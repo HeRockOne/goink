@@ -3,4 +3,4 @@ package version
 
 // Version 由 Makefile 通过 -ldflags "-X internal/version.Version=xxx" 注入。
 // 未注入时默认为 "dev"。
-var Version = "dev"
+var Version = "0.1.0"
