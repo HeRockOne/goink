@@ -1,0 +1,149 @@
+.thinking-block {
+  margin: 0.4rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  background: color-mix(in oklab, var(--muted) 38%, transparent);
+  overflow: hidden;
+}
+
+.thinking-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8rem;
+  color: oklch(0.5 0 0);
+  transition: background 150ms ease, color 300ms ease;
+}
+
+[data-theme="dark"] .thinking-summary {
+  color: oklch(0.65 0 0);
+}
+
+.thinking-summary:hover {
+  background: color-mix(in oklab, var(--muted) 62%, transparent);
+}
+
+.thinking-summary::marker {
+  display: none;
+}
+
+.thinking-summary::-webkit-details-marker {
+  display: none;
+}
+
+.thinking-chevron {
+  font-size: 0.6rem;
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+details[open] > .thinking-summary .thinking-chevron {
+  transform: rotate(90deg);
+}
+
+.thinking-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.45 0 0) 0%,
+    oklch(0.72 0 0) 25%,
+    oklch(0.45 0 0) 50%,
+    oklch(0.72 0 0) 75%,
+    oklch(0.45 0 0) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: thinking-shimmer 3.5s linear infinite;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .thinking-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.55 0 0) 0%,
+    oklch(0.88 0 0) 25%,
+    oklch(0.55 0 0) 50%,
+    oklch(0.88 0 0) 75%,
+    oklch(0.55 0 0) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes thinking-shimmer {
+  0%   { background-position: 220% 0; }
+  100% { background-position: -220% 0; }
+}
+
+.thinking-content {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.83rem;
+  line-height: 1.62;
+  color: color-mix(in oklab, var(--foreground) 62%, var(--muted-foreground));
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
+}
+
+/* ---- Animated thinking block ---- */
+.thinking-block-animated {
+  margin: 0.4rem 0;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  background: color-mix(in oklab, var(--muted) 38%, transparent);
+  overflow: hidden;
+}
+
+.thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8rem;
+  color: oklch(0.5 0 0);
+  background: none;
+  border: none;
+  text-align: left;
+  transition: background 150ms ease, color 300ms ease;
+}
+
+[data-theme="dark"] .thinking-toggle {
+  color: oklch(0.65 0 0);
+}
+
+.thinking-toggle:hover {
+  background: color-mix(in oklab, var(--muted) 62%, transparent);
+}
+
+.thinking-chevron-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.thinking-expand-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease-out, opacity 200ms ease;
+}
+
+.thinking-content-animated {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.83rem;
+  line-height: 1.62;
+  color: color-mix(in oklab, var(--foreground) 62%, var(--muted-foreground));
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
+  max-height: 400px;
+  overflow-y: auto;
+}

@@ -1,0 +1,46 @@
+# Binaries
+*.exe
+*.dll
+*.dylib
+spike_test
+
+# Test and dev
+dev_test/
+
+# ONNX model files (downloaded at runtime)
+models/
+
+# Build output
+/build/bin/
+/build/runtime/
+!/build/runtime/models/vocab.txt
+/build/dist/
+/build/*.AppDir/
+/build/windows/
+goink
+goink.exe
+
+# Go
+*.mod.cache
+
+# IDE
+.idea/
+.vscode/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+frontend/package.json.md5
+
+/release/
+docs.local/
+
+# MiMoCode
+.mimocode/

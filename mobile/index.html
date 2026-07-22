@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#F5F0E8">
+<title>Goink</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<script src="marked.min.js"></script>
+</head>
+<body>
+  <!-- 顶部栏 -->
+  <header id="appHeader">
+    <h1 id="pageTitle">小说</h1>
+    <div id="headerActions"></div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main id="appMain">
+    <!-- 小说列表（首页） -->
+    <div id="page-novels" class="page active">
+      <div id="novelList" class="scroll-area"></div>
+    </div>
+
+    <!-- 小说详情 -->
+    <div id="page-novel-detail" class="page">
+      <div id="novelDetailHeader" class="novel-detail-header"></div>
+      <div id="novelDetailTabs" class="tab-bar"></div>
+      <div id="novelDetailContent" class="scroll-area"></div>
+    </div>
+
+    <!-- 对话页 -->
+    <div id="page-chat" class="page">
+      <div id="chatBanner" class="chat-banner"></div>
+      <div id="chatMessages" class="scroll-area chat-scroll"></div>
+      <button id="scrollToBottom" class="scroll-bottom-btn hidden" onclick="scrollToBottom()">↓</button>
+      <div id="chatInput" class="chat-input">
+        <div class="input-row">
+          <textarea id="msgInput" placeholder="输入消息..." rows="1"></textarea>
+          <button id="sendBtn" class="btn-send" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          </button>
+          <button id="stopBtn" class="btn-stop hidden">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设置页 -->
+    <div id="page-settings" class="page">
+      <div id="settingsContent" class="scroll-area settings-scroll"></div>
+    </div>
+  </main>
+
+  <!-- 底部导航 -->
+  <nav id="bottomNav">
+    <button class="nav-item active" data-page="novels">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      <span>书架</span>
+    </button>
+    <button class="nav-item" data-page="chat">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span>对话</span>
+    </button>
+    <button class="nav-item" data-page="settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <span>设置</span>
+    </button>
+  </nav>
+
+  <!-- 模型选择弹窗 -->
+  <div id="modelSheet" class="sheet hidden">
+    <div class="sheet-overlay" onclick="closeSheet('modelSheet')"></div>
+    <div class="sheet-content">
+      <div class="sheet-handle"></div>
+      <h3>选择模型</h3>
+      <div id="modelList" class="model-list"></div>
+    </div>
+  </div>
+
+  <!-- 历史会话弹窗 -->
+  <div id="sessionSheet" class="sheet hidden">
+    <div class="sheet-overlay" onclick="closeSheet('sessionSheet')"></div>
+    <div class="sheet-content">
+      <div class="sheet-handle"></div>
+      <h3>历史会话</h3>
+      <div id="sessionList" class="session-list"></div>
+    </div>
+  </div>
+
+  <!-- 详情弹窗 -->
+  <div id="detailSheet" class="sheet hidden">
+    <div class="sheet-overlay" onclick="closeSheet('detailSheet')"></div>
+    <div class="sheet-content sheet-full">
+      <div class="sheet-handle"></div>
+      <h3 id="detailTitle"></h3>
+      <div id="detailBody" class="scroll-area"></div>
+    </div>
+  </div>
+
+  <!-- 全屏阅读器 -->
+  <div id="readerSheet" class="reader-sheet hidden">
+    <!-- 阅读器顶部栏 -->
+    <div class="reader-header">
+      <button onclick="closeReader()" class="reader-close" title="关闭">✕</button>
+      <span id="readerTitle" class="reader-title">章节标题</span>
+      <button onclick="showChapterList()" class="reader-close" title="目录">☰</button>
+      <button onclick="toggleReaderSettings()" class="reader-close" title="设置">⚙</button>
+    </div>
+    <!-- 阅读器设置（默认隐藏） -->
+    <div class="reader-settings hidden" id="readerSettingsPanel">
+      <div class="reader-setting"><label>字号</label><input type="range" id="rsFontSize" min="14" max="24" value="17" oninput="updateReaderSetting('fontSize', this.value)"><span id="rsFontSizeVal" class="reader-val">17</span></div>
+      <div class="reader-setting"><label>行距</label><input type="range" id="rsLineHeight" min="1.4" max="2.4" step="0.1" value="1.8" oninput="updateReaderSetting('lineHeight', this.value)"><span id="rsLineHeightVal" class="reader-val">1.8</span></div>
+      <div class="reader-setting"><label>背景</label><div class="reader-bg-btns">
+        <button onclick="updateReaderSetting('bgColor','#FFFEF9');updateReaderSetting('textColor','#3E3427')" style="background:#FFFEF9;border:1px solid var(--border)" title="暖白"></button>
+        <button onclick="updateReaderSetting('bgColor','#F5F0E8');updateReaderSetting('textColor','#3E3427')" style="background:#F5F0E8;border:1px solid var(--border)" title="羊皮纸"></button>
+        <button onclick="updateReaderSetting('bgColor','#1A1D2E');updateReaderSetting('textColor','#E2E8F0')" style="background:#1A1D2E;border:1px solid var(--border)" title="暗色"></button>
+      </div></div>
+    </div>
+    <!-- 章节目录面板（内嵌，默认隐藏） -->
+    <div id="chapterListPanel" class="chapter-list-panel hidden">
+      <div id="chapterListBody" class="scroll-area" style="max-height:50vh"></div>
+    </div>
+    <!-- 阅读内容 -->
+    <div id="readerContent" class="reader-content"></div>
+    <!-- 底部工具栏 -->
+    <div class="reader-toolbar">
+      <button id="readerPrev" onclick="prevChapter()" class="reader-nav-btn">‹ 上一章</button>
+      <span id="readerProgress" class="reader-progress">1/1</span>
+      <button id="readerNext" onclick="nextChapter()" class="reader-nav-btn">下一章 ›</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

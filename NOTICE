@@ -1,0 +1,57 @@
+Goink — Additional Terms under GNU AGPLv3 Section 7
+
+These additional terms apply to all copies, modifications, and
+distributions of this software, supplementing the AGPLv3 license.
+
+7(b) — Attribution
+
+Any derivative work based on all or a substantial portion of Goink
+must retain the following attribution in all applicable locations:
+
+  a) the README file of the derivative project;
+
+  b) for applications with a graphical user interface, the "About"
+     dialog or startup screen;
+
+  c) for command-line applications, the output of --version and the
+     top-level help text;
+
+  d) for web services or SaaS deployments, an "About" or
+     "Acknowledgements" page directly accessible by users.
+
+  "Based on Goink by 响滩 (sigpanic) — https://github.com/sigpanic/goink"
+
+7(c) — No Misrepresentation of Origin
+
+  a) Derivative works must not be presented in any manner that would
+     reasonably lead a person to believe that they are original works,
+     or that they are endorsed, sponsored, recommended by, or
+     affiliated with the original author.
+
+  b) Derivative works, regardless of the name under which they are
+     distributed, must prominently display the following notice in
+     the locations specified in 7(b):
+
+     "This is a modified version of Goink. It is not endorsed by or
+      affiliated with the original author."
+
+  c) Distributors of derivative works must not imply endorsement by
+     the original author in any medium, including but not limited to
+     domain names, social media accounts, package registries, app
+     store listings, and marketing materials.
+
+  d) The following acts constitute misrepresentation of origin under
+     this section:
+
+     i)   removing, modifying, or obscuring provenance records,
+          changelogs, copyright notices, or author attributions
+          within the source tree that identify the origin of the work;
+
+     ii)  distributing a derivative work on a third-party platform
+          under the name "Goink" or a confusingly similar name,
+          without the notice required by 7(c)(b).
+
+  e) Distribution under the name "Goink" does not exempt the
+     derivative work from any obligation under this section, and does
+     not constitute or imply endorsement by the original author.
+

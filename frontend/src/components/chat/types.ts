@@ -1,0 +1,289 @@
+import type { session } from '@/hooks/useApp'
+
+// 与 Go 端 internal/agent/events.go 的 AgentEventType 枚举一一对应
+export enum AgentEventType {
+  Thinking = 0,
+  ThinkingDone = 1,
+  Content = 2,
+  ToolCall = 3,
+  Usage = 4,
+  Error = 5,
+  Compression = 6,
+  Retry = 7,          // 429/限流自动重试通知
+  PhaseGate = 8,
+}
+
+// PhaseStatus 与 Go 端 agent.PhaseGate.Status() 的返回值对应
+export interface PhaseStatus {
+  phase: string
+  called: Record<string, number>
+  ready: boolean
+  next?: string
+  message?: string
+}
+
+// AgentEvent 与 Go 端 AgentEvent 的 JSON 序列化一一对应
+export interface AgentEvent {
+  turn_id: number
+  sub_task_id?: string
+  seq?: number
+  type: AgentEventType
+  data?: string
+  tool_name?: string
+  tool_id?: string
+  phase?: string         // "selected" | "executing" | "awaiting_approval" | "completed" | "failed" | "loop_detected"
+  tool_args?: Record<string, unknown>
+  success?: boolean
+  error?: string
+  display_text?: string
+  activity_kind?: string
+  metadata?: Record<string, unknown>
+  usage?: Record<string, unknown>
+  compression_phase?: string // "compressing" | "done"
+  summary?: string
+  retry_count?: number
+  retry_max?: number
+  retry_wait?: number
+  phase_gate?: PhaseStatus
+  timestamp: string
+}
+
+// TurnSegment 是 turn 内的一个片段：文本块、工具调用、子 Agent 或压缩标记
+export interface TurnSegment {
+  id: string
+  type: 'text' | 'tool' | 'subagent' | 'compression'
+  content: string
+  thinkingContent: string
+  thinkingDone: boolean
+  isStreaming: boolean
+  // tool
+  toolName: string
+  toolId: string
+  toolStatus: 'executing' | 'awaiting_approval' | 'completed' | 'failed'
+  displayText: string
+  activityKind: string
+  error: string
+  // approval
+  approvalType?: string
+  approvalPayload?: Record<string, unknown>
+  // subagent
+  status?: 'streaming' | 'done' | 'failed'
+  agentType?: 'memory' | 'review'
+  taskId?: string
+  segments?: TurnSegment[]
+  finalText?: string
+  // compression
+  compressionPhase?: 'compressing' | 'done'
+  // web_search / web_fetch 的富文本结果
+  result?: Record<string, unknown>
+}
+
+export function emptySegment(id: string): TurnSegment {
+  return {
+    id,
+    type: 'text',
+    content: '',
+    thinkingContent: '',
+    thinkingDone: false,
+    isStreaming: false,
+    toolName: '',
+    toolId: '',
+    toolStatus: 'executing',
+    displayText: '',
+    activityKind: '',
+    error: '',
+  }
+}
+
+// Turn 是一次对话轮次：用户消息 + AI 回复的 segments
+export interface Turn {
+  id: string
+  turnId: number
+  userMessage: string
+  segments: TurnSegment[]
+  status: 'streaming' | 'done' | 'failed' | 'interrupted' | 'stopped'
+  errorMessage?: string
+  compressionOnly?: boolean // 纯压缩 turn（手动压缩），无用户消息
+}
+
+export function rebuildTurns(messages: session.Message[]): Turn[] {
+  const turns: Turn[] = []
+  let current: Turn | null = null
+  let segCounter = 0
+  const subagentCache = new Map<string, TurnSegment>()
+
+  for (const msg of messages) {
+    // 中断标记：根据 event_type 区分用户停止和系统中断
+    if (msg.event_type === 'user_stopped' || msg.event_type === 'system_interrupted') {
+      const target = turns.find(t => t.turnId === msg.turn_id)
+      if (target) {
+        target.status = msg.event_type === 'user_stopped' ? 'stopped' : 'interrupted'
+      }
+      continue
+    }
+
+    // 压缩边界标记：独立成一个纯压缩 turn
+    if (msg.event_type === 'compression') {
+      if (msg.agent_type !== 'main' && msg.sub_task_id) {
+        const cached = subagentCache.get(msg.sub_task_id)
+        if (cached && cached.segments) {
+          cached.segments.push({
+            ...emptySegment(`seg_${segCounter++}`),
+            type: 'compression',
+            compressionPhase: 'done',
+          })
+        }
+        continue
+      }
+      if (current && current.turnId === msg.turn_id) {
+        current.segments.push({
+          ...emptySegment(`seg_${segCounter++}`),
+          type: 'compression',
+          compressionPhase: 'done',
+        })
+        continue
+      }
+      turns.push({
+        id: `comp_${msg.turn_id}`,
+        turnId: msg.turn_id,
+        userMessage: '',
+        segments: [{
+          ...emptySegment(`comp_${msg.turn_id}`),
+          type: 'compression',
+          compressionPhase: 'done',
+        }],
+        status: 'done',
+        compressionOnly: true,
+      })
+      continue
+    }
+
+    if (msg.role === 'user') {
+      current = {
+        id: `hist_${msg.turn_id}`,
+        turnId: msg.turn_id,
+        userMessage: msg.content,
+        segments: [],
+        status: 'done',
+      }
+      turns.push(current)
+    } else if (msg.role === 'assistant') {
+      // 子 Agent 消息：agent_type !== 'main' 且有 sub_task_id
+      if (msg.agent_type !== 'main' && msg.sub_task_id && current) {
+        const subTaskId = msg.sub_task_id
+        const cached = subagentCache.get(subTaskId)
+        const subSeg: TurnSegment = cached ?? (() => {
+          const seg: TurnSegment = {
+            ...emptySegment(`seg_${segCounter++}`),
+            type: 'subagent',
+            status: 'done',
+            agentType: (msg.agent_type as 'memory' | 'review') || 'memory',
+            taskId: subTaskId,
+            segments: [],
+            finalText: '',
+          }
+          // 不直接 push——等遇到 run_subagent tool_display 时插到正确位置
+          subagentCache.set(subTaskId, seg)
+          return seg
+        })()
+
+        // 追加子 agent 的文本内容
+        if ((msg.content || msg.thinking_content) && subSeg.segments) {
+          subSeg.segments.push({
+            ...emptySegment(`seg_${segCounter++}`),
+            type: 'text',
+            content: msg.content || '',
+            thinkingContent: msg.thinking_content || '',
+            thinkingDone: true,
+            isStreaming: false,
+          })
+          if (msg.content) {
+            subSeg.finalText = (subSeg.finalText || '') ? (subSeg.finalText + '\n' + msg.content) : msg.content
+          }
+        }
+
+        // 子 agent 的工具调用
+        const toolDisplays = parseToolDisplays(msg.extra_metadata)
+        if (toolDisplays.length > 0 && subSeg.segments) {
+          for (const td of toolDisplays) {
+            const phase = td.phase as 'completed' | 'failed' | 'executing' | undefined
+            subSeg.segments.push({
+              ...emptySegment(`seg_${segCounter++}`),
+              type: 'tool',
+              toolName: td.tool_name,
+              toolId: td.tool_id,
+              toolStatus: phase && (phase === 'executing' || phase === 'completed' || phase === 'failed') ? phase : 'completed',
+              displayText: td.display_text,
+              activityKind: td.activity_kind,
+              error: '',
+            })
+          }
+        }
+        continue
+      }
+
+      // 主 Agent 消息
+      if (!current) continue
+
+      const thinkingContent = msg.thinking_content || ''
+
+      // 文本内容
+      if (msg.content || thinkingContent) {
+        current.segments.push({
+          ...emptySegment(`seg_${segCounter++}`),
+          type: 'text',
+          content: msg.content || '',
+          thinkingContent,
+          thinkingDone: true,
+          isStreaming: false,
+        })
+      }
+
+      // 工具展示信息
+      const toolDisplays = parseToolDisplays(msg.extra_metadata)
+      for (const td of toolDisplays) {
+        // run_subagent：在此位置插入子 Agent 卡片
+        if (td.tool_name === 'run_subagent') {
+          const cached = subagentCache.get(td.tool_id)
+          if (cached) current.segments.push(cached)
+          continue
+        }
+        current.segments.push({
+          ...emptySegment(`seg_${segCounter++}`),
+          type: 'tool',
+          toolName: td.tool_name,
+          toolId: td.tool_id,
+          toolStatus: (td.phase === 'completed' || td.phase === 'failed' || td.phase === 'executing') ? td.phase : 'completed',
+          displayText: td.display_text || td.tool_name,
+          activityKind: td.activity_kind || '',
+          error: '',
+          result: td.result,
+        })
+      }
+    }
+  }
+
+  return turns
+}
+
+interface ToolDisplay {
+  tool_id: string
+  tool_name: string
+  display_text: string
+  activity_kind: string
+  phase: string
+  result?: Record<string, unknown>
+}
+
+function parseToolDisplays(extraMetadata?: string): ToolDisplay[] {
+  if (!extraMetadata) return []
+  try {
+    const meta = JSON.parse(extraMetadata)
+    if (meta.tool_displays && Array.isArray(meta.tool_displays)) {
+      return meta.tool_displays as ToolDisplay[]
+    }
+    return []
+  } catch {
+    return []
+  }
+}
