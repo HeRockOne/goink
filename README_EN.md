@@ -23,7 +23,7 @@
 
 > **Forked from [sigpanic/goink](https://github.com/sigpanic/goink) with additions: mobile web frontend, HTTP API, token auth, phase gate, data backup, and more.**
 >
-> **About this project:** Developed using the free open-source LLM [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5) by Xiaomi. I'm not a programmer — this is my first time forking a repo. Features were added based on my own writing needs. There may be bugs or issues. Feedback welcome. Code generated with AI assistance, for reference and learning only.
+> **About this project:** Fully developed using [MiMoCode](https://github.com/nicepkg/Aide) + [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5) (Xiaomi's free open-source LLM), with AI handling all code changes. I'm not a programmer, have never systematically learned any code, and this is my first time forking a repo for practice. I only provide feature requirements based on my actual writing needs. I have no code review ability and no time/energy to handle bug reports. If there are issues, please fork and fix them yourself.
 
 ---
 
@@ -180,26 +180,32 @@ Every edit generates a Diff preview. Approve before writing. Full Git history fo
 
 ## Installation
 
-Download from [Releases](https://github.com/HeRockOne/goink/releases):
-
-- **Windows** — Run installer
-- **macOS** — Open DMG, drag to Applications
-- **Linux** — Run AppImage
-
-Requires LLM API Key (OpenAI-compatible). Installer < 60MB. No Python/Node.js/GPU needed.
+No pre-built packages yet. Build from source:
 
 ### Build From Source
 
 ```bash
-# Linux dependencies
+# Clone
+git clone https://github.com/HeRockOne/goink.git
+cd goink
+
+# Linux dependencies (Ubuntu/Debian)
 sudo apt install libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc
 
-git clone https://github.com/sigpanic/goink
-cd goink
+# Build
 make deps
 make build   # production
 make dev     # dev mode
 ```
+
+### Windows One-Click Build
+
+```powershell
+.\build.ps1    # PowerShell
+build.bat      # CMD
+```
+
+Requires LLM API Key (OpenAI-compatible).
 
 ### One-Click Build (Windows)
 

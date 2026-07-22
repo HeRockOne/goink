@@ -23,7 +23,7 @@
 
 > **基于 [sigpanic/goink](https://github.com/sigpanic/goink) fork，在原版基础上新增移动端 Web 前端、HTTP API、Token 认证、阶段门禁、数据备份等功能。**
 >
-> **关于本项目：** 本 fork 使用免费大模型 [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5)（小米开源）进行开发。本人非程序员，第一次尝试 fork，功能基于个人实际写作需求添加，可能出现 bug 或其他问题，欢迎反馈。代码由 AI 辅助生成，仅供参考学习。
+> **关于本项目：** 本 fork 使用 [MiMoCode](https://github.com/nicepkg/Aide) + [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5)（小米开源免费大模型）全程 AI 辅助开发。本人非程序员，未系统学习过任何代码，第一次 fork 练手，所有代码修改均由大模型完成，本人仅基于实际写作需求提出功能要求。无代码 review 能力，也无时间精力处理 bug 反馈。如有问题，请自行 fork 仓库修改。
 
 ---
 
@@ -180,26 +180,32 @@ BGE 中文模型 ONNX 本地推理 + sqlite-vec 向量索引。问"那个吊坠"
 
 ## 安装
 
-从 [Releases](https://github.com/HeRockOne/goink/releases) 下载：
-
-- **Windows** — 运行安装程序
-- **macOS** — 打开 DMG，拖入 Applications
-- **Linux** — 运行 AppImage
-
-需要 LLM API Key（兼容 OpenAI 格式）。安装包 < 60MB，无需 Python/Node.js/GPU。
+本项目暂未发布预编译安装包，请从源码构建：
 
 ### 从源码构建
 
 ```bash
-# Linux 依赖
+# 克隆仓库
+git clone https://github.com/HeRockOne/goink.git
+cd goink
+
+# Linux 依赖（Ubuntu/Debian）
 sudo apt install libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc
 
-git clone https://github.com/sigpanic/goink
-cd goink
+# 构建
 make deps
 make build   # 生产构建
 make dev     # 开发模式
 ```
+
+### Windows 一键构建
+
+```powershell
+.\build.ps1    # PowerShell
+build.bat      # CMD
+```
+
+需要 LLM API Key（兼容 OpenAI 格式）。
 
 ### 一键构建部署（Windows）
 
