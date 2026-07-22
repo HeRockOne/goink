@@ -14,7 +14,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/stretchr/testify v1.11.1
-	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/net v0.57.0

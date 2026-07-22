@@ -137,26 +137,6 @@ export default function ModelConfigTab({ onSaved }: Props) {
       return
     }
 
-    // 找出需要测试的：从未测试过，或 key 跟上次测试/保存时不一致
-    const needTest = withKey.filter(p => {
-      const tr = testResults[p.key]
-      if (!tr || !tr.ok) return true // 从未测试或上次失败
-      if (tr.keySnapshot !== p.api_key) return true // key 变了
-      return false
-    })
-
-    if (needTest.length > 0) {
-      setSaveMsg(t('settings.testingConnection'))
-      for (const p of needTest) {
-        const err = await handleTest(p.key)
-        if (err) {
-          setSaveMsg(`${p.name} ${t('settings.connectionTestFailed')}: ${err}`)
-          setTimeout(() => setSaveMsg(''), 5000)
-          return
-        }
-      }
-    }
-
     setIsSaving(true)
     setSaveMsg('')
     try {
@@ -174,7 +154,7 @@ export default function ModelConfigTab({ onSaved }: Props) {
     } finally {
       setIsSaving(false)
     }
-  }, [providers, app, testResults, handleTest, t, onSaved])
+  }, [providers, app, t, onSaved])
 
   if (isLoading) {
     return (

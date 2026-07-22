@@ -165,9 +165,41 @@ BGE 中文模型 ONNX 本地推理 + sqlite-vec 向量索引。问"那个吊坠"
 
 从 [Releases](https://github.com/HeRockOne/goink/releases) 下载安装包。
 
-需要 LLM API Key（兼容 OpenAI 格式）。
+### 运行时依赖
+
+| 依赖 | 说明 |
+|------|------|
+| WebView2 Runtime | Windows 11 内置；Windows 10 需要安装，程序首次启动会自动下载 |
+| LLM API Key | 兼容 OpenAI 格式（DeepSeek、OpenAI、Claude 等均可） |
+
+程序自带 Git 和 ONNX Runtime（向量搜索），无需额外安装。
 
 ### 从源码构建
+
+#### 编译环境要求
+
+| 组件 | 版本 | 说明 |
+|------|------|------|
+| Go | 1.21+ | 后端编译 |
+| Node.js | 18+ | 前端构建 |
+| MSYS2 | - | Windows 必须，提供 gcc + 头文件 |
+| Wails CLI | v2.13+ | 框架构建工具 |
+
+#### Windows 编译环境安装（必须）
+
+项目使用 CGO（SQLite、sqlite-vec 向量搜索），Windows 上必须通过 MSYS2 提供 gcc 和完整的 POSIX 头文件。**不要使用 TDM-GCC**，会缺少 `sqlite3.h` 等头文件导致编译失败。
+
+```powershell
+# 1. 安装 MSYS2（https://www.msys2.org），默认路径 C:\msys64
+
+# 2. 打开 MSYS2 终端，安装工具链
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-pkgconf
+
+# 3. 将 MSYS2 加入系统 PATH
+# C:\msys64\mingw64\bin
+```
+
+#### 构建步骤
 
 ```bash
 # 克隆仓库
@@ -183,7 +215,7 @@ make build   # 生产构建
 make dev     # 开发模式
 ```
 
-### Windows 一键构建
+#### Windows 一键构建
 
 ```powershell
 .\build.ps1    # PowerShell
