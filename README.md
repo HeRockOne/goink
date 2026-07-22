@@ -178,7 +178,7 @@ BGE 中文模型 ONNX 本地推理 + sqlite-vec 向量索引。问"那个吊坠"
 
 ## 安装
 
-从 [Releases](https://github.com/sigpanic/goink/releases) 下载：
+从 [Releases](https://github.com/HeRockOne/goink/releases) 下载：
 
 - **Windows** — 运行安装程序
 - **macOS** — 打开 DMG，拖入 Applications

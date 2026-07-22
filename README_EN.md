@@ -178,7 +178,7 @@ Every edit generates a Diff preview. Approve before writing. Full Git history fo
 
 ## Installation
 
-Download from [Releases](https://github.com/sigpanic/goink/releases):
+Download from [Releases](https://github.com/HeRockOne/goink/releases):
 
 - **Windows** — Run installer
 - **macOS** — Open DMG, drag to Applications
