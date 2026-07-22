@@ -2,7 +2,7 @@ import { Heart, ExternalLink, FileText, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { BrowserOpenURL } from '@/lib/wailsjs/runtime/runtime'
 
-const REPO = 'sigpanic/goink'
+const REPO = 'HeRockOne/goink'
 const BRANCH = 'master'
 
 interface Props {

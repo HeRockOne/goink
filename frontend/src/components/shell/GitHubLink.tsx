@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 export default function GitHubLink() {
   const { t } = useTranslation()
-  const url = 'https://github.com/sigpanic/goink'
+  const url = 'https://github.com/HeRockOne/goink'
 
   return (
     <button
@@ -19,7 +19,7 @@ export default function GitHubLink() {
         opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none">
         <p className="text-xs text-foreground mb-1">{t('shell.githubIssue')}</p>
         <p className="text-xs text-foreground mb-1.5">{t('shell.githubStar')}</p>
-        <p className="text-[10px] text-muted-foreground font-mono">github.com/sigpanic/goink</p>
+        <p className="text-[10px] text-muted-foreground font-mono">github.com/HeRockOne/goink</p>
       </div>
     </button>
   )
