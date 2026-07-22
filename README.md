@@ -1,21 +1,4 @@
-<p align="center">
-  <img src="assets/logo-dark.svg#gh-dark-mode-only" alt="Goink" />
-  <img src="assets/logo-light.svg#gh-light-mode-only" alt="Goink" />
-</p>
-
 <h1 align="center">Goink<br><sub>桌面 AI 写作系统 — Agent 实时决策 × 结构化记忆 × 写完自检</sub></h1>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.25" />
-  <img src="https://img.shields.io/badge/Wails-v2.12-DF0000?style=for-the-badge&logo=wails&logoColor=white" alt="Wails v2" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React 19" />
-  <img src="https://img.shields.io/badge/SQLite-3-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
-  <br />
-  <img src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 6" />
-  <img src="https://img.shields.io/badge/Tailwind-4.3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind 4" />
-  <img src="https://img.shields.io/badge/ONNX_Runtime-1.26-005BED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX Runtime" />
-  <img src="https://img.shields.io/badge/license-AGPL_v3-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="AGPL v3" />
-</p>
 
 <p align="center"><strong><a href="README_EN.md">English</a> | 中文</strong></p>
 
@@ -180,7 +163,9 @@ BGE 中文模型 ONNX 本地推理 + sqlite-vec 向量索引。问"那个吊坠"
 
 ## 安装
 
-本项目暂未发布预编译安装包，请从源码构建：
+从 [Releases](https://github.com/HeRockOne/goink/releases) 下载安装包。
+
+需要 LLM API Key（兼容 OpenAI 格式）。
 
 ### 从源码构建
 
@@ -199,15 +184,6 @@ make dev     # 开发模式
 ```
 
 ### Windows 一键构建
-
-```powershell
-.\build.ps1    # PowerShell
-build.bat      # CMD
-```
-
-需要 LLM API Key（兼容 OpenAI 格式）。
-
-### 一键构建部署（Windows）
 
 ```powershell
 .\build.ps1    # PowerShell
