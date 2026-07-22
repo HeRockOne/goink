@@ -21,7 +21,9 @@
 
 ---
 
-> **基于 [sigpanic/goink](https://github.com/sigpanic/goink) fork，在原版基础上新增移动端 Web 前端、HTTP API、Token 认证、阶段门禁、数据备份等大量功能。**
+> **基于 [sigpanic/goink](https://github.com/sigpanic/goink) fork，在原版基础上新增移动端 Web 前端、HTTP API、Token 认证、阶段门禁、数据备份等功能。**
+>
+> **关于本项目：** 本 fork 使用免费大模型 [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5)（小米开源）进行开发。本人非程序员，第一次尝试 fork，功能基于个人实际写作需求添加，可能出现 bug 或其他问题，欢迎反馈。代码由 AI 辅助生成，仅供参考学习。
 
 ---
 

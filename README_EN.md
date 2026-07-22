@@ -21,7 +21,9 @@
 
 ---
 
-> **Forked from [sigpanic/goink](https://github.com/sigpanic/goink) with major additions: mobile web frontend, HTTP API, token auth, phase gate, data backup, and more.**
+> **Forked from [sigpanic/goink](https://github.com/sigpanic/goink) with additions: mobile web frontend, HTTP API, token auth, phase gate, data backup, and more.**
+>
+> **About this project:** Developed using the free open-source LLM [MiMo-V2.5](https://huggingface.co/XiaomiMiMo/MiMo-V2.5) by Xiaomi. I'm not a programmer — this is my first time forking a repo. Features were added based on my own writing needs. There may be bugs or issues. Feedback welcome. Code generated with AI assistance, for reference and learning only.
 
 ---
 
