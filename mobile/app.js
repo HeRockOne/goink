@@ -888,7 +888,7 @@ function newChat() { state.sessionId = null; document.getElementById('chatMessag
 
 // ═══════════ 模型 ═══════════
 async function loadModels() { try { const r = await api('/api/settings/model'); state.models = r.models||[]; state.selectedModel = r.selected_model_key||''; } catch (_) {} }
-function showModels() { document.getElementById('modelList').innerHTML = state.models.map(m => `<div class="model-item ${m.key===state.selectedModel?'selected':''}" onclick="selectModel('${esc(m.key)}')"><div class="model-name">${esc(m.name||m.key)}</div>${m.thinking ? '<span class="model-badge">思考</span>' : ''}</div>`).join(''); openSheet('modelSheet'); }
+function showModels() { document.getElementById('modelList').innerHTML = state.models.map(m => { const displayName = m.provider ? `${m.provider} / ${m.name}` : (m.name || m.key); return `<div class="model-item ${m.key===state.selectedModel?'selected':''}" onclick="selectModel('${esc(m.key)}')"><div class="model-name">${esc(displayName)}</div>${m.thinking ? '<span class="model-badge">思考</span>' : ''}</div>`; }).join(''); openSheet('modelSheet'); }
 async function selectModel(key) { try { await api('/api/settings/model', { method: 'POST', body: { model_key: key } }); state.selectedModel = key; closeSheet('modelSheet'); toast('已切换'); showModels(); } catch (_) { toast('切换失败'); } }
 
 // ═══════════ 设置 ═══════════
@@ -914,7 +914,8 @@ async function loadSettings() {
       return;
     }
     state.models = r.models||[]; state.selectedModel = r.selected_model_key||'';
-    const name = state.models.find(m => m.key === state.selectedModel)?.name || state.selectedModel.split('/').pop() || '未选择';
+    const found = state.models.find(m => m.key === state.selectedModel);
+    const name = found ? (found.provider ? `${found.provider} / ${found.name}` : found.name) : state.selectedModel.split('/').pop() || '未选择';
     document.getElementById('settingsContent').innerHTML = `
       <div class="setting-group"><div class="setting-label">🤖 ${t('model')}</div><div class="setting-value" onclick="showModels()"><span>${t('current_model')}</span><strong style="color:var(--accent)">${esc(name)}</strong></div></div>
       <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>

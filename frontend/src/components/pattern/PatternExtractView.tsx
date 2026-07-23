@@ -19,6 +19,7 @@ type Scope = 'all' | 'selected'
 
 interface ModelOption {
   Key: string
+  ProviderName: string
   ModelName: string
 }
 
@@ -96,7 +97,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     return () => { cancelled = true }
   }, [app])
 
-  const modelOptions = useMemo(() => models.map(m => ({ value: m.Key, label: m.ModelName })), [models])
+  const modelOptions = useMemo(() => models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName })), [models])
   const novelOptions = useMemo(() => novels.map(n => ({ value: String(n.id), label: n.title })), [novels])
   const activeChapterIds = useMemo(() => (
     scope === 'all' ? [] : chapters.filter(ch => selected.has(ch.id)).map(ch => ch.id)

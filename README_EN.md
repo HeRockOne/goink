@@ -83,7 +83,7 @@ prepare → outline → write → review → maintain → prepare
 | Word Count Config | Custom min/max chapter word limits |
 | WebDAV | Built-in server for phone file manager access |
 | Model Management | Auto-fetch from model.dev, thinking mode support |
-| Data Backup | One-click full backup/restore |
+| Data Backup | One-click full backup/restore (DB, novels, user skills) |
 | Session Management | Delete history sessions |
 | Log Toggle | Enable/disable file logging |
 | Chat UI | Message bubbles, Markdown rendering, copy button |

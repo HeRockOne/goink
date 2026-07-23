@@ -44,7 +44,7 @@ export default function ChatControls({
   const selected = models.find(m => m.Key === selectedKey)
   const supportsThinking = selected?.SupportsThinking ?? false
 
-  const modelOptions = models.map(m => ({ value: m.Key, label: m.ModelName }))
+  const modelOptions = models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName }))
   const levels = selected?.ReasoningLevels?.length
     ? selected.ReasoningLevels
     : supportsThinking ? ['low', 'high', 'max'] : []

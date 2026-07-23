@@ -271,7 +271,7 @@ export default function StyleView({ focusId, onFocusHandled, embedded = false, n
     }
   }, [detailId, editName, editContent, editTags, editNovelId, app, load, page, t])
 
-  const modelOptions = models.map(m => ({ value: m.Key, label: m.ModelName }))
+  const modelOptions = models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName }))
 
   const { meta, body } = result ? splitFrontmatter(result.rawContent) : { meta: {}, body: '' }
 

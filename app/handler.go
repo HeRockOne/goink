@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -131,10 +130,6 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	cfg, err := config.Load()
 	if err != nil {
-		if errors.Is(err, config.ErrNotInitialized) {
-			// 首次启动，不自动初始化，等前端展示 InitView 再由用户手动触发
-			return
-		}
 		a.logger.Error("加载配置失败", "err", err)
 		return
 	}
