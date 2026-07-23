@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { QRCodeSVG } from 'qrcode.react'
 import { SaveGitConfig, SetPhaseGateEnabled, SetChapterWordLimit } from '@/lib/wailsjs/go/app/App'
 import { useApp, type novel } from '@/hooks/useApp'
 
@@ -303,25 +304,34 @@ export default function GeneralConfigTab() {
           <Shield className="w-3.5 h-3.5" />
           API 认证令牌
         </label>
-        <p className="text-[11px] text-muted-foreground">移动端首次连接时需输入此令牌。丢失可重新生成。</p>
-        <div className="flex items-center gap-2">
-          <input
-            value={apiToken}
-            readOnly
-            className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none"
-          />
-          <button
-            onClick={() => { navigator.clipboard.writeText(apiToken) }}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-          >
-            复制
-          </button>
-          <button
-            onClick={handleResetToken}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors text-destructive"
-          >
-            重置
-          </button>
+        <p className="text-[11px] text-muted-foreground">移动端首次连接时需输入此令牌，或扫描下方二维码。丢失可重新生成。</p>
+        <div className="flex items-start gap-4">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                value={apiToken}
+                readOnly
+                className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none"
+              />
+              <button
+                onClick={() => { navigator.clipboard.writeText(apiToken) }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
+              >
+                复制
+              </button>
+              <button
+                onClick={handleResetToken}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors text-destructive"
+              >
+                重置
+              </button>
+            </div>
+          </div>
+          {apiToken && (
+            <div className="shrink-0 p-2 bg-white rounded-lg border">
+              <QRCodeSVG value={apiToken} size={80} level="M" />
+            </div>
+          )}
         </div>
       </div>
 

@@ -515,7 +515,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
   // File tab
   const viewMode = activeTab.viewMode || 'content'
   return (
-    <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
+    <main className="content-panel flex-1 flex flex-col min-w-0 min-h-0 border-r overflow-hidden" style={{ background: 'var(--reader-paper, var(--background))' }}>
       <TabBar tabs={tabs} activeTabId={activeTabId} onSelect={setActiveTabId} onClose={closeTab} />
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 select-none">
         <span className="text-sm font-medium truncate">{activeTab.title}</span>

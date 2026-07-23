@@ -9,8 +9,10 @@ make deps      # 下载运行时依赖
 make build     # 生产构建
 make dev       # 开发模式
 ```
-
-Windows 一键构建：`.\build.ps1` 或 `build.bat`
+## ***重要***
+1：当前运行环境：中国大陆**windows10**PowerShell 7**
+2：除非必要，否则请严格并行读取文件或者代码
+3：Windows 一键构建：`.\build.ps1` 或 `build.bat`
 
 **目录规范：**
 - Git 命令在项目根目录执行
@@ -58,3 +60,4 @@ skills/        # 内置 Skill
 - 不要主动问"commit?"或"开始写？"
 - 不要手改 `frontend/src/lib/wailsjs/go/models.ts`（Wails 自动生成）
 - Windows 上 cgo 编译诊断报错是预期行为
+

@@ -7,3 +7,21 @@
   border-radius: 2px;
   border-bottom: 2px solid rgba(30, 64, 175, 0.45);
 }
+
+/* 阅读区域：泛黄纸张背景 */
+.content-panel {
+  background: var(--reader-bg) !important;
+}
+
+.content-panel .prose,
+.content-panel .markdown-body {
+  background: var(--reader-paper) !important;
+  color: var(--foreground) !important;
+}
+
+/* 强制覆盖 Monaco 编辑器的白色背景 */
+.content-panel .monaco-editor,
+.content-panel .monaco-editor .margin,
+.content-panel .monaco-editor .monaco-editor-background {
+  background: var(--reader-paper) !important;
+}

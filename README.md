@@ -13,9 +13,12 @@
 ## 目录
 
 - [新增功能](#新增功能)
-- [项目结构](#项目结构)
-- [核心能力](#核心能力)
 - [安装](#安装)
+- [核心能力](#核心能力)
+- [项目结构](#项目结构)
+- [主题配色](#主题配色)
+- [图标替换](#图标替换)
+- [从源码构建](#从源码构建)
 - [技术栈](#技术栈)
 - [License](#license)
 
@@ -25,7 +28,7 @@
 
 ### 移动端 Web 前端
 
-手机浏览器访问 `http://{局域网IP}:8877/mobile/`，完整写作系统：
+手机浏览器访问 `https://{局域网IP}:8877/mobile/`，完整写作系统：
 
 | 模块 | 功能 |
 |------|------|
@@ -34,6 +37,8 @@
 | 全屏阅读器 | 字号行距背景调节、左右翻页、章节目录、进度记忆 |
 | AI 对话 | 流式 SSE、思考过程、会话历史、模型切换 |
 | 设置 | 深浅模式、中英语言、Token 管理、模型选择 |
+
+> 首次连接支持扫码或手动输入 Token。离线时自动从 IndexedDB 读取缓存数据。
 
 ### HTTP API
 
@@ -82,6 +87,10 @@ prepare → outline → write → review → maintain → prepare
 | 会话管理 | 删除历史会话 |
 | 日志开关 | 设置中启用/禁用文件日志 |
 | 对话优化 | 消息气泡、Markdown 渲染、复制按钮 |
+| 复古牛皮纸主题 | 浅色/深色双模式，泛黄旧书风格 |
+| 移动端扫码连接 | 桌面端显示 Token 二维码，手机扫码快速连接 |
+| 移动端离线存储 | IndexedDB 缓存，离线可阅读小说和查看设定 |
+| 自动 HTTPS | 启动时自动生成证书，手机扫码可用摄像头 |
 
 ---
 
@@ -220,6 +229,67 @@ make dev     # 开发模式
 .\build.ps1    # PowerShell
 build.bat      # CMD
 ```
+
+## 主题配色
+
+复古牛皮纸风格，浅色/深色双模式。颜色定义在 `frontend/src/index.css`。
+
+### 颜色变量 → 文件位置
+
+| 变量 | 作用 | 所在文件 |
+|------|------|----------|
+| `--background` | 整体页面背景 | `index.css` |
+| `--foreground` | 全局文字颜色 | `index.css` |
+| `--card` | 卡片/面板背景 | `index.css` |
+| `--primary` | 主色调（按钮、链接） | `index.css` |
+| `--sidebar` | 侧边栏背景 | `index.css` |
+| `--border` | 边框颜色 | `index.css` |
+| `--muted` | 次要背景（输入框、代码块） | `index.css` |
+| `--reader-bg` | 阅读区域外层背景 | `index.css` + `ContentPanel.css` |
+| `--reader-paper` | 阅读正文纸张背景 | `index.css` + `ContentPanel.css` |
+| `--bubble-user` | 用户消息气泡 | `index.css` |
+
+### 各区域对应关系
+
+| 区域 | 浅色模式 | 深色模式 |
+|------|----------|----------|
+| 页面整体背景 | `--background` `#f5edd6` | `--background` `#1a1210` |
+| 侧边栏 | `--sidebar` `#ede5ce` | `--sidebar` `#1e1612` |
+| 阅读正文区 | `--reader-paper` `#faf4e4` | `--reader-paper` `#2a1e16` |
+| 卡片/弹窗 | `--card` `#faf4e4` | `--card` `#2a1e16` |
+| 输入框/代码块 | `--muted` `#ebe3cc` | `--muted` `#2e221a` |
+
+### 修改配色步骤
+
+1. 编辑 `frontend/src/index.css` 中 `:root`（浅色）或 `[data-theme="dark"]`（深色）
+2. 阅读区域额外受 `frontend/src/components/content/ContentPanel.css` 控制
+3. 运行 `npm run build` 验证无报错
+4. 运行 `.\build.ps1` 重新构建部署
+
+---
+
+## 图标替换
+
+项目有多个图标位置，替换后重新构建即可生效：
+
+| 位置 | 用途 | 格式 |
+|------|------|------|
+| `build/windows/icon.ico` | exe 文件图标 + 窗口标题栏图标 | ICO（多尺寸） |
+| `appicon.png` | Wails 构建用的应用图标 | PNG |
+| `frontend/public/logo.svg` | 标题栏左上角 Logo | SVG |
+| `frontend/public/favicon.svg` | 浏览器标签页图标 | SVG |
+| `assets/logo.svg` | Logo 源文件 | SVG |
+
+### 替换步骤
+
+1. 准备新图标（推荐 SVG 或高清 PNG）
+2. 替换对应文件：
+   - **exe 图标**：用在线工具（如 convertio.co/png-ico）将 PNG 转为 ICO，替换 `build/windows/icon.ico`
+   - **应用图标**：将 PNG 放到项目根目录，重命名为 `appicon.png`，同时复制到 `build/appicon.png`
+   - **标题栏 Logo**：将 SVG 放到 `frontend/public/logo.svg`
+   - **Favicon**：将 SVG 放到 `frontend/public/favicon.svg`
+3. 运行 `.\build.ps1` 重新构建
+4. 若 exe 图标未更新，清除 Windows 图标缓存或重启电脑
 
 ---
 

@@ -7,6 +7,92 @@ const state = {
   chaptersCache: {}
 };
 
+// ── IndexedDB 离线存储 ──
+const DB_NAME = 'goink_offline';
+const DB_VERSION = 1;
+let dbInstance = null;
+
+function openDB() {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('novels')) db.createObjectStore('novels', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('chapters')) db.createObjectStore('chapters', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('characters')) db.createObjectStore('characters', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('timeline')) db.createObjectStore('timeline', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('arcs')) db.createObjectStore('arcs', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('locations')) db.createObjectStore('locations', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('preferences')) db.createObjectStore('preferences', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+    };
+    req.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(store, data) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const s = tx.objectStore(store);
+    if (Array.isArray(data)) data.forEach(item => s.put(item));
+    else s.put(data);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function dbGetAll(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// 从服务器同步数据到 IndexedDB
+async function syncToOffline() {
+  if (!API.connOk) return;
+  try {
+    // 同步小说列表
+    const novelsRes = await api('/api/novels');
+    if (novelsRes.novels) {
+      await dbPut('novels', novelsRes.novels);
+      // 同步每本小说的章节、角色等
+      for (const novel of novelsRes.novels) {
+        const [chRes, charRes, tlRes, arcRes, locRes, prefRes] = await Promise.all([
+          api(`/api/novels/${novel.id}/chapters`).catch(() => ({})),
+          api(`/api/characters?novel_id=${novel.id}`).catch(() => ({})),
+          api(`/api/timeline?novel_id=${novel.id}`).catch(() => ({})),
+          api(`/api/arcs?novel_id=${novel.id}`).catch(() => ({})),
+          api(`/api/locations?novel_id=${novel.id}`).catch(() => ({})),
+          api(`/api/preferences?novel_id=${novel.id}`).catch(() => ({})),
+        ]);
+        if (chRes.chapters) await dbPut('chapters', chRes.chapters);
+        if (charRes.characters) await dbPut('characters', charRes.characters);
+        if (tlRes.entries) await dbPut('timeline', tlRes.entries);
+        if (arcRes.arcs) await dbPut('arcs', arcRes.arcs);
+        if (locRes.locations) await dbPut('locations', locRes.locations);
+        if (prefRes.preferences) await dbPut('preferences', prefRes.preferences);
+      }
+    }
+  } catch (_) {}
+}
+
 // ── HTTP ──
 function getToken() { return localStorage.getItem('goink_api_token') || ''; }
 function setToken(t) { localStorage.setItem('goink_api_token', t); }
@@ -15,13 +101,72 @@ async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(API.base + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal: opts.signal });
-  if (res.status === 401) {
-    // token 无效，只在未弹窗时显示
-    if (!document.getElementById('tokenOverlay')) showTokenPrompt();
-    return { error: 'unauthorized' };
+  try {
+    const res = await fetch(API.base + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal: opts.signal });
+    if (res.status === 401) {
+      // token 无效，只在未弹窗时显示
+      if (!document.getElementById('tokenOverlay')) showTokenPrompt();
+      return { error: 'unauthorized' };
+    }
+    API.connOk = true;
+    return res.json();
+  } catch (_) {
+    // 网络失败，尝试从 IndexedDB 读取
+    API.connOk = false;
+    return offlineFallback(path);
   }
-  return res.json();
+}
+
+// 离线回退：从 IndexedDB 读取缓存数据
+async function offlineFallback(path) {
+  try {
+    if (path === '/api/novels') {
+      const novels = await dbGetAll('novels');
+      return { novels };
+    }
+    const novelMatch = path.match(/\/api\/novels\/(\d+)\/chapters/);
+    if (novelMatch) {
+      const all = await dbGetAll('chapters');
+      return { chapters: all.filter(c => c.novel_id == novelMatch[1]) };
+    }
+    if (path.startsWith('/api/characters')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nid = params.get('novel_id');
+      const all = await dbGetAll('characters');
+      return { characters: nid ? all.filter(c => c.novel_id == nid) : all };
+    }
+    if (path.startsWith('/api/timeline')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nid = params.get('novel_id');
+      const all = await dbGetAll('timeline');
+      return { entries: nid ? all.filter(e => e.novel_id == nid) : all };
+    }
+    if (path.startsWith('/api/arcs')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nid = params.get('novel_id');
+      const all = await dbGetAll('arcs');
+      return { arcs: nid ? all.filter(a => a.novel_id == nid) : all };
+    }
+    if (path.startsWith('/api/locations')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nid = params.get('novel_id');
+      const all = await dbGetAll('locations');
+      return { locations: nid ? all.filter(l => l.novel_id == nid) : all };
+    }
+    if (path.startsWith('/api/preferences')) {
+      const params = new URLSearchParams(path.split('?')[1] || '');
+      const nid = params.get('novel_id');
+      const all = await dbGetAll('preferences');
+      return { preferences: nid ? all.filter(p => p.novel_id == nid) : all };
+    }
+    // 章节内容
+    const chMatch = path.match(/\/api\/chapters\/(\d+)/);
+    if (chMatch) {
+      const ch = await dbGet('chapters', parseInt(chMatch[1]));
+      return ch || { error: 'not_found' };
+    }
+  } catch (_) {}
+  return { error: 'offline', _offline: true };
 }
 
 // Token 输入弹窗
@@ -35,12 +180,13 @@ function showTokenPrompt() {
   overlay.innerHTML = `
     <div style="background:var(--surface);border-radius:16px;padding:24px;width:85%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
       <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--accent)">🔐 访问验证</h3>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">首次连接需输入令牌，请在桌面端「设置」中查看。</p>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">首次连接需输入令牌，请在桌面端「设置」中查看或扫描二维码。</p>
       <input id="tokenInput" type="text" placeholder="输入 32 位令牌" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:monospace;margin-bottom:12px;outline:none;box-sizing:border-box">
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
         <button id="tokenSave" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">连接</button>
         <button id="tokenCancel" style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">跳过</button>
       </div>
+      <button id="tokenScan" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">📷 扫描二维码</button>
     </div>`;
   document.body.appendChild(overlay);
   document.getElementById('tokenInput').focus();
@@ -57,6 +203,76 @@ function showTokenPrompt() {
   document.getElementById('tokenInput').onkeydown = (e) => {
     if (e.key === 'Enter') document.getElementById('tokenSave').click();
   };
+  document.getElementById('tokenScan').onclick = () => { startQRScan(); };
+}
+
+// QR 码扫描
+function startQRScan() {
+  let overlay = document.getElementById('qrScanOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'qrScanOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:1000;display:flex;flex-direction:column';
+  overlay.innerHTML = `
+    <div style="flex:1;position:relative;overflow:hidden">
+      <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" autoplay playsinline></video>
+      <canvas id="qrCanvas" style="display:none"></canvas>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid rgba(255,255,255,.7);border-radius:12px;pointer-events:none"></div>
+    </div>
+    <div style="padding:16px;text-align:center;background:var(--surface)">
+      <p style="font-size:14px;color:var(--text);margin-bottom:12px">将二维码放入框内</p>
+      <button id="qrCancel" style="padding:10px 32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">取消</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let scanning = true;
+
+  document.getElementById('qrCancel').onclick = () => {
+    scanning = false;
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+    }
+    overlay.remove();
+  };
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      video.srcObject = stream;
+      video.play();
+      scanFrame();
+    })
+    .catch(() => {
+      toast('无法访问摄像头');
+      overlay.remove();
+    });
+
+  function scanFrame() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        scanning = false;
+        video.srcObject.getTracks().forEach(t => t.stop());
+        overlay.remove();
+        // 填入 token 并连接
+        const tokenInput = document.getElementById('tokenInput');
+        if (tokenInput) tokenInput.value = code.data;
+        setToken(code.data);
+        document.getElementById('tokenOverlay').remove();
+        switchPage(state.page);
+        toast('扫码成功，令牌已保存');
+        return;
+      }
+    }
+    requestAnimationFrame(scanFrame);
+  }
 }
 
 // ── 全局主题 ──
@@ -231,6 +447,10 @@ async function loadNovels() {
     const novels = r.novels || [];
     const el = document.getElementById('novelList');
     if (!novels.length) { el.innerHTML = `<div class="empty-state"><p>${t('novels_empty')}</p></div>`; return; }
+    // 在线时后台同步到 IndexedDB
+    if (API.connOk && !r._offline) syncToOffline();
+    // 离线提示
+    if (r._offline) toast('📡 离线模式，显示缓存数据');
     const colors = ['#6366F1','#EC4899','#10B981','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#F97316'];
     const enriched = await Promise.all(novels.map(async (n, i) => {
       const [chRes, charRes] = await Promise.all([api(`/api/novels/${n.id}/chapters?page=1&size=9999`), api(`/api/characters?novel_id=${n.id}`)]);
@@ -240,8 +460,8 @@ async function loadNovels() {
     }));
     el.innerHTML = enriched.map(n => {
       const isActive = n.id === state.novelId;
-      const wordStr = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + '万' : n.totalWords ? n.totalWords : '';
-      return `<div class="novel-card${isActive ? ' novel-active' : ''}" onclick="openNovel(${n.id},'${esc(n.title)}')"><div class="novel-card-top"><div class="novel-icon" style="background:${n.color}">${(n.title||'?')[0]}</div><div class="novel-info"><div class="novel-title">${esc(n.title)}</div>${n.genre ? `<span class="novel-genre" style="background:${n.color}22;color:${n.color}">${esc(n.genre)}</span>` : ''}${isActive ? `<span class="novel-genre" style="background:rgba(139,105,20,.15);color:var(--accent)">${t('current')}</span>` : ''}${n.description ? `<div class="novel-desc">${esc(n.description)}</div>` : ''}</div></div><div class="novel-meta"><span>📖 ${n.chapterCount}${t('chapters')}</span><span>👤 ${n.charCount}${t('characters')}</span>${wordStr ? `<span>📝 ${wordStr}万字</span>` : ''}${n.lastUpdated ? `<span>🕐 ${n.lastUpdated}</span>` : ''}</div><span class="arrow">›</span></div>`;
+      const wordStr = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + '万字' : n.totalWords ? n.totalWords + '字' : '';
+      return `<div class="novel-card${isActive ? ' novel-active' : ''}" onclick="openNovel(${n.id},'${esc(n.title)}')"><div class="novel-card-top"><div class="novel-icon" style="background:${n.color}">${(n.title||'?')[0]}</div><div class="novel-info"><div class="novel-title">${esc(n.title)}</div>${n.genre ? `<span class="novel-genre" style="background:${n.color}22;color:${n.color}">${esc(n.genre)}</span>` : ''}${isActive ? `<span class="novel-genre" style="background:rgba(139,105,20,.15);color:var(--accent)">${t('current')}</span>` : ''}${n.description ? `<div class="novel-desc">${esc(n.description)}</div>` : ''}</div></div><div class="novel-meta"><span>📖 ${n.chapterCount}${t('chapters')}</span><span>👤 ${n.charCount}${t('characters')}</span>${wordStr ? `<span>📝 ${wordStr}</span>` : ''}${n.lastUpdated ? `<span>🕐 ${n.lastUpdated}</span>` : ''}</div><span class="arrow">›</span></div>`;
     }).join('');
   } catch (_) { document.getElementById('novelList').innerHTML = `<div class="empty-state"><p>${t('load_fail')}</p></div>`; }
 }
@@ -687,9 +907,10 @@ async function loadSettings() {
             <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
             <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
           </div>
+          <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
         </div>
         <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-        <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>界面语言</span><strong style="color:var(--accent)">${lang==='zh'?'中文 English':'English 中文'}</strong></div></div>`;
+        <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>`;
       return;
     }
     state.models = r.models||[]; state.selectedModel = r.selected_model_key||'';
@@ -697,14 +918,15 @@ async function loadSettings() {
     document.getElementById('settingsContent').innerHTML = `
       <div class="setting-group"><div class="setting-label">🤖 ${t('model')}</div><div class="setting-value" onclick="showModels()"><span>${t('current_model')}</span><strong style="color:var(--accent)">${esc(name)}</strong></div></div>
       <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>界面语言</span><strong style="color:var(--accent)">${lang==='zh'?'中文 English':'English 中文'}</strong></div></div>
+      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>
       <div class="setting-group"><div class="setting-label">🔐 API 认证</div>
         <div style="display:flex;gap:8px">
           <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
           <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
         </div>
+        <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
       </div>
-      <div class="setting-group"><div class="setting-label">🔗 ${t('server')}</div><div class="setting-value"><span>${t('server')}</span><strong>${esc(API.base)}</strong></div><div class="setting-value"><span>${t('status')}</span><strong style="color:${API.connOk?'var(--success)':'var(--error)'}">${API.connOk?t('connected'):t('disconnected')}</strong></div></div>`;
+      <div class="setting-group"><div class="setting-label">🔗 ${t('server')}</div><div class="setting-value"><span>${t('server')}</span><strong>${esc(API.base)}</strong></div><div class="setting-value"><span>${t('status')}</span><strong style="color:${API.connOk?'var(--success)':'var(--error)'}">${API.connOk?'🟢 已连接':'🔴 离线'}</strong></div><div class="setting-value"><span>缓存</span><strong style="color:var(--text2);font-size:12px">在线时自动同步到本地</strong></div></div>`;
   } catch (_) {
     // 网络错误也显示设置页
     document.getElementById('settingsContent').innerHTML = `
@@ -714,9 +936,10 @@ async function loadSettings() {
           <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
           <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
         </div>
+        <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
       </div>
       <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>界面语言</span><strong style="color:var(--accent)">${lang==='zh'?'中文 English':'English 中文'}</strong></div></div>`;
+      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>`;
   }
 }
 
@@ -726,6 +949,74 @@ function saveTokenFromSettings() {
     setToken(val);
     toast('令牌已保存');
     loadSettings();
+  }
+}
+
+// 设置页 QR 码扫描
+function startQRScanFromSettings() {
+  let overlay = document.getElementById('qrScanOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'qrScanOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:1000;display:flex;flex-direction:column';
+  overlay.innerHTML = `
+    <div style="flex:1;position:relative;overflow:hidden">
+      <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" autoplay playsinline></video>
+      <canvas id="qrCanvas" style="display:none"></canvas>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid rgba(255,255,255,.7);border-radius:12px;pointer-events:none"></div>
+    </div>
+    <div style="padding:16px;text-align:center;background:var(--surface)">
+      <p style="font-size:14px;color:var(--text);margin-bottom:12px">将二维码放入框内</p>
+      <button id="qrCancel" style="padding:10px 32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">取消</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const video = document.getElementById('qrVideo');
+  const canvas = document.getElementById('qrCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let scanning = true;
+
+  document.getElementById('qrCancel').onclick = () => {
+    scanning = false;
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+    }
+    overlay.remove();
+  };
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      video.srcObject = stream;
+      video.play();
+      scanFrame();
+    })
+    .catch(() => {
+      toast('无法访问摄像头');
+      overlay.remove();
+    });
+
+  function scanFrame() {
+    if (!scanning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        scanning = false;
+        video.srcObject.getTracks().forEach(t => t.stop());
+        overlay.remove();
+        // 填入 token 并保存
+        const tokenField = document.getElementById('tokenField');
+        if (tokenField) tokenField.value = code.data;
+        setToken(code.data);
+        toast('扫码成功，令牌已保存');
+        loadSettings();
+        return;
+      }
+    }
+    requestAnimationFrame(scanFrame);
   }
 }
 

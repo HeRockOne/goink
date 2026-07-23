@@ -1,5 +1,5 @@
 #define MyAppName "Goink"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.2.0"
 #define MyAppExeName "goink.exe"
 #define MyAppPublisher "HeRockOne"
 #define MyAppURL "https://github.com/HeRockOne/goink"

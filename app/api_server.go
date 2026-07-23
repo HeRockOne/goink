@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ import (
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"novel/internal/cert"
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
@@ -101,11 +103,58 @@ func (s *apiServer) Start() {
 	}
 	s.running = true
 	s.mu.Unlock()
+
+	// 杀掉占用端口的旧进程
+	killPort(s.port)
+
 	addr := fmt.Sprintf(":%d", s.port)
 	s.server = &http.Server{Addr: addr, Handler: withCORS(withAuth(s.mux, s))}
-	s.logger.Info("移动端 API 服务器启动", "port", s.port)
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+	// 尝试生成/加载 HTTPS 证书
+	dataDir := config.DataDirPath()
+	certFile, keyFile, ip, err := cert.EnsureCert(dataDir)
+	if err != nil {
+		s.logger.Warn("HTTPS 证书生成失败，使用 HTTP", "err", err)
+		s.logger.Info("移动端 API 服务器启动 (HTTP)", "port", s.port)
+		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			s.logger.Warn("API 服务器已停止", "err", err)
+		}
+		return
+	}
+
+	s.logger.Info("移动端 API 服务器启动 (HTTPS)", "port", s.port, "ip", ip)
+	s.logger.Info("📱 iPhone 用户首次访问需信任证书：设置 → 通用 → 关于本机 → 证书信任设置")
+	s.logger.Info("访问地址", "url", fmt.Sprintf("https://%s:%d/mobile/", ip, s.port))
+
+	if err := s.server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 		s.logger.Warn("API 服务器已停止", "err", err)
+	}
+}
+
+// killPort 杀掉占用指定端口的进程（仅 Windows）。
+func killPort(port int) {
+	out, err := exec.Command("netstat", "-ano", "-p", "tcp").Output()
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if !strings.Contains(line, fmt.Sprintf(":%d", port)) {
+			continue
+		}
+		if !strings.Contains(line, "LISTENING") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		pid := fields[len(fields)-1]
+		if pid == "0" || pid == "4" {
+			continue
+		}
+		slog.Info("杀掉旧进程", "pid", pid, "port", port)
+		exec.Command("taskkill", "/F", "/PID", pid).Run()
 	}
 }
 
