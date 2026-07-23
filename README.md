@@ -82,7 +82,6 @@ prepare → outline → write → review → maintain → prepare
 | 会话管理 | 删除历史会话 |
 | 日志开关 | 设置中启用/禁用文件日志 |
 | 对话优化 | 消息气泡、Markdown 渲染、复制按钮 |
-| 国际化 | 中/英文界面切换 |
 
 ---
 

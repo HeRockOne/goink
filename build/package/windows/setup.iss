@@ -1,31 +1,35 @@
 #define MyAppName "Goink"
-#define MyAppVersion GetEnv("VERSION")
+#define MyAppVersion "0.1.0"
 #define MyAppExeName "goink.exe"
+#define MyAppPublisher "HeRockOne"
+#define MyAppURL "https://github.com/HeRockOne/goink"
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=Goink
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
 DefaultDirName={code:GetDefaultDir}
 DefaultGroupName={#MyAppName}
 OutputDir=..\..\dist
 OutputBaseFilename=goink-v{#MyAppVersion}-windows-amd64
 Compression=lzma2
 SolidCompression=yes
-UninstallDisplayName={#MyAppName}
+UninstallDisplayName={#MyAppName} {#MyAppVersion}
 ArchitecturesInstallIn64BitMode=x64compatible
 DirExistsWarning=no
 
 [Files]
-Source: "..\..\bin\goink.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\runtime\*"; DestDir: "{app}\runtime"; Flags: recursesubdirs
+Source: "D:\Goink\goink.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "D:\Goink\runtime\*"; DestDir: "{app}\runtime"; Flags: recursesubdirs
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式:"; Flags: checkedonce
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autoprograms}\{#MyAppName}卸载 Goink"; Filename: "{uninstallexe}"
+Name: "{autoprograms}\{#MyAppName}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Code]
