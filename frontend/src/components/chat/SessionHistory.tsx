@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageSquare, Loader2, History, Trash2 } from 'lucide-react'
+import { MessageSquare, Loader2, History, Trash2, CheckSquare, Square, CheckCheck, ArrowUpDown } from 'lucide-react'
 import type { app } from '@/hooks/useApp'
 import { useApp } from '@/hooks/useApp'
 
@@ -17,7 +17,6 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
   const [mounted, setMounted] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
-  // 面板打开时每分钟刷新时间，保证 timeAgo 相对时间准确
   useEffect(() => {
     if (!open) return
     const timer = setInterval(() => setNow(Date.now()), 60_000)
@@ -43,6 +42,8 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
   const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
   const [submittedSearch, setSubmittedSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const loadingRef = useRef(false)
   const searchRef = useRef('')
@@ -60,6 +61,7 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
           setSessions(prev => p === 1 ? result.items : [...prev, ...result.items])
           setTotal(result.total)
           setHasMore(result.page < result.total_pages)
+          if (p === 1) setSelectedIds(new Set())
         }
       } catch {
         // ignore
@@ -81,7 +83,6 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     }
   }, [open])
 
-  // 搜索防抖 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchRef.current !== search) {
@@ -104,6 +105,7 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     setSessions([])
     setPage(1)
     setHasMore(true)
+    setSelectedIds(new Set())
     loadPageRef.current?.(1)
   }, [open, novelId])
 
@@ -117,7 +119,47 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     }
   }, [hasMore, isLoading, page])
 
+  const toggleSelect = useCallback((sid: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(sid)) next.delete(sid)
+      else next.add(sid)
+      return next
+    })
+  }, [])
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(sessions.map(s => s.session_id)))
+  }, [sessions])
+
+  const invertSelect = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set<string>()
+      sessions.forEach(s => {
+        if (!prev.has(s.session_id)) next.add(s.session_id)
+      })
+      return next
+    })
+  }, [sessions])
+
+  const deleteSelected = useCallback(async () => {
+    const count = selectedIds.size
+    if (count === 0) return
+    const msg = count === 1 ? t('chat.confirmDeleteSession') : t('chat.confirmDeleteSessions', '确定要删除选中的 ' + count + ' 个会话吗？此操作不可恢复。')
+    if (!window.confirm(msg)) return
+    setIsDeleting(true)
+    const ids = [...selectedIds]
+    for (const sid of ids) {
+      try { await app.DeleteSession(sid) } catch { /* ignore */ }
+    }
+    setIsDeleting(false)
+    setSelectedIds(new Set())
+    loadPageRef.current?.(1)
+  }, [selectedIds, app, t])
+
   if (!mounted) return null
+
+  const hasSelection = selectedIds.size > 0
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -134,15 +176,48 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
             <span className="text-[10px] text-muted-foreground">{t('chat.totalSessions', { count: total })}</span>
           )}
         </div>
+        <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-1">
+          ✕
+        </button>
       </div>
 
-      <div className="px-4 py-2 shrink-0">
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={t('chat.searchSessions')}
-          className="w-full h-7 rounded-md border bg-muted/30 px-2.5 text-xs"
-        />
+      <div className="px-4 py-2 shrink-0 border-b border-border/30">
+        <div className="flex items-center gap-2">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={t('chat.searchSessions')}
+            className="flex-1 h-7 rounded-md border bg-muted/30 px-2.5 text-xs"
+          />
+          {/* 批量操作按钮 */}
+          <button
+            onClick={selectAll}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer whitespace-nowrap"
+            title={t('selectAll')}
+          >
+            <CheckCheck className="w-3 h-3" /> {t('selectAll')}
+          </button>
+          <button
+            onClick={invertSelect}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer whitespace-nowrap"
+            title={t('chat.invertSelect', '反选')}
+          >
+            <ArrowUpDown className="w-3 h-3" /> {t('chat.invertSelect', '反选')}
+          </button>
+          {hasSelection && (
+            <button
+              onClick={deleteSelected}
+              disabled={isDeleting}
+              className="flex items-center gap-1 text-[10px] text-destructive hover:text-destructive/80 transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap"
+            >
+              {isDeleting
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <Trash2 className="w-3 h-3" />
+              }
+              {t('chat.delete', '删除')}({selectedIds.size})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 会话列表 */}
@@ -161,27 +236,32 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
           </div>
         ) : (
           <div className="space-y-0.5">
-            {sessions.map(s => (
+            {sessions.map(s => {
+              const isSelected = selectedIds.has(s.session_id)
+              return (
               <div key={s.session_id} className="group flex items-center">
-              <button
-                onClick={() => { onSelectSession(s.session_id); onClose() }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
-              >
-                <MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs truncate">{s.title || t('chat.newChat')}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(s.updated_at)}</div>
-                </div>
-              </button>
-              <button
-                onClick={async (e) => { e.stopPropagation(); if (!window.confirm(t('chat.confirmDeleteSession'))) return; await app.DeleteSession(s.session_id); loadPageRef.current(1); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 text-destructive transition-all shrink-0"
-                title={t('chat.deleteSession')}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+                {/* 复选框 */}
+                <button
+                  onClick={() => toggleSelect(s.session_id)}
+                  className="shrink-0 p-1.5 mr-1 rounded hover:bg-muted/50 transition-colors cursor-pointer"
+                >
+                  {isSelected
+                    ? <CheckSquare className="w-4 h-4 text-primary" />
+                    : <Square className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                  }
+                </button>
+                <button
+                  onClick={() => { onSelectSession(s.session_id); onClose() }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
+                >
+                  <MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-xs truncate ${isSelected ? 'text-primary' : ''}`}>{s.title || t('chat.newChat')}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(s.updated_at)}</div>
+                  </div>
+                </button>
               </div>
-            ))}
+            )})}
             {isLoading && (
               <div className="flex justify-center py-3">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />

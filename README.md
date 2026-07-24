@@ -34,11 +34,17 @@
 |------|------|
 | 书架 | 小说列表、字数统计、当前书籍标识 |
 | 小说详情 | 章节/角色/时间线/弧线/读者/偏好/地点 七大模块 |
-| 全屏阅读器 | 字号行距背景调节、左右翻页、章节目录、进度记忆 |
+| 全屏阅读器 | 字号行距调节、左右翻页、章节目录、进度记忆 |
 | AI 对话 | 流式 SSE、思考过程、会话历史、模型切换 |
 | 设置 | 深浅模式、中英语言、Token 管理、模型选择 |
 
-> 首次连接支持扫码或手动输入 Token。离线时自动从 IndexedDB 读取缓存数据。
+> **离线缓存**：`idb-keyval` + 内存 Map 双缓存。在线浏览时自动缓存全部数据（含章节正文），离线时秒读。连接恢复后自动刷新缓存。
+>
+> **Service Worker**：预缓存静态资源，断网时页面骨架正常加载。
+>
+> **太虚剑宗主题**：冰蓝玄黑色系 + CSS 山峦剪影 + 毛玻璃卡片，浅色/深色双模式。
+>
+> 首次连接支持扫码或手动输入 Token。
 
 ### HTTP API
 
@@ -84,13 +90,15 @@ prepare → outline → write → review → maintain → prepare
 | WebDAV | 内置服务器，手机文件管理器阅读小说 |
 | 模型管理 | model.dev 自动获取、思考模式支持 |
 | 数据备份 | 一键备份/恢复全量数据（含数据库、小说、用户技能） |
-| 会话管理 | 删除历史会话 |
+| 会话管理 | 删除历史会话、批量勾选删除 |
 | 日志开关 | 设置中启用/禁用文件日志 |
 | 对话优化 | 消息气泡、Markdown 渲染、复制按钮 |
-| 复古牛皮纸主题 | 浅色/深色双模式，泛黄旧书风格 + Diff 编辑器主题 |
+| 桌面端自动加载最新会话 | 启动后自动选中最近会话 |
 | 双端实时同步 | 桌面端与移动端 WebSocket 全双工同步对话 |
 | 移动端扫码连接 | 桌面端显示 Token 二维码，手机扫码快速连接 |
-| 移动端离线存储 | IndexedDB 缓存，离线可阅读小说和查看设定 |
+| 移动端离线缓存 | idb-keyval + 内存 Map，在线时缓存全部数据，离线秒读 |
+| 移动端 Service Worker | 预缓存静态资源，断网页面可用 |
+| 太虚剑宗移动端主题 | 冰蓝玄黑配色 + 山峦剪影 + 毛玻璃 UI |
 | 自动 HTTPS | 启动时自动生成证书，手机摄像头可用 |
 | 模型服务商显示 | 模型选择显示 `provider / model-name` 格式 |
 | 端口冲突处理 | 启动时自动杀掉占用端口的旧进程 |
@@ -126,9 +134,11 @@ goink/
 │   ├── webdav/             # WebDAV 服务器
 │   └── ...
 ├── mobile/                 # 移动端 Web 前端（纯 JS + wspulse）
-│   ├── index.html          #   入口
-│   ├── app.js              #   主逻辑 + 离线存储
-│   ├── style.css           #   样式
+│   ├── index.html          #   入口 + HTML template 组件定义
+│   ├── app.js              #   主逻辑 + 离线缓存 + 模板渲染
+│   ├── style.css           #   太虚剑宗主题样式
+│   ├── sw.js               #   Service Worker（离线资源缓存）
+│   ├── idb-keyval.min.js   #   离线存储库（295B）
 │   ├── jsQR.js             #   QR 码扫描库
 │   ├── wspulse.mjs         #   WebSocket 客户端
 │   └── API.md              #   API 文档
@@ -316,7 +326,7 @@ Diff 视图使用自定义 Monaco 主题（`ContentPanel.tsx` 中注册）：
 | Agent 引擎 | ReAct 循环（Go，SSE + 31 工具 + 子 Agent） |
 | 桌面框架 | Wails v2（Go + WebView） |
 | 前端 | React 19 + TypeScript + Tailwind 4 + shadcn/ui |
-| 移动端 | HTTP API + 纯原生 JS Web 前端 |
+| 移动端 | HTTP API + 纯原生 JS Web 前端 + idb-keyval 离线缓存 |
 | 数据库 | SQLite + GORM |
 | 向量搜索 | sqlite-vec + ONNX Runtime |
 | 版本控制 | 内置 Git |

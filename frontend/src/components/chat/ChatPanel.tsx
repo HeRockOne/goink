@@ -79,6 +79,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   const [sessionsTotal, setSessionsTotal] = useState(0)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [sessionTitle, setSessionTitle] = useState('')
   const [initLoadError, setInitLoadError] = useState(false)
   const [initLoadRetry, setInitLoadRetry] = useState(0)
   const [historyLoadError, setHistoryLoadError] = useState(false)
@@ -151,22 +152,32 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     setActiveSessionId(undefined)
     setTurns([])
     setSessionId('')
+    setSessionTitle('')
     app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
       if (r) {
         setSessions(r.items)
         setSessionsTotal(r.total)
+        // 无上次会话时自动选中最新会话
+        const sid = lastSessionIdRef.current
+        if (!sid && r.items.length > 0) {
+          const latest = r.items[0]
+          setActiveSessionId(latest.session_id)
+          setSessionTitle(latest.title || '')
+          app.SetLastSession(latest.session_id).catch(() => {})
+        }
       }
     }).catch((err) => {
       console.error('Load sessions failed', err)
     })
 
-    // 尝试恢复上次活跃会话（仅恢复一次，通过 ref 标记）
+    // 尝试恢复上次活跃会话
     const sid = lastSessionIdRef.current
     if (sid && novelId) {
       lastSessionIdRef.current = ''
       app.GetSession(sid).then(detail => {
         if (detail && detail.novel_id === novelId) {
           setActiveSessionId(sid)
+          setSessionTitle(detail.title || '')
         }
       }).catch(() => {
         app.SetLastSession('').catch(() => {})
@@ -390,10 +401,13 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     setActiveSessionId(sid)
     app.SetLastSession(sid).catch(() => {})
     app.GetSession(sid).then(detail => {
-      if (detail?.usage) {
-        setLastUsage(detail.usage as unknown as UsageInfo)
-      } else {
-        setLastUsage(null)
+      if (detail) {
+        setSessionTitle(detail.title || '')
+        if (detail.usage) {
+          setLastUsage(detail.usage as unknown as UsageInfo)
+        } else {
+          setLastUsage(null)
+        }
       }
     }).catch(() => setLastUsage(null))
   }, [app])
@@ -1079,7 +1093,10 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       />
 
       <div className="px-4 py-2.5 border-b shrink-0 flex items-center justify-between select-none">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('chat.aiChat')}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">{t('chat.aiChat')}</span>
+          {sessionTitle && <span className="text-xs text-foreground/60 truncate max-w-[140px]">· {sessionTitle}</span>}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleOpenHistory}

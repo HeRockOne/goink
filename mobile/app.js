@@ -7,93 +7,59 @@ const state = {
   chaptersCache: {}
 };
 
-// ── IndexedDB 离线存储 ──
-const DB_NAME = 'goink_offline';
-const DB_VERSION = 1;
-let dbInstance = null;
+// ── 离线缓存（idb-keyval + 内存 Map）──
+// idb-keyval: 持久化层，基于 IndexedDB，大容量
+// 内存缓存: 微秒级，存最近 200 条数据（LRU）
+const memCache = new Map();
+const MEM_MAX = 200;
+function memSet(k, v) { memCache.set(k, v); if (memCache.size > MEM_MAX) { const first = memCache.keys().next().value; memCache.delete(first); } }
+function memGet(k) { if (memCache.has(k)) { const v = memCache.get(k); memCache.delete(k); memCache.set(k, v); return v; } }
 
-function openDB() {
-  if (dbInstance) return Promise.resolve(dbInstance);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('novels')) db.createObjectStore('novels', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('chapters')) db.createObjectStore('chapters', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('characters')) db.createObjectStore('characters', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('timeline')) db.createObjectStore('timeline', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('arcs')) db.createObjectStore('arcs', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('locations')) db.createObjectStore('locations', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('preferences')) db.createObjectStore('preferences', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
-    };
-    req.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
-    req.onerror = () => reject(req.error);
-  });
+async function cacheResponse(path, data) {
+  memSet(path, data);                          // 内存缓存（微秒级）
+  await idbKeyval.set(path, data).catch(() => {}); // 持久化（IndexedDB）
 }
 
-async function dbPut(store, data) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readwrite');
-    const s = tx.objectStore(store);
-    if (Array.isArray(data)) data.forEach(item => s.put(item));
-    else s.put(data);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+async function offlineFallback(path) {
+  // L1: 内存（微秒）
+  const m = memGet(path);
+  if (m !== undefined) return { ...m, _offline: true };
+  // L2: idb-keyval（IndexedDB，首次读稍慢）
+  const d = await idbKeyval.get(path).catch(() => null);
+  if (d) { memSet(path, d); return { ...d, _offline: true }; }
+  return { error: 'offline', _offline: true };
 }
 
-async function dbGetAll(store) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function dbGet(store, key) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).get(key);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-// 从服务器同步数据到 IndexedDB
 async function syncToOffline() {
   if (!API.connOk) return;
   try {
-    // 同步小说列表
+    await idbKeyval.clear().catch(() => {});
+    memCache.clear();
     const novelsRes = await api('/api/novels');
     if (novelsRes.novels) {
-      await dbPut('novels', novelsRes.novels);
-      // 同步每本小说的章节、角色等
       for (const novel of novelsRes.novels) {
-        const [chRes, charRes, tlRes, arcRes, locRes, prefRes] = await Promise.all([
-          api(`/api/novels/${novel.id}/chapters`).catch(() => ({})),
+        const chRes = await api(`/api/novels/${novel.id}/chapters`).catch(() => ({}));
+        const chapters = chRes.chapters || [];
+        // 预缓存每章正文内容
+        for (const ch of chapters) {
+          await api(`/api/chapters/${ch.id}`).catch(() => ({}));
+        }
+        // 缓存其他设定
+        await Promise.all([
           api(`/api/characters?novel_id=${novel.id}`).catch(() => ({})),
           api(`/api/timeline?novel_id=${novel.id}`).catch(() => ({})),
           api(`/api/arcs?novel_id=${novel.id}`).catch(() => ({})),
           api(`/api/locations?novel_id=${novel.id}`).catch(() => ({})),
           api(`/api/preferences?novel_id=${novel.id}`).catch(() => ({})),
         ]);
-        if (chRes.chapters) await dbPut('chapters', chRes.chapters);
-        if (charRes.characters) await dbPut('characters', charRes.characters);
-        if (tlRes.entries) await dbPut('timeline', tlRes.entries);
-        if (arcRes.arcs) await dbPut('arcs', arcRes.arcs);
-        if (locRes.locations) await dbPut('locations', locRes.locations);
-        if (prefRes.preferences) await dbPut('preferences', prefRes.preferences);
       }
     }
   } catch (_) {}
 }
 
 // ── HTTP ──
+let _useCache = false; // 连续失败后跳过网络直接读缓存
+
 function getToken() { return localStorage.getItem('goink_api_token') || ''; }
 function setToken(t) { localStorage.setItem('goink_api_token', t); }
 
@@ -101,93 +67,38 @@ async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
+  const isGet = !opts.method || opts.method === 'GET';
+  // 离线或缓存模式：跳过网络直接读缓存
+  if (!navigator.onLine || (_useCache && isGet)) {
+    API.connOk = false;
+    return offlineFallback(path);
+  }
+  // 网络请求带 1.5s 超时
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 500);
+  const signal = opts.signal || ctrl.signal;
   try {
-    const res = await fetch(API.base + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal: opts.signal });
+    const res = await fetch(API.base + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal });
+    clearTimeout(timer);
     if (res.status === 401) {
-      // token 无效，只在未弹窗时显示
       if (!document.getElementById('tokenOverlay')) showTokenPrompt();
       return { error: 'unauthorized' };
     }
-    API.connOk = true;
-    return res.json();
+    API.connOk = true; _useCache = false; // 成功 → 取消缓存模式
+    const data = await res.json();
+    if (isGet) cacheResponse(path, data).catch(() => {});
+    return data;
   } catch (_) {
-    // 网络失败，尝试从 IndexedDB 读取
-    API.connOk = false;
+    API.connOk = false; _useCache = true; // 失败 → 后续直接读缓存
     return offlineFallback(path);
   }
 }
 
-// 离线回退：从 IndexedDB 读取缓存数据
-async function offlineFallback(path) {
-  try {
-    if (path === '/api/novels') {
-      const novels = await dbGetAll('novels');
-      return { novels };
-    }
-    const novelMatch = path.match(/\/api\/novels\/(\d+)\/chapters/);
-    if (novelMatch) {
-      const all = await dbGetAll('chapters');
-      return { chapters: all.filter(c => c.novel_id == novelMatch[1]) };
-    }
-    if (path.startsWith('/api/characters')) {
-      const params = new URLSearchParams(path.split('?')[1] || '');
-      const nid = params.get('novel_id');
-      const all = await dbGetAll('characters');
-      return { characters: nid ? all.filter(c => c.novel_id == nid) : all };
-    }
-    if (path.startsWith('/api/timeline')) {
-      const params = new URLSearchParams(path.split('?')[1] || '');
-      const nid = params.get('novel_id');
-      const all = await dbGetAll('timeline');
-      return { entries: nid ? all.filter(e => e.novel_id == nid) : all };
-    }
-    if (path.startsWith('/api/arcs')) {
-      const params = new URLSearchParams(path.split('?')[1] || '');
-      const nid = params.get('novel_id');
-      const all = await dbGetAll('arcs');
-      return { arcs: nid ? all.filter(a => a.novel_id == nid) : all };
-    }
-    if (path.startsWith('/api/locations')) {
-      const params = new URLSearchParams(path.split('?')[1] || '');
-      const nid = params.get('novel_id');
-      const all = await dbGetAll('locations');
-      return { locations: nid ? all.filter(l => l.novel_id == nid) : all };
-    }
-    if (path.startsWith('/api/preferences')) {
-      const params = new URLSearchParams(path.split('?')[1] || '');
-      const nid = params.get('novel_id');
-      const all = await dbGetAll('preferences');
-      return { preferences: nid ? all.filter(p => p.novel_id == nid) : all };
-    }
-    // 章节内容
-    const chMatch = path.match(/\/api\/chapters\/(\d+)/);
-    if (chMatch) {
-      const ch = await dbGet('chapters', parseInt(chMatch[1]));
-      return ch || { error: 'not_found' };
-    }
-  } catch (_) {}
-  return { error: 'offline', _offline: true };
-}
-
 // Token 输入弹窗
 function showTokenPrompt() {
-  // 创建 token 输入弹窗
   let overlay = document.getElementById('tokenOverlay');
   if (overlay) overlay.remove();
-  overlay = document.createElement('div');
-  overlay.id = 'tokenOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:16px;padding:24px;width:85%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--accent)">🔐 访问验证</h3>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">首次连接需输入令牌，请在桌面端「设置」中查看或扫描二维码。</p>
-      <input id="tokenInput" type="text" placeholder="输入 32 位令牌" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:monospace;margin-bottom:12px;outline:none;box-sizing:border-box">
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button id="tokenSave" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">连接</button>
-        <button id="tokenCancel" style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">跳过</button>
-      </div>
-      <button id="tokenScan" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">📷 扫描二维码</button>
-    </div>`;
+  overlay = tpl('tpl-token-prompt').firstElementChild;
   document.body.appendChild(overlay);
   document.getElementById('tokenInput').focus();
   document.getElementById('tokenSave').onclick = () => {
@@ -210,19 +121,7 @@ function showTokenPrompt() {
 function startQRScan() {
   let overlay = document.getElementById('qrScanOverlay');
   if (overlay) overlay.remove();
-  overlay = document.createElement('div');
-  overlay.id = 'qrScanOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:1000;display:flex;flex-direction:column';
-  overlay.innerHTML = `
-    <div style="flex:1;position:relative;overflow:hidden">
-      <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" autoplay playsinline></video>
-      <canvas id="qrCanvas" style="display:none"></canvas>
-      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid rgba(255,255,255,.7);border-radius:12px;pointer-events:none"></div>
-    </div>
-    <div style="padding:16px;text-align:center;background:var(--surface)">
-      <p style="font-size:14px;color:var(--text);margin-bottom:12px">将二维码放入框内</p>
-      <button id="qrCancel" style="padding:10px 32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">取消</button>
-    </div>`;
+  overlay = tpl('tpl-qr-scan').firstElementChild;
   document.body.appendChild(overlay);
 
   const video = document.getElementById('qrVideo');
@@ -281,7 +180,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('goink_theme', theme);
   const mc = document.querySelector('meta[name="theme-color"]');
-  if (mc) mc.content = theme === 'dark' ? '#121212' : '#F5F0E8';
+  if (mc) mc.content = theme === 'dark' ? '#0a0e17' : '#eef3f7';
 }
 function toggleTheme() {
   const next = getTheme() === 'dark' ? 'light' : 'dark';
@@ -381,10 +280,73 @@ function fallbackCopy(t) {
   document.body.removeChild(ta);
 }
 
+// ── Template Helpers ──
+function tpl(id) { return document.getElementById(id).content.cloneNode(true); }
+function qs(el, sel) { return el.querySelector(sel); }
+
+// 空状态（template: tpl-empty）
+function emptyState(text) {
+  const el = tpl('tpl-empty'); const root = el.firstElementChild;
+  qs(root, '.em-text').textContent = text;
+  const hint = qs(root, '.em-hint');
+  if (hint) hint.remove();
+  return root;
+}
+
+// 设置值行（template: tpl-setting-row）
+function settingRow(label, val, onclick, valStyle) {
+  const el = tpl('tpl-setting-row'); const root = el.firstElementChild;
+  qs(root, '.sv-label').textContent = label;
+  const v = qs(root, '.sv-val');
+  if (valStyle) v.style.cssText = valStyle;
+  v.innerHTML = val;
+  if (onclick) root.onclick = onclick;
+  return root;
+}
+
+// 通用数据卡片构建
+function dc({ badge, bg, color, title, sub, meta, onclick }) {
+  const el = tpl('tpl-data-card'); const root = el.firstElementChild;
+  const b = qs(root, '.dc-badge'); b.textContent = badge || '?';
+  if (bg) b.style.background = bg; if (color) b.style.color = color;
+  qs(root, '.dc-title').textContent = title || '';
+  const subEl = qs(root, '.dc-sub');
+  if (sub) subEl.textContent = sub; else subEl.remove();
+  const metaEl = qs(root, '.dc-meta');
+  if (meta) metaEl.innerHTML = meta; else metaEl.remove();
+  if (onclick) root.onclick = onclick;
+  return root;
+}
+
+// 小说卡片构建
+function nvCard(n) {
+  const el = tpl('tpl-novel-card'); const root = el.firstElementChild;
+  if (n.id === state.novelId) root.classList.add('novel-active');
+  root.onclick = () => openNovel(n.id, esc(n.title));
+  const icon = qs(root, '.nv-icon'); icon.style.background = n.color || '#666'; icon.textContent = (n.title || '?')[0];
+  qs(root, '.nv-title').textContent = n.title;
+  let m = '';
+  if (n.genre) m += `<span class="novel-tag novel-tag-ghost">${esc(n.genre)}</span>`;
+  if (n.id === state.novelId) m += `<span class="novel-tag novel-tag-jade">◆ ${t('current')}</span>`;
+  qs(root, '.nv-meta').innerHTML = m;
+  const desc = qs(root, '.nv-desc');
+  if (n.description) desc.textContent = n.description; else desc.remove();
+  const wd = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + '万' : n.totalWords ? n.totalWords + '字' : '';
+  qs(root, '.nv-stat-ch').innerHTML = `<strong>${n.chapterCount}</strong>${t('chapters')}`;
+  qs(root, '.nv-stat-char').innerHTML = `<strong>${n.charCount}</strong>${t('characters')}`;
+  const wdEl = qs(root, '.nv-stat-wd');
+  if (wd) wdEl.innerHTML = `<strong>${wd}</strong>`; else wdEl.remove();
+  const dtEl = qs(root, '.nv-stat-dt');
+  if (n.lastUpdated) dtEl.textContent = '🕐' + n.lastUpdated; else dtEl.remove();
+  return root;
+}
+
 // 分类折叠
 function toggleGroup(el) {
-  const body = el.querySelector('.collapse-body');
-  const icon = el.querySelector('.collapse-icon');
+  const group = el.closest('.collapse-group');
+  if (!group) return;
+  const body = group.querySelector('.collapse-body');
+  const icon = group.querySelector('.collapse-icon');
   if (body) { body.classList.toggle('hidden'); icon.textContent = body.classList.contains('hidden') ? '▸' : '▾'; }
 }
 function cardClick(ev, fn) { ev.stopPropagation(); fn(); }
@@ -655,18 +617,15 @@ async function loadNovels() {
     if (API.connOk && !r._offline) syncToOffline();
     // 离线提示
     if (r._offline) toast('📡 离线模式，显示缓存数据');
-    const colors = ['#6366F1','#EC4899','#10B981','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#F97316'];
+    const colors = ['#7b4f9e','#c44a4a','#3d8b5e','#b8922e','#c44a4a','#7b4f9e','#3d8b5e','#d4a843'];
     const enriched = await Promise.all(novels.map(async (n, i) => {
       const [chRes, charRes] = await Promise.all([api(`/api/novels/${n.id}/chapters?page=1&size=9999`), api(`/api/characters?novel_id=${n.id}`)]);
       const chs = chRes.chapters || [];
       const chars = charRes.characters || [];
       return { ...n, color: colors[i % colors.length], chapterCount: chs.length, charCount: chars.length, totalWords: chs.reduce((s, c) => s + (c.word_count || 0), 0), lastUpdated: chs.length ? chs[0]?.updated_at?.slice(0, 10) : '' };
     }));
-    el.innerHTML = enriched.map(n => {
-      const isActive = n.id === state.novelId;
-      const wordStr = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + '万字' : n.totalWords ? n.totalWords + '字' : '';
-      return `<div class="novel-card${isActive ? ' novel-active' : ''}" onclick="openNovel(${n.id},'${esc(n.title)}')"><div class="novel-card-top"><div class="novel-icon" style="background:${n.color}">${(n.title||'?')[0]}</div><div class="novel-info"><div class="novel-title">${esc(n.title)}</div>${n.genre ? `<span class="novel-genre" style="background:${n.color}22;color:${n.color}">${esc(n.genre)}</span>` : ''}${isActive ? `<span class="novel-genre" style="background:rgba(139,105,20,.15);color:var(--accent)">${t('current')}</span>` : ''}${n.description ? `<div class="novel-desc">${esc(n.description)}</div>` : ''}</div></div><div class="novel-meta"><span>📖 ${n.chapterCount}${t('chapters')}</span><span>👤 ${n.charCount}${t('characters')}</span>${wordStr ? `<span>📝 ${wordStr}</span>` : ''}${n.lastUpdated ? `<span>🕐 ${n.lastUpdated}</span>` : ''}</div><span class="arrow">›</span></div>`;
-    }).join('');
+    el.innerHTML = '';
+    enriched.forEach(n => el.appendChild(nvCard(n)));
   } catch (_) { document.getElementById('novelList').innerHTML = `<div class="empty-state"><p>${t('load_fail')}</p></div>`; }
 }
 
@@ -694,59 +653,160 @@ async function loadTabContent(tab) {
     switch (tab) {
       case 'chapters': {
         const chs = await getChapters(nId);
-        el.innerHTML = chs.length ? chs.map(c => `<div class="data-card" onclick="readChapter(${nId}, ${c.id})"><div class="data-card-header"><div class="data-card-icon" style="background:rgba(139,105,20,.1);color:var(--accent)">${c.chapter_number}</div><div class="data-card-body"><div class="data-card-title">${esc(c.title)}</div><div class="data-card-sub">${c.word_count} ${t('words')}</div></div><span class="data-card-arrow">›</span></div></div>`).join('') : `<div class="empty-state"><p>${t('no_chapters')}</p></div>`;
+        el.innerHTML = '';
+        if (chs.length) {
+          chs.forEach(c => el.appendChild(dc({
+            badge: c.chapter_number, bg: 'var(--frost)', color: 'var(--ice)',
+            title: c.title, sub: c.word_count + ' ' + t('words'),
+            onclick: () => readChapter(nId, c.id)
+          })));
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_chapters')}</p></div>`;
+        }
         break;
       }
       case 'characters': {
         const r = await api(`/api/characters?novel_id=${nId}`);
         const chars = r.characters || [];
-        el.innerHTML = chars.length ? chars.map(c => { let preview = c.role || ''; if (!preview && c.personality) try { const p = JSON.parse(c.personality); const vals = Object.values(p).filter(v => typeof v === 'string' && v.length < 40); preview = vals.slice(0, 2).join(' · '); } catch (_) { preview = (c.personality||'').slice(0, 40) || ''; } return `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(c.name)}', formatCharacter(${JSON.stringify(c).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:rgba(59,130,246,.1);color:#3B82F6">${(c.name||'?')[0]}</div><div class="data-card-body"><div class="data-card-title">${esc(c.name)}</div>${preview ? `<div class="data-card-sub">${esc(preview)}</div>` : ''}</div><span class="data-card-arrow">›</span></div></div>`; }).join('') : `<div class="empty-state"><p>${t('no_characters')}</p></div>`;
+        el.innerHTML = '';
+        if (chars.length) {
+          chars.forEach(c => {
+            let preview = c.role || '';
+            if (!preview && c.personality) try { const p = JSON.parse(c.personality); const vals = Object.values(p).filter(v => typeof v === 'string' && v.length < 40); preview = vals.slice(0, 2).join(' · '); } catch (_) { preview = (c.personality||'').slice(0, 40) || ''; }
+            el.appendChild(dc({
+              badge: (c.name||'?')[0], bg: 'var(--frost)', color: 'var(--ice)',
+              title: c.name, sub: preview || undefined,
+              onclick: (ev) => cardClick(ev, () => showDetail(c.name, formatCharacter(c)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_characters')}</p></div>`;
+        }
         break;
       }
       case 'timeline': {
         const r = await api(`/api/timeline?novel_id=${nId}&page=1&size=500`);
         const items = extractItems(r);
-        const resolved = items.filter(i => i.status === 'resolved');
-        const pending = items.filter(i => i.status === 'pending');
-        const other = items.filter(i => i.status !== 'resolved' && i.status !== 'pending');
-        el.innerHTML = items.length ? `<div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('resolved')}</span><span class="collapse-count">${resolved.length}</span></div><div class="collapse-body hidden">${resolved.map(i => timelineCard(i)).join('')}</div></div><div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('pending')}</span><span class="collapse-count">${pending.length}</span></div><div class="collapse-body hidden">${pending.map(i => timelineCard(i)).join('')}</div></div><div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('other')}</span><span class="collapse-count">${other.length}</span></div><div class="collapse-body hidden">${other.map(i => timelineCard(i)).join('')}</div></div>` : `<div class="empty-state"><p>${t('no_timeline')}</p></div>`;
+        el.innerHTML = '';
+        if (items.length) {
+          const groups = [
+            { key: t('resolved'), items: items.filter(i => i.status === 'resolved') },
+            { key: t('pending'), items: items.filter(i => i.status === 'pending') },
+            { key: t('other'), items: items.filter(i => i.status !== 'resolved' && i.status !== 'pending') }
+          ];
+          groups.forEach(g => {
+            if (!g.items.length) return;
+            const grp = tpl('tpl-collapse');
+            const root = grp.firstElementChild;
+            qs(root, '.c-title').textContent = g.key;
+            qs(root, '.c-count').textContent = g.items.length;
+            const body = qs(root, '.c-body');
+            g.items.forEach(i => body.appendChild(timelineCard(i)));
+            el.appendChild(root);
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_timeline')}</p></div>`;
+        }
         break;
       }
       case 'arcs': {
         const [arcRes, nodeRes] = await Promise.all([api(`/api/arcs?novel_id=${nId}&page=1&size=500`), api(`/api/arc-nodes?novel_id=${nId}`)]);
         const arcs = extractItems(arcRes);
         const allNodes = nodeRes.nodes || [];
-        el.innerHTML = arcs.length ? arcs.map(a => {
-          const nodes = allNodes.filter(n => n.story_arc_id === a.id);
-          const completed = nodes.filter(n => n.status === 'completed').length;
-          const sc = a.status === 'active' ? 'var(--success)' : a.status === 'completed' ? '#3B82F6' : a.status === 'paused' ? 'var(--warning)' : 'var(--text2)';
-          return `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(a.name||'')}', formatArc(${JSON.stringify(a).replace(/"/g, '&quot;')}, ${JSON.stringify(nodes).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:${sc}15;color:${sc}">A</div><div class="data-card-body"><div class="data-card-title">${esc(a.name||'无名弧线')}</div><div class="data-card-sub">${esc((a.description||'').slice(0,50))}</div><div class="data-card-tags">${nodes.length ? `<span class="tag tag-sm" style="background:rgba(99,102,241,.1);color:#6366F1">${completed}/${nodes.length}节点</span>` : ''}${a.arc_type ? `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">${esc(a.arc_type)}</span>` : ''}${a.status ? `<span class="tag tag-sm" style="background:${sc}15;color:${sc}">${esc(a.status)}</span>` : ''}</div></div><span class="data-card-arrow">›</span></div></div>`;
-        }).join('') : `<div class="empty-state"><p>${t('no_arcs')}</p></div>`;
+        el.innerHTML = '';
+        if (arcs.length) {
+          arcs.forEach(a => {
+            const nodes = allNodes.filter(n => n.story_arc_id === a.id);
+            const completed = nodes.filter(n => n.status === 'completed').length;
+            const sc = a.status === 'active' ? 'var(--ice)' : a.status === 'completed' ? 'var(--ice)' : a.status === 'paused' ? 'var(--text2)' : 'var(--text2)';
+            let meta = '';
+            if (nodes.length) meta += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">${completed}/${nodes.length}</span>`;
+            if (a.arc_type) meta += `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">${esc(a.arc_type)}</span>`;
+            if (a.status) meta += `<span class="tag tag-sm" style="background:${sc.replace(')','12)')};color:${sc}">${esc(a.status)}</span>`;
+            el.appendChild(dc({
+              badge: 'A', bg: 'var(--frost)', color: sc,
+              title: a.name || '无名弧线', sub: (a.description||'').slice(0,50) || undefined,
+              meta: meta || undefined,
+              onclick: (ev) => cardClick(ev, () => showDetail(a.name||'', formatArc(a, nodes)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_arcs')}</p></div>`;
+        }
         break;
       }
       case 'reader': {
         const r = await api(`/api/reader?novel_id=${nId}&page=1&size=500`);
         const items = extractItems(r);
-        const known = items.filter(i => i.type === 'known');
-        const suspense = items.filter(i => i.type === 'suspense');
-        const misconception = items.filter(i => i.type === 'misconception');
-        const mkCard = (i, tc, tl) => `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(tl)}', formatReader(${JSON.stringify(i).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:${tc}15;color:${tc}">R</div><div class="data-card-body"><div class="data-card-title">${esc((i.content||'').slice(0,35))}</div><div class="data-card-tags"><span class="tag tag-sm" style="background:${tc}15;color:${tc}">${tl}</span>${i.planted_chapter ? `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">第${i.planted_chapter}章</span>` : ''}${i.revealed_chapter ? `<span class="tag tag-sm" style="background:rgba(91,140,90,.15);color:var(--success)">揭示${i.revealed_chapter}</span>` : ''}</div></div><span class="data-card-arrow">›</span></div></div>`;
-        el.innerHTML = items.length ? `<div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('known')}</span><span class="collapse-count">${known.length}</span></div><div class="collapse-body hidden">${known.map(i => mkCard(i, 'var(--success)', t('known'))).join('')}</div></div><div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('suspense')}</span><span class="collapse-count">${suspense.length}</span></div><div class="collapse-body hidden">${suspense.map(i => mkCard(i, 'var(--warning)', t('suspense'))).join('')}</div></div><div class="collapse-group" onclick="toggleGroup(this)"><div class="collapse-header"><span class="collapse-icon">▸</span><span class="collapse-title">${t('misconception')}</span><span class="collapse-count">${misconception.length}</span></div><div class="collapse-body hidden">${misconception.map(i => mkCard(i, 'var(--error)', t('misconception'))).join('')}</div></div>` : `<div class="empty-state"><p>${t('no_reader')}</p></div>`;
+        el.innerHTML = '';
+        if (items.length) {
+          const groups = [
+            { key: t('known'), tc: 'var(--ice)', tl: t('known'), items: items.filter(i => i.type === 'known') },
+            { key: t('suspense'), tc: 'var(--ice)', tl: t('suspense'), items: items.filter(i => i.type === 'suspense') },
+            { key: t('misconception'), tc: 'var(--ice)', tl: t('misconception'), items: items.filter(i => i.type === 'misconception') }
+          ];
+          groups.forEach(g => {
+            if (!g.items.length) return;
+            const grp = tpl('tpl-collapse');
+            const root = grp.firstElementChild;
+            qs(root, '.c-title').textContent = g.key;
+            qs(root, '.c-count').textContent = g.items.length;
+            const body = qs(root, '.c-body');
+            g.items.forEach(i => {
+              let meta = `<span class="tag tag-sm" style="background:${g.tc}15;color:${g.tc}">${g.tl}</span>`;
+              if (i.planted_chapter) meta += `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">第${i.planted_chapter}章</span>`;
+              if (i.revealed_chapter) meta += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">揭示${i.revealed_chapter}</span>`;
+              body.appendChild(dc({
+                badge: 'R', bg: g.tc + '15', color: g.tc,
+                title: (i.content||'').slice(0,35), meta: meta,
+                onclick: (ev) => cardClick(ev, () => showDetail(g.tl, formatReader(i)))
+              }));
+            });
+            el.appendChild(root);
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_reader')}</p></div>`;
+        }
         break;
       }
       case 'preferences': {
         const r = await api(`/api/preferences?novel_id=${nId}&page=1&size=500`);
         const items = extractItems(r);
-        el.innerHTML = items.length ? items.map(i => `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(i.category||t('uncategorized'))}', formatPreference(${JSON.stringify(i).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:rgba(245,158,11,.1);color:var(--warning)">P</div><div class="data-card-body"><div class="data-card-title">${esc(i.category||t('uncategorized'))}</div><div class="data-card-sub">${esc((i.content||'').slice(0,60))}</div><div class="data-card-tags"><span class="tag tag-sm" style="background:${i.is_global ? 'rgba(139,105,20,.1)' : 'var(--surface2)'};color:${i.is_global ? 'var(--accent)' : 'var(--text2)'}">${i.is_global ? t('global') : t('novel_only')}</span></div></div><span class="data-card-arrow">›</span></div></div>`).join('') : `<div class="empty-state"><p>${t('no_prefs')}</p></div>`;
+        el.innerHTML = '';
+        if (items.length) {
+          items.forEach(i => {
+            const meta = `<span class="tag tag-sm" style="background:${i.is_global ? 'var(--frost)' : 'var(--surface2)'};color:${i.is_global ? 'var(--ice)' : 'var(--text2)'}">${i.is_global ? t('global') : t('novel_only')}</span>`;
+            el.appendChild(dc({
+              badge: 'P', bg: 'var(--frost)', color: 'var(--ice)',
+              title: i.category || t('uncategorized'), sub: (i.content||'').slice(0,60) || undefined,
+              meta: meta,
+              onclick: (ev) => cardClick(ev, () => showDetail(i.category||t('uncategorized'), formatPreference(i)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_prefs')}</p></div>`;
+        }
         break;
       }
       case 'locations': {
         const r = await api(`/api/locations?novel_id=${nId}&page=1&size=500`);
         const items = extractItems(r);
-        el.innerHTML = items.length ? items.map(i => {
-          let preview = i.description ? esc(i.description.slice(0,40)) : (i.location_type ? esc(i.location_type) : '');
-          return `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(i.name||'')}', formatLocation(${JSON.stringify(i).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:rgba(16,185,129,.1);color:var(--success)">L</div><div class="data-card-body"><div class="data-card-title">${esc(i.name||'无名')}</div>${preview ? `<div class="data-card-sub">${preview}</div>` : ''}${i.location_type ? `<div class="data-card-tags"><span class="tag tag-sm" style="background:rgba(16,185,129,.1);color:var(--success)">${esc(i.location_type)}</span></div>` : ''}</div><span class="data-card-arrow">›</span></div></div>`;
-        }).join('') : `<div class="empty-state"><p>${t('no_locations')}</p></div>`;
+        el.innerHTML = '';
+        if (items.length) {
+          items.forEach(i => {
+            let preview = i.description ? i.description.slice(0,40) : (i.location_type || '');
+            let meta = '';
+            if (i.location_type) meta = `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">${esc(i.location_type)}</span>`;
+            el.appendChild(dc({
+              badge: 'L', bg: 'var(--frost)', color: 'var(--ice)',
+              title: i.name || '无名', sub: preview || undefined,
+              meta: meta || undefined,
+              onclick: (ev) => cardClick(ev, () => showDetail(i.name||'', formatLocation(i)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_locations')}</p></div>`;
+        }
         break;
       }
     }
@@ -796,11 +856,7 @@ function renderReader(content) {
   document.getElementById('readerTitle').textContent = title;
   document.getElementById('readerContent').style.fontSize = rs.fontSize + 'px';
   document.getElementById('readerContent').style.lineHeight = rs.lineHeight;
-  document.getElementById('readerContent').style.color = rs.textColor;
-  document.getElementById('readerContent').style.backgroundColor = rs.bgColor;
-  // 微信兼容
-  document.getElementById('readerContent').style.setProperty('color', rs.textColor, 'important');
-  document.getElementById('readerContent').style.setProperty('background-color', rs.bgColor, 'important');
+  // 背景文字颜色完全跟随全局主题，不设内联样式
   // 渲染内容
   document.getElementById('readerContent').innerHTML = marked.parse(content);
   // 更新进度
@@ -867,12 +923,16 @@ function showChapterList() {
   const panel = document.getElementById('chapterListPanel');
   const { chapters, idx } = state.reader;
   const el = document.getElementById('chapterListBody');
-  el.innerHTML = chapters.map((c, i) => {
-    const isCurrent = i === idx;
-    return `<div class="ch-list-item${isCurrent ? ' ch-list-active' : ''}" onclick="jumpToChapter(${i})"><span class="ch-list-num">${c.chapter_number}</span><span class="ch-list-title">${esc(c.title||'')}</span></div>`;
-  }).join('');
+  el.innerHTML = '';
+  chapters.forEach((c, i) => {
+    const item = tpl('tpl-ch-list'); const root = item.firstElementChild;
+    if (i === idx) root.classList.add('ch-list-active');
+    root.onclick = () => jumpToChapter(i);
+    qs(root, '.ch-num').textContent = c.chapter_number;
+    qs(root, '.ch-title').textContent = c.title || '';
+    el.appendChild(root);
+  });
   panel.classList.toggle('hidden');
-  // 滚动到当前章节
   if (!panel.classList.contains('hidden')) {
     setTimeout(() => { const active = el.querySelector('.ch-list-active'); if (active) active.scrollIntoView({ block: 'center' }); }, 100);
   }
@@ -926,7 +986,7 @@ function toggleReaderSettings() {
 
 // 阅读设置
 function loadReaderSettings() {
-  try { return JSON.parse(localStorage.getItem('reader_settings')) || { fontSize: 17, lineHeight: 1.8, bgColor: '#FFFEF9', textColor: '#3E3427' }; } catch (_) { return { fontSize: 17, lineHeight: 1.8, bgColor: '#FFFEF9', textColor: '#3E3427' }; }
+  try { return JSON.parse(localStorage.getItem('reader_settings')) || { fontSize: 17, lineHeight: 1.8 }; } catch (_) { return { fontSize: 17, lineHeight: 1.8 }; }
 }
 function saveReaderSettings(rs) { localStorage.setItem('reader_settings', JSON.stringify(rs)); }
 function updateSettingsUI(rs) {
@@ -943,20 +1003,23 @@ function updateReaderSetting(key, val) {
   if (!content) return;
   if (key === 'fontSize') { content.style.fontSize = rs.fontSize + 'px'; content.style.setProperty('font-size', rs.fontSize + 'px', 'important'); document.getElementById('rsFontSizeVal').textContent = rs.fontSize; }
   if (key === 'lineHeight') { content.style.lineHeight = rs.lineHeight; content.style.setProperty('line-height', rs.lineHeight, 'important'); document.getElementById('rsLineHeightVal').textContent = rs.lineHeight; }
-  if (key === 'bgColor') { content.style.backgroundColor = rs.bgColor; content.style.setProperty('background-color', rs.bgColor, 'important'); }
-  if (key === 'textColor') { content.style.color = rs.textColor; content.style.setProperty('color', rs.textColor, 'important'); }
 }
 
 // ═══════════ 时间线卡片 ═══════════
 function timelineCard(t) {
-  const sc = t.status === 'resolved' ? 'var(--success)' : t.status === 'pending' ? 'var(--warning)' : 'var(--text2)';
+  const sc = t.status === 'resolved' ? 'var(--ice)' : t.status === 'pending' ? 'var(--ice)' : 'var(--text2)';
   const sl = t.status === 'resolved' ? '已解决' : t.status === 'pending' ? '待处理' : t.status || '';
-  let tags = '';
-  if (t.target_chapter) tags += `<span class="tag tag-sm" style="background:rgba(139,105,20,.1);color:var(--accent)">目标:第${t.target_chapter}</span>`;
+  let tags = `<span class="tag tag-sm" style="background:${sc.replace(')','15)')};color:${sc}">${sl}</span>`;
+  if (t.target_chapter) tags += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">目标:第${t.target_chapter}</span>`;
   if (t.source_chapter_id) tags += `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">来源:第${t.source_chapter_id}</span>`;
-  if (t.resolved_chapter_id) tags += `<span class="tag tag-sm" style="background:rgba(91,140,90,.15);color:var(--success)">解决:第${t.resolved_chapter_id}</span>`;
-  if (t.importance) { let stars = ''; for (let i = 0; i < t.importance; i++) stars += '★'; for (let i = t.importance; i < 5; i++) stars += '☆'; tags += `<span class="tag tag-sm" style="background:rgba(245,158,11,.1);color:var(--warning)">${stars}</span>`; }
-  return `<div class="data-card" onclick="cardClick(event, () => showDetail('${esc(t.title||'')}', formatTimeline(${JSON.stringify(t).replace(/"/g, '&quot;')})))"><div class="data-card-header"><div class="data-card-icon" style="background:${sc}15;color:${sc}">T</div><div class="data-card-body"><div class="data-card-title">${esc(t.title||'')}</div><div class="data-card-sub">${esc((t.content||'').slice(0,50))}</div><div class="data-card-tags"><span class="tag tag-sm" style="background:${sc}15;color:${sc}">${sl}</span>${tags}</div></div><span class="data-card-arrow">›</span></div></div>`;
+  if (t.resolved_chapter_id) tags += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">解决:第${t.resolved_chapter_id}</span>`;
+  if (t.importance) { let stars = ''; for (let i = 0; i < t.importance; i++) stars += '★'; for (let i = t.importance; i < 5; i++) stars += '☆'; tags += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">${stars}</span>`; }
+  return dc({
+    badge: 'T', bg: 'var(--frost)', color: sc,
+    title: t.title || '', sub: (t.content||'').slice(0,50) || undefined,
+    meta: tags,
+    onclick: (ev) => cardClick(ev, () => showDetail(t.title||'', formatTimeline(t)))
+  });
 }
 
 // ═══════════ 详情弹窗 ═══════════
@@ -967,43 +1030,47 @@ function showDetail(title, body) {
 }
 
 // ═══════════ 详情格式化 ═══════════
+// ir: 构造 info-row HTML（结构定义见 template#tpl-info-row）
+function ir(l, v, s) { return `<div class="info-row"><span class="info-label">${esc(l)}</span><span${s?` style="${s}"`:''}>${v}</span></div>`; }
+function escH(s) { return s || ''; }
+
 function formatCharacter(c) {
   let h = '';
-  if (c.name) h += `<div style="font-size:18px;font-weight:700;margin-bottom:8px">${esc(c.name)}</div>`;
-  if (c.role) h += `<div class="info-row"><span class="info-label">定位</span><span>${esc(c.role)}</span></div>`;
+  if (c.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:8px;color:var(--ice)">${esc(c.name)}</div>`;
+  if (c.role) h += ir('定位', esc(c.role));
   if (c.personality) {
-    try { const p = JSON.parse(c.personality); Object.keys(p).forEach(k => { const v = String(p[k]); h += `<div class="info-row"><span class="info-label">${esc(k)}</span><span>${esc(v)}</span></div>`; }); } catch (_) { h += `<div class="info-row"><span class="info-label">性格</span><span>${esc(c.personality)}</span></div>`; }
+    try { const p = JSON.parse(c.personality); Object.keys(p).forEach(k => { const v = String(p[k]); h += ir(k, esc(v)); }); } catch (_) { h += ir('性格', esc(c.personality)); }
   }
-  if (c.background) h += `<div class="info-row"><span class="info-label">背景</span><span>${esc(c.background)}</span></div>`;
+  if (c.background) h += `<div style="margin-top:8px;font-size:13px;line-height:1.6;color:var(--text2);padding:0 4px">${esc(c.background)}</div>`;
   return h;
 }
 
 function formatTimeline(t) {
   let h = '';
-  if (t.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:8px">${esc(t.title)}</div>`;
-  if (t.category) h += `<div class="info-row"><span class="info-label">分类</span><span>${esc(t.category)}</span></div>`;
-  if (t.status) { const sc = t.status === 'resolved' ? 'var(--success)' : t.status === 'pending' ? 'var(--warning)' : 'var(--text2)'; h += `<div class="info-row"><span class="info-label">状态</span><span style="color:${sc};font-weight:600">${esc(t.status)}</span></div>`; }
-  if (t.target_chapter) h += `<div class="info-row"><span class="info-label">目标章节</span><span>第${t.target_chapter}章</span></div>`;
-  if (t.source_chapter_id) h += `<div class="info-row"><span class="info-label">来源章节</span><span>第${t.source_chapter_id}章</span></div>`;
-  if (t.resolved_chapter_id) h += `<div class="info-row"><span class="info-label">解决章节</span><span>第${t.resolved_chapter_id}章</span></div>`;
-  if (t.importance) { h += '<div class="info-row"><span class="info-label">重要度</span><span>'; for (let i = 0; i < t.importance; i++) h += '★'; for (let i = t.importance; i < 5; i++) h += '☆'; h += '</span></div>'; }
-  if (t.source) h += `<div class="info-row"><span class="info-label">来源</span><span>${esc(t.source)}</span></div>`;
-  if (t.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(t.content)}</div>`;
-  if (t.detail_json) { try { const d = JSON.parse(t.detail_json); Object.keys(d).forEach(k => { h += `<div class="info-row"><span class="info-label">${esc(k)}</span><span>${esc(String(d[k]))}</span></div>`; }); } catch (_) {} }
+  if (t.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(t.title)}</div>`;
+  if (t.category) h += ir('分类', esc(t.category));
+  if (t.status) { const sc = t.status === 'resolved' ? 'var(--ice)' : t.status === 'pending' ? 'var(--ice)' : 'var(--text2)'; h += ir('状态', esc(t.status), `color:${sc};font-weight:600`); }
+  if (t.target_chapter) h += ir('目标章节', '第' + t.target_chapter + '章');
+  if (t.source_chapter_id) h += ir('来源章节', '第' + t.source_chapter_id + '章');
+  if (t.resolved_chapter_id) h += ir('解决章节', '第' + t.resolved_chapter_id + '章');
+  if (t.importance) { let s = ''; for (let i = 0; i < t.importance; i++) s += '★'; for (let i = t.importance; i < 5; i++) s += '☆'; h += ir('重要度', s); }
+  if (t.source) h += ir('来源', esc(t.source));
+  if (t.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:var(--text2)">${esc(t.content)}</div>`;
+  if (t.detail_json) { try { const d = JSON.parse(t.detail_json); Object.keys(d).forEach(k => { h += ir(esc(k), esc(String(d[k]))); }); } catch (_) {} }
   return h;
 }
 
 function formatArc(a, nodes) {
   let h = '';
-  if (a.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px">${esc(a.name)}</div>`;
-  if (a.arc_type) h += `<div class="info-row"><span class="info-label">类型</span><span>${esc(a.arc_type)}</span></div>`;
-  if (a.status) h += `<div class="info-row"><span class="info-label">状态</span><span>${esc(a.status)}</span></div>`;
-  if (a.description) h += `<div style="margin:8px 0;font-size:13px;line-height:1.5;color:var(--text2)">${esc(a.description)}</div>`;
+  if (a.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(a.name)}</div>`;
+  if (a.arc_type) h += ir('类型', esc(a.arc_type));
+  if (a.status) h += ir('状态', esc(a.status));
+  if (a.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(a.description)}</div>`;
   if (nodes && nodes.length) {
-    h += '<div style="font-size:14px;font-weight:600;margin:10px 0 6px">节点 (' + nodes.length + ')</div>';
+    h += `<div style="font-size:14px;font-weight:600;margin:12px 0 6px;color:var(--ice)">节点 (${nodes.length})</div>`;
     nodes.sort((x, y) => (x.target_chapter||0) - (y.target_chapter||0)).forEach((n, i) => {
-      const sc = n.status === 'completed' ? 'var(--success)' : n.status === 'pending' ? 'var(--accent)' : 'var(--text2)';
-      h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;margin:6px 0"><div style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;border-radius:50%;background:${sc};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</span><strong style="font-size:13px;flex:1">${esc(n.title||'')}</strong></div>${n.target_chapter ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">目标: 第${n.target_chapter}章${n.actual_chapter ? ` | 实际: 第${n.actual_chapter}章` : ''}</div>` : ''}${n.description ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.4">${esc(n.description)}</div>` : ''}</div>`;
+      const sc = n.status === 'completed' ? 'var(--ice)' : n.status === 'pending' ? 'var(--ice)' : 'var(--text2)';
+      h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:6px 0"><div style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;border-radius:50%;background:${sc};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</span><strong style="font-size:13px;flex:1;color:var(--text)">${esc(n.title||'')}</strong></div>${n.target_chapter ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">目标: 第${n.target_chapter}章${n.actual_chapter ? ` | 实际: 第${n.actual_chapter}章` : ''}</div>` : ''}${n.description ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.4">${esc(n.description)}</div>` : ''}</div>`;
     });
   }
   return h;
@@ -1012,40 +1079,45 @@ function formatArc(a, nodes) {
 function formatReader(i) {
   let h = '';
   const tl = { known: '已知信息', suspense: '悬念', misconception: '误解' }[i.type] || i.type || '';
-  if (tl) h += `<div class="info-row"><span class="info-label">类型</span><span style="color:${i.type==='suspense'?'var(--warning)':i.type==='misconception'?'var(--error)':'var(--success)'};font-weight:600">${esc(tl)}</span></div>`;
-  if (i.planted_chapter) h += `<div class="info-row"><span class="info-label">埋设章节</span><span>第${i.planted_chapter}章</span></div>`;
-  if (i.revealed_chapter) h += `<div class="info-row"><span class="info-label">揭示章节</span><span>第${i.revealed_chapter}章</span></div>`;
-  if (i.related_truth) h += `<div class="info-row"><span class="info-label">关联真相</span><span>${esc(i.related_truth)}</span></div>`;
-  if (i.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(i.content)}</div>`;
+  if (tl) { const tc = i.type==='suspense'?'var(--ice)':i.type==='misconception'?'var(--ice)':'var(--ice)'; h += ir('类型', esc(tl), `color:${tc};font-weight:600`); }
+  if (i.planted_chapter) h += ir('埋设章节', '第' + i.planted_chapter + '章');
+  if (i.revealed_chapter) h += ir('揭示章节', '第' + i.revealed_chapter + '章');
+  if (i.related_truth) h += ir('关联真相', esc(i.related_truth));
+  if (i.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:var(--text2)">${esc(i.content)}</div>`;
   return h;
 }
 
 function formatPreference(i) {
   let h = '';
-  h += `<div class="info-row"><span class="info-label">分类</span><span style="font-weight:600">${esc(i.category||'未分类')}</span></div>`;
-  h += `<div class="info-row"><span class="info-label">范围</span><span>${i.is_global ? '全局' : '小说专属'}</span></div>`;
-  if (i.id) h += `<div class="info-row"><span class="info-label">ID</span><span>${i.id}</span></div>`;
-  if (i.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.6;color:var(--text2);white-space:pre-wrap">${esc(i.content)}</div>`;
+  h += ir('分类', esc(i.category || '未分类'), 'font-weight:600');
+  h += ir('范围', i.is_global ? '全局' : '小说专属');
+  if (i.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap">${esc(i.content)}</div>`;
   return h;
 }
 
 function formatLocation(l) {
   let h = '';
-  if (l.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px">${esc(l.name)}</div>`;
-  if (l.location_type) h += `<div class="info-row"><span class="info-label">类型</span><span>${esc(l.location_type)}</span></div>`;
-  if (l.description) h += `<div style="margin:8px 0;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.description)}</div>`;
-  if (l.detail_json) { try { const d = JSON.parse(l.detail_json); Object.keys(d).forEach(k => { h += `<div class="info-row"><span class="info-label">${esc(k)}</span><span>${esc(String(d[k]))}</span></div>`; }); } catch (_) {} }
-  if (l.tags) h += `<div style="margin-top:8px"><span class="info-label">标签</span><div class="data-card-tags" style="margin-top:4px">${l.tags.split(',').map(t => `<span class="tag" style="background:rgba(16,185,129,.1);color:var(--success)">${esc(t.trim())}</span>`).join('')}</div></div>`;
+  if (l.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(l.name)}</div>`;
+  if (l.location_type) h += ir('类型', esc(l.location_type));
+  if (l.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.description)}</div>`;
+  if (l.detail_json) { try { const d = JSON.parse(l.detail_json); Object.keys(d).forEach(k => { h += ir(esc(k), esc(String(d[k]))); }); } catch (_) {} }
+  if (l.tags) h += `<div style="margin-top:8px"><span class="info-label" style="display:inline-block;min-width:60px;font-size:11px;color:var(--ice)">标签</span><div class="data-card-meta" style="display:inline-flex;gap:4px;margin-left:4px">${l.tags.split(',').map(t => `<span class="tag" style="background:var(--frost);color:var(--ice)">${esc(t.trim())}</span>`).join('')}</div></div>`;
   return h;
 }
 
 // ═══════════ 对话 ═══════════
 function addMessage(role, content, thinking, isStreaming) {
   const container = document.getElementById('chatMessages');
-  const div = document.createElement('div');
+  const el = tpl('tpl-chat-msg'); const div = el.firstElementChild;
   div.className = 'msg ' + role; div.dataset.streaming = isStreaming || '';
-  const av = role === 'user' ? '我' : 'AI';
-  div.innerHTML = `<div class="msg-avatar">${av}</div><div class="msg-body"><div class="msg-bubble">${marked.parse(content || '')}</div>${role === 'assistant' ? `<div class="msg-actions"><button onclick="copyText(this.closest('.msg').querySelector('.msg-bubble').textContent)">复制</button></div>${thinking ? `<div class="thinking-toggle" onclick="toggleThinking(this)">💭 思考 (${thinking.length}字) ▼</div><div class="thinking-content hidden">${esc(thinking)}</div>` : ''}` : ''}</div>`;
+  qs(div, '.cm-av').textContent = role === 'user' ? '我' : 'AI';
+  qs(div, '.cm-bubble').innerHTML = marked.parse(content || '');
+  if (thinking) {
+    const body = qs(div, '.msg-body');
+    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▼`;
+    const tc = document.createElement('div'); tc.className = 'thinking-content hidden'; tc.textContent = thinking;
+    body.appendChild(tog); body.appendChild(tc);
+  }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   return div;
@@ -1086,16 +1158,63 @@ function stopChat() { if (abortCtrl) abortCtrl.abort(); if (state.isLoading) { s
 
 // ═══════════ 会话 ═══════════
 async function loadSessions() { if (!state.novelId) return; try { const r = await api(`/api/sessions?novel_id=${state.novelId}&page=1&size=20`); state.sessions = r.items || []; } catch (_) {} }
-function showSessions() { const list = document.getElementById('sessionList'); list.innerHTML = state.sessions.length ? state.sessions.map(s => `<div class="session-item" onclick="loadSession('${s.session_id}');closeSheet('sessionSheet')"><div class="session-title">${esc(s.title||s.session_id.slice(0,20))}</div>${s.current_phase ? `<div class="session-phase">阶段: ${s.current_phase}</div>` : ''}</div>`).join('') : '<div style="padding:16px;text-align:center;color:var(--text2)">暂无历史会话</div>'; openSheet('sessionSheet'); }
+function showSessions() {
+  const list = document.getElementById('sessionList'); list.innerHTML = '';
+  if (state.sessions.length) {
+    state.sessions.forEach(s => {
+      const el = tpl('tpl-session-item'); const root = el.firstElementChild;
+      root.dataset.sid = s.session_id;
+      qs(root, '.s-title').textContent = s.title || s.session_id.slice(0,20);
+      const ph = qs(root, '.s-phase');
+      if (s.current_phase) ph.textContent = '阶段: ' + s.current_phase;
+      else ph.remove();
+      list.appendChild(root);
+    });
+  } else {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text2)">暂无历史会话</div>';
+  }
+  openSheet('sessionSheet');
+}
 async function loadSession(sid) { state.sessionId = sid; document.getElementById('chatMessages').innerHTML = ''; try { const r = await api(`/api/sessions/${sid}/messages`); (r.messages||[]).forEach(m => { if ((m.role==='user'||m.role==='assistant') && (m.content||m.thinking_content)) addMessage(m.role, m.content||'', m.thinking_content||''); }); } catch (_) {} toast('已加载会话'); }
-function newChat() { state.sessionId = null; document.getElementById('chatMessages').innerHTML = '<div class="empty-state"><p>开始新的对话</p><span class="hint">输入消息开始创作</span></div>'; }
+function newChat() { state.sessionId = null; const c = document.getElementById('chatMessages'); c.innerHTML = ''; c.appendChild(emptyState('开始新的对话')); qs(c, '.em-hint') && (qs(c, '.em-hint').textContent = '输入消息开始创作'); }
 
 // ═══════════ 模型 ═══════════
 async function loadModels() { try { const r = await api('/api/settings/model'); state.models = r.models||[]; state.selectedModel = r.selected_model_key||''; } catch (_) {} }
-function showModels() { document.getElementById('modelList').innerHTML = state.models.map(m => { const displayName = m.provider ? `${m.provider} / ${m.name}` : (m.name || m.key); return `<div class="model-item ${m.key===state.selectedModel?'selected':''}" onclick="selectModel('${esc(m.key)}')"><div class="model-name">${esc(displayName)}</div>${m.thinking ? '<span class="model-badge">思考</span>' : ''}</div>`; }).join(''); openSheet('modelSheet'); }
+function showModels() {
+  const list = document.getElementById('modelList'); list.innerHTML = '';
+  state.models.forEach(m => {
+    const el = tpl('tpl-model-item'); const root = el.firstElementChild;
+    root.dataset.key = m.key;
+    if (m.key === state.selectedModel) root.classList.add('selected');
+    const displayName = m.provider ? `${m.provider} / ${m.name}` : (m.name || m.key);
+    qs(root, '.mod-name').textContent = displayName;
+    if (m.thinking) {
+      const badge = document.createElement('span'); badge.className = 'model-badge'; badge.textContent = '思考';
+      root.appendChild(badge);
+    }
+    list.appendChild(root);
+  });
+  openSheet('modelSheet');
+}
 async function selectModel(key) { try { await api('/api/settings/model', { method: 'POST', body: { model_key: key } }); state.selectedModel = key; closeSheet('modelSheet'); toast('已切换'); showModels(); } catch (_) { toast('切换失败'); } }
 
 // ═══════════ 设置 ═══════════
+function sg(label, rows) {
+  const el = document.createElement('div'); el.className = 'setting-group';
+  const lbl = document.createElement('div'); lbl.className = 'setting-label'; lbl.textContent = label;
+  el.appendChild(lbl);
+  rows.forEach(r => {
+    if (typeof r === 'string') el.insertAdjacentHTML('beforeend', r);
+    else el.appendChild(r);
+  });
+  return el;
+}
+function authBlock(token) {
+  const d = document.createElement('div');
+  d.innerHTML = `<div style="display:flex;gap:8px;margin-top:4px"><input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:monospace;outline:none;background:var(--bg);color:var(--text)"><button onclick="saveTokenFromSettings()" style="padding:7px 14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--ice),var(--ice-light));color:#fff;font-size:12px;font-weight:600;cursor:pointer">保存</button></div><button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:11px;cursor:pointer">📷 扫描二维码</button>`;
+  return d;
+}
+
 async function loadSettings() {
   const isDark = getTheme() === 'dark';
   const lang = getLang();
@@ -1103,48 +1222,30 @@ async function loadSettings() {
   try {
     const r = await api('/api/settings/model');
     if (r.error === 'unauthorized') {
-      // token 无效，显示设置页+token输入
-      document.getElementById('settingsContent').innerHTML = `
-        <div class="setting-group"><div class="setting-label">🔐 API 认证</div>
-          <p style="font-size:12px;color:var(--text2);margin-bottom:10px">令牌无效或已过期，请在桌面端「设置」中查看令牌并重新输入。</p>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
-            <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
-          </div>
-          <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
-        </div>
-        <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-        <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>`;
+      const el = document.getElementById('settingsContent'); el.innerHTML = '';
+      el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+      el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
+      el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
       return;
     }
     state.models = r.models||[]; state.selectedModel = r.selected_model_key||'';
     const found = state.models.find(m => m.key === state.selectedModel);
     const name = found ? (found.provider ? `${found.provider} / ${found.name}` : found.name) : state.selectedModel.split('/').pop() || '未选择';
-    document.getElementById('settingsContent').innerHTML = `
-      <div class="setting-group"><div class="setting-label">🤖 ${t('model')}</div><div class="setting-value" onclick="showModels()"><span>${t('current_model')}</span><strong style="color:var(--accent)">${esc(name)}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🔐 API 认证</div>
-        <div style="display:flex;gap:8px">
-          <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
-          <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
-        </div>
-        <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
-      </div>
-      <div class="setting-group"><div class="setting-label">🔗 ${t('server')}</div><div class="setting-value"><span>${t('server')}</span><strong>${esc(API.base)}</strong></div><div class="setting-value"><span>${t('status')}</span><strong style="color:${API.connOk?'var(--success)':'var(--error)'}">${API.connOk?'🟢 已连接':'🔴 离线'}</strong></div><div class="setting-value"><span>缓存</span><strong style="color:var(--text2);font-size:12px">在线时自动同步到本地</strong></div></div>`;
+    const el = document.getElementById('settingsContent'); el.innerHTML = '';
+    el.appendChild(sg('🤖 ' + t('model'), [settingRow(t('current_model'), esc(name), showModels, 'color:var(--ice)')]));
+    el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
+    el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
+    el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+    el.appendChild(sg('🔗 ' + t('server'), [
+      settingRow(t('server'), esc(API.base), null, 'color:var(--text);font-size:12px'),
+      settingRow(t('status'), API.connOk?'🟢 已连接':'🔴 离线', null, `color:${API.connOk?'var(--ice)':'var(--ice)'}`),
+      settingRow('缓存', '在线自动同步', null, 'color:var(--text3);font-size:11px')
+    ]));
   } catch (_) {
-    // 网络错误也显示设置页
-    document.getElementById('settingsContent').innerHTML = `
-      <div class="setting-group"><div class="setting-label">🔐 API 认证</div>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">连接失败，请输入令牌。</p>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;outline:none">
-          <button onclick="saveTokenFromSettings()" style="padding:8px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>
-        </div>
-        <button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
-      </div>
-      <div class="setting-group"><div class="setting-label">🎨 ${t('appearance')}</div><div class="setting-value" onclick="toggleTheme()"><span>${t('dark_mode').replace('Mode','').replace('模式','')}</span><strong style="color:var(--accent)">${isDark?t('dark_mode'):t('light_mode')}</strong></div></div>
-      <div class="setting-group"><div class="setting-label">🌐 Language</div><div class="setting-value" onclick="toggleLang()"><span>切换到</span><strong style="color:var(--accent)">${lang==='zh'?'English →':'中文 →'}</strong></div></div>`;
+    const el = document.getElementById('settingsContent'); el.innerHTML = '';
+    el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+    el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
+    el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
   }
 }
 
@@ -1161,19 +1262,7 @@ function saveTokenFromSettings() {
 function startQRScanFromSettings() {
   let overlay = document.getElementById('qrScanOverlay');
   if (overlay) overlay.remove();
-  overlay = document.createElement('div');
-  overlay.id = 'qrScanOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:1000;display:flex;flex-direction:column';
-  overlay.innerHTML = `
-    <div style="flex:1;position:relative;overflow:hidden">
-      <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" autoplay playsinline></video>
-      <canvas id="qrCanvas" style="display:none"></canvas>
-      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid rgba(255,255,255,.7);border-radius:12px;pointer-events:none"></div>
-    </div>
-    <div style="padding:16px;text-align:center;background:var(--surface)">
-      <p style="font-size:14px;color:var(--text);margin-bottom:12px">将二维码放入框内</p>
-      <button id="qrCancel" style="padding:10px 32px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;cursor:pointer">取消</button>
-    </div>`;
+  overlay = tpl('tpl-qr-scan').firstElementChild;
   document.body.appendChild(overlay);
 
   const video = document.getElementById('qrVideo');
@@ -1212,7 +1301,6 @@ function startQRScanFromSettings() {
         scanning = false;
         video.srcObject.getTracks().forEach(t => t.stop());
         overlay.remove();
-        // 填入 token 并保存
         const tokenField = document.getElementById('tokenField');
         if (tokenField) tokenField.value = code.data;
         setToken(code.data);
@@ -1271,4 +1359,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   connectWS();
   switchPage('novels');
+  // 从离线恢复时（重新连上局域网），尝试增量同步
+  window.addEventListener('online', () => {
+    API.connOk = false;
+    if (getToken()) {
+      toast('📡 网络已恢复，正在同步数据...');
+      syncToOffline().then(() => {
+        toast('✅ 数据同步完成');
+        if (state.page === 'novels') loadNovels();
+      }).catch(() => {});
+    }
+  });
 });
