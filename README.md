@@ -1,4 +1,4 @@
-<h1 align="center">Goink<br><sub>桌面 AI 写作系统 — Agent 实时决策 × 结构化记忆 × 写完自检</sub></h1>
+<h1 align="center"><img src="assets/logo.svg" width="80" alt="Goink Logo"><br>Goink<br><sub>桌面 AI 写作系统 — Agent 实时决策 × 结构化记忆 × 写完自检</sub></h1>
 
 <p align="center"><strong><a href="README_EN.md">English</a> | 中文</strong></p>
 

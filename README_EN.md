@@ -1,4 +1,4 @@
-<h1 align="center">Goink<br><sub>Desktop AI Novel-Writing System — Agent Decisions × Structured Memory × Self-Check</sub></h1>
+<h1 align="center"><img src="assets/logo.svg" width="80" alt="Goink Logo"><br>Goink<br><sub>Desktop AI Novel-Writing System — Agent Decisions × Structured Memory × Self-Check</sub></h1>
 
 <p align="center"><strong><a href="README.md">中文</a> | English</strong></p>
 
