@@ -30,7 +30,8 @@ func (t *GetTimelineTool) Name() string { return "get_timeline" }
 func (t *GetTimelineTool) Description() string {
 	return "获取故事时间线总览：章节计划（next/near/far）+ 伏笔和用户指令。两种用法：\n" +
 		"- 传入 current_chapter：自动收集附近条目（近期历史+未来+异常标记），不要传分页/过滤 参数\n" +
-		"- 不传 current_chapter：分页浏览条目（不含计划），可用 category/status 过滤，需要传分页/过滤 参数"
+		"- 不传 current_chapter：分页浏览条目（不含计划），可用 category/status 过滤，需要传分页/过滤 参数" +
+		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部"
 }
 func (t *GetTimelineTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 

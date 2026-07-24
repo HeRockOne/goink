@@ -110,6 +110,9 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	}
 	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
 
+	// 保存主 agent 的阶段门禁状态，子 agent 运行期间不会被清空
+	savedPhaseGate := a.phaseGate
+
 	subOpts := RunOptions{
 		TurnID:          parentOpts.TurnID,
 		SessionID:       parentOpts.SessionID,
@@ -124,8 +127,13 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		Model:           parentOpts.Model,
 		ProviderName:    parentOpts.ProviderName,
 		ReasoningEffort: parentOpts.ReasoningEffort,
+		Broadcast:       parentOpts.Broadcast, // 子代理事件也广播到移动端
 	}
 	result, err := a.Run(ctx, subOpts)
+
+	// 恢复主 agent 的阶段门禁状态
+	a.phaseGate = savedPhaseGate
+
 	return result.FinalText, err
 }
 
@@ -215,9 +223,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		// 双端同步：桌面端对话时通过 WebSocket 广播到移动端
 		if opts.Broadcast != nil {
 			evData := map[string]any{
-				"turn_id": opts.TurnID,
-				"type":    event.Type.String(),
-				"data":    event.Data,
+				"turn_id":    opts.TurnID,
+				"type":       event.Type.String(),
+				"session_id": opts.SessionID,
+				"data":       event.Data,
 			}
 			if event.ErrMsg != "" {
 				evData["error"] = event.ErrMsg

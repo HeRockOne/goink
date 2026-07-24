@@ -33,7 +33,6 @@ import (
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
-	ws "novel/internal/ws"
 )
 
 // generateToken 生成随机 API token。
@@ -60,6 +59,7 @@ func newAPIServer(port int, app *App, logger *slog.Logger, frontend *embed.FS, m
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/info", s.handleServerInfo)
+	s.mux.HandleFunc("/api/sync/state", s.handleSyncState)
 	s.mux.HandleFunc("/api/novels", s.handleNovels)
 	s.mux.HandleFunc("/api/novels/", s.handleNovelChapters)
 	s.mux.HandleFunc("/api/chapters/", s.handleChapterContent)
@@ -156,6 +156,27 @@ func killPort(port int) {
 		slog.Info("杀掉旧进程", "pid", pid, "port", port)
 		exec.Command("taskkill", "/F", "/PID", pid).Run()
 	}
+}
+
+// handleSyncState 返回当前桌面端流式会话状态，供移动端中途加入时查询。
+func (s *apiServer) handleSyncState(w http.ResponseWriter, r *http.Request) {
+	if s.app.wsHub == nil {
+		writeJSON(w, map[string]any{"active": false})
+		return
+	}
+
+	active, sessionID, thinking, content := s.app.wsHub.GetSyncState()
+	if !active {
+		writeJSON(w, map[string]any{"active": false})
+		return
+	}
+
+	writeJSON(w, map[string]any{
+		"active":     true,
+		"session_id": sessionID,
+		"thinking":   thinking,
+		"content":    content,
+	})
 }
 
 // ensureAPIToken 确保 API token 存在，不存在则自动生成。
@@ -599,8 +620,7 @@ func (s *apiServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "WebSocket not available", http.StatusServiceUnavailable)
 		return
 	}
-	// 复用 internal/ws 包的 HandleWS 进行 WebSocket 升级
-	ws.HandleWS(s.app.wsHub, nil, s.logger).ServeHTTP(w, r)
+	s.app.wsHub.HandleWS(s.logger)(w, r)
 }
 
 // handleModelSettings 处理模型设置的 GET/POST 请求。

@@ -2368,7 +2368,10 @@ export namespace writing {
 export namespace ws {
 	
 	export class Hub {
-	
+	    StreamSessionID: string;
+	    StreamThinking: string;
+	    StreamContent: string;
+	    StreamActive: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Hub(source);
@@ -2376,7 +2379,10 @@ export namespace ws {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	
+	        this.StreamSessionID = source["StreamSessionID"];
+	        this.StreamThinking = source["StreamThinking"];
+	        this.StreamContent = source["StreamContent"];
+	        this.StreamActive = source["StreamActive"];
 	    }
 	}
 

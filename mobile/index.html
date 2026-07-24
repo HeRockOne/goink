@@ -11,6 +11,10 @@
 <link rel="manifest" href="manifest.json">
 <script src="marked.min.js"></script>
 <script src="jsQR.js"></script>
+<script type="module">
+  import { connect } from './wspulse.mjs';
+  window.pulseConnect = connect;
+</script>
 </head>
 <body>
   <!-- 顶部栏 -->

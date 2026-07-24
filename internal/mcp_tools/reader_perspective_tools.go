@@ -25,7 +25,8 @@ func (t *GetReaderPerspectiveTool) Name() string { return "get_reader_perspectiv
 func (t *GetReaderPerspectiveTool) Description() string {
 	return "获取当前小说的读者认知状态：已知信息、活跃悬念、读者误知。" +
 		"每条条目末尾的 `[entry_id:X]` 是该条目的唯一标识，更新或回收时填入 entry_id。" +
-		"尽量合并同类信息到已有条目，减少重复创建。只记录读者一定会在意，后续创作需要考虑的条目。"
+		"尽量合并同类信息到已有条目，减少重复创建。只记录读者一定会在意，后续创作需要考虑的条目。" +
+		"\n【省token指令】用 type 过滤只获取当前需要的类型（known/suspense/misconception），不要一次获取全部"
 }
 func (t *GetReaderPerspectiveTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 

@@ -30,7 +30,8 @@ func (t *GetStoryArcsTool) Name() string { return "get_story_arcs" }
 func (t *GetStoryArcsTool) Description() string {
 	return "获取叙事弧线和节点链。两种用法：\n" +
 		"- 传入 current_chapter：活跃弧线做窗口切分（近期/异常/未来），暂停弧线显示断点+恢复条件，已完成/废弃弧线仅显示元数据，不要传分页/过滤 参数\n" +
-		"- 不传 current_chapter：分页查看所有弧线含完整节点链，需要传分页/过滤 参数"
+		"- 不传 current_chapter：分页查看所有弧线含完整节点链，需要传分页/过滤 参数" +
+		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部"
 }
 func (t *GetStoryArcsTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 

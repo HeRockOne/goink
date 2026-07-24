@@ -28,7 +28,8 @@ func (t *GetCharactersTool) Name() string { return "get_characters" }
 func (t *GetCharactersTool) Description() string {
 	return "获取当前小说的角色列表。按最近更新降序排列，截断 50 条——完整了解角色阵容后再创作。" +
 		"冷门角色（长时间未更新）可能不在列表中，用 search 按名搜索。" +
-		"需要了解角色之间的关系时，用 get_character_relations 传入角色 ID 获取子图。"
+		"需要了解角色之间的关系时，用 get_character_relations 传入角色 ID 获取子图。" +
+		"\n【省token指令】用 page=1&size=10 只获取主角相关角色，不要一次获取全部50条"
 }
 func (t *GetCharactersTool) Category() ToolCategory { return CategoryNovelManagement }
 

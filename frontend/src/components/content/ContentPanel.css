@@ -19,9 +19,19 @@
   color: var(--foreground) !important;
 }
 
-/* 强制覆盖 Monaco 编辑器的白色背景 */
-.content-panel .monaco-editor,
-.content-panel .monaco-editor .margin,
-.content-panel .monaco-editor .monaco-editor-background {
+/* Monaco 编辑器 + Diff 编辑器：强制覆盖所有白色/黑色背景 */
+.content-panel [class*="monaco-editor"],
+.content-panel [class*="monaco-editor"] [class*="margin"],
+.content-panel [class*="monaco-editor"] [class*="background"],
+.content-panel [class*="monaco-editor"] [style*="background-color: rgb(255"] {
   background: var(--reader-paper) !important;
+  background-color: var(--reader-paper) !important;
+}
+
+/* Diff 编辑器的增删行背景 */
+.content-panel [class*="line-insert"],
+.content-panel [class*="line-delete"],
+.content-panel [class*="changed"],
+.content-panel [class*="diff"] {
+  background-color: inherit !important;
 }

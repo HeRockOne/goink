@@ -1,6 +1,6 @@
 module novel
 
-go 1.25.0
+go 1.26.0
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.2
@@ -15,6 +15,7 @@ require (
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/stretchr/testify v1.11.1
 	github.com/wailsapp/wails/v2 v2.13.0
+	github.com/wspulse/hub v0.12.1
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/net v0.57.0
@@ -26,9 +27,14 @@ require (
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/coder/websocket v1.8.14 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/maxence2997/carousel v1.0.4 // indirect
 	github.com/miekg/dns v1.1.27 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/wspulse/core v0.6.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 )
 
 require (
@@ -47,7 +53,7 @@ require (
 	github.com/gofrs/uuid v3.1.0+incompatible // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/itlightning/dateparse v0.2.1 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect

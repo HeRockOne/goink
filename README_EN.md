@@ -87,10 +87,16 @@ prepare → outline → write → review → maintain → prepare
 | Session Management | Delete history sessions |
 | Log Toggle | Enable/disable file logging |
 | Chat UI | Message bubbles, Markdown rendering, copy button |
-| Vintage Theme | Parchment-style light/dark modes |
+| Vintage Theme | Parchment-style light/dark modes + Monaco Diff editor theme |
+| Bidirectional Sync | Desktop and mobile WebSocket full-duplex chat sync |
 | QR Code Connection | Desktop shows token QR, mobile scans to connect |
 | Offline Storage | IndexedDB cache for reading novels offline |
 | Auto HTTPS | Generates certificate on startup, mobile camera works |
+| Provider Display | Model selection shows `provider / model-name` format |
+| Port Conflict Handling | Auto-kill processes occupying port on startup |
+| Skill Token Optimization | 17 skills compressed 84%, tool descriptions with token hints |
+| Sub-agent Event Sync | Sub-agent (review/memory) events synced to mobile |
+| Config.json Removed | Data dir uses exe location directly, no config.json needed |
 
 ---
 
@@ -206,7 +212,7 @@ goink/
 │   └── ...
 ├── internal/
 │   ├── agent/              # LLM conversation loop, sub-agents
-│   ├── mcp_tools/          # 30+ MCP tools
+│   ├── mcp_tools/          # 31 MCP tools (with token hints)
 │   ├── llm/                # Multi-provider LLM transport
 │   ├── session/            # Sessions + messages
 │   ├── character/          # Characters + directed graph
@@ -215,17 +221,20 @@ goink/
 │   ├── reader/             # Reader perspectives
 │   ├── location/           # Location graph
 │   ├── rag/                # Vector search (ONNX)
-│   ├── ws/                 # WebSocket sync
+│   ├── ws/                 # WebSocket sync (wspulse)
+│   ├── cert/               # Auto HTTPS certificate generation
 │   ├── webdav/             # WebDAV server
 │   └── ...
-├── mobile/                 # Mobile web frontend (pure JS)
+├── mobile/                 # Mobile web frontend (pure JS + wspulse)
 │   ├── index.html          #   Entry
-│   ├── app.js              #   Main logic
+│   ├── app.js              #   Main logic + offline storage
 │   ├── style.css           #   Styles
+│   ├── jsQR.js             #   QR code scanner
+│   ├── wspulse.mjs         #   WebSocket client
 │   └── API.md              #   API docs
 ├── frontend/               # Desktop (React + TypeScript)
 ├── docs/                   # Documentation
-├── skills/                 # Built-in writing Skills
+├── skills/                 # Built-in writing Skills (token-optimized)
 ├── build.ps1               # One-click build/deploy
 └── build.bat               # One-click build/deploy
 ```
@@ -345,6 +354,38 @@ build.bat      # CMD
 
 ---
 
+## Theme Colors
+
+Vintage parchment style with light/dark modes. Colors defined in `frontend/src/index.css`.
+
+### Color Variables → File Locations
+
+| Variable | Purpose | File |
+|----------|---------|------|
+| `--background` | Overall page background | `index.css` |
+| `--foreground` | Global text color | `index.css` |
+| `--card` | Card/panel background | `index.css` |
+| `--primary` | Primary accent (buttons, links) | `index.css` |
+| `--sidebar` | Sidebar background | `index.css` |
+| `--border` | Border color | `index.css` |
+| `--reader-paper` | Reading content paper background | `index.css` + `ContentPanel.css` |
+
+### Monaco Diff Editor Theme
+
+Custom themes registered in `ContentPanel.tsx`:
+- `goink-light`: Light paper background `#f5edd6`, green insert, red delete
+- `goink-dark`: Dark leather background `#2a1e16`, warm white text
+
+### How to Modify Colors
+
+1. Edit `frontend/src/index.css` in `:root` (light) or `[data-theme="dark"]` (dark)
+2. Reading area also controlled by `ContentPanel.css`
+3. Monaco Diff theme registered in `ContentPanel.tsx`
+4. Run `npm run build` to verify
+5. Run `.\build.ps1` to rebuild and deploy
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -352,7 +393,7 @@ build.bat      # CMD
 | Agent Engine | ReAct loop (Go, SSE + 31 tools + sub-agents) |
 | Desktop | Wails v2 (Go + WebView) |
 | Frontend | React 19 + TypeScript + Tailwind 4 + shadcn/ui |
-| Mobile | HTTPS API + pure JS web frontend |
+| Mobile | HTTPS API + pure JS web frontend + wspulse WebSocket |
 | Database | SQLite + GORM |
 | Vector Search | sqlite-vec + ONNX Runtime |
 | Version Control | Built-in Git |

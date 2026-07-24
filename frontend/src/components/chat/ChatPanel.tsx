@@ -365,9 +365,12 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   }, [])
 
   // 流式输出时自动滚到底部，但仅在用户未主动上滚时
+  // 用 requestAnimationFrame 确保 DOM 更新后再滚动
   useEffect(() => {
     if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+      })
     }
   }, [turns])
 

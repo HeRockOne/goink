@@ -87,7 +87,7 @@ func main() {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					// WebSocket
 					if r.URL.Path == "/ws" {
-						ws.HandleWS(wsHub, nil, log).ServeHTTP(w, r)
+						wsHub.HandleWS(log)(w, r)
 						return
 					}
 					// 封面

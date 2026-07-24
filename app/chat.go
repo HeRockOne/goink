@@ -76,6 +76,9 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 
 	// 辅助：推事件
 	emitEvent := func(eventType string, data map[string]any) {
+		// 始终通过 WebSocket 广播到移动端（双端同步）
+		a.BroadcastChatEvent(eventType, data)
+
 		if eventCallback != nil {
 			// API 模式：通过回调推送到 SSE 流
 			data["type"] = eventType
@@ -92,8 +95,6 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		} else {
 			// Wails 模式：通过 EventsEmit 发送事件到前端
 			wails.EventsEmit(ctx, "chat:"+eventType, data)
-			// 同时通过 WebSocket 广播到移动端（双端同步）
-			a.BroadcastChatEvent(eventType, data)
 		}
 	}
 

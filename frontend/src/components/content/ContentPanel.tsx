@@ -1,8 +1,38 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import { type OnMount, DiffEditor } from '@monaco-editor/react'
+import { type OnMount, DiffEditor, loader } from '@monaco-editor/react'
 import { FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toastError } from '@/lib/utils'
+
+// 注册牛皮纸主题
+loader.init().then(monaco => {
+  monaco.editor.defineTheme('goink-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#f5edd6',
+      'editor.foreground': '#3d2b1f',
+      'editor.lineHighlightBackground': '#e8dcc0',
+      'diffEditor.insertedTextBackground': '#d4e8d4',
+      'diffEditor.removedTextBackground': '#f0d4d4',
+      'editorCursor.foreground': '#8b5e3c',
+    }
+  })
+  monaco.editor.defineTheme('goink-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#2a1e16',
+      'editor.foreground': '#e8dcc8',
+      'editor.lineHighlightBackground': '#3a2c20',
+      'diffEditor.insertedTextBackground': '#1a3020',
+      'diffEditor.removedTextBackground': '#3a1818',
+      'editorCursor.foreground': '#c4956a',
+    }
+  })
+})
 import { useApp } from '@/hooks/useApp'
 import { useEditorTabs } from '@/hooks/useEditorTabs'
 import { useTheme, type Theme } from '@/hooks/useTheme'
@@ -17,7 +47,7 @@ import { outlinePath, isContentPath, isOutlinePath, isSkillPath, skillNameFromPa
 import type { EditorTab } from './types'
 import './ContentPanel.css'
 
-const MONACO_THEME: Record<Theme, string> = { light: 'light', dark: 'vs-dark' }
+const MONACO_THEME: Record<Theme, string> = { light: 'goink-light', dark: 'goink-dark' }
 
 export interface ContentPanelHandle {
   openFile: (path: string, title: string, readOnly?: boolean, initialViewMode?: string) => void

@@ -124,6 +124,19 @@ func (a *App) BroadcastChatEvent(eventType string, data map[string]any) {
 	if raw, err := json.Marshal(ev); err == nil {
 		a.wsHub.Broadcast(raw)
 	}
+	// 更新流式状态
+	sessionID, _ := data["session_id"].(string)
+	d, _ := data["data"].(string)
+	switch eventType {
+	case "started":
+		a.wsHub.UpdateStreamState(sessionID, "", "", true)
+	case "thinking":
+		a.wsHub.AppendThinking(d)
+	case "content":
+		a.wsHub.AppendContent(d)
+	case "done", "error":
+		a.wsHub.UpdateStreamState("", "", "", false)
+	}
 }
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)

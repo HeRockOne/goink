@@ -30,7 +30,8 @@ type GetChapterListTool struct{}
 
 func (t *GetChapterListTool) Name() string { return "get_chapter_list" }
 func (t *GetChapterListTool) Description() string {
-	return "获取小说的章节列表，支持分页。按章节号降序排列（最新的在前）。返回每章的 id、章节号、标题、字数、摘要。字数校验针对最近编辑的章节（非章节号最大的），批量写作时不会误查空占位章节。可通过 chapter_number 指定检查特定章节。"
+	return "获取小说的章节列表，支持分页。按章节号降序排列（最新的在前）。返回每章的 id、章节号、标题、字数、摘要。字数校验针对最近编辑的章节（非章节号最大的），批量写作时不会误查空占位章节。可通过 chapter_number 指定检查特定章节。" +
+		"\n【省token指令】用 size 参数限制返回数量：检查字数用 size=1，浏览用 size=5，不要传 size=9999"
 }
 func (t *GetChapterListTool) Category() ToolCategory { return CategoryNovelManagement }
 

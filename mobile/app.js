@@ -419,17 +419,221 @@ function switchPage(page) {
   if (page === 'novel-detail') loadNovelDetail();
 }
 
-// ── WebSocket ──
-function connectWS() {
+// ── WebSocket (wspulse) ──
+let wsStreamEl = null; // 桌面端对话流式消息的 DOM 元素
+let wsThinking = '';   // 桌面端对话思考内容
+let wsContent = '';    // 桌面端对话正文内容
+
+async function connectWS() {
   try {
     const token = getToken();
-    const wsUrl = API.base.replace('http', 'ws') + '/api/ws' + (token ? '?token=' + token : '');
-    const ws = new WebSocket(wsUrl);
-    API.ws = ws;
-    ws.onopen = () => { API.connOk = true; };
-    ws.onmessage = (e) => { try { const ev = JSON.parse(e.data); if (ev.type === 'model_changed') { state.selectedModel = ev.model_key || ''; toast('模型已切换'); if (state.page === 'settings') loadSettings(); } if (ev.type === 'chat:done' && state.page === 'chat') loadSessions(); } catch (_) {} };
-    ws.onclose = () => { API.connOk = false; setTimeout(connectWS, 5000); };
-  } catch (_) { setTimeout(connectWS, 5000); }
+    const room = state.sessionId || 'global';
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    params.set('room', room);
+    const wsUrl = API.base.replace('http', 'ws') + '/api/ws?' + params.toString();
+
+    const client = await pulseConnect(wsUrl, {
+      onMessage(msg) {
+        console.log('[WS] 收到消息:', msg.event, msg.payload);
+        try {
+          const ev = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+          // 非 chat 频道的事件
+          if (ev.type === 'model_changed') {
+            state.selectedModel = ev.model_key || '';
+            toast('模型已切换');
+            if (state.page === 'settings') loadSettings();
+            return;
+          }
+          // chat 频道事件
+          if (ev.channel === 'chat') {
+            // 同步状态事件：中途加入时桌面端推送当前流式状态
+            if (ev.type === 'sync_state') {
+              handleSyncState(ev);
+              return;
+            }
+            // 如果桌面端在不同会话，只更新会话列表
+            if (ev.session_id && ev.session_id !== state.sessionId) {
+              if (ev.type === 'done' || ev.type === 'started') loadSessions();
+              return;
+            }
+            handleChatEvent(ev);
+          }
+        } catch (_) {}
+      },
+      onDisconnect(err) {
+        console.log('[WS] 断开连接:', err);
+        API.connOk = false;
+      },
+      onTransportRestore() {
+        console.log('[WS] 连接恢复');
+        API.connOk = true;
+      },
+      autoReconnect: { maxRetries: 10, baseDelay: 1000, maxDelay: 30000 }
+    });
+
+    API.wsClient = client;
+    API.connOk = true;
+
+    // 连接成功后，查询桌面端当前流式状态
+    api('/api/sync/state').then(r => {
+      if (r.active && r.session_id) {
+        handleSyncState(r);
+      }
+    }).catch(() => {});
+  } catch (_) {
+    setTimeout(connectWS, 5000);
+  }
+}
+
+// 处理同步状态：中途加入会话时，桌面端推送当前流式状态
+function handleSyncState(ev) {
+  if (state.page !== 'chat') return;
+
+  const sessionId = ev.session_id;
+  const thinking = ev.thinking || '';
+  const content = ev.content || '';
+
+  // 切换到桌面端当前会话
+  if (sessionId && sessionId !== state.sessionId) {
+    state.sessionId = sessionId;
+    // 加载该会话的历史消息
+    const container = document.getElementById('chatMessages');
+    container.innerHTML = '';
+    api(`/api/sessions/${sessionId}/messages`).then(r => {
+      (r.messages || []).forEach(m => {
+        if ((m.role === 'user' || m.role === 'assistant') && (m.content || m.thinking_content)) {
+          addMessage(m.role, m.content || '', m.thinking_content || '');
+        }
+      });
+      // 创建流式气泡并显示当前内容
+      wsThinking = thinking;
+      wsContent = content;
+      wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
+      if (thinking || content) {
+        updateStreaming(wsStreamEl, content || '思考中...', thinking);
+      }
+    }).catch(() => {
+      wsThinking = thinking;
+      wsContent = content;
+      wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
+      if (thinking || content) {
+        updateStreaming(wsStreamEl, content || '思考中...', thinking);
+      }
+    });
+    toast('已同步到当前会话');
+  }
+}
+
+// 处理桌面端对话事件，实时更新移动端 UI
+function handleChatEvent(ev) {
+  console.log('[Chat] handleChatEvent:', ev.type, 'page:', state.page, 'sessionId:', state.sessionId);
+  if (state.page !== 'chat') {
+    console.log('[Chat] 非聊天页面，忽略');
+    return;
+  }
+
+  switch (ev.type) {
+    case 'started': {
+      // 桌面端开始新对话，先加载历史消息
+      const newSessionId = ev.session_id || state.sessionId;
+      const prevSessionId = state.sessionId;
+      console.log('[Chat] started:', { newSessionId, prevSessionId, currentPage: state.page });
+      state.sessionId = newSessionId;
+      wsThinking = '';
+      wsContent = '';
+
+      // 如果是同一个会话的新消息，先加载历史再追加流式内容
+      if (newSessionId && newSessionId === prevSessionId) {
+        console.log('[Chat] 同一会话，加载历史');
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = '';
+        // 异步加载历史消息，然后创建流式气泡
+        api(`/api/sessions/${newSessionId}/messages`).then(r => {
+          console.log('[Chat] 历史消息数量:', (r.messages || []).length);
+          (r.messages || []).forEach(m => {
+            if ((m.role === 'user' || m.role === 'assistant') && (m.content || m.thinking_content)) {
+              addMessage(m.role, m.content || '', m.thinking_content || '');
+            }
+          });
+          // 历史加载完后创建流式气泡
+          wsStreamEl = addMessage('assistant', '思考中...', '', true);
+          console.log('[Chat] 流式气泡已创建');
+        }).catch((err) => {
+          console.log('[Chat] 加载历史失败:', err);
+          wsStreamEl = addMessage('assistant', '思考中...', '', true);
+        });
+      } else {
+        // 新会话，清空并创建流式气泡
+        console.log('[Chat] 新会话，清空并创建流式气泡');
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = '';
+        wsStreamEl = addMessage('assistant', '思考中...', '', true);
+        console.log('[Chat] 流式气泡已创建:', wsStreamEl);
+      }
+      break;
+    }
+
+    case 'thinking':
+      // 桌面端思考内容
+      wsThinking += ev.data || '';
+      // 如果流式气泡还未创建，立即创建
+      if (!wsStreamEl) {
+        wsStreamEl = addMessage('assistant', '思考中...', '', true);
+      }
+      updateStreaming(wsStreamEl, wsContent || '思考中...', wsThinking);
+      break;
+
+    case 'content':
+      // 桌面端正文内容
+      wsContent += ev.data || '';
+      // 如果流式气泡还未创建，立即创建
+      if (!wsStreamEl) {
+        wsStreamEl = addMessage('assistant', '', '', true);
+      }
+      updateStreaming(wsStreamEl, wsContent, wsThinking);
+      break;
+
+    case 'done':
+      // 桌面端对话完成
+      if (ev.text) wsContent = ev.text;
+      if (wsStreamEl) {
+        updateStreaming(wsStreamEl, wsContent, wsThinking);
+        wsStreamEl.dataset.streaming = '';
+        wsStreamEl = null;
+      }
+      wsThinking = '';
+      wsContent = '';
+      // 刷新会话列表
+      loadSessions();
+      break;
+
+    case 'error':
+      if (wsStreamEl) {
+        updateStreaming(wsStreamEl, '❌ ' + (ev.error || '未知错误'), '');
+        wsStreamEl.dataset.streaming = '';
+        wsStreamEl = null;
+      }
+      wsThinking = '';
+      wsContent = '';
+      break;
+
+    case 'tool_call':
+      // 工具调用提示
+      if (wsStreamEl && ev.tool_name) {
+        const toolHint = `\n\n🔧 ${ev.tool_name}...`;
+        wsContent += toolHint;
+        updateStreaming(wsStreamEl, wsContent, wsThinking);
+      }
+      break;
+
+    case 'phase_gate':
+      // 阶段门禁变化
+      if (ev.phase_gate && ev.phase_gate.phase) {
+        toast(`阶段: ${ev.phase_gate.phase}`);
+      }
+      break;
+  }
 }
 
 // ═══════════ 章节缓存 ═══════════

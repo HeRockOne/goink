@@ -87,10 +87,16 @@ prepare → outline → write → review → maintain → prepare
 | 会话管理 | 删除历史会话 |
 | 日志开关 | 设置中启用/禁用文件日志 |
 | 对话优化 | 消息气泡、Markdown 渲染、复制按钮 |
-| 复古牛皮纸主题 | 浅色/深色双模式，泛黄旧书风格 |
+| 复古牛皮纸主题 | 浅色/深色双模式，泛黄旧书风格 + Diff 编辑器主题 |
+| 双端实时同步 | 桌面端与移动端 WebSocket 全双工同步对话 |
 | 移动端扫码连接 | 桌面端显示 Token 二维码，手机扫码快速连接 |
 | 移动端离线存储 | IndexedDB 缓存，离线可阅读小说和查看设定 |
-| 自动 HTTPS | 启动时自动生成证书，手机扫码可用摄像头 |
+| 自动 HTTPS | 启动时自动生成证书，手机摄像头可用 |
+| 模型服务商显示 | 模型选择显示 `provider / model-name` 格式 |
+| 端口冲突处理 | 启动时自动杀掉占用端口的旧进程 |
+| 技能 Token 优化 | 17 个 Skill 精简 84%，工具描述加 token 提示 |
+| 子代理事件同步 | 子代理（review/memory）事件同步到移动端 |
+| config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
 
 ---
 
@@ -106,7 +112,7 @@ goink/
 │   └── ...                 #   其他模块
 ├── internal/
 │   ├── agent/              # LLM 对话循环、压缩、子 Agent
-│   ├── mcp_tools/          # 30+ MCP 工具
+│   ├── mcp_tools/          # 31 MCP 工具（含 token 优化提示）
 │   ├── llm/                # 多提供商 LLM 传输
 │   ├── session/            # 会话 + 消息
 │   ├── character/          # 角色 + 有向关系图
@@ -115,17 +121,20 @@ goink/
 │   ├── reader/             # 读者视角
 │   ├── location/           # 地点图
 │   ├── rag/                # 向量搜索（ONNX）
-│   ├── ws/                 # WebSocket 同步
+│   ├── ws/                 # WebSocket 同步（wspulse）
+│   ├── cert/               # 自动 HTTPS 证书生成
 │   ├── webdav/             # WebDAV 服务器
 │   └── ...
-├── mobile/                 # 移动端 Web 前端（纯 JS）
+├── mobile/                 # 移动端 Web 前端（纯 JS + wspulse）
 │   ├── index.html          #   入口
-│   ├── app.js              #   主逻辑
+│   ├── app.js              #   主逻辑 + 离线存储
 │   ├── style.css           #   样式
+│   ├── jsQR.js             #   QR 码扫描库
+│   ├── wspulse.mjs         #   WebSocket 客户端
 │   └── API.md              #   API 文档
 ├── frontend/               # 桌面端（React + TypeScript）
 ├── docs/                   # 文档
-├── skills/                 # 内置写作 Skill
+├── skills/                 # 内置写作 Skill（已优化 token）
 ├── build.ps1               # 一键构建部署
 └── build.bat               # 一键构建部署
 ```
@@ -257,14 +266,21 @@ build.bat      # CMD
 | 侧边栏 | `--sidebar` `#ede5ce` | `--sidebar` `#1e1612` |
 | 阅读正文区 | `--reader-paper` `#faf4e4` | `--reader-paper` `#2a1e16` |
 | 卡片/弹窗 | `--card` `#faf4e4` | `--card` `#2a1e16` |
-| 输入框/代码块 | `--muted` `#ebe3cc` | `--muted` `#2e221a` |
+| Diff 编辑器 | Monaco 自定义主题 `goink-light` | Monaco 自定义主题 `goink-dark` |
+
+### Monaco 编辑器主题
+
+Diff 视图使用自定义 Monaco 主题（`ContentPanel.tsx` 中注册）：
+- `goink-light`：浅色纸张背景 `#f5edd6`，插入行绿底，删除行红底
+- `goink-dark`：深棕皮革背景 `#2a1e16`，暖白文字
 
 ### 修改配色步骤
 
 1. 编辑 `frontend/src/index.css` 中 `:root`（浅色）或 `[data-theme="dark"]`（深色）
 2. 阅读区域额外受 `frontend/src/components/content/ContentPanel.css` 控制
-3. 运行 `npm run build` 验证无报错
-4. 运行 `.\build.ps1` 重新构建部署
+3. Monaco Diff 编辑器主题在 `ContentPanel.tsx` 中注册
+4. 运行 `npm run build` 验证无报错
+5. 运行 `.\build.ps1` 重新构建部署
 
 ---
 
