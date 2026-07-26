@@ -125,3 +125,131 @@ next: outline
 - `POST /api/chat` 发送消息后，Agent 按当前 session 的阶段执行
 - 门禁状态持久化在 `sessions` 表的 `current_phase` 字段
 - 新会话自动从 prepare 阶段开始
+
+
+## 示例门禁配置
+
+以下是完整的阶段门禁配置，可直接复制到设置中使用（每个 `<!-- phase-gate-config -->` 块是一个阶段的规则）：
+
+```yaml
+# prepare 阶段：只读上下文搜集
+mode: single
+phase: prepare
+tools: get_writing_context, get_chapter_list, read, get_characters, ...
+require: get_writing_context, get_chapter_list, get_characters, ...
+next: outline
+
+# outline 阶段：写大纲
+mode: single
+phase: outline
+tools: read, edit, ...
+require: edit
+next: write
+
+# write 阶段：写正文
+mode: single
+phase: write
+tools: read, edit, ...
+require: edit, get_chapter_list
+next: review
+
+# review 阶段：审稿
+mode: single
+phase: review
+tools: read, edit, run_subagent, ...
+require: run_subagent
+next: maintain
+
+# maintain 阶段：状态维护
+mode: single
+phase: maintain
+tools: read, edit, update_*, create_*, ...
+require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, ...
+next: prepare
+```
+
+完整配置见下方（HTML 注释块，系统解析用）：
+
+<!-- phase-gate-config
+mode: single
+phase: prepare
+tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
+next: outline
+-->
+<!-- phase-gate-config
+mode: single
+phase: outline
+tools: read, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+edit_paths: outlines/*, goink.md, skills/*
+require: edit
+next: write
+-->
+<!-- phase-gate-config
+mode: single
+phase: write
+tools: read, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, web_search, web_fetch, set_phase
+edit_paths: chapters/*
+require: edit, get_chapter_list
+next: review
+-->
+<!-- phase-gate-config
+mode: single
+phase: review
+tools: read, edit, run_subagent, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+edit_paths: chapters/*
+require: run_subagent
+next: maintain
+-->
+<!-- phase-gate-config
+mode: single
+phase: maintain
+tools: read, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, get_phase_gate_config, update_phase_gate_config, update_chapter_meta, set_phase
+edit_paths: goink.md, chapters/*, outlines/*, skills/*
+require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective
+next: prepare
+-->
+<!-- phase-gate-config
+mode: batch
+phase: prepare
+tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
+next: outline
+-->
+<!-- phase-gate-config
+mode: batch
+phase: outline
+tools: read, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+edit_paths: outlines/*, goink.md, skills/*
+require: edit
+next: write
+-->
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, web_search, web_fetch, set_phase
+edit_paths: chapters/*
+require: edit, get_chapter_list
+next: outline
+-->
+<!-- phase-gate-config
+mode: batch
+phase: review
+tools: read, edit, run_subagent, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
+edit_paths: chapters/*
+require: run_subagent
+next: maintain
+-->
+<!-- phase-gate-config
+mode: batch
+phase: maintain
+tools: read, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, get_phase_gate_config, update_phase_gate_config, update_chapter_meta, set_phase
+edit_paths: goink.md, chapters/*, outlines/*, skills/*
+require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective
+next: done
+-->
+<!-- phase-gate-config
+mode: batch
+phase: done
+tools: read
+-->
