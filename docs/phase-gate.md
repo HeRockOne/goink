@@ -172,6 +172,13 @@ next: prepare
 
 <!-- phase-gate-config
 mode: single
+phase: init
+tools: create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase
+require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
+next: prepare
+-->
+<!-- phase-gate-config
+mode: single
 phase: prepare
 tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
@@ -211,6 +218,13 @@ next: prepare
 -->
 <!-- phase-gate-config
 mode: batch
+phase: init
+tools: create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase
+require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
+next: prepare
+-->
+<!-- phase-gate-config
+mode: batch
 phase: prepare
 tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
@@ -230,7 +244,7 @@ phase: write
 tools: read, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, web_search, web_fetch, set_phase
 edit_paths: chapters/*
 require: edit, get_chapter_list
-next: outline
+next: review
 -->
 <!-- phase-gate-config
 mode: batch
@@ -252,4 +266,5 @@ next: done
 mode: batch
 phase: done
 tools: read
+next: prepare
 -->
