@@ -1,6 +1,7 @@
 // ContextRing — SVG 圆环显示 token 用量，照搬 Python ContextRing.tsx
-import { useState, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { GetSettings, SaveSettings } from '@/lib/wailsjs/go/app/App'
 
 export interface UsageInfo {
   prompt_tokens: number
@@ -41,6 +42,16 @@ interface Props {
 export default function ContextRing({ usage, onCompress, isTurnRunning, isCompressing }: Props) {
   const { t } = useTranslation()
   const [showPopover, setShowPopover] = useState(false)
+  const [threshold, setThreshold] = useState(70)
+  const thresholdLoaded = useRef(false)
+
+  useEffect(() => {
+    if (thresholdLoaded.current) return
+    thresholdLoaded.current = true
+    GetSettings().then(s => {
+      if (s?.compression_threshold) setThreshold(Math.round(s.compression_threshold * 100))
+    }).catch(() => {})
+  }, [])
 
   const DETAIL_LABELS: Record<string, string> = {
     system: t('chat.systemContext'),
@@ -139,6 +150,29 @@ export default function ContextRing({ usage, onCompress, isTurnRunning, isCompre
               {isCompressing ? t('chat.compressing') : t('chat.compressContext')}
             </button>
           )}
+          <div className="border-t pt-2 mt-2">
+            <div className="flex justify-between items-center text-xs mb-1">
+              <span className="text-muted-foreground">压缩阈值</span>
+              <span className="tabular-nums font-medium">{threshold}%</span>
+            </div>
+            <input
+              type="range"
+              min={50} max={95} step={5}
+              value={threshold}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setThreshold(v)
+                SaveSettings({ compression_threshold: v / 100 }).catch(() => {})
+              }}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+              style={{ accentColor: 'var(--primary)' }}
+            />
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+              <span>50%</span>
+              <span>太快</span>
+              <span>95%</span>
+            </div>
+          </div>
         </div>
       )}
     </span>

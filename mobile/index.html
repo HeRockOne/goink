@@ -66,6 +66,11 @@
     <div id="page-settings" class="page">
       <div id="settingsContent" class="scroll-area settings-scroll"></div>
     </div>
+
+    <!-- 统计页 -->
+    <div id="page-stats" class="page">
+      <div id="statsContent" class="scroll-area"></div>
+    </div>
   </main>
 
   <!-- 底部导航 -->
@@ -77,6 +82,10 @@
     <button class="nav-item" data-page="chat">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
       <span>对话</span>
+    </button>
+    <button class="nav-item" data-page="stats">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+      <span>统计</span>
     </button>
     <button class="nav-item" data-page="settings">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -262,12 +271,12 @@
   <!-- Token 输入弹窗 -->
   <template id="tpl-token-prompt">
     <div id="tokenOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)closeSheet('tokenOverlay')">
-      <div style="background:var(--surface-raised);border-radius:var(--radius-xl);padding:24px;width:85%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);border:1px solid var(--border);border-top:2px solid var(--ice)">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:8px;color:var(--ice);letter-spacing:1px;padding-left:10px;border-left:2px solid var(--ice)">🔐 访问验证</h3>
+      <div style="background:var(--surface-raised);border-radius:var(--radius-xl);padding:24px;width:85%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);border:1px solid var(--border);border-top:2px solid var(--gold)">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:8px;color:var(--gold);letter-spacing:1px;padding-left:10px;border-left:2px solid var(--gold)">🔐 访问验证</h3>
         <p style="font-size:12px;color:var(--text2);margin-bottom:14px">首次连接需输入令牌，请在桌面端「设置」中查看或扫描二维码。</p>
         <input id="tokenInput" type="text" placeholder="输入 32 位令牌" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:monospace;margin-bottom:12px;outline:none;box-sizing:border-box;background:var(--bg);color:var(--text)">
         <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button id="tokenSave" style="flex:1;padding:9px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--ice),var(--ice-light));color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px var(--blood-glow)">连接</button>
+          <button id="tokenSave" style="flex:1;padding:9px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--oak-dark),var(--oak));color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px var(--maple-glow)">连接</button>
           <button id="tokenCancel" style="padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;cursor:pointer">跳过</button>
         </div>
         <button id="tokenScan" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">📷 扫描二维码</button>
@@ -281,7 +290,7 @@
       <div style="flex:1;position:relative;overflow:hidden">
         <video id="qrVideo" style="width:100%;height:100%;object-fit:cover" autoplay playsinline></video>
         <canvas id="qrCanvas" style="display:none"></canvas>
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid var(--ice);border-radius:var(--radius);pointer-events:none;box-shadow:0 0 20px var(--blood-glow)"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;border:2px solid var(--gold);border-radius:var(--radius);pointer-events:none;box-shadow:0 0 20px var(--maple-glow)"></div>
       </div>
       <div style="padding:16px;text-align:center;background:var(--surface);backdrop-filter:var(--surface-blur);border-top:1px solid var(--border)">
         <p style="font-size:14px;color:var(--text);margin-bottom:12px">将二维码放入框内</p>

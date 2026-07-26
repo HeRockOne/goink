@@ -9,9 +9,12 @@ import (
 	"gorm.io/gorm"
 
 	"novel/internal/character"
+	"novel/internal/item"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/novel"
 	"novel/internal/reader"
+	"novel/internal/scene"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
 )
@@ -28,11 +31,14 @@ table 可选值与对应工具映射：
   story_arc                 — create_story_arc / get_story_arcs / update_story_arc
   arc_node                  — create_arc_node
   reader_perspective_entry  — create_reader_perspective_entry
-  preference                — create_preference / get_preferences / update_preference`
+  preference                — create_preference / get_preferences / update_preference
+  scene                     — create_scene / get_scenes / update_scene
+  lore                      — create_lore / get_lore / update_lore
+  item                      — create_item / get_items / update_item`
 
 // DeleteRecordArgs 是 delete_record 的参数。
 type DeleteRecordArgs struct {
-	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference"`
+	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference,enum=scene,enum=lore,enum=item" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference scene lore item"`
 	ID    int64  `json:"id"    jsonschema:"required,description=主键ID"                                                                validate:"required,min=1"`
 }
 
@@ -73,6 +79,15 @@ func (t *DeleteRecordTool) Execute(ctx context.Context, args any, tc ToolContext
 		return t.deleteReaderPerspectiveEntry(ctx, a, tc)
 	case "preference":
 		return t.deletePreference(ctx, a, tc)
+	case "scene":
+		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&scene.Scene{})
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+	case "lore":
+		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&lore.LoreEntry{})
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+	case "item":
+		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&item.Item{})
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
 	default:
 		return &ToolResult{Success: false, Error: fmt.Sprintf("不支持的表：%s", a.Table)}, nil
 	}

@@ -25,8 +25,9 @@ func (a *App) GetCharacterRelations(novelID int64) ([]character.CharacterRelatio
 type CreateCharacterInput struct {
 	Name        string `json:"name"`                  // 角色名称，必填
 	Description string `json:"description,omitempty"` // 自然语言描述
-	Personality string `json:"personality,omitempty"` // JSON 自由格式，如 {"traits":["勇敢","冲动"]}
-	Abilities   string `json:"abilities,omitempty"`   // JSON 数组，如 ["剑术","隐身"]
+	Personality string `json:"personality,omitempty"` // JSON 自由格式
+	Abilities   string `json:"abilities,omitempty"`   // JSON 数组
+	LocationID  *int64 `json:"location_id,omitempty"` // 当前所在地点 ID
 }
 
 // CreateCharacter 创建一个角色。
@@ -40,6 +41,7 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 		Description: input.Description,
 		Personality: input.Personality,
 		Abilities:   input.Abilities,
+		LocationID:  input.LocationID,
 	}
 	if err := a.character.DB.WithContext(a.ctx).Create(&char).Error; err != nil {
 		return nil, fmt.Errorf("create character: %w", err)
@@ -48,12 +50,12 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 }
 
 // UpdateCharacterInput 是 UpdateCharacter 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
 type UpdateCharacterInput struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Personality string `json:"personality,omitempty"`
 	Abilities   string `json:"abilities,omitempty"`
+	LocationID  *int64 `json:"location_id,omitempty"`
 }
 
 // UpdateCharacter 更新角色。只更新非零值字段。

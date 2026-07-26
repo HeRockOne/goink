@@ -35,23 +35,33 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
   return (
     <div className={`group/msg flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`relative max-w-[85%] rounded-xl px-3.5 py-3 break-words ${
-          isUser
-            ? 'bg-bubble-user text-bubble-user-foreground rounded-br-sm'
-            : 'bg-card border border-border/30 text-foreground rounded-bl-sm shadow-xs'
-        }`}
+        className="relative overflow-visible max-w-[85%]"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <Markdown content={content} className={isUser ? 'markdown-user' : undefined} />
-
-        {/* 操作按钮 - 右下角 */}
+        {/* 气泡 */}
         <div
-          className={`absolute -bottom-8 right-0 flex items-center gap-0.5 bg-popover border border-border/30 rounded-lg px-1 py-0.5 shadow-sm transition-all duration-150 ${
-            showActions ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1 pointer-events-none'
+          className={`rounded-xl px-3.5 py-3 break-words ${
+            isUser
+              ? 'bg-bubble-user text-bubble-user-foreground rounded-br-sm'
+              : 'bg-card border border-border/30 text-foreground rounded-bl-sm shadow-xs'
           }`}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+        >
+          <Markdown content={content} className={isUser ? 'markdown-user' : undefined} />
+          {timestamp && (
+            <div className={`text-[10px] text-muted-foreground/50 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
+              {formatTime(timestamp)}
+            </div>
+          )}
+        </div>
+
+        {/* 操作按钮 - 气泡边框外居中 */}
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-popover border border-border/30 rounded-lg px-1 py-0.5 shadow-sm transition-all duration-150 z-10 ${
+            isUser ? '-left-8' : '-right-8'
+          } ${
+            showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
         >
           <button
             onClick={handleCopy}
@@ -83,13 +93,6 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
             </button>
           )}
         </div>
-
-        {/* 时间戳 */}
-        {timestamp && (
-          <div className={`text-[10px] text-muted-foreground/50 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-            {formatTime(timestamp)}
-          </div>
-        )}
       </div>
     </div>
   )

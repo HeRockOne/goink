@@ -25,14 +25,20 @@ import (
 	"novel/internal/character"
 	"novel/internal/config"
 	"novel/internal/git"
+	"novel/internal/item"
+	"novel/internal/itemoccurrence"
 	"novel/internal/llm"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/novel"
 	"novel/internal/reader"
+	"novel/internal/scene"
 	"novel/internal/session"
+	"novel/internal/stats"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/writing"
 )
 
 // generateToken 生成随机 API token。
@@ -69,6 +75,18 @@ func newAPIServer(port int, app *App, logger *slog.Logger, frontend *embed.FS, m
 	s.mux.HandleFunc("/api/reader", s.handleReader)
 	s.mux.HandleFunc("/api/preferences", s.handlePreferences)
 	s.mux.HandleFunc("/api/locations", s.handleLocations)
+	s.mux.HandleFunc("/api/lore", s.handleLore)
+	s.mux.HandleFunc("/api/items", s.handleItems)
+	s.mux.HandleFunc("/api/read", s.handleReadFile)
+	s.mux.HandleFunc("/api/scenes", s.handleScenes)
+	s.mux.HandleFunc("/api/stats", s.handleStats)
+	s.mux.HandleFunc("/api/writing-snapshot", s.handleWritingSnapshot)
+	s.mux.HandleFunc("/api/item-occurrences", s.handleItemOccurrences)
+	s.mux.HandleFunc("/api/character-relations", s.handleCharacterRelations)
+	s.mux.HandleFunc("/api/location-relations", s.handleLocationRelations)
+	s.mux.HandleFunc("/api/phase-gate-config", s.handlePhaseGateConfig)
+	s.mux.HandleFunc("/api/writing-context", s.handleWritingContextAPI)
+	s.mux.HandleFunc("/api/search-memory", s.handleSearchMemory)
 	s.mux.HandleFunc("/api/chat", s.handleChat)
 	s.mux.HandleFunc("/api/sessions", s.handleSessions)
 	s.mux.HandleFunc("/api/sessions/", s.handleSessionMessages)
@@ -379,6 +397,303 @@ func (s *apiServer) handleLocations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"locations": locations})
 }
 
+func (s *apiServer) handleLore(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"lore": []any{}, "total": 0})
+		return
+	}
+	ls := lore.NewStore(s.app.db, s.logger)
+	opts := lore.ListOptions{
+		Page:     int(parseIntQuery(r, "page")),
+		Size:     int(parseIntQuery(r, "size")),
+		Category: r.URL.Query().Get("category"),
+		Search:   r.URL.Query().Get("search"),
+	}
+	if opts.Page <= 0 {
+		opts.Page = 1
+	}
+	if opts.Size <= 0 {
+		opts.Size = 9999
+	}
+	result, err := ls.ListByNovel(r.Context(), novelID, opts)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"lore": result.Items, "total": result.Total})
+}
+
+
+func (s *apiServer) handleReadFile(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		writeJSON(w, map[string]any{"error": "path required"})
+		return
+	}
+	content, err := git.ReadFile(novelID, path)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"content": content, "path": path})
+}
+func (s *apiServer) handleItems(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"items": []any{}, "total": 0})
+		return
+	}
+	is := item.NewStore(s.app.db, s.logger)
+	opts := item.ListOptions{
+		Page:     int(parseIntQuery(r, "page")),
+		Size:     int(parseIntQuery(r, "size")),
+		ItemType: r.URL.Query().Get("type"),
+		Status:   r.URL.Query().Get("status"),
+		Search:   r.URL.Query().Get("search"),
+	}
+	if opts.Page <= 0 {
+		opts.Page = 1
+	}
+	if opts.Size <= 0 {
+		opts.Size = 9999
+	}
+	result, err := is.ListByNovel(r.Context(), novelID, opts)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"items": result.Items, "total": result.Total})
+}
+
+func (s *apiServer) handleScenes(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	chapterID := parseIntQuery(r, "chapter_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"scenes": []any{}})
+		return
+	}
+	ss := scene.NewStore(s.app.db, s.logger)
+	scenes, err := ss.ListByChapter(r.Context(), novelID, chapterID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"scenes": scenes})
+}
+
+func (s *apiServer) handleStats(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"error": "invalid novel_id"})
+		return
+	}
+	ss := stats.NewStore(s.app.db, s.logger)
+	result, err := ss.GetNovelStats(r.Context(), novelID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"stats": result})
+}
+
+func (s *apiServer) handleWritingSnapshot(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"error": "invalid novel_id"})
+		return
+	}
+	ws := writing.NewSnapshotStore(s.app.db, s.logger)
+	result, err := ws.Get(r.Context(), novelID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"writing_snapshot": result})
+}
+
+func (s *apiServer) handleItemOccurrences(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	itemID := parseIntQuery(r, "item_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"occurrences": []any{}})
+		return
+	}
+	store := itemoccurrence.NewStore(s.app.db, s.logger)
+	if itemID > 0 {
+		items, err := store.ListByItem(r.Context(), novelID, itemID)
+		if err != nil { writeError(w, err); return }
+		writeJSON(w, map[string]any{"occurrences": items})
+	} else {
+		result, err := store.ListByNovel(r.Context(), novelID, storage.PageParams{Page: 1, Size: 9999})
+		if err != nil { writeError(w, err); return }
+		writeJSON(w, map[string]any{"occurrences": result.Items, "total": result.Total})
+	}
+}
+
+func (s *apiServer) handleCharacterRelations(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"relations": []any{}})
+		return
+	}
+	cs := character.NewStore(s.app.db, s.logger)
+	rels, err := cs.ListCurrentByNovel(r.Context(), novelID)
+	if err != nil { writeError(w, err); return }
+	writeJSON(w, map[string]any{"relations": rels})
+}
+
+func (s *apiServer) handleLocationRelations(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	if novelID == 0 || s.app.db == nil {
+		writeJSON(w, map[string]any{"relations": []any{}})
+		return
+	}
+	ls := location.NewStore(s.app.db, s.logger)
+	rels, err := ls.ListRelationsByNovel(r.Context(), novelID)
+	if err != nil { writeError(w, err); return }
+	writeJSON(w, map[string]any{"relations": rels})
+}
+
+// ── get_writing_context 辅助函数 ─────────────────────────
+
+func (s *apiServer) getChapterBrief(ctx context.Context, novelID int64, chapNum int) map[string]any {
+	r := map[string]any{"num": chapNum, "title": "", "id": 0}
+	var ch chapter.Chapter
+	if err := s.app.db.WithContext(ctx).Where("novel_id = ? AND chapter_number = ?", novelID, chapNum).First(&ch).Error; err == nil {
+		r["id"] = ch.ID; r["title"] = ch.Title; r["word_count"] = ch.WordCount
+	}
+	return r
+}
+func (s *apiServer) getRecentChapters(ctx context.Context, novelID int64) []map[string]any {
+	cs := chapter.NewStore(s.app.db, s.logger)
+	chs, _ := cs.ListByNovel(ctx, novelID, chapter.ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Page: 1, Size: 5}})
+	var out []map[string]any
+	if chs != nil {
+		for _, ch := range chs.Items {
+			out = append(out, map[string]any{"num": ch.ChapterNumber, "title": ch.Title, "summary": ch.Summary, "key_events": ch.KeyEvents, "word_cnt": ch.WordCount})
+		}
+	}
+	return out
+}
+func (s *apiServer) getCharacterBriefs(ctx context.Context, novelID int64) []map[string]any {
+	var chars []character.Character
+	s.app.db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chars)
+	var out []map[string]any
+	for _, ch := range chars {
+		loc := map[string]any{"id": 0, "name": ""}
+		if ch.LocationID != nil {
+			var l location.Location
+			if s.app.db.WithContext(ctx).First(&l, *ch.LocationID).Error == nil {
+				loc = map[string]any{"id": l.ID, "name": l.Name}
+			}
+		}
+		var ic int64
+		s.app.db.WithContext(ctx).Model(&item.Item{}).Where("owner_id = ? AND novel_id = ?", ch.ID, novelID).Count(&ic)
+		out = append(out, map[string]any{"id": ch.ID, "name": ch.Name, "location": loc, "item_count": ic})
+	}
+	return out
+}
+func (s *apiServer) getActiveArcs(ctx context.Context, novelID int64) []map[string]any {
+	var arcs []storyarc.StoryArc
+	s.app.db.WithContext(ctx).Where("novel_id = ? AND status = 'active'", novelID).Find(&arcs)
+	var out []map[string]any
+	for _, a := range arcs {
+		t, d := int64(0), int64(0)
+		s.app.db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ?", a.ID).Count(&t)
+		s.app.db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ? AND status = 'completed'", a.ID).Count(&d)
+		out = append(out, map[string]any{"id": a.ID, "name": a.Name, "type_zh": arcTypeZh(a.ArcType), "nodes_total": t, "nodes_done": d})
+	}
+	return out
+}
+func (s *apiServer) getTimelineBrief(ctx context.Context, novelID int64, chapNum int) map[string]any {
+	ts := timeline.NewStore(s.app.db, s.logger)
+	entries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 20}})
+	pending, resolved, overdue := make([]map[string]any, 0), make([]map[string]any, 0), make([]map[string]any, 0)
+	if entries != nil {
+		for _, e := range entries.Items {
+			item := map[string]any{"id": e.ID, "title": e.Title, "status": e.Status, "target_chapter": e.TargetChapter, "importance": e.Importance, "resolved_chapter": e.ResolvedChapterID}
+			if e.Status == "resolved" {
+				resolved = append(resolved, item)
+			} else {
+				pending = append(pending, item)
+				if chapNum > 0 && e.TargetChapter > 0 && e.TargetChapter < chapNum {
+					overdue = append(overdue, map[string]any{"id": e.ID, "title": e.Title, "target_chapter": e.TargetChapter, "importance": e.Importance, "overdue_by": chapNum - e.TargetChapter})
+				}
+			}
+		}
+	}
+	return map[string]any{"pending": pending, "resolved": resolved, "overdue": overdue}
+}
+func (s *apiServer) getReaderCounts(ctx context.Context, novelID int64) map[string]int {
+	var k int64
+	s.app.db.WithContext(ctx).Model(&reader.ReaderPerspective{}).Where("novel_id = ? AND type = 'known'", novelID).Count(&k)
+	var sCount, mCount int
+	var active []reader.ReaderPerspective
+	s.app.db.WithContext(ctx).Where("novel_id = ? AND (revealed_chapter = 0 OR revealed_chapter IS NULL)", novelID).Find(&active)
+	for _, e := range active {
+		if e.Type == "suspense" { sCount++ }
+		if e.Type == "misconception" { mCount++ }
+	}
+	return map[string]int{"known": int(k), "suspense": sCount, "misconception": mCount}
+}
+func (s *apiServer) getSnap(ctx context.Context, novelID int64) map[string]any {
+	ws := writing.NewSnapshotStore(s.app.db, s.logger)
+	snap, _ := ws.Get(ctx, novelID)
+	if snap == nil { return nil }
+	return map[string]any{"last_chapter_num": snap.LastChapterNum, "current_arc_id": snap.CurrentArcID, "current_location": snap.CurrentLocation, "active_chars": snap.ActiveChars}
+}
+func (s *apiServer) getNovelStats(ctx context.Context, novelID int64) map[string]any {
+	var tc int64
+	s.app.db.WithContext(ctx).Model(&chapter.Chapter{}).Where("novel_id = ?", novelID).Count(&tc)
+	snap, _ := writing.NewSnapshotStore(s.app.db, s.logger).Get(ctx, novelID)
+	st := map[string]any{"total_chapters": tc}
+	if snap != nil { st["last_chapter_num"] = snap.LastChapterNum }
+	return st
+}
+
+func arcTypeZh(t string) string {
+	switch t { case "main": return "主线"; case "sub": return "支线"; case "character": return "角色弧"; case "background": return "背景"; default: return t }
+}
+
+func (s *apiServer) handlePhaseGateConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.LoadSettings(s.app.db)
+	if err != nil { writeError(w, err); return }
+	writeJSON(w, map[string]any{"config": cfg.PhaseGateConfig, "enabled": cfg.PhaseGateEnabled != nil && *cfg.PhaseGateEnabled})
+}
+
+func (s *apiServer) handleWritingContextAPI(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	chapNum := int(parseIntQuery(r, "current_chapter"))
+	if novelID == 0 {
+		writeJSON(w, map[string]any{"error": "novel_id required"})
+		return
+	}
+	// 用已有 API 端点各自获取数据，客户端自己拼
+	r1 := s.getChapterBrief(r.Context(), novelID, chapNum)
+	r2 := s.getRecentChapters(r.Context(), novelID)
+	r3 := s.getCharacterBriefs(r.Context(), novelID)
+	r4 := s.getActiveArcs(r.Context(), novelID)
+	r5 := s.getTimelineBrief(r.Context(), novelID, chapNum)
+	r6 := s.getReaderCounts(r.Context(), novelID)
+	r7 := s.getSnap(r.Context(), novelID)
+	r8 := s.getNovelStats(r.Context(), novelID)
+	writeJSON(w, map[string]any{"chapter": r1, "recent_chapters": r2, "characters": r3, "active_arcs": r4, "timeline": r5, "reader": r6, "writing_snapshot": r7, "stats": r8})
+}
+
+func (s *apiServer) handleSearchMemory(w http.ResponseWriter, r *http.Request) {
+	novelID := parseIntQuery(r, "novel_id")
+	query := r.URL.Query().Get("query")
+	svc := s.app.searchService.Load()
+	if novelID == 0 || query == "" || svc == nil {
+		writeJSON(w, map[string]any{"results": []any{}})
+		return
+	}
+	results, err := svc.SearchAll(r.Context(), novelID, query)
+	if err != nil { writeError(w, err); return }
+	writeJSON(w, map[string]any{"results": results})
+}
 func (s *apiServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 	novelID := parseIntQuery(r, "novel_id")
 	if novelID == 0 || s.app.session == nil {

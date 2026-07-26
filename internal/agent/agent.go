@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 	"novel/internal/agentcfg"
 	"novel/internal/approval"
+	"novel/internal/config"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
 	"novel/internal/search"
@@ -23,6 +25,12 @@ import (
 	"novel/internal/skill"
 	"novel/internal/storage"
 )
+
+// agentDB 包级变量，供 parsePhaseGateFromMessages 读取配置用。
+// 在 NewAgent 中设置。
+var agentDB *gorm.DB
+
+func getDB() *gorm.DB { return agentDB }
 
 // Agent 是对话编排核心，持有运行所需的所有基础设施。
 type Agent struct {
@@ -35,7 +43,21 @@ type Agent struct {
 	skillStore    *skill.Store
 	searchService atomic.Pointer[search.Service]
 	cancelMgr     *CancelManager
-	phaseGate     *PhaseGate // 从 always-mode skill 解析的阶段门禁配置
+	phaseGateMu   sync.Mutex
+	phaseGate     *PhaseGate // 从 always-mode skill 解析的阶段门禁配置（受 phaseGateMu 保护）
+}
+
+// phaseGate 读写加锁，避免并发竞争
+func (a *Agent) getPG() *PhaseGate {
+	a.phaseGateMu.Lock()
+	defer a.phaseGateMu.Unlock()
+	return a.phaseGate
+}
+
+func (a *Agent) setPG(pg *PhaseGate) {
+	a.phaseGateMu.Lock()
+	defer a.phaseGateMu.Unlock()
+	a.phaseGate = pg
 }
 
 // RunOptions 是单次 Run() 的参数。
@@ -66,6 +88,7 @@ type RunOptions struct {
 
 // New 创建 Agent 实例。
 func New(llmClient *llm.Client, registry *mcp_tools.Registry, session *session.Store, db *gorm.DB, approver approval.Approver, logger *slog.Logger, skillStore *skill.Store, cancelMgr *CancelManager) *Agent {
+	agentDB = db
 	return &Agent{
 		llm:        llmClient,
 		registry:   registry,
@@ -111,7 +134,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
 
 	// 保存主 agent 的阶段门禁状态，子 agent 运行期间不会被清空
-	savedPhaseGate := a.phaseGate
+	savedPhaseGate := a.getPG()
 
 	subOpts := RunOptions{
 		TurnID:          parentOpts.TurnID,
@@ -123,7 +146,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		AgentType:       req.AgentType,
 		SubTaskID:       req.ToolID,
 		EventSeq:        parentOpts.EventSeq,
-		MaxTurns:        50,
+		MaxTurns:        100,
 		Model:           parentOpts.Model,
 		ProviderName:    parentOpts.ProviderName,
 		ReasoningEffort: parentOpts.ReasoningEffort,
@@ -132,7 +155,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	result, err := a.Run(ctx, subOpts)
 
 	// 恢复主 agent 的阶段门禁状态
-	a.phaseGate = savedPhaseGate
+	a.setPG(savedPhaseGate)
 
 	return result.FinalText, err
 }
@@ -152,7 +175,7 @@ func agentTypeFromString(s string) agentcfg.AgentType {
 // Run 执行 Agent 循环，返回最终文本和轮数。
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, error) {
 	if opts.MaxTurns <= 0 {
-		opts.MaxTurns = 50
+		opts.MaxTurns = 100
 	}
 	if opts.Model == nil {
 		return AgentLoopResult{}, errors.New("agent: Model is required in RunOptions")
@@ -162,7 +185,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 	// 门禁开关关闭时，强制清空上次残留的门禁状态
 	if !opts.PhaseGateEnabled {
-		a.phaseGate = nil
+		a.setPG(nil)
 	}
 
 	// 初始化阶段门禁：如果 RunOptions 没有提供，从系统消息中解析
@@ -180,12 +203,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		if opts.PhaseCurrent != "" || opts.PhaseCalledJSON != "" {
 			phaseGate.LoadState(opts.PhaseCurrent, opts.PhaseCalledJSON)
 		}
-		a.phaseGate = phaseGate
+		a.setPG(phaseGate)
 		a.logger.Info("阶段门禁已启用", "phase", phaseGate.CurrentPhase(), "mode", phaseGate.mode)
 		// Run 结束时保存门禁状态到 session
 		defer func() {
-			if a.phaseGate != nil {
-				phase, toolsJSON := a.phaseGate.SaveState()
+			if a.getPG() != nil {
+				phase, toolsJSON := a.getPG().SaveState()
 				a.session.SavePhaseGateState(opts.SessionID, phase, toolsJSON)
 			}
 		}()
@@ -241,8 +264,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	interrupted := false
 
 	// 发送阶段门禁初始状态到前端
-	if a.phaseGate != nil {
-		ps := a.phaseGate.Status()
+	if a.getPG() != nil {
+		ps := a.getPG().Status()
 		emit(AgentEvent{
 			TurnID:    opts.TurnID,
 			Type:      EventPhaseGate,
@@ -350,7 +373,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					if name == "set_phase" {
 						targetPhase, _ := args["phase"].(string)
 						// 如果 phaseGate 为空但门禁应该启用，尝试重新解析
-						if a.phaseGate == nil && opts.PhaseGateEnabled && opts.AgentType == "main" {
+						if a.getPG() == nil && opts.PhaseGateEnabled && opts.AgentType == "main" {
 							mode := opts.PhaseMode
 							if mode == "" {
 								mode = "single"
@@ -359,28 +382,28 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								if opts.PhaseCurrent != "" || opts.PhaseCalledJSON != "" {
 									pg.LoadState(opts.PhaseCurrent, opts.PhaseCalledJSON)
 								}
-								a.phaseGate = pg
+								a.setPG(pg)
 								a.logger.Warn("set_phase 时门禁为空，已重新初始化", "phase", pg.CurrentPhase())
 							}
 						}
-						if a.phaseGate != nil {
-							ok, warning := a.phaseGate.SetPhase(targetPhase)
+						if a.getPG() != nil {
+							ok, warning := a.getPG().SetPhase(targetPhase)
 							// 记录调用
-							a.phaseGate.OnToolCall("set_phase", true)
+							a.getPG().OnToolCall("set_phase", true)
 							if ok {
 								// 成功：发送状态
-								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.phaseGate.CurrentPhase(), a.phaseGate.StatusString())
+								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
 								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
-								ps := a.phaseGate.Status()
+								ps := a.getPG().Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
-								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": a.phaseGate.CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
+								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": a.getPG().CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
 							} else {
 								// 失败：require 未满足或未知阶段
-								resultJSON := fmt.Sprintf(`{"success":false,"error":"%s","current_phase":"%s"}`, warning, a.phaseGate.CurrentPhase())
+								resultJSON := fmt.Sprintf(`{"success":false,"error":"%s","current_phase":"%s"}`, warning, a.getPG().CurrentPhase())
 								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
-								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: false, Error: warning, Data: map[string]any{"current_phase": a.phaseGate.CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
+								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: false, Error: warning, Data: map[string]any{"current_phase": a.getPG().CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
 							}
 							continue
 						}
@@ -389,14 +412,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 
 					// ---- 阶段门禁：先检查，再执行（硬拦截） ----
-					if a.phaseGate != nil && a.phaseGate.Active() && a.phaseGate.CurrentPhase() != "" {
-						allowed, warning := a.phaseGate.CheckToolAllowed(name)
+					if a.getPG() != nil && a.getPG().Active() && a.getPG().CurrentPhase() != "" {
+						allowed, warning := a.getPG().CheckToolAllowed(name)
 						if !allowed {
 							// 硬拦截：不执行工具，返回错误结果
-							a.logger.Warn("门禁拦截", "tool", name, "phase", a.phaseGate.CurrentPhase())
-							injectMsg := fmt.Sprintf("<system-reminder>\n🚫 门禁拦截：当前阶段 [%s] 不允许使用 [%s]。%s\n</system-reminder>", a.phaseGate.CurrentPhase(), name, warning)
+							a.logger.Warn("门禁拦截", "tool", name, "phase", a.getPG().CurrentPhase())
+							injectMsg := fmt.Sprintf("<system-reminder>\n🚫 门禁拦截：当前阶段 [%s] 不允许使用 [%s]。%s\n</system-reminder>", a.getPG().CurrentPhase(), name, warning)
 							a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
-							ps := a.phaseGate.Status()
+							ps := a.getPG().Status()
 							emit(AgentEvent{
 								TurnID:    opts.TurnID,
 								Type:      EventPhaseGate,
@@ -410,11 +433,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						// edit 工具路径检查：不同阶段只能编辑特定文件
 						if name == "edit" {
 							if editPath, ok := args["path"].(string); ok && editPath != "" {
-								if pathAllowed, pathWarning := a.phaseGate.CheckEditPath(editPath); !pathAllowed {
-									a.logger.Warn("编辑路径被拦截", "path", editPath, "phase", a.phaseGate.CurrentPhase())
+								if pathAllowed, pathWarning := a.getPG().CheckEditPath(editPath); !pathAllowed {
+									a.logger.Warn("编辑路径被拦截", "path", editPath, "phase", a.getPG().CurrentPhase())
 									injectMsg := fmt.Sprintf("<system-reminder>\n🚫 %s\n</system-reminder>", pathWarning)
 									a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
-									ps := a.phaseGate.Status()
+									ps := a.getPG().Status()
 									emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, ErrMsg: pathWarning, Timestamp: time.Now()})
 									toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: false, Error: pathWarning, ErrKind: "user"}, displayText: display.DisplayText, activityKind: display.ActivityKind})
 									continue
@@ -481,12 +504,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					})
 
 					// 门禁：记录调用
-					if a.phaseGate != nil && a.phaseGate.Active() {
-						a.phaseGate.OnToolCall(name, result.Success)
+					if a.getPG() != nil && a.getPG().Active() {
+						a.getPG().OnToolCall(name, result.Success)
 						// get_chapter_list 字数校验状态注入
 						if name == "get_chapter_list" && result.Data != nil {
 							if wcOK, ok := result.Data["word_count_ok"].(bool); ok {
-								a.phaseGate.SetWordCountOK(wcOK)
+								a.getPG().SetWordCountOK(wcOK)
 							}
 						}
 					}
@@ -618,14 +641,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	}
 
 	// 门禁强制提醒：require 已满足但未调用 set_phase 时，注入提醒消息
-	if a.phaseGate != nil && a.phaseGate.Active() {
-		ready, next := a.phaseGate.CheckTransitionReady()
+	if a.getPG() != nil && a.getPG().Active() {
+		ready, next := a.getPG().CheckTransitionReady()
 		if ready && next != "" {
 			reminder := fmt.Sprintf(
 				"<system-reminder>\n⚠️ 门禁提醒：当前阶段 [%s] 的所有条件已满足，你必须调用 set_phase(\"%s\") 切换到下一阶段。这是强制要求，不调用将导致流程卡死。\n</system-reminder>",
-				a.phaseGate.CurrentPhase(), next)
+				a.getPG().CurrentPhase(), next)
 			a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
-			a.logger.Warn("注入阶段推进提醒", "phase", a.phaseGate.CurrentPhase(), "next", next)
+			a.logger.Warn("注入阶段推进提醒", "phase", a.getPG().CurrentPhase(), "next", next)
 		}
 	}
 
@@ -697,7 +720,11 @@ func extraJSON(extra map[string]any) string {
 	if len(extra) == 0 {
 		return ""
 	}
-	b, _ := json.Marshal(extra)
+	b, err := json.Marshal(extra)
+	if err != nil {
+		slog.Warn("extraJSON marshal failed", "err", err)
+		return ""
+	}
 	return string(b)
 }
 
@@ -707,12 +734,25 @@ func parseArgs(raw json.RawMessage) map[string]any {
 		return nil
 	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	if err := json.Unmarshal(raw, &m); err != nil {
+		slog.Warn("parseArgs unmarshal failed", "err", err)
+		return nil
+	}
 	return m
 }
 
 // parsePhaseGateFromMessages 从消息列表中扫描系统消息，提取 <!-- phase-gate-config --> 块。
+// 优先从 app_config.phase_gate_config 读取（若有），完全避免占用 AI 上下文 token。
 func parsePhaseGateFromMessages(messages []map[string]any, mode string) *PhaseGate {
+	// 尝试从数据库配置读取
+	if db := getDB(); db != nil {
+		if s, err := config.LoadSettings(db); err == nil && s.PhaseGateConfig != "" {
+			if pg := ParsePhaseGateConfig(s.PhaseGateConfig, mode); pg != nil {
+				return pg
+			}
+		}
+	}
+	// 回退：从系统消息中扫描（兼容旧版 skill 内嵌配置）
 	for _, msg := range messages {
 		if msg["role"] != "system" {
 			continue

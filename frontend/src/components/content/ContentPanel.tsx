@@ -4,35 +4,53 @@ import { FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toastError } from '@/lib/utils'
 
-// 注册牛皮纸主题
-loader.init().then(monaco => {
-  monaco.editor.defineTheme('goink-light', {
-    base: 'vs',
-    inherit: true,
-    rules: [],
+// 注册牛皮纸主题 — 从 CSS 变量读取颜色，支持自定义主题
+function readCSS(varName: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback
+}
+
+function defineMonacoThemes(m: typeof import('monaco-editor')) {
+  const L = {
+    bg: readCSS('--background', '#f5edd6'),
+    fg: readCSS('--foreground', '#3d2b1f'),
+    line: readCSS('--muted', '#e8dcc0'),
+    insert: '#d4e8d4',
+    remove: '#f0d4d4',
+    cursor: readCSS('--primary', '#8b5e3c'),
+  }
+  const D = {
+    bg: readCSS('--background', '#2a1e16'),
+    fg: readCSS('--foreground', '#e8dcc8'),
+    line: readCSS('--muted', '#3a2c20'),
+    insert: '#1a3020',
+    remove: '#3a1818',
+    cursor: readCSS('--primary', '#c4956a'),
+  }
+  m.editor.defineTheme('goink-light', {
+    base: 'vs', inherit: true, rules: [],
     colors: {
-      'editor.background': '#f5edd6',
-      'editor.foreground': '#3d2b1f',
-      'editor.lineHighlightBackground': '#e8dcc0',
-      'diffEditor.insertedTextBackground': '#d4e8d4',
-      'diffEditor.removedTextBackground': '#f0d4d4',
-      'editorCursor.foreground': '#8b5e3c',
+      'editor.background': L.bg,
+      'editor.foreground': L.fg,
+      'editor.lineHighlightBackground': L.line,
+      'diffEditor.insertedTextBackground': L.insert,
+      'diffEditor.removedTextBackground': L.remove,
+      'editorCursor.foreground': L.cursor,
     }
   })
-  monaco.editor.defineTheme('goink-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
+  m.editor.defineTheme('goink-dark', {
+    base: 'vs-dark', inherit: true, rules: [],
     colors: {
-      'editor.background': '#2a1e16',
-      'editor.foreground': '#e8dcc8',
-      'editor.lineHighlightBackground': '#3a2c20',
-      'diffEditor.insertedTextBackground': '#1a3020',
-      'diffEditor.removedTextBackground': '#3a1818',
-      'editorCursor.foreground': '#c4956a',
+      'editor.background': D.bg,
+      'editor.foreground': D.fg,
+      'editor.lineHighlightBackground': D.line,
+      'diffEditor.insertedTextBackground': D.insert,
+      'diffEditor.removedTextBackground': D.remove,
+      'editorCursor.foreground': D.cursor,
     }
   })
-})
+}
+loader.init().then(m => defineMonacoThemes(m))
 import { useApp } from '@/hooks/useApp'
 import { useEditorTabs } from '@/hooks/useEditorTabs'
 import { useTheme, type Theme } from '@/hooks/useTheme'
@@ -80,6 +98,11 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
   } = useEditorTabs(novelId)
 
   const { theme } = useTheme()
+
+  // 主题切换时重新注册 Monaco 主题（自定义主题的 CSS 变量已变化）
+  useEffect(() => {
+    loader.init().then(mm => defineMonacoThemes(mm))
+  }, [theme])
   const [isLoading, setIsLoading] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)

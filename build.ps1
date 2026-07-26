@@ -8,7 +8,7 @@ $env:CGO_ENABLED = "1"
 $env:GOPROXY = "https://goproxy.cn,direct"
 $env:CGO_CFLAGS = "-I$env:USERPROFILE\go\pkg\mod\github.com\mattn\go-sqlite3@v1.14.44"
 Set-Location "$PSScriptRoot"
-wails build -tags webkit2_41 -o build\bin\goink.exe 2>&1 | Select-String -NotMatch "KnownStructs|Not found"
+wails build -tags webkit2_41 -o goink.exe 2>&1 | Select-String -NotMatch "KnownStructs|Not found"
 if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED" -ForegroundColor Red; exit 1 }
 
 # Step 2: Stop
@@ -18,7 +18,7 @@ Start-Sleep -Seconds 2
 
 # Step 3: Deploy
 Write-Host "[3/3] Copying to D:\Goink\..." -ForegroundColor Yellow
-$src = "build\bin\build\bin\goink.exe"
+$src = "build\bin\goink.exe"
 if (-not (Test-Path $src)) { $src = "build\bin\goink.exe" }
 Copy-Item $src "D:\Goink\goink.exe" -Force
 Start-Process "D:\Goink\goink.exe" -WindowStyle Minimized

@@ -65,6 +65,9 @@
     "close": "Close"
   },
   "shell": {
+    "stats": "Stats",
+    "world": "World",
+    "items": "Items",
     "search": "Search",
     "bookshelf": "Bookshelf",
     "chapters": "Chapters",
@@ -971,7 +974,13 @@
     "toolRef_get_locations": "View the list of all locations in the novel, supporting list, detail, and relation network modes.",
     "toolRef_create_location": "Create a new location in the novel, filling in name, description, type, etc.",
     "toolRef_update_location": "Modify an existing location's information.",
-    "toolRef_delete_record": "Delete a specified record (characters, locations, timeline entries, etc.). Automatically checks associated data before deletion.",
+    "toolRef_delete_record": "Generic delete tool. Supports character/location/scene/lore/item tables.",
+    "toolRef_get_item_occurrences": "Get all chapter occurrences for an item.",
+    "toolRef_create_item_occurrence": "Record an item appearance or status change in a chapter.",
+    "toolRef_update_phase_gate_config": "Update phase gate config. Stored in DB, read by gate code only, zero AI context cost.",
+    "toolRef_get_phase_gate_config": "Read current phase gate config and status.",
+    "toolRef_get_writing_context": "Get all writing context in one call, replacing multiple get_* calls.",
+    "toolRef_update_chapter_meta": "Update chapter metadata (summary, key events, characters, arcs). Must call after each chapter.",
     "toolRef_get_preferences": "View current creative preference settings, including writing style, narrative rules, etc.",
     "toolRef_get_character_relations": "View the relationship graph between characters, understanding their interactions and connections.",
     "toolRef_get_timeline": "View the novel's timeline, including foreshadowing, event entries, and chapter plans.",
@@ -996,6 +1005,18 @@
     "toolRef_run_subagent": "Launch a specialized sub-agent for complex tasks (memory retrieval or chapter review). The sub-agent runs independently and returns a report.",
     "toolRef_web_search": "Search the web for real-world information, obtaining real-time data, news, or reference materials for writing.",
     "toolRef_web_fetch": "Fetch the main content of a specified webpage, returning cleaned pure text for reference.",
+    "toolRef_get_lore": "Browse worldbuilding lore entries: power systems, society, history, core conflicts.",
+    "toolRef_create_lore": "Create a new worldbuilding lore entry.",
+    "toolRef_update_lore": "Update an existing lore entry.",
+    "toolRef_search_lore": "Full-text search across all lore entries.",
+    "toolRef_get_items": "List or search items and artifacts. Supports filtering by type and status.",
+    "toolRef_create_item": "Create a new item or artifact entry.",
+    "toolRef_update_item": "Update item details, including owner and location.",
+    "toolRef_get_scenes": "List scenes for a chapter.",
+    "toolRef_create_scene": "Create a scene entry for a chapter.",
+    "toolRef_get_stats": "Get comprehensive novel statistics.",
+    "toolRef_get_writing_snapshot": "Get the current writing progress snapshot.",
+    "toolRef_set_phase": "Switch writing phase.",
     "subagent_whatIsTitle": "What are Sub-agents",
     "subagent_whatIsDesc": "Sub-agents are AI clones with independent context windows and dedicated tool sets. They focus on executing specific types of complex tasks and return result reports to the main conversation after completion. The main conversation context won't be filled with intermediate sub-agent processes, making sub-agents particularly suitable for tasks requiring extensive retrieval and multi-round analysis.",
     "subagent_availableTypes": "Available Sub-agent Types",
@@ -1148,3 +1169,4 @@
     "checkFailed": "Check failed"
   }
 }
+

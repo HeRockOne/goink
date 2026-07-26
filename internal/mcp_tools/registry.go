@@ -16,4 +16,13 @@ func RegisterAllTools(r *Registry) {
 	RegisterWebSearchTools(r)
 	RegisterWebFetchTools(r)
 	RegisterPhaseGateTools(r)
+	RegisterLoreTools(r)
+	RegisterItemTools(r)
+	RegisterSceneTools(r)
+	RegisterStatsTools(r)
+	RegisterSnapshotTools(r)
+	RegisterItemOccurrenceTools(r)
+	RegisterPhaseGateConfigTool(r)
+	RegisterWritingContextTool(r)
+	RegisterChapterMetaTool(r)
 }

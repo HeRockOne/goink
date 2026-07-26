@@ -15,8 +15,13 @@ export default function SidebarTimelineList({ novelId }: Props) {
 
   const load = useCallback(async () => {
     if (!novelId) { setEntries([]); return }
-    const list = await app.GetTimelineEntries(novelId, 0, 0)
-    setEntries(list ?? [])
+    try {
+      const list = await app.GetTimelineEntries(novelId, 0, 0)
+      setEntries(list ?? [])
+    } catch (err) {
+      console.error('TimelineList load failed:', err)
+      setEntries([])
+    }
   }, [novelId, app])
 
   useEffect(() => { load() }, [load])

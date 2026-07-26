@@ -24,6 +24,7 @@ type PhaseGate struct {
 	mode            string         // "single" | "batch"
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
+	visited         []string       // 已访问过的阶段列表，用于回退校验
 }
 
 // PhaseConfig 是单个阶段的配置。
@@ -69,6 +70,7 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 	return &PhaseGate{
 		phases:          phases,
 		currentPhase:    firstPhase,
+		visited:         []string{firstPhase},
 		calledTools:     make(map[string]int),
 		successfulTools: make(map[string]int),
 		mode:            mode,
@@ -223,7 +225,23 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
+	// 校验 next 字段：允许推进到 next，也允许回退到已访问过的阶段
+	if current != nil && current.Next != "" && targetPhase != current.Next {
+		allowed := false
+		for _, v := range g.visited {
+			if v == targetPhase {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return false, fmt.Sprintf("阶段 [%s] 不允许直接切换到 [%s]，只允许推进到 [%s] 或回退到已访问过的阶段",
+				g.currentPhase, targetPhase, current.Next)
+		}
+	}
+
 	g.currentPhase = targetPhase
+	g.visited = append(g.visited, targetPhase)
 	return true, ""
 }
 
@@ -422,6 +440,7 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	}
 	if currentPhase != "" {
 		g.currentPhase = currentPhase
+		g.visited = []string{currentPhase} // 恢复时从当前阶段开始
 	}
 	if calledToolsJSON != "" {
 		var tools map[string]int

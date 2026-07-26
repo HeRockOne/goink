@@ -13,6 +13,7 @@ make dev       # 开发模式
 1：当前运行环境：中国大陆**windows10**PowerShell 7**
 2：除非必要，否则请严格并行读取文件或者代码
 3：Windows 一键构建：`.\build.ps1` 或 `build.bat`
+4：每次审计结果写入/docs/*.md
 
 **目录规范：**
 - Git 命令在项目根目录执行

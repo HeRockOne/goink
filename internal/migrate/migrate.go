@@ -9,10 +9,14 @@ import (
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
+	"novel/internal/item"
+	"novel/internal/itemoccurrence"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/novel"
 	"novel/internal/reader"
 	"novel/internal/rollback"
+	"novel/internal/scene"
 	"novel/internal/session"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
@@ -47,6 +51,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&rollback.TurnCommit{},
 		&style.Sample{},
 		&writing.WritingLog{},
+		&writing.WritingSnapshot{},
+		&lore.LoreEntry{},
+		&item.Item{},
+		&scene.Scene{},
+		&chapter.ChapterArc{},
+		&itemoccurrence.ItemOccurrence{},
 	}
 
 	for _, m := range models {

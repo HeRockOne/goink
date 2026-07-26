@@ -18,14 +18,20 @@ import (
 
 // SaveSettingsInput 是保存设置的入参。
 type SaveSettingsInput struct {
-	// 后续加 LLM 配置字段（provider、模型选择、APIKey 等）
+	PhaseGateConfig      string   `json:"phase_gate_config,omitempty"`
+	CompressionThreshold *float64 `json:"compression_threshold,omitempty"`
 }
 
 // ── 设置 ──────────────────────────────────────────────────
 
-// GetSettings 返回运行时配置。
+// GetSettings 返回运行时配置。每次从 DB 读取，确保前端看到的是最新数据。
 func (a *App) GetSettings() (*config.AppSettings, error) {
-	return a.settings, nil
+	s, err := config.LoadSettings(a.db)
+	if err != nil {
+		return nil, fmt.Errorf("get settings: %w", err)
+	}
+	a.settings = s // 同步内存缓存
+	return s, nil
 }
 
 // GetServerInfo 返回服务器连接信息（IP + 端口）。
@@ -33,8 +39,6 @@ func (a *App) GetServerInfo() map[string]any {
 	ip := getLocalIP()
 	port := 0
 	if a.ctx != nil {
-		// 从 Wails 运行时获取端口
-		// Wails v2 在启动时会打印端口，这里用默认值
 		port = 9323
 	}
 	return map[string]any{
@@ -46,6 +50,12 @@ func (a *App) GetServerInfo() map[string]any {
 
 // SaveSettings 保存运行时配置。
 func (a *App) SaveSettings(input SaveSettingsInput) error {
+	if input.PhaseGateConfig != "" {
+		a.settings.PhaseGateConfig = input.PhaseGateConfig
+	}
+	if input.CompressionThreshold != nil {
+		a.settings.CompressionThreshold = *input.CompressionThreshold
+	}
 	return config.SaveSettings(a.db, a.settings)
 }
 

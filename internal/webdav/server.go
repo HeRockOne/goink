@@ -120,7 +120,7 @@ func (s *Server) IsRunning() bool {
 func (s *Server) GetURL() string {
 	ip := getLocalIP()
 	hostname := getHostname()
-	return fmt.Sprintf("浏览器阅读: http://%s:%d/\n文件管理器: http://%s:%d/\n用户名: %s  密码: %s", ip, s.port, hostname, s.port, s.username, s.password)
+	return fmt.Sprintf("浏览器阅读: http://%s:%d/\n文件管理器: http://%s:%d/\n用户名: %s", ip, s.port, hostname, s.port, s.username)
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {

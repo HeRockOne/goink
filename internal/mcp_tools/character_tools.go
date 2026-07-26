@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"novel/internal/character"
+	"novel/internal/item"
 	"novel/internal/storage"
 )
 
@@ -18,6 +19,7 @@ import (
 // GetCharactersArgs 是 get_characters 的参数。
 type GetCharactersArgs struct {
 	Search   string `json:"search" jsonschema:"description=角色名模糊搜索"`
+	Brief    bool   `json:"brief"  jsonschema:"description=true=只返回id/name/location_id/item_count（省token）；false=返回完整数据"`
 	PageArgs        // 嵌入分页参数
 }
 
@@ -28,7 +30,9 @@ func (t *GetCharactersTool) Name() string { return "get_characters" }
 func (t *GetCharactersTool) Description() string {
 	return "获取当前小说的角色列表。按最近更新降序排列，截断 50 条——完整了解角色阵容后再创作。" +
 		"冷门角色（长时间未更新）可能不在列表中，用 search 按名搜索。" +
+		"返回的角色数据包含 location_id（所在地点ID），可与 get_locations 联用。" +
 		"需要了解角色之间的关系时，用 get_character_relations 传入角色 ID 获取子图。" +
+		"【省token指令】brief=true 只返回 id/name/location_id/item_count，省略 personality/description 等大字段。" +
 		"\n【省token指令】用 page=1&size=10 只获取主角相关角色，不要一次获取全部50条"
 }
 func (t *GetCharactersTool) Category() ToolCategory { return CategoryNovelManagement }
@@ -42,6 +46,8 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 	a.NormalizePage()
 
 	store := character.NewStore(tc.DB, slog.Default())
+	// 查询该角色拥有的物品
+	itemStore := item.NewStore(tc.DB, slog.Default())
 	result, err := store.ListByNovel(ctx, tc.NovelID, character.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		Search:     a.Search,
@@ -52,12 +58,23 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 
 	items := make([]map[string]any, len(result.Items))
 	for i, ch := range result.Items {
-		items[i] = map[string]any{
-			"id":          ch.ID,
-			"name":        ch.Name,
-			"description": ch.Description,
-			"personality": parseJSONField(ch.Personality),
-			"abilities":   parseJSONField(ch.Abilities),
+		if a.Brief {
+			items[i] = map[string]any{
+				"id":          ch.ID,
+				"name":        ch.Name,
+				"location_id": ch.LocationID,
+				"item_count":   countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+			}
+		} else {
+			items[i] = map[string]any{
+				"id":          ch.ID,
+				"name":        ch.Name,
+				"description": ch.Description,
+				"personality": parseJSONField(ch.Personality),
+				"abilities":   parseJSONField(ch.Abilities),
+				"location_id": ch.LocationID,
+				"item_count":   countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+			}
 		}
 	}
 
@@ -154,10 +171,11 @@ func formatRelationEdges(rels []character.CharacterRelation, nameMap map[int64]s
 
 // CreateCharacterItem 是 create_character 的单条参数。
 type CreateCharacterItem struct {
-	Name        string `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
-	Description string `json:"description"  jsonschema:"description=角色自然语言描述，如外貌、身份、背景故事等"`
-	Personality string `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
-	Abilities   string `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
+	Name        string  `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
+	Description string  `json:"description"  jsonschema:"description=角色自然语言描述，如外貌、身份、背景故事等"`
+	Personality string  `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
+	Abilities   string  `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
+	LocationID  *int64  `json:"location_id" jsonschema:"description=角色当前所在地点ID"`
 }
 
 // CreateCharacterArgs 是 create_character 的参数。
@@ -172,7 +190,8 @@ func (t *CreateCharacterTool) Name() string { return "create_character" }
 func (t *CreateCharacterTool) Description() string {
 	return "批量创建角色（1-10个）。保证原子性，失败时返回具体条目原因。" +
 		"name 必填；personality 为自由 JSON，建议包含 role/traits/background/motivation；" +
-		"abilities 为 JSON 数组。创建后可用 get_characters 查看。"
+		"abilities 为 JSON 数组。创建后可用 get_characters 查看。" +
+		"【关联指令】如果角色有明确的当前所在地点，请传入 location_id 将角色关联到地点。之后 get_locations 查地点时可直接看到该地点有哪些角色。"
 }
 func (t *CreateCharacterTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -194,6 +213,7 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 				Description: item.Description,
 				Personality: item.Personality,
 				Abilities:   item.Abilities,
+				LocationID:  item.LocationID,
 			}
 			if err := tx.Create(&ch).Error; err != nil {
 				failedName = item.Name
@@ -226,6 +246,7 @@ type UpdateCharacterArgs struct {
 	Description string `json:"description"  jsonschema:"description=新的自然语言描述（完全替换旧的）"`
 	Personality string `json:"personality"  jsonschema:"description=新的性格/设定，字符串形式JSON（完全替换旧的）"`
 	Abilities   string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
+	LocationID  *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
 }
 
 // UpdateCharacterTool 更新角色字段。
@@ -276,7 +297,7 @@ type UpdateCharacterRelationshipArgs struct {
 	RelationID        int64  `json:"relation_id"         jsonschema:"description=编辑已有关系时提供此ID，直接修改描述内容"`
 	SourceCharacterID int64  `json:"source_character_id" jsonschema:"description=建立新关系时的发出方角色ID。旧关系自动变为历史"`
 	TargetCharacterID int64  `json:"target_character_id" jsonschema:"description=建立新关系时的接收方角色ID。旧关系自动变为历史"`
-	RelationDescribe  string `json:"relation_describe"   jsonschema:"description=自由文本描述关系，如'师徒、暗中较量'。详细描述而非简单分类词。编辑已有关系时可不传"`
+	RelationDescribe  string `json:"relation_describe"   jsonschema:"required,description=自由文本描述关系，如'师徒、暗中较量'。详细描述而非简单分类词"`
 	Description       string `json:"description"         jsonschema:"description=当前关系阶段的详细描述"`
 	ChapterID         int64  `json:"chapter_id"          jsonschema:"description=此关系确立/变化的章节ID"`
 }
@@ -420,6 +441,13 @@ func parseJSONField(raw string) any {
 // ── 注册 ──────────────────────────────────────────────
 
 // RegisterCharacterTools 注册角色管理类工具。
+
+func countItemsForChar(store *item.Store, ctx context.Context, novelID, charID int64) int {
+	var count int64
+	store.DB.WithContext(ctx).Model(&item.Item{}).Where("novel_id = ? AND owner_id = ?", novelID, charID).Count(&count)
+	return int(count)
+}
+
 func RegisterCharacterTools(r *Registry) {
 	r.Register(&GetCharactersTool{})
 	r.Register(&GetCharacterRelationsTool{})
@@ -427,3 +455,4 @@ func RegisterCharacterTools(r *Registry) {
 	r.Register(&UpdateCharacterTool{})
 	r.Register(&UpdateCharacterRelationshipTool{})
 }
+

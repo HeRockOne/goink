@@ -86,6 +86,19 @@ import {
   CreateLocation,
   UpdateLocation,
   DeleteLocation,
+  CreateLore,
+  UpdateLore,
+  DeleteLore,
+  GetLoreList,
+  GetLoreDetail,
+  FindLore,
+  CreateItem,
+  UpdateItem,
+  DeleteItem,
+  GetItemList,
+  GetItemDetail,
+  FindItems,
+  GetNovelStats,
   CreateReaderPerspective,
   UpdateReaderPerspective,
   DeleteReaderPerspective,
@@ -106,7 +119,7 @@ import {
   GetAPIToken,
   ResetAPIToken,
 } from '@/lib/wailsjs/go/app/App'
-import type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill } from '@/lib/wailsjs/go/models'
+import type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill, lore, item, stats } from '@/lib/wailsjs/go/models'
 
 export function useApp() {
   return useMemo(() => ({
@@ -196,6 +209,19 @@ export function useApp() {
     CreateLocation,
     UpdateLocation,
     DeleteLocation,
+    CreateLore,
+    UpdateLore,
+    DeleteLore,
+    GetLoreList,
+    GetLoreDetail,
+    FindLore,
+    CreateItem,
+    UpdateItem,
+    DeleteItem,
+    GetItemList,
+    GetItemDetail,
+    FindItems,
+    GetNovelStats,
     CreateReaderPerspective,
     UpdateReaderPerspective,
     DeleteReaderPerspective,
@@ -218,4 +244,4 @@ export function useApp() {
   }), [])
 }
 
-export type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill }
+export type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill, lore, item, stats }

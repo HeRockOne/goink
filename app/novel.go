@@ -14,12 +14,16 @@ import (
 	"novel/internal/config"
 	"novel/internal/export"
 	"novel/internal/git"
+	"novel/internal/item"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/novel"
 	"novel/internal/reader"
+	"novel/internal/scene"
 	"novel/internal/session"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/writing"
 )
 
 // ── 小说 ──────────────────────────────────────────────────
@@ -69,6 +73,10 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 		a.logger.Error("创建小说失败: goink.md 写入失败", "novelID", n.ID, "error", err)
 		return nil, fmt.Errorf("failed to create goink.md: %w", err)
 	}
+
+	// 初始化写作进度快照
+	snapStore := writing.NewSnapshotStore(a.db, a.logger)
+	snapStore.Upsert(a.ctx, &writing.WritingSnapshot{NovelID: n.ID})
 
 	a.logger.Info("小说创建成功", "novelID", n.ID, "title", n.Title)
 	return &n, nil
@@ -150,6 +158,11 @@ func (a *App) DeleteNovel(novelID int64) error {
 				return tx.Where("novel_id = ?", novelID).Delete(&reader.ReaderPerspective{}).Error
 			}},
 			{"sessions", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&session.Session{}).Error }},
+			{"lore", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&lore.LoreEntry{}).Error }},
+			{"items", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&item.Item{}).Error }},
+			{"scenes", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&scene.Scene{}).Error }},
+			{"writing_snapshots", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&writing.WritingSnapshot{}).Error }},
+			{"writing_logs", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&writing.WritingLog{}).Error }},
 		} {
 			if err := op.fn(tx); err != nil {
 				return fmt.Errorf("%s: %w", op.label, err)

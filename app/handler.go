@@ -21,17 +21,21 @@ import (
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
+	"novel/internal/item"
 	"novel/internal/llm"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/mcp_tools"
 	"novel/internal/migrate"
 	"novel/internal/novel"
 	"novel/internal/rag"
 	"novel/internal/reader"
 	"novel/internal/rollback"
+	"novel/internal/scene"
 	"novel/internal/search"
 	"novel/internal/session"
 	"novel/internal/skill"
+	"novel/internal/stats"
 	"novel/internal/style"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
@@ -65,6 +69,10 @@ type App struct {
 	novel      *novel.Store
 	chapter    *chapter.Store
 	character  *character.Store
+	lore       *lore.Store
+	item       *item.Store
+	scene      *scene.Store
+	stats      *stats.Store
 	session    *session.Store
 	skill      *skill.Store
 	style      *style.Store
@@ -250,6 +258,10 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	a.storyarc = storyarc.NewStore(db, a.logger)
 	a.location = location.NewStore(db, a.logger)
 	a.reader = reader.NewStore(db, a.logger)
+	a.lore = lore.NewStore(db, a.logger)
+	a.item = item.NewStore(db, a.logger)
+	a.scene = scene.NewStore(db, a.logger)
+	a.stats = stats.NewStore(db, a.logger)
 	a.turnCommit = rollback.NewStore(db, a.logger)
 	a.writing = writing.NewStore(db, a.logger)
 	s, err := skill.NewStore(a.logger, config.UserSkillsDir())
@@ -285,7 +297,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	// 11. 异步初始化向量存储和搜索服务（不阻塞 UI）
 	go func() {
 		emb, err := rag.GetEmbedder()
-		svc := search.NewService(a.logger, a.character, a.location,
+		svc := search.NewService(a.logger, a.character, a.location, a.lore, a.item,
 			a.timeline, a.storyarc, a.chapter, nil)
 		a.searchService.Store(svc)
 		a.agent.SetSearchService(svc)
@@ -303,7 +315,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 		a.logger.Info("向量存储初始化完成")
 
 		// 初始化搜索服务
-		svc = search.NewService(a.logger, a.character, a.location,
+		svc = search.NewService(a.logger, a.character, a.location, a.lore, a.item,
 			a.timeline, a.storyarc, a.chapter, a.vectorStore)
 		a.searchService.Store(svc)
 		a.agent.SetSearchService(svc)

@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"log/slog"
 	"time"
 )
 
@@ -67,7 +68,9 @@ func (m *Message) ToAPIFormat() map[string]any {
 		}
 		var meta map[string]any
 		if m.ExtraMetadata != "" {
-			json.Unmarshal([]byte(m.ExtraMetadata), &meta)
+			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
+				slog.Warn("failed to unmarshal ExtraMetadata", "role", m.Role, "err", err)
+			}
 		}
 		if meta != nil {
 			if tc, ok := meta["tool_calls"]; ok {
@@ -82,7 +85,9 @@ func (m *Message) ToAPIFormat() map[string]any {
 	if m.Role == "tool" {
 		var meta map[string]any
 		if m.ExtraMetadata != "" {
-			json.Unmarshal([]byte(m.ExtraMetadata), &meta)
+			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
+				slog.Warn("failed to unmarshal ExtraMetadata", "role", m.Role, "err", err)
+			}
 		}
 		if meta != nil {
 			if id, ok := meta["tool_call_id"]; ok {

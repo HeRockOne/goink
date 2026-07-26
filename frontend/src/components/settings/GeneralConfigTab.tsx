@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
-import { SaveGitConfig, SetPhaseGateEnabled, SetChapterWordLimit } from '@/lib/wailsjs/go/app/App'
+import { SaveGitConfig, SetChapterWordLimit } from '@/lib/wailsjs/go/app/App'
 import { useApp, type novel } from '@/hooks/useApp'
 
 export default function GeneralConfigTab() {
@@ -17,7 +17,6 @@ export default function GeneralConfigTab() {
   const [gitSaving, setGitSaving] = useState(false)
   const [gitSaved, setGitSaved] = useState(false)
   const [gitError, setGitError] = useState<string | null>(null)
-  const [phaseGateEnabled, setPhaseGateEnabled] = useState(true)
   const [webdavRunning, setWebdavRunning] = useState(false)
   const [webdavPort, setWebdavPort] = useState('12345')
   const [webdavUser, setWebdavUser] = useState('1')
@@ -50,9 +49,6 @@ export default function GeneralConfigTab() {
       if (s?.last_novel_id) setSelectedID(s.last_novel_id)
       if (s?.git_name) setGitName(s.git_name)
       if (s?.git_email) setGitEmail(s.git_email)
-      if (s?.phase_gate_enabled !== undefined && s?.phase_gate_enabled !== null) {
-        setPhaseGateEnabled(s.phase_gate_enabled as boolean)
-      }
       if (s?.webdav_port) setWebdavPort(String(s.webdav_port))
       if (s?.webdav_user) setWebdavUser(s.webdav_user)
       if (s?.webdav_pass) setWebdavPass(s.webdav_pass)
@@ -95,16 +91,6 @@ export default function GeneralConfigTab() {
     }
   }
 
-  async function handlePhaseGateToggle() {
-    const newValue = !phaseGateEnabled
-    setPhaseGateEnabled(newValue)
-    try {
-      await SetPhaseGateEnabled(newValue)
-    } catch (err) {
-      setPhaseGateEnabled(!newValue)
-      console.error('Failed to save phase gate setting:', err)
-    }
-  }
 
   async function handleSaveWordLimit() {
     const min = parseInt(minChapterWords) || 2500
@@ -212,26 +198,6 @@ export default function GeneralConfigTab() {
             className="flex-1 h-8 rounded-md border bg-muted/50 px-3 text-xs font-mono focus:outline-none cursor-default"
           />
         </div>
-      </div>
-
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          {t('settings.phaseGate')}
-        </label>
-        <p className="text-[11px] text-muted-foreground">{t('settings.phaseGateDesc')}</p>
-        <button
-          onClick={handlePhaseGateToggle}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            phaseGateEnabled ? 'bg-primary' : 'bg-muted'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              phaseGateEnabled ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
       </div>
 
       {/* 章节字数范围 */}

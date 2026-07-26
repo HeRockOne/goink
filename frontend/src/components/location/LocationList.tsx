@@ -42,8 +42,13 @@ export default function LocationList({ novelId }: Props) {
 
   const load = useCallback(async () => {
     if (!novelId) { setLocations([]); return }
-    const list = await app.GetLocations(novelId)
-    setLocations(list ?? [])
+    try {
+      const list = await app.GetLocations(novelId)
+      setLocations(list ?? [])
+    } catch (err) {
+      console.error('LocationList load failed:', err)
+      setLocations([])
+    }
   }, [novelId, app])
 
   useEffect(() => { load() }, [load])

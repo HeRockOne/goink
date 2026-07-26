@@ -65,6 +65,9 @@
     "close": "关闭"
   },
   "shell": {
+    "stats": "统计",
+    "world": "世界观",
+    "items": "物品",
     "search": "搜索",
     "bookshelf": "书架",
     "chapters": "章节",
@@ -957,11 +960,29 @@
     "toolRef_run_subagent": "启动专项子代理执行复杂任务（记忆检索或章节审稿），子代理独立运行后返回报告。",
     "toolRef_web_search": "联网搜索真实信息，获取实时数据、新闻或参考资料用于写作。",
     "toolRef_web_fetch": "抓取指定网页的正文内容，返回清洗后的纯净文本供参考。",
+    "toolRef_get_lore": "获取世界观设定条目。设定包括力量体系、社会构成、历史事件、核心冲突等。",
+    "toolRef_create_lore": "创建新的世界观设定条目。",
+    "toolRef_update_lore": "更新世界观设定条目。",
+    "toolRef_search_lore": "全文搜索世界观设定，快速定位特定概念或规则。",
+    "toolRef_get_items": "获取物品/法宝列表或详情，支持按类型和状态过滤。",
+    "toolRef_create_item": "创建新的物品或法宝条目。",
+    "toolRef_update_item": "更新物品信息，可变更持有者和所在地。",
+    "toolRef_get_scenes": "获取指定章节的场景列表。",
+    "toolRef_create_scene": "为章节创建场景条目。",
+    "toolRef_get_stats": "获取小说的综合统计信息。",
+    "toolRef_get_writing_snapshot": "获取当前写作进度快照。",
+    "toolRef_set_phase": "切换写作阶段。",
     "subagent_whatIsTitle": "什么是子代理",
     "subagent_whatIsDesc": "子代理是拥有独立上下文窗口和专属工具集的 AI 分身。它们专注于执行特定类型的复杂任务，运行结束后将结果报告返回给主对话。主对话上下文不会被子代理的中间过程撑满，因此子代理特别适合需要大量检索和多轮分析的任务。",
     "subagent_availableTypes": "可用子代理类型",
     "subagent_memoryDesc": "只读子代理，能在大量故事数据中并行搜索，将分散的角色、地点、时间线、伏笔等信息整合为连贯的报告。适合需要回溯大量设定、查找隐藏约束或跨章节信息关联的场景。",
     "subagent_memoryExample": "例如：让 AI \"查一下第三至五章中所有与某某角色相关的伏笔是否都已回收\"。",
+    "toolRef_get_item_occurrences": "获取某物品在所有章节中的出现/流转记录。",
+    "toolRef_create_item_occurrence": "记录物品在指定章节中的出现或状态变化。",
+    "toolRef_update_phase_gate_config": "更新阶段门禁配置。门禁配置存储在数据库，仅系统读取，不占用 AI 上下文 token。",
+    "toolRef_get_phase_gate_config": "读取当前阶段门禁配置内容和状态。",
+    "toolRef_get_writing_context": "一次性获取创作准备所需的全部上下文，替代多次 get_* 调用。",
+    "toolRef_update_chapter_meta": "更新章节元数据（摘要、关键事件、出场角色、关联弧线）。写完一章后必须调用。",
     "subagent_reviewDesc": "只读子代理，对指定章节进行多维度质量审查，逐项检查角色一致性、情节逻辑、伏笔管理、读者认知和故事弧线推进，输出结构化的审稿报告。",
     "subagent_reviewExample": "例如：让 AI \"审一下第八章，看看主角的性格表现是否与前几章一致\"。",
     "subagent_howToUse": "如何使用",
@@ -1106,3 +1127,4 @@
     "checkFailed": "检查失败"
   }
 }
+

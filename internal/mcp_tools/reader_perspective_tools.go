@@ -14,8 +14,11 @@ import (
 
 // ── get_reader_perspective ──────────────────────────────
 
-// GetReaderPerspectiveArgs 无参——LLM 按需调用即可。
-type GetReaderPerspectiveArgs struct{}
+// GetReaderPerspectiveArgs 支持按类型过滤和计数模式。
+type GetReaderPerspectiveArgs struct {
+	Type       string `json:"type" jsonschema:"description=过滤类型：known/suspense/misconception，空=返回全部"`
+	CountsOnly bool   `json:"counts_only" jsonschema:"description=true=只返回各类型条目数，不返回具体内容（省token）"`
+}
 
 // GetReaderPerspectiveTool 返回读者当前认知状态的三段式摘要。
 // known 兜底截断 60 条——完整认知上下文只需最近的关键事实。
@@ -26,7 +29,8 @@ func (t *GetReaderPerspectiveTool) Description() string {
 	return "获取当前小说的读者认知状态：已知信息、活跃悬念、读者误知。" +
 		"每条条目末尾的 `[entry_id:X]` 是该条目的唯一标识，更新或回收时填入 entry_id。" +
 		"尽量合并同类信息到已有条目，减少重复创建。只记录读者一定会在意，后续创作需要考虑的条目。" +
-		"\n【省token指令】用 type 过滤只获取当前需要的类型（known/suspense/misconception），不要一次获取全部"
+		"【省token指令】counts_only=true 只返回各类型数量，不返回具体内容。" +
+		"【省token指令】type=known/suspense/misconception 只获取需要的类型。"
 }
 func (t *GetReaderPerspectiveTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -38,33 +42,55 @@ func (t *GetReaderPerspectiveTool) ExposeToLLM() bool { return true }
 func (t *GetReaderPerspectiveTool) NewArgs() any      { return &GetReaderPerspectiveArgs{} }
 
 func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
+	a := args.(*GetReaderPerspectiveArgs)
 	rs := reader.NewStore(tc.DB, slog.Default())
 
-	// known：取最近 60 条，直接查 DB 保证 DESC 顺序
-	var knownItems []reader.ReaderPerspective
-	if err := tc.DB.WithContext(ctx).
-		Where("novel_id = ? AND type = ?", tc.NovelID, reader.TypeKnown).
-		Order("planted_chapter DESC").
-		Limit(60).
-		Find(&knownItems).Error; err != nil {
-		return nil, fmt.Errorf("query known perspectives: %w", err)
-	}
+	hasFilter := a.Type != ""
+	countsOnly := a.CountsOnly
 
-	// suspense + misconception：只取未回收的
-	active, err := rs.ListActive(ctx, tc.NovelID)
-	if err != nil {
-		return nil, fmt.Errorf("query active perspectives: %w", err)
+	// 如果指定了类型，只查该类型
+	var knownItems []reader.ReaderPerspective
+	if !hasFilter || a.Type == "known" {
+		if err := tc.DB.WithContext(ctx).
+			Where("novel_id = ? AND type = ?", tc.NovelID, reader.TypeKnown).
+			Order("planted_chapter DESC").
+			Limit(60).
+			Find(&knownItems).Error; err != nil {
+			return nil, fmt.Errorf("query known perspectives: %w", err)
+		}
 	}
 
 	var suspenses []reader.ReaderPerspective
 	var misconceptions []reader.ReaderPerspective
-	for _, e := range active {
-		switch e.Type {
-		case reader.TypeSuspense:
-			suspenses = append(suspenses, e)
-		case reader.TypeMisconception:
-			misconceptions = append(misconceptions, e)
+	if !hasFilter || a.Type == "suspense" || a.Type == "misconception" {
+		active, err := rs.ListActive(ctx, tc.NovelID)
+		if err != nil {
+			return nil, fmt.Errorf("query active perspectives: %w", err)
 		}
+		for _, e := range active {
+			if hasFilter && e.Type != a.Type {
+				continue
+			}
+			switch e.Type {
+			case reader.TypeSuspense:
+				suspenses = append(suspenses, e)
+			case reader.TypeMisconception:
+				misconceptions = append(misconceptions, e)
+			}
+		}
+	}
+
+	counts := map[string]int{
+		"known":         len(knownItems),
+		"suspense":      len(suspenses),
+		"misconception": len(misconceptions),
+	}
+
+	if countsOnly {
+		return &ToolResult{
+			Success: true,
+			Data:    map[string]any{"counts": counts},
+		}, nil
 	}
 
 	formatted := formatReaderPerspective(knownItems, suspenses, misconceptions)
@@ -73,11 +99,7 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 		Success: true,
 		Data: map[string]any{
 			"content": formatted,
-			"counts": map[string]int{
-				"known":         len(knownItems),
-				"suspense":      len(suspenses),
-				"misconception": len(misconceptions),
-			},
+			"counts":  counts,
 		},
 	}, nil
 }

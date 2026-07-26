@@ -28,7 +28,7 @@ type ChapterPlan struct {
 	Content string `json:"content"` // 计划内容，自然语言，LLM 填写
 }
 
-// TimelineEntry 是伏笔和用户创作意图的追踪条目。
+// TimelineEntry 是伏笔、编年史事件和用户创作意图的追踪条目。
 //
 // 与 Python 版本的差异（26 字段 → 13 字段）：
 //
@@ -79,16 +79,18 @@ type ChapterPlan struct {
 type TimelineEntry struct {
 	ID                int64     `gorm:"column:id;primaryKey;autoIncrement"      json:"id"`
 	NovelID           int64     `gorm:"column:novel_id;not null;index"          json:"novel_id"`
+	EntryType         string    `gorm:"column:entry_type;not null;default:'foreshadowing';index" json:"entry_type"` // "foreshadowing" | "chronicle"
 	Category          string    `gorm:"column:category;not null;index"          json:"category"`            // "foreshadowing" | "user_directive"，约束枚举
-	Status            string    `gorm:"column:status;not null;index"            json:"status"`              // "pending" | "resolved" | "abandoned"
+	Status            string    `gorm:"column:status;not null;index"            json:"status"`              // "pending" | "resolved" | "abandoned" | "occurred"（编年史）
 	Title             string    `gorm:"column:title;not null"                   json:"title"`               // 简短标题
 	Content           string    `gorm:"column:content"                          json:"content"`             // 详细描述
-	DetailJSON        string    `gorm:"column:detail_json"                      json:"detail_json"`         // JSON，category 相关结构化数据（伏笔类型、提示文本等）
-	TargetChapter     int       `gorm:"column:target_chapter;not null"          json:"target_chapter"`      // 预计回收章节号，主排序键，必填。不用于过滤，不准确不影响可见性，这个需要提醒llm完成的时候留下准确的id
-	Importance        int       `gorm:"column:importance;default:3"             json:"importance"`          // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
-	SourceChapterID   int64     `gorm:"column:source_chapter_id"                json:"source_chapter_id"`   // 在哪章创建/埋下的，创建后不可变
-	Source            string    `gorm:"column:source"                           json:"source"`              // "ai" | "user"，谁创建的
-	ResolvedChapterID int64     `gorm:"column:resolved_chapter_id"              json:"resolved_chapter_id"` // 在哪章回收，NULL 表示未回收
+	DetailJSON        string    `gorm:"column:detail_json"                      json:"detail_json"`         // JSON，category 相关结构化数据
+	TargetChapter     int       `gorm:"column:target_chapter;not null;default:0" json:"target_chapter"`     // 伏笔目标章节号；编年史模式为 0
+	Importance        int       `gorm:"column:importance;default:3"             json:"importance"`          // 重要度 1-5
+	SourceChapterID   int64     `gorm:"column:source_chapter_id"                json:"source_chapter_id"`
+	Source            string    `gorm:"column:source"                           json:"source"`
+	ResolvedChapterID int64     `gorm:"column:resolved_chapter_id"              json:"resolved_chapter_id"`
+	ChronologyDate    string    `gorm:"column:chronology_date"                  json:"chronology_date"`     // 编年史时间坐标，如"灵历1000年""三万年前"
 	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
 	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
 }

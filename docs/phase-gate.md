@@ -49,11 +49,17 @@ prepare → [outline → write] × N 章循环 → review → maintain → done
 
 | 阶段 | 允许的工具 | 阻止的工具 |
 |------|-----------|-----------|
-| prepare | get_*, read, edit, search_story_memory | update_*, create_*, run_subagent |
-| outline | read, edit, get_*, search_story_memory | update_*, create_*, run_subagent |
-| write | read, edit, search_story_memory, get_* | update_*, create_*, run_subagent |
-| review | read, run_subagent, get_* | edit, update_*, create_* |
-| maintain | read, edit, update_*, create_* | run_subagent |
+| prepare | get_*, read, edit, search_story_memory, web_search, web_fetch | update_*, create_*, delete_*, run_subagent, set_phase |
+| outline | read, edit, get_*, search_story_memory, web_search, web_fetch | update_*, create_*, delete_*, run_subagent, set_phase |
+| write | read, edit, search_story_memory, web_search, web_fetch, get_* | update_*, create_*, delete_*, run_subagent, set_phase |
+| review | read, run_subagent, get_*, search_story_memory | edit, update_*, create_*, delete_*, set_phase |
+| maintain | read, edit, update_*, create_*, delete_*, search_story_memory, get_* | run_subagent, set_phase |
+
+> **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
+> create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 prepare 和 maintain 阶段可用。
+> set_phase 在所有阶段默认禁用，由系统自动推进。
+
+## require 完成条件
 
 ## require 完成条件
 

@@ -196,8 +196,10 @@ const LANGS = {
     novels_empty: '书架空空如也', loading: '加载中', load_fail: '加载失败',
     chapters: '章节', characters: '角色', timeline: '时间线', arcs: '弧线',
     reader: '读者', preferences: '偏好', locations: '地点',
+    lore: '设定', items: '物品', scenes: '场景',
     no_chapters: '暂无章节', no_characters: '暂无角色', no_timeline: '暂无时间线',
     no_arcs: '暂无弧线', no_reader: '暂无读者认知', no_prefs: '暂无偏好', no_locations: '暂无地点',
+    no_lore: '暂无设定', no_items: '暂无物品', no_scenes: '暂无场景',
     resolved: '已解决', pending: '待处理', other: '其他',
     known: '已知信息', suspense: '悬念', misconception: '误解',
     global: '全局', novel_only: '小说专属', uncategorized: '未分类',
@@ -225,8 +227,10 @@ const LANGS = {
     novels_empty: 'Your bookshelf is empty', loading: 'Loading', load_fail: 'Failed to load',
     chapters: 'Chapters', characters: 'Characters', timeline: 'Timeline', arcs: 'Arcs',
     reader: 'Reader', preferences: 'Preferences', locations: 'Locations',
+    lore: 'Lore', items: 'Items', scenes: 'Scenes',
     no_chapters: 'No chapters yet', no_characters: 'No characters yet', no_timeline: 'No timeline yet',
     no_arcs: 'No arcs yet', no_reader: 'No reader perspectives yet', no_prefs: 'No preferences yet', no_locations: 'No locations yet',
+    no_lore: 'No lore yet', no_items: 'No items yet', no_scenes: 'No scenes yet',
     resolved: 'Resolved', pending: 'Pending', other: 'Other',
     known: 'Known', suspense: 'Suspense', misconception: 'Misconception',
     global: 'Global', novel_only: 'Novel only', uncategorized: 'Uncategorized',
@@ -366,7 +370,7 @@ function switchPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page)?.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  const titles = { novels: t('bookshelf'), chat: t('chat'), settings: t('settings'), 'novel-detail': state.novelTitle || t('detail') };
+  const titles = { novels: t('bookshelf'), chat: t('chat'), stats: t('stats_label', '统计'), settings: t('settings'), 'novel-detail': state.novelTitle || t('detail') };
   document.getElementById('pageTitle').textContent = titles[page] || 'Goink';
   const actions = document.getElementById('headerActions');
   if (page === 'chat') {
@@ -378,6 +382,7 @@ function switchPage(page) {
   if (page === 'novels') loadNovels();
   if (page === 'chat') { loadModels(); loadSessions(); }
   if (page === 'settings') loadSettings();
+  if (page === 'stats') loadStatsPage();
   if (page === 'novel-detail') loadNovelDetail();
 }
 
@@ -633,7 +638,7 @@ function openNovel(id, title) { state.novelId = id; state.novelTitle = title; sw
 
 // ═══════════ 小说详情 ═══════════
 let novelTab = 'chapters';
-const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }];
+const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }, { id: 'lore', label: () => '📜 ' + t('lore') }, { id: 'items', label: () => '⚔️ ' + t('items') }, { id: 'scenes', label: () => '🎬 ' + t('scenes') }];
 
 async function loadNovelDetail() {
   // 标题已在顶部导航栏显示，不再重复
@@ -809,8 +814,124 @@ async function loadTabContent(tab) {
         }
         break;
       }
+      case 'lore': {
+        const r = await api(`/api/lore?novel_id=${nId}&page=1&size=9999`);
+        const items = r.lore || [];
+        el.innerHTML = '';
+        if (items.length) {
+          const groups = {};
+          items.forEach(i => { const c = i.category || '未分类'; if (!groups[c]) groups[c] = []; groups[c].push(i); });
+          Object.keys(groups).forEach(cat => {
+            const grp = tpl('tpl-collapse');
+            const root = grp.firstElementChild;
+            qs(root, '.c-title').textContent = cat;
+            qs(root, '.c-count').textContent = groups[cat].length;
+            const body = qs(root, '.c-body');
+            groups[cat].forEach(i => {
+              body.appendChild(dc({
+                badge: (i.title||'?')[0], bg: 'var(--frost)', color: 'var(--ice)',
+                title: i.title, sub: i.summary || (i.content||'').slice(0,50) || undefined,
+                meta: i.is_public === false ? '<span class="tag tag-sm" style="background:#c44a4a15;color:#c44a4a">隐藏</span>' : undefined,
+                onclick: (ev) => cardClick(ev, () => showDetail(i.title, formatLore(i)))
+              }));
+            });
+            el.appendChild(root);
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_lore')}</p></div>`;
+        }
+        break;
+      }
+      case 'items': {
+        const r = await api(`/api/items?novel_id=${nId}&page=1&size=9999`);
+        const items = r.items || [];
+        el.innerHTML = '';
+        if (items.length) {
+          items.forEach(i => {
+            let meta = '';
+            if (i.item_type) meta += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">${esc(i.item_type)}</span>`;
+            if (i.grade) meta += `<span class="tag tag-sm" style="background:var(--surface2);color:var(--text2)">${esc(i.grade)}</span>`;
+            if (i.status) meta += `<span class="tag tag-sm" style="${i.status === 'active' ? 'background:#3d8b5e15;color:#3d8b5e' : 'background:var(--surface2);color:var(--text2)'}">${esc(i.status)}</span>`;
+            el.appendChild(dc({
+              badge: (i.name||'?')[0], bg: 'var(--frost)', color: 'var(--ice)',
+              title: i.name, sub: (i.description||'').slice(0,50) || undefined,
+              meta: meta || undefined,
+              onclick: (ev) => cardClick(ev, () => showDetail(i.name, formatItem(i)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_items')}</p></div>`;
+        }
+        break;
+      }
+      case 'scenes': {
+        const r = await api(`/api/scenes?novel_id=${nId}`);
+        const scenes = r.scenes || [];
+        el.innerHTML = '';
+        if (scenes.length) {
+          scenes.forEach(s => {
+            let meta = '';
+            if (s.arc_node_id) meta += `<span class="tag tag-sm" style="background:var(--frost);color:var(--ice)">节点${s.arc_node_id}</span>`;
+            el.appendChild(dc({
+              badge: (s.title||'?')[0], bg: 'var(--frost)', color: 'var(--ice)',
+              title: s.title || '场景', sub: (s.content||'').slice(0,50) || undefined,
+              meta: meta || undefined,
+              onclick: (ev) => cardClick(ev, () => showDetail(s.title||'场景', formatScene(s)))
+            }));
+          });
+        } else {
+          el.innerHTML = `<div class="empty-state"><p>${t('no_scenes')}</p></div>`;
+        }
+        break;
+      }
     }
   } catch (_) { el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>'; }
+}
+
+// ═══════════ 统计页面 ═══════════
+async function loadStatsPage() {
+  const el = document.getElementById('statsContent');
+  el.innerHTML = `<div class="empty-state"><div class="loading-dots">${t('loading')}</div></div>`;
+  const nId = state.novelId;
+  if (!nId) {
+    el.innerHTML = '<div class="empty-state"><p>请先打开一本小说</p></div>';
+    return;
+  }
+  try {
+    const r = await api(`/api/stats?novel_id=${nId}`);
+    const s = r.stats;
+    if (!s) { el.innerHTML = '<div class="empty-state"><p>暂无数据</p></div>'; return; }
+    el.innerHTML = '';
+    const cards = [
+      { label: '总章节', value: String(s.total_chapters || 0), badge: '📖' },
+      { label: '总字数', value: fmt(s.total_words || 0), badge: '📝' },
+      { label: '均章字数', value: fmt(s.avg_chapter_words || 0), badge: '📐' },
+      { label: '弧线进度', value: `${s.arc_completed||0}/${s.arc_count||0}`, badge: '🔮' },
+      { label: '伏笔回收', value: `${s.foreshadowing_resolved||0}/${s.foreshadowing_total||0}`, badge: '👁' },
+      { label: '角色数', value: String(s.character_count || 0), badge: '👤' },
+      { label: '地点数', value: String(s.location_count || 0), badge: '📍' },
+    ];
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px';
+    cards.forEach(c => {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;text-align:center;box-shadow:var(--shadow-xs)';
+      card.innerHTML = `<div style="font-size:20px;margin-bottom:4px">${c.badge}</div><div style="font-size:20px;font-weight:700;color:var(--ice)">${esc(c.value)}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${esc(c.label)}</div>`;
+      grid.appendChild(card);
+    });
+    el.appendChild(grid);
+    if (s.latest_chapter_num > 0) {
+      const footer = document.createElement('div');
+      footer.style.cssText = 'margin-top:14px;font-size:12px;color:var(--text2);text-align:center';
+      footer.textContent = `最新章节：第 ${s.latest_chapter_num} 章 ${s.latest_chapter_title || ''}`;
+      el.appendChild(footer);
+    }
+  } catch (_) { el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>'; }
+}
+
+function fmt(n) {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
 }
 
 // ═══════════ 全屏沉浸阅读器 ═══════════
@@ -1102,6 +1223,43 @@ function formatLocation(l) {
   if (l.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.description)}</div>`;
   if (l.detail_json) { try { const d = JSON.parse(l.detail_json); Object.keys(d).forEach(k => { h += ir(esc(k), esc(String(d[k]))); }); } catch (_) {} }
   if (l.tags) h += `<div style="margin-top:8px"><span class="info-label" style="display:inline-block;min-width:60px;font-size:11px;color:var(--ice)">标签</span><div class="data-card-meta" style="display:inline-flex;gap:4px;margin-left:4px">${l.tags.split(',').map(t => `<span class="tag" style="background:var(--frost);color:var(--ice)">${esc(t.trim())}</span>`).join('')}</div></div>`;
+  return h;
+}
+
+function formatLore(l) {
+  let h = '';
+  if (l.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(l.title)}</div>`;
+  if (l.category) h += ir('分类', esc(l.category));
+  if (l.is_public === false) h += ir('公开', '否（隐藏设定）', 'color:#c44a4a');
+  if (l.reveal_chapter_id) h += ir('揭示章节', '第' + l.reveal_chapter_id + '章');
+  if (l.arc_id) h += ir('关联弧线', 'ID: ' + l.arc_id);
+  if (l.summary) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.summary)}</div>`;
+  if (l.content) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap">${esc(l.content)}</div>`;
+  return h;
+}
+
+function formatItem(i) {
+  let h = '';
+  if (i.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(i.name)}</div>`;
+  if (i.item_type) h += ir('类型', esc(i.item_type));
+  if (i.grade) h += ir('品级', esc(i.grade));
+  if (i.status) h += ir('状态', esc(i.status));
+  if (i.narrative_role) h += ir('叙事角色', {key_prop:'关键道具',supporting:'重要',normal:'普通'}[i.narrative_role] || i.narrative_role);
+  if (i.owner_id) h += ir('持有者', 'ID: ' + i.owner_id);
+  if (i.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(i.description)}</div>`;
+  if (i.ability) h += `<div style="margin:8px 4px"><span class="info-label" style="color:var(--ice)">能力</span><div style="font-size:13px;line-height:1.6;color:var(--text2);margin-top:4px">${esc(i.ability)}</div></div>`;
+  if (i.lore) h += `<div style="margin:8px 4px"><span class="info-label" style="color:var(--ice)">来历</span><div style="font-size:13px;line-height:1.6;color:var(--text2);margin-top:4px">${esc(i.lore)}</div></div>`;
+  return h;
+}
+
+function formatScene(s) {
+  let h = '';
+  if (s.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(s.title)}</div>`;
+  if (s.chapter_id) h += ir('章节', 'ID: ' + s.chapter_id);
+  if (s.location_id) h += ir('地点', 'ID: ' + s.location_id);
+  if (s.arc_id) h += ir('关联弧线', 'ID: ' + s.arc_id);
+  if (s.arc_node_id) h += ir('弧线节点', 'ID: ' + s.arc_node_id);
+  if (s.content) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap">${esc(s.content)}</div>`;
   return h;
 }
 

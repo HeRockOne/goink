@@ -16,7 +16,11 @@ models/
 !/build/runtime/models/vocab.txt
 /build/dist/
 /build/*.AppDir/
-/build/windows/
+/build/windows/*
+!/build/windows/icon.ico
+
+# Auto-generated Wails bindings (regenerated on every build)
+frontend/src/lib/wailsjs/
 goink
 goink.exe
 

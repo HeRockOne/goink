@@ -10,6 +10,9 @@ import SidePanel from '@/components/sidebar/SidePanel'
 import ContentPanel, { type ContentPanelHandle } from '@/components/content/ContentPanel'
 import CharacterListView from '@/components/character/CharacterListView'
 import LocationListView from '@/components/location/LocationListView'
+import LoreListView from '@/components/lore/LoreListView'
+import ItemListView from '@/components/item/ItemListView'
+import StatsView from '@/components/stats/StatsView'
 import ArcListView from '@/components/storyarc/ArcListView'
 import TimelineView from '@/components/timeline/TimelineView'
 import ReaderView from '@/components/reader/ReaderView'
@@ -79,7 +82,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const loadedRef = useRef(false)
   const { theme, toggle: toggleTheme } = useTheme()
   const { isMaximised, setIsMaximised } = useWindowState()
-  const { sidePanelWidth, chatPanelWidth, setSidePanelWidth, setChatPanelWidth } = useLayoutState()
+  const { sidePanelWidth, chatPanelWidth, setChatPanelWidth } = useLayoutState()
   const [sidebarClosed, setSidebarClosed] = useState(false)
 
   // ── 更新检查 ────────────────────────────────────────────
@@ -389,7 +392,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <ActivityBar activeId={sidebarPanel ?? activePanel} onSelect={handleActivitySelect} />
 
-        {!sidebarClosed && (
+        {!sidebarClosed && (sidebarPanel ?? activePanel) !== 'stats' && (
           <SidePanel
             activePanel={sidebarPanel ?? activePanel}
             novels={novels}
@@ -427,7 +430,6 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             onSelectGitFile={handleSelectGitFile}
             onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
             sidePanelWidth={sidePanelWidth}
-            onSidePanelResize={setSidePanelWidth}
           />
         )}
 
@@ -443,49 +445,66 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             onExportNovel={(n) => setExportNovelId(n.id)}
             onImportNovel={() => importNovel.startImport()}
           />
-        ) : activePanel !== 'characters' && activePanel !== 'locations' && activePanel !== 'storyarcs' && activePanel !== 'timeline' && activePanel !== 'reader' && activePanel !== 'preferences' && activePanel !== 'profile' && activePanel !== 'git' && activePanel !== 'style-samples' && (
-          <ContentPanel ref={contentRef} novelId={activeNovelId} onContentChange={setActiveContent} onDirtyChange={setIsDirty} />
-        )}
+        ) : (
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* ContentPanel: for non-special panels (chapters, search, etc.) */}
+            {activePanel !== 'characters' && activePanel !== 'locations' && activePanel !== 'storyarcs' && activePanel !== 'timeline' && activePanel !== 'reader' && activePanel !== 'preferences' && activePanel !== 'world' && activePanel !== 'items' && activePanel !== 'stats' && activePanel !== 'profile' && activePanel !== 'git' && activePanel !== 'style-samples' && (
+              <ContentPanel ref={contentRef} novelId={activeNovelId} onContentChange={setActiveContent} onDirtyChange={setIsDirty} />
+            )}
 
-        {/* Always mounted: pattern extraction is a long-running task, unmounting would interrupt progress listeners */}
-        <div className={activePanel === 'style-samples' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>
-          <ErrorBoundary>
-            <ExtractWorkspaceView novelId={activeNovelId} focusSampleId={styleSampleFocusId} onFocusSampleHandled={() => setStyleSampleFocusId(null)} />
-          </ErrorBoundary>
-        </div>
-        {activePanel === 'characters' ? (
-          <ErrorBoundary>
-            <CharacterListView novelId={activeNovelId} focusId={characterFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'locations' ? (
-          <ErrorBoundary>
-            <LocationListView novelId={activeNovelId} focusId={locationFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'storyarcs' ? (
-          <ErrorBoundary>
-            <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'timeline' ? (
-          <ErrorBoundary>
-            <TimelineView novelId={activeNovelId} focusEntryId={timelineFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'reader' ? (
-          <ErrorBoundary>
-            <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'preferences' ? (
-          <ErrorBoundary>
-            <PreferenceView novelId={activeNovelId} focusId={preferenceFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === 'git' ? (
-          <ErrorBoundary>
-            <GitCommitView file={selectedGitFile} />
-          </ErrorBoundary>
-        ) : activePanel === 'profile' ? (
-          <ErrorBoundary>
-            <ProfileView />
-          </ErrorBoundary>
-        ) : null}
+            {/* Always mounted: pattern extraction is a long-running task, unmounting would interrupt progress listeners */}
+            <div className={activePanel === 'style-samples' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>
+              <ErrorBoundary>
+                <ExtractWorkspaceView novelId={activeNovelId} focusSampleId={styleSampleFocusId} onFocusSampleHandled={() => setStyleSampleFocusId(null)} />
+              </ErrorBoundary>
+            </div>
+            {activePanel === 'characters' ? (
+              <ErrorBoundary>
+                <CharacterListView novelId={activeNovelId} focusId={characterFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'locations' ? (
+              <ErrorBoundary>
+                <LocationListView novelId={activeNovelId} focusId={locationFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'storyarcs' ? (
+              <ErrorBoundary>
+                <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'timeline' ? (
+              <ErrorBoundary>
+                <TimelineView novelId={activeNovelId} focusEntryId={timelineFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'reader' ? (
+              <ErrorBoundary>
+                <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'preferences' ? (
+              <ErrorBoundary>
+                <PreferenceView novelId={activeNovelId} focusId={preferenceFocusId} />
+              </ErrorBoundary>
+            ) : activePanel === 'world' ? (
+              <ErrorBoundary>
+                <LoreListView novelId={activeNovelId} />
+              </ErrorBoundary>
+            ) : activePanel === 'items' ? (
+              <ErrorBoundary>
+                <ItemListView novelId={activeNovelId} />
+              </ErrorBoundary>
+            ) : activePanel === 'stats' ? (
+              <ErrorBoundary>
+                <StatsView novelId={activeNovelId} />
+              </ErrorBoundary>
+            ) : activePanel === 'git' ? (
+              <ErrorBoundary>
+                <GitCommitView file={selectedGitFile} />
+              </ErrorBoundary>
+            ) : activePanel === 'profile' ? (
+              <ErrorBoundary>
+                <ProfileView />
+              </ErrorBoundary>
+            ) : null}
+          </div>
+        )}
 
         {activePanel !== 'profile' && (
           <ChatPanel novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} />

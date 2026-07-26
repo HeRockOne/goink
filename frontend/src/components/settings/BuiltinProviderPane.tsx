@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, CheckCircle2, Loader2, Globe, ExternalLink, ChevronDown } from 'lucide-react'
+import { X, CheckCircle2, Loader2, Globe, ExternalLink, ChevronDown, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { BrowserOpenURL } from '@/lib/wailsjs/runtime/runtime'
 import type { llm } from '@/hooks/useApp'
 import TemperatureInfo from './TemperatureInfo'
 import ModelDiscoveryPanel from './ModelDiscoveryPanel'
+import ModelEditForm from './ModelEditForm'
 import ProviderIcon from './ProviderIcon'
 
 interface Props {
@@ -22,6 +23,7 @@ export default function BuiltinProviderPane({ providers, onUpdate, onAddCustomMo
   const [selectedKey, setSelectedKey] = useState(providers[0]?.key || '')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [editingModelId, setEditingModelId] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // 切换服务商时重置折叠和下拉状态
@@ -204,25 +206,49 @@ export default function BuiltinProviderPane({ providers, onUpdate, onAddCustomMo
           <span className="text-xs text-muted-foreground mb-2 block">{t('settings.customModels')}</span>
           <div className="rounded-md border divide-y">
             {provider.custom_models.map(m => (
-              <div key={m.id} className="flex items-center justify-between px-3 py-2">
-                <div>
-                  <span className="text-sm">{m.name || m.id}</span>
-                  {(m.context_window > 0 || m.max_output_tokens > 0) && (
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {m.context_window > 0 && (m.context_window >= 1_000_000 ? (m.context_window / 1_000_000).toFixed(0) + 'M' : (m.context_window / 1_000).toFixed(0) + 'K')}
-                          {m.max_output_tokens > 0 && <> · {(m.max_output_tokens / 1_000).toFixed(0)}K {t('settings.output')}</>}
-                          {m.supports_thinking ? <> · {t('settings.thinking')}</> : null}
-                          {m.reasoning_levels?.length ? <> · {t('settings.level')}: {m.reasoning_levels.join(',')}</> : null}
-                          {m.supports_vision ? <> · {t('settings.vision')}</> : null}
-                    </span>
-                  )}
+              <div key={m.id}>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <span className="text-sm">{m.name || m.id}</span>
+                    {(m.context_window > 0 || m.max_output_tokens > 0) && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {m.context_window > 0 && (m.context_window >= 1_000_000 ? (m.context_window / 1_000_000).toFixed(0) + 'M' : (m.context_window / 1_000).toFixed(0) + 'K')}
+                            {m.max_output_tokens > 0 && <> · {(m.max_output_tokens / 1_000).toFixed(0)}K {t('settings.output')}</>}
+                            {m.supports_thinking ? <> · {t('settings.thinking')}</> : null}
+                            {m.reasoning_levels?.length ? <> · {t('settings.level')}: {m.reasoning_levels.join(',')}</> : null}
+                            {m.supports_vision ? <> · {t('settings.vision')}</> : null}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingModelId(editingModelId === m.id ? null : m.id)}
+                      className="text-muted-foreground hover:text-primary transition-colors p-1"
+                      title={t('common.edit')}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onRemoveCustomModel(selectedKey, m.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => onRemoveCustomModel(selectedKey, m.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {editingModelId === m.id && (
+                  <div className="px-3 pb-3">
+                    <ModelEditForm
+                      model={m}
+                      onChange={patch => {
+                        const models = (provider.custom_models || []).map(cm => cm.id === m.id ? { ...cm, ...patch } : cm)
+                        onUpdate(selectedKey, { custom_models: models } as Partial<llm.ProviderView>)
+                      }}
+                      onSave={() => setEditingModelId(null)}
+                      onCancel={() => setEditingModelId(null)}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

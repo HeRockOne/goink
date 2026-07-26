@@ -47,11 +47,23 @@ HTTP 状态码: `401`
 9. [读者认知](#8-读者认知)
 10. [偏好](#9-偏好)
 11. [地点](#10-地点)
-12. [对话](#11-对话)
-13. [会话](#12-会话)
-14. [模型设置](#13-模型设置)
-15. [WebSocket](#14-websocket)
-16. [静态文件](#15-静态文件)
+12. [世界观设定](#11-世界观设定)
+13. [物品](#12-物品)
+14. [场景](#13-场景)
+15. [创作统计](#14-创作统计)
+16. [写作快照](#15-写作快照)
+17. [对话](#16-对话)
+18. [角色关系](#18-角色关系)
+19. [地点关系](#19-地点关系)
+20. [物品出现记录](#20-物品出现记录)
+21. [门禁配置](#21-门禁配置)
+22. [书写上下文](#22-书写上下文)
+23. [语义搜索](#23-语义搜索)
+24. [读取文件](#24-读取文件)
+25. [会话](#25-会话)
+26. [模型设置](#26-模型设置)
+27. [WebSocket](#27-websocket)
+28. [静态文件](#28-静态文件)
 
 ---
 
@@ -468,7 +480,438 @@ HTTP 状态码: `401`
 
 ---
 
-## 11. 对话
+## 11. 世界观设定
+
+### GET /api/lore
+
+获取指定小说的世界观设定条目，支持按分类和关键词筛选。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| category | string | 否 | 分类筛选（力量体系/社会构成/历史事件等） |
+| search | string | 否 | 全文搜索关键词 |
+| page | int | 否 | 页码（默认 1） |
+| size | int | 否 | 每页数量（默认 9999） |
+
+**响应:**
+```json
+{
+  "lore": [
+    {
+      "id": 1,
+      "novel_id": 1,
+      "title": "灵脉修炼体系",
+      "category": "力量体系",
+      "summary": "以灵脉为核心的能量修炼体系",
+      "content": "灵脉是天地灵气凝聚而成的能量脉络...",
+      "arc_id": 1,
+      "reveal_chapter_id": 5,
+      "is_public": true,
+      "source": "",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-07-01T00:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| title | string | 设定标题 |
+| category | string | 分类 |
+| summary | string | 一句话摘要 |
+| content | string | 正文内容（Markdown） |
+| arc_id | int | 关联的故事弧线 ID（可选） |
+| reveal_chapter_id | int | 首次向读者揭露此设定的章节 ID |
+| is_public | bool | 是否为公开设定（false 表示仅角色知晓） |
+| source | string | 来源说明 |
+
+---
+
+## 12. 物品
+
+### GET /api/items
+
+获取指定小说的物品/法宝列表。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| type | string | 否 | 物品类型（法宝/丹药/灵药/功法等） |
+| status | string | 否 | 状态筛选（active/destroyed/lost等） |
+| search | string | 否 | 关键词搜索 |
+| page | int | 否 | 页码（默认 1） |
+| size | int | 否 | 每页数量（默认 9999） |
+
+**响应:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "novel_id": 1,
+      "name": "灵脉玉佩",
+      "item_type": "法宝",
+      "grade": "天阶",
+      "description": "温润的玉佩...",
+      "ability": "储存灵气，缓慢恢复持有者法力",
+      "lore": "传说为上古大能所炼制",
+      "owner_id": 127,
+      "status": "active",
+      "arc_id": 1,
+      "narrative_role": "key_prop",
+      "first_chapter_id": 1,
+      "status_changed_chapter_id": 15,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| name | string | 物品名称 |
+| item_type | string | 物品类型 |
+| grade | string | 品级 |
+| description | string | 外观/功能描述 |
+| ability | string | 特殊能力 |
+| lore | string | 来历/传说 |
+| owner_id | int | 当前持有角色 ID |
+| status | string | 状态: `active` / `destroyed` / `lost` |
+| arc_id | int | 关联弧线 ID |
+| narrative_role | string | 叙事重要性: `key_prop` / `supporting` / `normal` |
+| first_chapter_id | int | 首次出现章节 ID |
+| status_changed_chapter_id | int | 状态变化章节 ID |
+
+---
+
+## 13. 场景
+
+### GET /api/scenes
+
+获取指定小说/章节的场景列表。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| chapter_id | int | 否 | 章节 ID（留空返回所有场景） |
+
+**响应:**
+```json
+{
+  "scenes": [
+    {
+      "id": 1,
+      "novel_id": 1,
+      "chapter_id": 101,
+      "title": "炎羽部落初遇",
+      "content": "夜幕降临...",
+      "character_ids": "[1,2,3]",
+      "location_id": 5,
+      "arc_id": 1,
+      "arc_node_id": 3,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| title | string | 场景标题 |
+| content | string | 场景内容 |
+| chapter_id | int | 所属章节 ID |
+| character_ids | string | JSON 数组格式的角色 ID 列表 |
+| location_id | int | 地点 ID |
+| arc_id | int | 关联弧线 ID |
+| arc_node_id | int | 关联弧线节点 ID |
+
+---
+
+## 14. 创作统计
+
+### GET /api/stats
+
+获取指定小说的综合统计数据。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+
+**响应:**
+```json
+{
+  "stats": {
+    "total_chapters": 75,
+    "total_words": 350000,
+    "avg_chapter_words": 4667,
+    "arc_count": 3,
+    "arc_completed": 1,
+    "foreshadowing_total": 15,
+    "foreshadowing_resolved": 8,
+    "character_count": 12,
+    "location_count": 25,
+    "latest_chapter_num": 75,
+    "latest_chapter_title": "第七十五章 真相大白"
+  }
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| total_chapters | int | 总章节数 |
+| total_words | int | 总字数 |
+| avg_chapter_words | int | 平均每章字数 |
+| arc_count | int | 弧线总数 |
+| arc_completed | int | 已完成的弧线数 |
+| foreshadowing_total | int | 伏笔总数 |
+| foreshadowing_resolved | int | 已回收的伏笔数 |
+| character_count | int | 角色数 |
+| location_count | int | 地点数 |
+| latest_chapter_num | int | 最新章节号 |
+| latest_chapter_title | string | 最新章节标题 |
+
+---
+
+## 15. 写作快照
+
+### GET /api/writing-snapshot
+
+获取当前写作进度快照。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+
+**响应:**
+```json
+{
+  "writing_snapshot": {
+    "id": 1,
+    "novel_id": 1,
+    "last_chapter_id": 101,
+    "current_arc_id": 2,
+    "current_location_id": 5,
+    "current_location_text": "青云宗后山",
+    "active_chars": "[1,2,3]",
+    "updated_at": "2026-07-15T00:00:00Z"
+  }
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| last_chapter_id | int | 最新完成的章节 ID |
+| current_arc_id | int | 当前正在推进的弧线 ID |
+| current_location_id | int | 当前焦点地点 ID |
+| current_location_text | string | 焦点地点文本（冗余） |
+| active_chars | string | JSON 数组格式的活跃角色 ID 列表 |
+
+---
+
+## 16. 角色关系
+
+### GET /api/character-relations
+
+获取角色之间的当前有效关系图。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+
+**响应:**
+```json
+{
+  "relations": [
+    {
+      "id": 1,
+      "novel_id": 11,
+      "source_character_id": 127,
+      "target_character_id": 128,
+      "relation_describe": "同伴、暗中提防",
+      "is_current": true,
+      "created_at": "2026-07-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 17. 地点关系
+
+### GET /api/location-relations
+
+获取地点之间的空间连通关系。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+
+**响应:**
+```json
+{
+  "relations": [
+    {
+      "id": 1,
+      "location_a_id": 5,
+      "location_b_id": 8,
+      "relation_type": "相邻",
+      "description": "皇城南门通往皇宫偏殿"
+    }
+  ]
+}
+```
+
+---
+
+## 18. 物品出现记录
+
+### GET /api/item-occurrences
+
+获取物品在章节中的出现记录。支持按物品 ID 筛选或返回全部。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| item_id | int | 否 | 物品 ID（留空返回全部） |
+
+**响应:**
+```json
+{
+  "occurrences": [
+    {
+      "id": 1,
+      "novel_id": 11,
+      "item_id": 4,
+      "chapter_id": 290,
+      "action": "acquired",
+      "description": "黎烨获得炽魂石",
+      "created_at": "2026-07-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 19. 门禁配置
+
+### GET /api/phase-gate-config
+
+获取当前阶段门禁配置和开关状态。
+
+**响应:**
+```json
+{
+  "config": "<!-- phase-gate-config\nmode: single\nphase: prepare\ntools: ...",
+  "enabled": true
+}
+```
+
+---
+
+## 20. 书写上下文
+
+### GET /api/writing-context
+
+获取树状关联的当前故事状态，用于 prepare 阶段替代多次 get_* 调用。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| current_chapter | int | 是 | 当前要写的章节号 |
+
+**响应:**
+```json
+{
+  "chapter": { "num": 3, "title": "第3章", "word_count": 2308 },
+  "recent_chapters": [
+    { "num": 3, "title": "第3章", "summary": "", "key_events": "", "word_cnt": 23 },
+    { "num": 2, "title": "荒原暗影", "summary": "三人前往星痕山脉途中...", "key_events": ["炽魂石出现裂纹"], "word_cnt": 3626 }
+  ],
+  "characters": [
+    { "id": 127, "name": "黎烨", "location": { "id": 67, "name": "山脚村落" }, "item_count": 3 }
+  ],
+  "active_arcs": [
+    { "id": 68, "name": "灵脉拯救之路", "type_zh": "主线", "nodes_total": 2, "nodes_done": 2 }
+  ],
+  "timeline": {
+    "pending": [{ "id": 197, "title": "炽魂石的共鸣", "target_chapter": 3, "importance": 4 }],
+    "resolved": []
+  },
+  "reader": { "known": 1, "suspense": 3, "misconception": 0 },
+  "writing_snapshot": { "last_chapter_num": 2, "current_arc_id": 68, "active_chars": "[127,128,129]" },
+  "stats": { "total_chapters": 3 }
+}
+```
+
+---
+
+## 21. 语义搜索
+
+### GET /api/search-memory
+
+使用语义搜索在小说内容中查找相关信息。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| query | string | 是 | 自然语言搜索关键词 |
+
+**响应:**
+```json
+{
+  "results": [
+    { "type": "lore", "title": "上古大战与星痕山脉", "relevance": 0 },
+    { "type": "rag", "title": "第 2 章", "relevance": 0.57 }
+  ]
+}
+```
+
+---
+
+## 22. 读取文件
+
+### GET /api/read
+
+读取小说仓库中的文件内容（章节正文、大纲、故事状态等）。
+
+**查询参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| novel_id | int | 是 | 小说 ID |
+| path | string | 是 | 文件路径，如 `chapters/002.md`、`outlines/002.md`、`goink.md` |
+
+**响应:**
+```json
+{
+  "content": "荒原的风比昨夜更冷了。\n\n黎烨勒住马缰...",
+  "path": "chapters/002.md"
+}
+```
+
+---
+
+## 23. 对话
 
 ### POST /api/chat
 
@@ -538,7 +981,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 12. 会话
+## 24. 会话
 
 ### GET /api/sessions
 
@@ -597,7 +1040,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 13. 模型设置
+## 25. 模型设置
 
 ### GET /api/settings/model
 
@@ -659,7 +1102,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 14. WebSocket
+## 26. WebSocket
 
 ### WebSocket /api/ws
 
@@ -677,7 +1120,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 15. 静态文件
+## 27. 静态文件
 
 ### GET /
 
@@ -723,6 +1166,6 @@ HTTP 状态码为 500（内部错误）或 405（方法不允许）。
 ### 数据提取规则
 
 客户端提取列表数据时建议按以下优先级:
-1. 直接检查顶层数组值键（如 `novels`、`characters`、`locations`）
+1. 直接检查顶层数组值键（如 `novels`、`characters`、`locations`、`lore`、`items`、`scenes`）
 2. 检查嵌套 `items` 数组（如 `entries.items`、`arcs.items`）
 3. 回退到空数组

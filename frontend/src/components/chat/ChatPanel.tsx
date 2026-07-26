@@ -58,11 +58,11 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     return idx >= 0 ? [key.substring(0, idx), key.substring(idx + 1)] : ['', key]
   }
 
+  const [turns, setTurns] = useState<Turn[]>([])
+  const [sessionId, setSessionId] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const startXRef = useRef(0)
   const startWidthRef = useRef(chatPanelWidth)
-  const [turns, setTurns] = useState<Turn[]>([])
-  const [sessionId, setSessionId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [models, setModels] = useState<llm.AvailableModel[]>([])
   const [selectedKey, setSelectedKey] = useState('')
@@ -340,6 +340,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     }).finally(() => setIsLoadingHistory(false))
   }, [app, activeSessionId, novelId, historyLoadRetry])
 
+  // ── 聊天面板缩放（右边锁死，只拖左边） ─────────────
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -350,8 +351,9 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   useEffect(() => {
     if (!isDragging) return
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - startXRef.current
-      onChatPanelResize(startWidthRef.current - delta)
+      let w = startWidthRef.current - (e.clientX - startXRef.current)
+      w = Math.min(800, Math.max(180, Math.round(w)))
+      onChatPanelResize(w)
     }
     const handleMouseUp = () => setIsDragging(false)
     document.addEventListener('mousemove', handleMouseMove)

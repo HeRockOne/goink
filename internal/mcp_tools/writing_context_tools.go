@@ -1,0 +1,329 @@
+package mcp_tools
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+
+	"novel/internal/chapter"
+	"novel/internal/character"
+	"novel/internal/config"
+	"novel/internal/item"
+	"novel/internal/location"
+	"novel/internal/lore"
+	"novel/internal/reader"
+	"novel/internal/scene"
+	"novel/internal/storage"
+	"novel/internal/storyarc"
+	"novel/internal/timeline"
+	"novel/internal/writing"
+)
+
+// ── get_writing_context ─────────────────────────────────
+// 返回树状结构：以 current_chapter 为根，向下展开场景→角色→地点→物品、弧线→节点→关联
+
+type GetWritingContextArgs struct {
+	CurrentChapter int `json:"current_chapter" jsonschema:"required,description=要写的章节号（必填），用于定位本章场景、出场角色等"`
+}
+
+type GetWritingContextTool struct{}
+
+func (t *GetWritingContextTool) Name() string { return "get_writing_context" }
+func (t *GetWritingContextTool) Description() string {
+	return "【省token专用·树状关联】一次性获取创作准备所需的全部上下文，替代多次 get_* 调用。" +
+		"使用时机：prepare 阶段开头调用一次即可，不要反复调用。\n" +
+		"返回结构说明：\n" +
+		"chapter: 当前章节 {num=章节号, title=标题, word_count=字数}\n" +
+		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数}]\n" +
+		"scenes[]: 本章场景 [{title, summary, word_count, location={name=地点名, type=地点类型}, arc_node={title=节点标题, arc_name=所属弧线名}}]\n" +
+		"characters[]: 出场角色 [{name, location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
+		"active_arcs[]: 活跃弧线 [{name, type_zh=类型中文(主线/支线/角色弧/背景), nodes_done=已完成节点数, nodes_total=总节点数, related_lore=[关联设定ID], related_items=[关联物品ID]}]\n" +
+		"timeline.pending[]: 待回收伏笔 [{title, category=foreshadowing/user_directive, target_chapter=目标回收章节, importance=重要度1-5}]\n" +
+		"timeline.resolved[]: 已回收伏笔 [{title, resolved_chapter=实际回收章节}]\n" +
+		"timeline.overdue[]: 超期未回收伏笔 [{title, target_chapter=原定回收章节, importance, overdue_by=超期了几章(越大越紧急)}]\n" +
+		"reader: 读者认知计数 {known=已知信息数, suspense=活跃悬念数, misconception=读者误知数}\n" +
+		"writing_snapshot: 写作快照 {last_chapter_num=最新已完成章节号, current_arc_id=当前弧线ID, current_location=当前地点, active_chars=活跃角色ID数组JSON}\n" +
+		"stats: 统计 {total_chapters=总章数}"
+}
+func (t *GetWritingContextTool) Category() ToolCategory { return CategoryMemoryRetrieval }
+func (t *GetWritingContextTool) JSONSchema() json.RawMessage {
+	return SchemaOf(GetWritingContextArgs{})
+}
+func (t *GetWritingContextTool) ExposeToLLM() bool { return true }
+func (t *GetWritingContextTool) NewArgs() any      { return &GetWritingContextArgs{} }
+
+func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
+	a := args.(*GetWritingContextArgs)
+	nid := tc.NovelID
+	db := tc.DB
+	log := slog.Default()
+	chapNum := a.CurrentChapter
+
+	result := map[string]any{}
+
+	// ── 1. 当前章节信息 ──
+	var curCh chapter.Chapter
+	chapterData := map[string]any{"num": chapNum, "title": "", "id": 0}
+	if err := db.WithContext(ctx).Where("novel_id = ? AND chapter_number = ?", nid, chapNum).First(&curCh).Error; err == nil {
+		chapterData["id"] = curCh.ID
+		chapterData["title"] = curCh.Title
+		chapterData["word_count"] = curCh.WordCount
+	}
+	result["chapter"] = chapterData
+
+	// ── 1.5 最近 5 章列表 ──
+	cs := chapter.NewStore(db, log)
+	recentChs, _ := cs.ListByNovel(ctx, nid, chapter.ListByNovelOptions{
+		Order:      "desc",
+		PageParams: storage.PageParams{Page: 1, Size: 5},
+	})
+	recentList := make([]map[string]any, 0)
+	if recentChs != nil {
+		for _, ch := range recentChs.Items {
+			recentList = append(recentList, map[string]any{
+				"num":        ch.ChapterNumber,
+				"title":      ch.Title,
+				"summary":    ch.Summary,
+				"key_events": ch.KeyEvents,
+				"word_cnt":   ch.WordCount,
+			})
+		}
+	}
+	result["recent_chapters"] = recentList
+
+	// ── 2. 本章场景 → 角色 → 地点 → 弧线节点 ──
+	sceneStore := scene.NewStore(db, log)
+	scenes, err := sceneStore.ListByChapter(ctx, nid, curCh.ID)
+	sceneList := make([]map[string]any, 0)
+	if err == nil {
+		for _, s := range scenes {
+			// 地点
+			locInfo := map[string]any{"id": 0, "name": ""}
+			if s.LocationID != nil {
+				var loc location.Location
+				if err := db.WithContext(ctx).First(&loc, *s.LocationID).Error; err == nil {
+					locInfo = map[string]any{"id": loc.ID, "name": loc.Name, "type": loc.LocationType}
+				}
+			}
+			// 弧线节点
+			nodeInfo := map[string]any(nil)
+			if s.ArcNodeID != nil {
+				var node storyarc.ArcNode
+				if err := db.WithContext(ctx).First(&node, *s.ArcNodeID).Error; err == nil {
+					var arcName string
+					db.WithContext(ctx).Model(&storyarc.StoryArc{}).Select("name").Where("id = ?", node.StoryArcID).Scan(&arcName)
+					nodeInfo = map[string]any{"id": node.ID, "title": node.Title, "arc_id": node.StoryArcID, "arc_name": arcName}
+				}
+			}
+			sceneList = append(sceneList, map[string]any{
+				"id":          s.ID,
+				"title":       s.Title,
+				"summary":     s.Summary,
+				"word_count":  s.WordCount,
+				"location":    locInfo,
+				"arc_node":    nodeInfo,
+				"scene_num":   s.SceneNumber,
+			})
+		}
+	}
+	result["scenes"] = sceneList
+
+	// ── 3. 本章出场角色 → 地点名 → 物品 ──
+	// 收集所有场景里的角色 ID
+	charIDSet := map[int64]bool{}
+	for _, s := range scenes {
+		ids := parseJSONInt64Array(s.CharacterIDs)
+		for _, id := range ids {
+			charIDSet[id] = true
+		}
+	}
+	// 如果有 snapshot 的活跃角色，也加上
+	snap, _ := writing.NewSnapshotStore(db, log).Get(ctx, nid)
+	if snap != nil {
+		ids := parseJSONInt64Array(snap.ActiveChars)
+		for _, id := range ids {
+			charIDSet[id] = true
+		}
+	}
+
+	charList := make([]map[string]any, 0)
+	if len(charIDSet) > 0 {
+		charIDs := make([]int64, 0, len(charIDSet))
+		for id := range charIDSet {
+			charIDs = append(charIDs, id)
+		}
+		var chars []character.Character
+		db.WithContext(ctx).Where("id IN ? AND novel_id = ?", charIDs, nid).Find(&chars)
+		itemStore := item.NewStore(db, log)
+		for _, ch := range chars {
+			locInfo := map[string]any{"id": 0, "name": ""}
+			if ch.LocationID != nil {
+				var loc location.Location
+				if err := db.WithContext(ctx).First(&loc, *ch.LocationID).Error; err == nil {
+					locInfo = map[string]any{"id": loc.ID, "name": loc.Name}
+				}
+			}
+			// 该角色持有的物品（仅 key_prop 和 supporting）
+			items := make([]map[string]any, 0)
+			var itemList []item.Item
+			db.WithContext(ctx).Where("novel_id = ? AND owner_id = ? AND narrative_role IN ('key_prop','supporting')", nid, ch.ID).Find(&itemList)
+			for _, it := range itemList {
+				items = append(items, map[string]any{"id": it.ID, "name": it.Name, "role": it.NarrativeRole})
+			}
+			charList = append(charList, map[string]any{
+				"id":          ch.ID,
+				"name":        ch.Name,
+				"location":    locInfo,
+				"items":       items,
+				"item_count":  countItemsForChar(itemStore, ctx, nid, ch.ID),
+			})
+		}
+	}
+	result["characters"] = charList
+
+	// ── 4. 活跃弧线 → 节点进度 + 关联设定/物品 ──
+	var arcs []storyarc.StoryArc
+	db.WithContext(ctx).Where("novel_id = ? AND status = 'active'", nid).Find(&arcs)
+	arcList := make([]map[string]any, 0)
+	for _, ar := range arcs {
+		// 节点进度
+		var totalNodes, doneNodes int64
+		db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ?", ar.ID).Count(&totalNodes)
+		db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ? AND status = 'completed'", ar.ID).Count(&doneNodes)
+		// 关联设定（初始化为空数组，不返回 null）
+		loreIDs := make([]int64, 0)
+		db.WithContext(ctx).Model(&lore.LoreEntry{}).Select("id").Where("novel_id = ? AND arc_id = ?", nid, ar.ID).Scan(&loreIDs)
+		// 关联物品
+		itemIDs := make([]int64, 0)
+		db.WithContext(ctx).Model(&item.Item{}).Select("id").Where("novel_id = ? AND arc_id = ?", nid, ar.ID).Scan(&itemIDs)
+
+		arcList = append(arcList, map[string]any{
+			"id":            ar.ID,
+			"name":          ar.Name,
+			"type_zh":       arcTypeZh(ar.ArcType),
+			"status":        ar.Status,
+			"nodes_total":   totalNodes,
+			"nodes_done":    doneNodes,
+			"related_lore":  loreIDs,
+			"related_items": itemIDs,
+		})
+	}
+	result["active_arcs"] = arcList
+
+	// ── 5. 时间线 ──
+	tlStore := timeline.NewStore(db, log)
+	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
+		PageParams: storage.PageParams{Page: 1, Size: 20},
+	})
+	if err == nil {
+		pending := make([]map[string]any, 0)
+		resolved := make([]map[string]any, 0)
+		overdue := make([]map[string]any, 0)
+		for _, e := range tlEntries.Items {
+			entry := map[string]any{
+				"id":               e.ID,
+				"title":            e.Title,
+				"category":         e.Category,
+				"status":           e.Status,
+				"target_chapter":   e.TargetChapter,
+				"importance":       e.Importance,
+				"resolved_chapter": e.ResolvedChapterID,
+			}
+			if e.Status == "resolved" {
+				resolved = append(resolved, entry)
+			} else {
+				pending = append(pending, entry)
+				// 超期检测：target_chapter < 当前要写的章节号
+				if chapNum > 0 && e.TargetChapter > 0 && e.TargetChapter < chapNum {
+					overdue = append(overdue, map[string]any{
+						"id":             e.ID,
+						"title":          e.Title,
+						"target_chapter": e.TargetChapter,
+						"importance":     e.Importance,
+						"overdue_by":     chapNum - e.TargetChapter,
+					})
+				}
+			}
+		}
+		result["timeline"] = map[string]any{
+			"pending":  pending,
+			"resolved": resolved,
+			"overdue":  overdue,
+		}
+	} else {
+		result["timeline"] = map[string]any{"pending": []any{}, "resolved": []any{}, "overdue": []any{}}
+	}
+
+	// ── 6. 读者认知计数 ──
+	var knownCount int64
+	db.WithContext(ctx).Model(&reader.ReaderPerspective{}).Where("novel_id = ? AND type = ?", nid, "known").Count(&knownCount)
+	rs := reader.NewStore(db, log)
+	activeEntries, _ := rs.ListActive(ctx, nid)
+	suspenseCount, misconceptionCount := 0, 0
+	for _, e := range activeEntries {
+		switch e.Type {
+		case "suspense":
+			suspenseCount++
+		case "misconception":
+			misconceptionCount++
+		}
+	}
+	result["reader"] = map[string]int{"known": int(knownCount), "suspense": suspenseCount, "misconception": misconceptionCount}
+
+	// ── 7. 写作快照 ──
+	if snap != nil {
+		result["writing_snapshot"] = map[string]any{
+			"last_chapter_num": snap.LastChapterNum,
+			"current_arc_id":   snap.CurrentArcID,
+			"current_location": snap.CurrentLocation,
+			"active_chars":     snap.ActiveChars,
+		}
+	}
+
+	// ── 8. 统计 ──
+	settings, _ := config.LoadSettings(db)
+	stats := map[string]any{}
+	var totalChapters int64
+	db.WithContext(ctx).Model(&chapter.Chapter{}).Where("novel_id = ?", nid).Count(&totalChapters)
+	stats["total_chapters"] = totalChapters
+	if settings != nil {
+		stats["min_words"] = settings.MinChapterWords
+		stats["max_words"] = settings.MaxChapterWords
+		stats["phase_gate_enabled"] = settings.PhaseGateEnabled != nil && *settings.PhaseGateEnabled
+	}
+	result["stats"] = stats
+
+	return &ToolResult{Success: true, Data: result}, nil
+}
+
+// parseJSONInt64Array 解析 "[1,5,12]" 格式的 JSON 数组
+func parseJSONInt64Array(raw string) []int64 {
+	if raw == "" {
+		return nil
+	}
+	var ids []int64
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil
+	}
+	return ids
+}
+
+// arcTypeZh 将弧线类型英文映射为中文
+func arcTypeZh(t string) string {
+	switch t {
+	case "main":
+		return "主线"
+	case "sub":
+		return "支线"
+	case "character":
+		return "角色弧"
+	case "background":
+		return "背景"
+	default:
+		return t
+	}
+}
+
+func RegisterWritingContextTool(r *Registry) {
+	r.Register(&GetWritingContextTool{})
+}

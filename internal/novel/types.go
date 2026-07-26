@@ -24,7 +24,10 @@ type PreferenceItem struct {
 	IsGlobal  bool      `gorm:"column:is_global;not null;index"   json:"is_global"` // true=用户全局，false=特定小说
 	Category  string    `gorm:"column:category"                   json:"category"`  // LLM 自行归类，自由文本
 	Content   string    `gorm:"column:content;not null"           json:"content"`   // 偏好内容
+	Status    string    `gorm:"column:status;default:'active'"    json:"status"`    // active(生效) | superseded(已替代)
+	Version   int       `gorm:"column:version;default:1"          json:"version"`   // 更新次数
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"`
 }
 
 // TableName 指定 GORM 表名。
