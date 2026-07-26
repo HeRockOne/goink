@@ -86,6 +86,7 @@ type App struct {
 	apiServer  *apiServer
 	wsHub      *ws.Hub
 	logEnabled bool // 文件日志开关
+	apiUseHTTPS bool // HTTPS 开关
 }
 
 // New 创建 App 实例。初始化在 OnStartup 中完成。
@@ -113,6 +114,18 @@ func (a *App) SetLoggingEnabled(enabled bool) {
 // GetLoggingEnabled 返回文件日志是否启用。
 func (a *App) GetLoggingEnabled() bool {
 	return a.logEnabled
+}
+
+// GetAPIUseHTTPS 返回 API 是否使用 HTTPS。
+func (a *App) GetAPIUseHTTPS() bool {
+	return a.apiUseHTTPS
+}
+
+// SetAPIUseHTTPS 设置 API 是否使用 HTTPS。
+func (a *App) SetAPIUseHTTPS(enabled bool) {
+	a.apiUseHTTPS = enabled
+	a.settings.APIUseHTTPS = enabled
+	config.SaveSettings(a.db, a.settings)
 }
 
 // SetWSHub 设置 WebSocket Hub，用于双端实时同步。
@@ -245,6 +258,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	a.settings = settings
 	a.logEnabled = settings.LogEnabled
 	logger.SetFileEnabled(settings.LogEnabled)
+	a.apiUseHTTPS = settings.APIUseHTTPS
 
 	// 5. 注册操作日志钩子
 	storage.RegisterOplogHooks(db)

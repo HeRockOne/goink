@@ -49,19 +49,20 @@ func generateToken() string {
 }
 
 type apiServer struct {
-	port     int
-	app      *App
-	logger   *slog.Logger
-	server   *http.Server
-	mux      *http.ServeMux
-	mu       sync.Mutex
-	running  bool
-	frontend *embed.FS
-	mobile   *embed.FS
+	port      int
+	useHTTPS  bool
+	app       *App
+	logger    *slog.Logger
+	server    *http.Server
+	mux       *http.ServeMux
+	mu        sync.Mutex
+	running   bool
+	frontend  *embed.FS
+	mobile    *embed.FS
 }
 
-func newAPIServer(port int, app *App, logger *slog.Logger, frontend *embed.FS, mobile *embed.FS) *apiServer {
-	s := &apiServer{port: port, app: app, logger: logger, frontend: frontend, mobile: mobile}
+func newAPIServer(port int, useHTTPS bool, app *App, logger *slog.Logger, frontend *embed.FS, mobile *embed.FS) *apiServer {
+	s := &apiServer{port: port, useHTTPS: useHTTPS, app: app, logger: logger, frontend: frontend, mobile: mobile}
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/api/health", s.handleHealth)
 	s.mux.HandleFunc("/api/info", s.handleServerInfo)
@@ -127,6 +128,14 @@ func (s *apiServer) Start() {
 
 	addr := fmt.Sprintf(":%d", s.port)
 	s.server = &http.Server{Addr: addr, Handler: withCORS(withAuth(s.mux, s))}
+
+	if !s.useHTTPS {
+		s.logger.Info("移动端 API 服务器启动 (HTTP)", "port", s.port)
+		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			s.logger.Warn("API 服务器已停止", "err", err)
+		}
+		return
+	}
 
 	// 尝试生成/加载 HTTPS 证书
 	dataDir := config.DataDirPath()

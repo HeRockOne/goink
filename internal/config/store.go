@@ -34,7 +34,8 @@ type AppSettings struct {
 	APIPort          int    `gorm:"column:api_port;default:9323" json:"api_port"`                             // 移动端连接端口
 	LogEnabled       bool   `gorm:"column:log_enabled;default:true" json:"log_enabled"`                       // 文件日志开关
 	APIToken         string `gorm:"column:api_token;default:''" json:"api_token"`                             // API 认证 token
-	PhaseGateConfig  string `gorm:"column:phase_gate_config;type:text" json:"phase_gate_config"`               // 阶段门禁配置（markdown + <!-- phase-gate-config --> 块），AI 和文件均不加载，仅门禁代码读取
+	PhaseGateConfig  string `gorm:"column:phase_gate_config;type:text" json:"phase_gate_config"`               // 阶段门禁配置
+	APIUseHTTPS      bool   `gorm:"column:api_use_https;default:true" json:"api_use_https"`                    // 移动端 API 使用 HTTPS（默认 true，关掉则用 HTTP）
 }
 
 func (AppSettings) TableName() string { return "app_config" }

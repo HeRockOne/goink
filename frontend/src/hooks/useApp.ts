@@ -116,6 +116,8 @@ import {
   SetAPIPort,
   SetLoggingEnabled,
   GetLoggingEnabled,
+  GetAPIUseHTTPS,
+  SetAPIUseHTTPS,
   GetAPIToken,
   ResetAPIToken,
 } from '@/lib/wailsjs/go/app/App'
@@ -239,6 +241,8 @@ export function useApp() {
     SetAPIPort,
     SetLoggingEnabled,
     GetLoggingEnabled,
+    GetAPIUseHTTPS,
+    SetAPIUseHTTPS,
     GetAPIToken,
     ResetAPIToken,
   }), [])

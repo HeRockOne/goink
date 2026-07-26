@@ -219,7 +219,7 @@ func (a *App) StopAPIServer() {
 
 // restartAPIServer 重启 API/WebSocket 服务器到指定端口。
 func (a *App) restartAPIServer(port int) {
-	a.apiServer = newAPIServer(port, a, a.logger, a.frontend, a.mobile)
+	a.apiServer = newAPIServer(port, a.apiUseHTTPS, a, a.logger, a.frontend, a.mobile)
 	go a.apiServer.Start()
 }
 
