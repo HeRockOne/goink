@@ -285,7 +285,7 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 
 Three layers (builtin/user/novel) × three modes (auto/manual/always) = 9 strategies.
 
-27 built-in skills. Create a new `.md` file to add a Skill, zero-code.
+33 built-in skills + 2 resident scheduling skills (writing-kernel, ai-communication-standard). Create a new `.md` file to add a Skill, zero-code.
 
 ### 17. Security
 
@@ -350,7 +350,7 @@ goink/
 ├── mobile/                 # Mobile web frontend
 ├── frontend/               # Desktop React frontend
 ├── docs/                   # Architecture/audit/competitor docs
-├── skills/                 # 27 built-in Skills
+├── skills/                 # Skill source repo (33 built-in + 2 resident scheduling)
 ├── build.ps1               # Windows one-click build
 └── build.bat               # Windows one-click build
 ```

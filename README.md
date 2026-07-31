@@ -285,7 +285,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
 三层（内置/用户/小说级）× 三种模式（auto/manual/always）= 9 种策略。
 
-当前 27 个 Skill，新建 `.md` 文件即新 Skill，零代码扩展。
+当前内置 33 个 Skill（builtin 一次到位）+ 2 个常驻调度 Skill（writing-kernel、ai-communication-standard 在用户级，可随时调整）。新建 `.md` 文件即新 Skill，零代码扩展。
 
 ### 十七、安全
 
@@ -350,7 +350,7 @@ goink/
 ├── mobile/                 # 移动端 Web 前端
 ├── frontend/               # 桌面端 React 前端
 ├── docs/                   # 架构/审计/竞品分析文档
-├── skills/                 # 27 个内置 Skill
+├── skills/                 # Skill 源文件仓库（内置 33 个 + 2 个常驻调度）
 ├── build.ps1               # Windows 一键构建
 └── build.bat               # Windows 一键构建
 ```
