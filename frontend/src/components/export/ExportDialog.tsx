@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, FileText, AlignLeft } from 'lucide-react'
+import { BookOpen, FileText, AlignLeft, FileType } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
   open: boolean
   novelTitle: string
   onClose: () => void
-  onExport: (format: 'epub' | 'markdown' | 'txt') => Promise<void>
+  onExport: (format: 'epub' | 'markdown' | 'txt' | 'docx') => Promise<void>
 }
 
 const FORMATS = [
+  {
+    id: 'docx' as const,
+    label: 'DOCX',
+    descKey: 'export.docxDesc',
+    icon: FileType,
+  },
   {
     id: 'epub' as const,
     label: 'EPUB',
@@ -32,7 +38,7 @@ const FORMATS = [
 
 export default function ExportDialog({ open, novelTitle, onClose, onExport }: Props) {
   const { t } = useTranslation()
-  const [format, setFormat] = useState<'epub' | 'markdown' | 'txt'>('epub')
+  const [format, setFormat] = useState<'epub' | 'markdown' | 'txt' | 'docx'>('docx')
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)

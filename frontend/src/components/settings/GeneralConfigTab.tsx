@@ -269,6 +269,30 @@ export default function GeneralConfigTab() {
         </div>
       </div>
 
+      {/* HTTPS 开关 */}
+      <div className="mt-4 space-y-2">
+        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <Lock className="w-3.5 h-3.5" />
+          HTTPS
+        </label>
+        <p className="text-[11px] text-muted-foreground">移动端 API 使用 HTTPS。关掉后使用 HTTP（无需证书，适合局域网调试）。</p>
+        <button
+          onClick={async () => {
+            const newValue = !useHTTPS
+            setUseHTTPS(newValue)
+            try {
+              await app.SetAPIUseHTTPS(newValue)
+            } catch (err) {
+              setUseHTTPS(!newValue)
+              console.error('Failed to toggle HTTPS:', err)
+            }
+          }}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useHTTPS ? 'bg-primary' : 'bg-muted'}`}
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useHTTPS ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
+
       {/* API 认证令牌 */}
       <div className="mt-6 space-y-2">
         <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">

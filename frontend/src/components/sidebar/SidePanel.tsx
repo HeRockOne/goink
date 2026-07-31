@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react'
 import type { novel, chapter } from '@/hooks/useApp'
 import NovelList from './NovelList'
 import ChapterList from './ChapterList'
@@ -45,6 +46,7 @@ interface Props {
   onSelectGitFile: (file: git.FileDiff) => void
   onSelectStyleSample: (id: number) => void
   sidePanelWidth: number
+  onWidthChange?: (w: number) => void
 }
 
 export default function SidePanel({
@@ -59,7 +61,21 @@ export default function SidePanel({
   onSelectGitFile,
   onSelectStyleSample,
   sidePanelWidth,
+  onWidthChange,
 }: Props) {
+  const dragRef = useRef(false)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!onWidthChange) return
+    e.preventDefault()
+    dragRef.current = true
+    const startX = e.clientX, startW = sidePanelWidth
+    const onMove = (ev: MouseEvent) => { if (dragRef.current) onWidthChange(startW + (ev.clientX - startX)) }
+    const onUp = () => { dragRef.current = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.body.style.cursor = ''; document.body.style.userSelect = '' }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [sidePanelWidth, onWidthChange])
   return (
     <aside className="shrink-0 flex flex-col bg-sidebar border-r relative" style={{ width: sidePanelWidth }}>
       {activePanel === 'search' ? (
@@ -131,6 +147,7 @@ export default function SidePanel({
       ) : (
         <div />
       )}
+      {onWidthChange && <div className="resize-handle" onMouseDown={handleMouseDown} />}
     </aside>
   )
 }

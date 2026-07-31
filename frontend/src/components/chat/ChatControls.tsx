@@ -43,6 +43,10 @@ export default function ChatControls({
   const { t } = useTranslation()
   const selected = models.find(m => m.Key === selectedKey)
   const supportsThinking = selected?.SupportsThinking ?? false
+  const splitModelKey = (key: string): string => {
+    const idx = key.indexOf('/')
+    return idx >= 0 ? key.substring(idx + 1) : key
+  }
 
   const modelOptions = models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName }))
   const levels = selected?.ReasoningLevels?.length
@@ -106,7 +110,7 @@ export default function ChatControls({
         {t('chat.auto')}
       </button>
 
-      <ContextRing usage={usage} onCompress={onCompress} isTurnRunning={isTurnRunning} isCompressing={isCompressing} />
+      <ContextRing usage={usage} selectedModel={splitModelKey(selectedKey)} onCompress={onCompress} isTurnRunning={isTurnRunning} isCompressing={isCompressing} />
     </div>
   )
 }

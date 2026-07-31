@@ -1156,12 +1156,38 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
             </div>
           </div>
         ) : showRecent ? (
-          <RecentSessions
-            sessions={sessions}
-            total={sessionsTotal}
-            onSelectSession={handleSelectSession}
-            onViewAll={handleOpenHistory}
-          />
+          sessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full px-8 text-center">
+              <MessageSquare className="w-12 h-12 text-muted-foreground/20 mb-4" />
+              <h3 className="text-base font-medium text-foreground mb-2">{t('chat.welcomeTitle')}</h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">{t('chat.welcomeDesc')}</p>
+              <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
+                <div className="rounded-lg border bg-card p-4 text-left">
+                  <p className="text-xs font-medium text-foreground mb-1">📝 {t('chat.hintWrite')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('chat.hintWriteDesc')}</p>
+                </div>
+                <div className="rounded-lg border bg-card p-4 text-left">
+                  <p className="text-xs font-medium text-foreground mb-1">📖 {t('chat.hintCreate')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('chat.hintCreateDesc')}</p>
+                </div>
+                <div className="rounded-lg border bg-card p-4 text-left">
+                  <p className="text-xs font-medium text-foreground mb-1">🌍 {t('chat.hintWorld')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('chat.hintWorldDesc')}</p>
+                </div>
+                <div className="rounded-lg border bg-card p-4 text-left">
+                  <p className="text-xs font-medium text-foreground mb-1">🔍 {t('chat.hintSearch')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('chat.hintSearchDesc')}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <RecentSessions
+              sessions={sessions}
+              total={sessionsTotal}
+              onSelectSession={handleSelectSession}
+              onViewAll={handleOpenHistory}
+            />
+          )
         ) : isLoadingHistory ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

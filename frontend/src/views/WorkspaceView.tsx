@@ -8,6 +8,7 @@ import ActivityBar from '@/components/shell/ActivityBar'
 import StatusBar from '@/components/shell/StatusBar'
 import SidePanel from '@/components/sidebar/SidePanel'
 import ContentPanel, { type ContentPanelHandle } from '@/components/content/ContentPanel'
+import NarrativeTimeline from '@/components/narrative/NarrativeTimeline'
 import CharacterListView from '@/components/character/CharacterListView'
 import LocationListView from '@/components/location/LocationListView'
 import LoreListView from '@/components/lore/LoreListView'
@@ -82,8 +83,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const loadedRef = useRef(false)
   const { theme, toggle: toggleTheme } = useTheme()
   const { isMaximised, setIsMaximised } = useWindowState()
-  const { sidePanelWidth, chatPanelWidth, setChatPanelWidth } = useLayoutState()
+  const { sidePanelWidth, setSidePanelWidth, chatPanelWidth, setChatPanelWidth } = useLayoutState()
   const [sidebarClosed, setSidebarClosed] = useState(false)
+  const [narrativeOpen, setNarrativeOpen] = useState(false)
+  const [narrativeWidth, setNarrativeWidth] = useState(() => { try { return Number(localStorage.getItem('narrative_panel_width')) || 320 } catch { return 320 } })
+  useEffect(() => { localStorage.setItem('narrative_panel_width', String(narrativeWidth)) }, [narrativeWidth])
+  const [activeChapterNum, setActiveChapterNum] = useState(0)
 
   // ── 更新检查 ────────────────────────────────────────────
   const [showUpdate, setShowUpdate] = useState(false)
@@ -152,6 +157,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   function handleSelectChapter(ch: chapter.Chapter) {
     const chTitle = `${t('sidebar.chapterN', { n: ch.chapter_number })} ${ch.title}`
     setTabTarget({ path: ch.file_path, title: chTitle })
+    setActiveChapterNum(ch.chapter_number)
     contentRef.current?.openFile(ch.file_path, chTitle)
   }
 
@@ -201,6 +207,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       return
     }
     setSidebarClosed(false)
+    // 点击 ActivityBar 任何面板时，关闭叙事面板
+    if (narrativeOpen) setNarrativeOpen(false)
     if (id === 'search') {
       setSidebarPanel('search')
     } else {
@@ -250,6 +258,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       setActiveContent('')
       setSelectedGitFile(null)
       await app.SetActiveNovel({ novel_id: n.id })
+      const maxNum = await app.GetMaxChapterNumber(n.id)
+      setActiveChapterNum(maxNum ?? 0)
     } catch (err) { console.error(err) }
   }
 
@@ -300,7 +310,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     } catch (err) { console.error(err); throw err }
   }
 
-  async function handleExportNovel(format: 'epub' | 'markdown' | 'txt') {
+  async function handleExportNovel(format: 'epub' | 'markdown' | 'txt' | 'docx') {
     if (exportNovelId == null) return
     try {
       await app.ExportNovel(exportNovelId, format)
@@ -324,15 +334,24 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <header
-        className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default"
-        style={{ '--wails-draggable': 'drag' } as React.CSSProperties}
+        className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default relative"
+        style={{ '--wails-draggable': 'drag', zIndex: 60 } as React.CSSProperties}
         onDoubleClick={() => { WindowToggleMaximise(); setIsMaximised(prev => !prev) }}
       >
         <Logo className="h-7 w-7 ml-3" />
         <span className="text-sm font-medium pl-2 flex-1">
           {activeNovel?.title ?? 'Goink'}
+          {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">📖 动态叙事已展开</span>}
         </span>
+
         <div className="flex items-center h-full" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
+          <button
+            onClick={() => setNarrativeOpen(prev => !prev)}
+            className={`narrative-toggle-btn ${narrativeOpen ? 'active' : ''}`}
+            title={narrativeOpen ? '关闭叙事面板' : '打开叙事面板'}
+          >
+            📖 叙事
+          </button>
           <GitHubLink />
           <button
             onClick={() => setActivePanel('profile')}
@@ -430,6 +449,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             onSelectGitFile={handleSelectGitFile}
             onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
             sidePanelWidth={sidePanelWidth}
+            onWidthChange={setSidePanelWidth}
           />
         )}
 
@@ -562,6 +582,19 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         result={updateResult}
         onClose={() => setShowUpdate(false)}
       />
+
+      {/* 叙事面板：悬浮在最上层 overlay，右边界对齐对话面板左边框 */}
+      {narrativeOpen && (
+        <div className="narrative-overlay" style={{ right: chatPanelWidth }} onClick={(e) => { if (e.target === e.currentTarget) setNarrativeOpen(false) }}>
+          <NarrativeTimeline
+            activeChapterNum={activeChapterNum}
+            novelId={activeNovelId}
+            width={narrativeWidth}
+            onWidthChange={setNarrativeWidth}
+            chatPanelWidth={chatPanelWidth}
+          />
+        </div>
+      )}
     </div>
   )
 }

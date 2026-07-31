@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '@/hooks/useApp'
 import ContributionGrid from './ContributionGrid'
-import { PenLine, CalendarDays, Flame, User, Camera } from 'lucide-react'
+import { PenLine, CalendarDays, Flame, User, Camera, TrendingUp } from 'lucide-react'
 import type { config } from '@/lib/wailsjs/go/models'
 
 interface WritingStats {
@@ -12,6 +12,15 @@ interface WritingStats {
   longest_streak: number
   total_novels: number
   total_chapters: number
+}
+
+interface DailyTokenUsage {
+  date: string
+  hit_tokens: number
+  miss_tokens: number
+  completion: number
+  cost: number
+  model: string
 }
 
 export default function ProfileView() {
@@ -30,6 +39,12 @@ export default function ProfileView() {
   const [nameError, setNameError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [currentYear] = useState(() => new Date().getFullYear())
+  const [tokenTrend, setTokenTrend] = useState<DailyTokenUsage[]>([])
+  const [selectedTrendModel, setSelectedTrendModel] = useState<string>('__all__')
+  const [trendStart, setTrendStart] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+  })
+  const [trendEnd, setTrendEnd] = useState(() => new Date().toISOString().slice(0, 10))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,6 +72,15 @@ export default function ProfileView() {
   }, [app, t])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const days = Math.ceil((new Date(trendEnd).getTime() - new Date(trendStart).getTime()) / 86400000) + 1
+    if (days < 1) return
+    ;(app as any).GetTokenUsageTrend(days).then((data: DailyTokenUsage[]) => {
+      const filtered = data.filter(d => d.date >= trendStart && d.date <= trendEnd)
+      setTokenTrend(filtered)
+    }).catch((err: any) => console.error('GetTokenUsageTrend failed', err))
+  }, [app, trendStart, trendEnd])
 
   function handleAvatarClick() {
     fileInputRef.current?.click()
@@ -192,6 +216,90 @@ export default function ProfileView() {
             value={`${stats?.longest_streak ?? 0} ${t('profile.day')}`}
           />
         </div>
+
+        {/* Token 消耗趋势 */}
+        <section>
+          <h2 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-muted-foreground" />
+            {t('profile.tokenTrend')}
+          </h2>
+
+          <div className="flex items-center gap-2 mb-3">
+            <input type="date" value={trendStart} onChange={e => setTrendStart(e.target.value)}
+              className="h-7 rounded-md border bg-background px-2 text-xs outline-none w-[130px]" />
+            <span className="text-xs text-muted-foreground">~</span>
+            <input type="date" value={trendEnd} onChange={e => setTrendEnd(e.target.value)}
+              className="h-7 rounded-md border bg-background px-2 text-xs outline-none w-[130px]" />
+            <select value={selectedTrendModel} onChange={e => setSelectedTrendModel(e.target.value)}
+              className="h-7 rounded-md border bg-background px-2 text-xs outline-none flex-1">
+              <option value="__all__">全部模型</option>
+              {tokenTrend.length > 0 && [...new Set(tokenTrend.map(d => d.model))].map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-lg border bg-card p-4">
+            {tokenTrend.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">暂无数据</p>
+            ) : (() => {
+              const data = selectedTrendModel === '__all__' ? tokenTrend : tokenTrend.filter(d => d.model === selectedTrendModel)
+              if (data.length === 0) return <p className="text-xs text-muted-foreground text-center py-8">暂无数据</p>
+              const totalHit = data.reduce((s, d) => s + d.hit_tokens, 0)
+              const totalMiss = data.reduce((s, d) => s + d.miss_tokens, 0)
+              const totalComp = data.reduce((s, d) => s + d.completion, 0)
+              const totalCost = data.reduce((s, d) => s + d.cost, 0)
+              return <>
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  <StatCard icon={TrendingUp} label={t('profile.monthTotal')} value={((totalHit + totalMiss + totalComp) / 1000).toFixed(0) + 'K'} />
+                  <StatCard icon={TrendingUp} label={t('profile.monthCost')} value={'¥' + totalCost.toFixed(2)} />
+                  <StatCard icon={TrendingUp} label={t('profile.cacheHitRate')} value={totalHit + totalMiss > 0 ? (totalHit / (totalHit + totalMiss) * 100).toFixed(1) + '%' : '0%'} />
+                  <StatCard icon={TrendingUp} label={t('profile.cacheRead')} value={(totalHit / 1000).toFixed(0) + 'K'} />
+                </div>
+                <div className="flex justify-center py-4">
+                  <svg width="160" height="160" viewBox="0 0 160 160">
+                    {(() => {
+                      const total = totalHit + totalMiss + totalComp
+                      if (total === 0) return <text x="80" y="80" textAnchor="middle" fill="var(--muted-foreground)" fontSize="12">无数据</text>
+                      const pct = (v: number) => v / total * 360
+                      const hA = pct(totalHit)
+                      const mA = pct(totalMiss)
+                      const cA = pct(totalComp)
+                      const rad = (deg: number) => (deg - 90) * Math.PI / 180
+                      const arc = (r: number, start: number, end: number) => {
+                        const s = rad(start), e = rad(end)
+                        const x1 = 80 + r * Math.cos(s), y1 = 80 + r * Math.sin(s)
+                        const x2 = 80 + r * Math.cos(e), y2 = 80 + r * Math.sin(e)
+                        const large = end - start > 180 ? 1 : 0
+                        return `M 80 80 L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`
+                      }
+                      let start = 0
+                      const slices: { color: string; label: string; val: number; deg: number }[] = []
+                      if (totalHit > 0) { slices.push({ color: 'var(--chart-1, #52c41a)', label: '缓存命中', val: totalHit, deg: hA }) }
+                      if (totalMiss > 0) { slices.push({ color: 'var(--chart-2, #f59e0b)', label: '未命中', val: totalMiss, deg: mA }) }
+                      if (totalComp > 0) { slices.push({ color: 'var(--chart-3, #ef4444)', label: '输出', val: totalComp, deg: cA }) }
+                      return <>
+                        {slices.map(s => {
+                          const el = <path key={s.label} d={arc(60, start, start + s.deg)} fill={s.color} stroke="var(--card)" strokeWidth="1" />
+                          start += s.deg
+                          return el
+                        })}
+                        <circle cx="80" cy="80" r="35" fill="var(--card)" />
+                        <text x="80" y="76" textAnchor="middle" fill="var(--foreground)" fontSize="16" fontWeight="bold">{total > 0 ? (totalHit / total * 100).toFixed(0) + '%' : '-'}</text>
+                        <text x="80" y="92" textAnchor="middle" fill="var(--muted-foreground)" fontSize="10">缓存命中</text>
+                      </>
+                    })()}
+                  </svg>
+                </div>
+                <div className="flex justify-center gap-6 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-1, #52c41a)' }} /> 缓存命中 {(totalHit / 1000).toFixed(0)}K</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-2, #f59e0b)' }} /> 未命中 {(totalMiss / 1000).toFixed(0)}K</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-3, #ef4444)' }} /> 输出 {(totalComp / 1000).toFixed(0)}K</span>
+                </div>
+              </>
+            })()}
+          </div>
+        </section>
 
         {/* 作品/章节概览 */}
         <div className="flex gap-6 text-xs text-muted-foreground">

@@ -55,9 +55,9 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
           )}
         </div>
 
-        {/* 操作按钮 - 气泡边框外居中 */}
+        {/* 操作按钮 - 气泡边框外居下 */}
         <div
-          className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-0.5 bg-popover border border-border/30 rounded-lg px-1 py-0.5 shadow-sm transition-all duration-150 z-10 ${
+          className={`absolute bottom-0 flex items-center gap-0.5 bg-popover border border-border/30 rounded-lg px-1 py-0.5 shadow-sm transition-all duration-150 z-10 ${
             isUser ? '-left-8' : '-right-8'
           } ${
             showActions ? 'opacity-100' : 'opacity-0 pointer-events-none'
