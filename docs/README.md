@@ -14,6 +14,7 @@
 | [competitor-analysis.md](architecture/competitor-analysis.md) | 竞品分析 |
 | [narrative-panel.md](architecture/narrative-panel.md) | 动态叙事面板设计 |
 | [token-injection.md](architecture/token-injection.md) | Token 注入构成分析 + tokencount 使用说明 |
+| [cache-hit-mechanism.md](architecture/cache-hit-mechanism.md) | 缓存命中机制详解（DeepSeek 前缀缓存，含流程推演） |
 
 ## design/ — 方案（长存，参考用）
 
