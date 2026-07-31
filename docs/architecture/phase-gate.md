@@ -7,43 +7,46 @@
 **核心特性：**
 - 系统级强制：每次对话自动激活，不依赖 LLM 配合
 - 硬拦截：门禁检查在工具执行之前，被拦截的工具不会执行
-- 自动推进：require 满足后自动进入下一阶段
+- 主动推进：require 满足后**必须主动调 set_phase 切换阶段**，系统不自动推进
 - 跨 turn 持久化：工具调用记录保存在 session 中
 - 两种模式：单章（single）和批量（batch）
+- 单轮内可回退修正，走完一轮完整流程（回到 prepare）后重置访问记录，防止第二轮任意跳转
 
 ## 设计哲学
 
 **prepare 允许 edit**：一般编辑任务（改大纲、改角色设定）在 prepare 阶段自由使用，不受门禁拦截。
 
-**require 触发收紧**：当 LLM 调用 get_chapter_list + get_characters + get_timeline（五门检查）时，require 满足，门禁自动推进到 outline 阶段，后续流程受控。
+**require 触发收紧**：当 LLM 调用 get_chapter_list + get_characters + get_timeline（五门检查）时，require 满足，但门禁**不会自动推进**——必须由 LLM 主动调 `set_phase("outline")` 切换，后续流程受控。
 
 **硬拦截**：门禁检查在 `registry.Execute` 之前。被拦截的工具不会执行，LLM 收到错误结果。
+
+**回退修正**：单轮创作内，LLM 可回退到本轮已访问过的阶段（如 write 阶段发现大纲问题，回 outline 修改）。
+
+**循环重置**：完成一轮完整流程（single 的 maintain→prepare，或 batch 的 maintain→done→prepare）后，访问记录重置——第二轮创作不能利用上一轮的访问历史任意跳转。
 
 ## 工作流程
 
 ### 单章模式（mode: single）
 
 ```
-每次对话开始 → 自动进入 prepare 阶段
+每次对话开始 → 自动进入 init/prepare 阶段
   ↓ prepare 允许 edit（一般编辑自由用）
   ↓ 调 get_chapter_list + get_characters + get_timeline（五门检查）
-  ↓ require 满足，自动推进
-outline → 写大纲（require: edit）
-  ↓ require 满足，自动推进
-write → 写正文（require: edit）
-  ↓ require 满足，自动推进
-review → 审读（require: run_subagent）
-  ↓ require 满足，自动推进
-maintain → 状态维护（require: update_chapter_plan, edit）
-  ↓ 完成
-回到 prepare
+  ↓ require 满足后，LLM 主动调 set_phase("outline")
+outline → 写大纲（require: edit）→ set_phase("write")
+write → 写正文（require: edit）→ 字数校验 → set_phase("review")
+review → 审读（require: run_subagent）→ set_phase("maintain")
+maintain → 状态维护（require: update_chapter_plan, edit）→ set_phase("prepare")
+  ↓ 回到 prepare（访问记录重置，开始新一轮）
 ```
 
 ### 批量模式（mode: batch）
 
 ```
-prepare → [outline → write] × N 章循环 → review → maintain → done
+init → prepare → [outline → write] × N 章循环 → review → maintain → done → prepare
 ```
+
+每章完成后 maintain→done→prepare，访问记录重置后开始下一章。
 
 ## 工具白名单
 
@@ -57,9 +60,7 @@ prepare → [outline → write] × N 章循环 → review → maintain → done
 
 > **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
 > create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 prepare 和 maintain 阶段可用。
-> set_phase 在所有阶段默认禁用，由系统自动推进。
-
-## require 完成条件
+> set_phase 在所有阶段始终可用（它是阶段切换的唯一入口）。
 
 ## require 完成条件
 
@@ -70,6 +71,8 @@ prepare → [outline → write] × N 章循环 → review → maintain → done
 | write | edit | 正文必须写入文件 |
 | review | run_subagent | Review agent 必须启动 |
 | maintain | update_chapter_plan, edit | 章节计划和 goink.md 必须更新 |
+
+> require 只统计**成功调用**（`phase_gate.go` `successfulTools`）——失败不算，防止"调了但没做成"蒙混过关。
 
 ## 跨 Turn 持久化
 
@@ -97,15 +100,18 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| next | 是 | require 满足后进入的下一阶段 |
+| next | 是 | require 满足后可进入的下一阶段 |
+| edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环 |
 
 ## 故障排查
 
 | 现象 | 原因 | 解决 |
 |------|------|------|
-| 工具被拦截 | 当前阶段不允许该工具 | 完成当前阶段 require 后自动解锁 |
-| 阶段不推进 | require 未满足 | 调用 require 列表中的工具 |
+| 工具被拦截 | 当前阶段不允许该工具 | 完成当前阶段 require 后，主动调 `set_phase` 切换到目标阶段 |
+| 阶段不推进 | require 未满足，或未调 set_phase | 先调用 require 列表中的工具，再主动 `set_phase` 切换 |
+| 切换被拒 | 目标阶段不在 next 链，也不在本轮 visited | 只能推进到 next 或回退到本轮已访问过的阶段 |
+| 第二轮可任意跳转（旧 bug） | visited 永久累积 | 已修复：回到 prepare 时重置访问记录 |
 | 批量模式不循环 | write 阶段没有 `loop: true` | 检查 writing-kernel.md 配置 |
 | 门禁未激活 | session 的 current_phase 为空 | 每次对话自动激活，检查 DB |
 
@@ -124,7 +130,7 @@ next: outline
 
 - `POST /api/chat` 发送消息后，Agent 按当前 session 的阶段执行
 - 门禁状态持久化在 `sessions` 表的 `current_phase` 字段
-- 新会话自动从 prepare 阶段开始
+- 新会话自动从配置的第一个阶段（init，若有）开始，之后由 LLM 主动 set_phase 推进
 
 
 ## 示例门禁配置
