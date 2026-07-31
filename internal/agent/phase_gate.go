@@ -24,7 +24,7 @@ type PhaseGate struct {
 	mode            string         // "single" | "batch"
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
-	visited         []string       // 已访问过的阶段列表，用于回退校验
+	visited         []string       // 已访问过的阶段列表，用于回退校验；回到起点时重置
 }
 
 // PhaseConfig 是单个阶段的配置。
@@ -225,7 +225,9 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
-	// 校验 next 字段：允许推进到 next，也允许回退到已访问过的阶段
+	// 校验 next 字段：允许推进到 next，也允许回退到已访问过的阶段。
+	// visited 在"回到流程起点（第一个阶段）"时重置，代表完成了一轮完整流程，
+	// 避免旧 bug：visited 永久累积导致第二轮创作可任意跳转。
 	if current != nil && current.Next != "" && targetPhase != current.Next {
 		allowed := false
 		for _, v := range g.visited {
@@ -241,7 +243,12 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	}
 
 	g.currentPhase = targetPhase
-	g.visited = append(g.visited, targetPhase)
+	// 回到流程起点 = 完成一轮 prepare→...→maintain，重置已访问记录，开始新一轮
+	if len(g.phases) > 0 && targetPhase == g.phases[0].Name {
+		g.visited = []string{targetPhase}
+	} else {
+		g.visited = append(g.visited, targetPhase)
+	}
 	return true, ""
 }
 
