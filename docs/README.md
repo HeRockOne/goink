@@ -27,6 +27,12 @@
 |------|------|
 | [0001-prompt-caching.md](adr/0001-prompt-caching.md) | Prompt Caching 消息前缀稳定化决策 |
 
+## reports/ — 评估报告（长存，专题分析）
+
+| 文档 | 说明 |
+|------|------|
+| [phase-gate-caching-assessment.md](reports/phase-gate-caching-assessment.md) | 门禁配置系统 × 缓存命中优化深度评估 |
+
 ## archive/ — 过程记录（归档，不再更新）
 
 | 文档 | 说明 |
