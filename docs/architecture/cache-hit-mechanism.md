@@ -28,13 +28,13 @@
 首次对话注入 4 段 system 消息（`app/chat.go` `writeSystemMessages`）：
 
 ```
-L1  Identity        → 1,322 tokens   人设/流程/规范（agentcfg/identity.go）
-L2  Always skills   → 1,304 tokens   always 模式 skill 全量正文
-L3  Skill catalog   →   572 tokens   auto 模式 skill 的 name+description 目录
+L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
+L2  Always skills   → 1,845 tokens   always 模式 skill 全量正文
+L3  Skill catalog   →   993 tokens   auto 模式 skill 的 name+description 目录
 L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
 ```
 
-**固定前缀 = L1 + L2 + L3 + 工具定义（57 个 JSON）≈ 16,122 tokens**
+**固定前缀 = L1 + L2 + L3 + 工具定义（57 个 JSON）≈ 17,102 tokens**
 - `writeSystemMessages` **只在创建新 session（isNew）时执行**（`chat.go:172`）
 - 固定前缀写入 messages 表后**不再重写**，保证缓存稳定命中
 

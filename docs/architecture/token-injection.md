@@ -31,23 +31,23 @@ go run ./tokencount
 
 ---
 
-## 二、实测构成（2026-07-31）
+## 二、实测构成（2026-08-01，skill 体系扩充后）
 
 ```
-首轮对话注入合计：16,122 tokens
-├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (80.2%)
-├─ Identity（mainAgentSystem1）               1,322 (8.2%)
-├─ Always skills（writing-kernel + ai-communication-standard 正文） 1,304 (8.1%)
-└─ Skill catalog（17 个 auto skill 的 name+desc）    572 (3.5%)
+首轮对话注入合计：17,102 tokens
+├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (75.6%)
+├─ Identity（mainAgentSystem1）               1,340 (7.8%)
+├─ Always skills（writing-kernel + ai-communication-standard 正文） 1,845 (10.8%)
+└─ Skill catalog（25 个 auto skill 的 name+desc）    993 (5.8%)
 ```
 
 | 组成部分 | Tokens | 占比 | 说明 |
 |---------|--------|------|------|
-| 工具定义 | 12,924 | 80.2% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
-| Identity | 1,322 | 8.2% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
-| Always skills | 1,304 | 8.1% | writing-kernel 1,196 + ai-communication-standard 108 |
-| Skill catalog | 572 | 3.5% | 17 个 auto skill 仅注入 name + description |
-| **合计** | **16,122** | 100% | |
+| 工具定义 | 12,924 | 75.6% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
+| Identity | 1,340 | 7.8% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
+| Always skills | 1,845 | 10.8% | writing-kernel 1,737 + ai-communication-standard 108 |
+| Skill catalog | 993 | 5.8% | 25 个 auto skill 仅注入 name + description |
+| **合计** | **17,102** | 100% | |
 
 ---
 
@@ -56,9 +56,9 @@ go run ./tokencount
 首次对话注入 4 段 system 消息（`app/chat.go` `writeSystemMessages`），按稳定前缀顺序：
 
 ```
-L1  Identity        → 1,322 tokens   人设/流程/规范（agentcfg/identity.go）
-L2  Always skills   → 1,304 tokens   always 模式 skill 全量正文
-L3  Skill catalog   →   572 tokens   auto 模式 skill 的 name+description 目录
+L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
+L2  Always skills   → 1,845 tokens   always 模式 skill 全量正文
+L3  Skill catalog   →   993 tokens   auto 模式 skill 的 name+description 目录
 L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
 ```
 
@@ -74,13 +74,13 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 
 1. **L1+L2+L3 = 稳定前缀**（约 3.2K tokens）→ 写入 messages 表，保证 Prompt Caching 命中
 2. **L4 NovelState 刻意排除在稳定前缀外** → 小说状态每轮变化，放后面避免破坏缓存前缀（`app/chat.go` 动态注入 + `internal/agent/agent.go` 的 `computePrefixHash`）
-3. **skill 正文不占常驻 token** → 17 个 auto skill 只注入 572 tokens 的目录，正文按需加载，这是省 token 的核心策略
+3. **skill 正文不占常驻 token** → 25 个 auto skill 只注入 993 tokens 的目录，正文按需加载，这是省 token 的核心策略
 
 ---
 
 ## 四、缓存命中与计费
 
-- **首轮**：16,122 tokens 全部按未命中（全额）计费——首轮无缓存可命中
+- **首轮**：17,102 tokens 全部按未命中（全额）计费——首轮无缓存可命中
 - **后续轮次**：稳定前缀被复用命中缓存 → 按折扣价计费（DeepSeek 约 10%）
 - **实测命中率**：89-93%（商汤 sensenova-6.7-flash-lite，见 `archive/billing-test-report.md`）
 
@@ -94,6 +94,6 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 |------|------|------|------|
 | 工具定义裁剪 | 数 K | 按阶段/意图只注入部分工具 | 已用 `allowed_tools` 运行时限制，但发送的 JSON 仍全量（刻意保缓存前缀稳定） |
 | 工具 schema 精简 | ~2-3K | 合并重复 `$defs`、精简 description | 未实施 |
-| Catalog 瘦身 | 少量 | 17 个 auto skill 目录压缩 | 未实施 |
+| Catalog 瘦身 | 少量 | 25 个 auto skill 目录压缩 | 未实施 |
 
 > 完整方案见 `design/token-optimization-plan.md`。

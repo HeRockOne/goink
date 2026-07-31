@@ -9,7 +9,7 @@
 
 ## 〇、实测基线
 
-> 当前系统提示词注入构成已用 `tokencount` 精确统计，见 **`architecture/token-injection.md`**（16,122 tokens / 57 工具 / 12,924 工具定义）。
+> 当前系统提示词注入构成已用 `tokencount` 精确统计，见 **`architecture/token-injection.md`**（17,102 tokens / 57 工具 / 12,924 工具定义）。
 
 > ⚠️ 注意：规划中的「分阶段裁剪」已在待办中标记完成，但实际采用**全量发送 + allowed_tools 限制**方案（见 `archive/prompt-caching-research.md` 与 ADR-0001），工具 JSON 未裁剪，这是刻意为保持缓存前缀稳定做的取舍。分阶段裁剪的 -6,000 收益未兑现。
 
