@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock } from 'lucide-react'
+import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
 import { SaveGitConfig, SetChapterWordLimit } from '@/lib/wailsjs/go/app/App'
@@ -34,6 +34,8 @@ export default function GeneralConfigTab() {
   const [apiToken, setApiToken] = useState('')
   const [loggingEnabled, setLoggingEnabled] = useState(true)
   const [useHTTPS, setUseHTTPS] = useState(true)
+  const [exaApiKey, setExaApiKey] = useState('')
+  const [exaKeySaved, setExaKeySaved] = useState(false)
 
   useEffect(() => {
     app.GetAppConfig().then(cfg => {
@@ -62,6 +64,7 @@ export default function GeneralConfigTab() {
       if (s?.api_use_https !== undefined && s?.api_use_https !== null) {
         setUseHTTPS(s.api_use_https as boolean)
       }
+      if (s?.exa_api_key) setExaApiKey(s.exa_api_key as string)
     }).catch(() => {})
     app.GetLoggingEnabled().then(v => setLoggingEnabled(v)).catch(() => {})
     app.GetAPIUseHTTPS().then(v => setUseHTTPS(v)).catch(() => {})
@@ -291,6 +294,38 @@ export default function GeneralConfigTab() {
         >
           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useHTTPS ? 'translate-x-6' : 'translate-x-1'}`} />
         </button>
+      </div>
+
+      {/* Exa 网络搜索 API Key */}
+      <div className="mt-6 space-y-2">
+        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <Search className="w-3.5 h-3.5" />
+          Exa 网络搜索 API Key
+        </label>
+        <p className="text-[11px] text-muted-foreground">用于 AI 联网搜索（web_search）。留空使用 Exa 免费额度（有速率限制），填写后可解除限制。到 <span className="text-primary">dashboard.exa.ai/api-keys</span> 获取。</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={exaApiKey}
+            onChange={e => { setExaApiKey(e.target.value); setExaKeySaved(false) }}
+            placeholder="exa-xxx（可选）"
+            className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none"
+          />
+          <button
+            onClick={async () => {
+              try {
+                await app.SaveSettings({ exa_api_key: exaApiKey.trim() })
+                setExaKeySaved(true)
+                setTimeout(() => setExaKeySaved(false), 2000)
+              } catch (err) {
+                console.error('Failed to save Exa API key:', err)
+              }
+            }}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
+          >
+            {exaKeySaved ? '已保存' : '保存'}
+          </button>
+        </div>
       </div>
 
       {/* API 认证令牌 */}

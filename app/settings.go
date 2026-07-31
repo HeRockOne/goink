@@ -23,6 +23,7 @@ type SaveSettingsInput struct {
 	PriceInput           *float64 `json:"price_input,omitempty"`
 	PriceOutput          *float64 `json:"price_output,omitempty"`
 	CachePrice           *float64 `json:"cache_price,omitempty"`
+	ExaAPIKey            string   `json:"exa_api_key,omitempty"`
 }
 
 // ── 设置 ──────────────────────────────────────────────────
@@ -67,6 +68,9 @@ func (a *App) SaveSettings(input SaveSettingsInput) error {
 	}
 	if input.CachePrice != nil {
 		a.settings.CachePrice = *input.CachePrice
+	}
+	if input.ExaAPIKey != "" {
+		a.settings.ExaAPIKey = input.ExaAPIKey
 	}
 	return config.SaveSettings(a.db, a.settings)
 }

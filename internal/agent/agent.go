@@ -737,10 +737,17 @@ func displayPhase(phase string) mcp_tools.DisplayPhase {
 	return mcp_tools.PhaseCompleted
 }
 
-// BuildWebSearch 构建 WebSearch 闭包，通过 Exa AI MCP 端点执行搜索，无需 API key。
+// BuildWebSearch 构建 WebSearch 闭包，通过 Exa AI MCP 端点执行搜索。
+// 优先使用用户在设置中配置的 Exa API key（x-api-key header），未配置则走免费 tier。
 func (a *Agent) BuildWebSearch() func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
 	return func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
-		return llm.SearchWeb(ctx, query)
+		apiKey := ""
+		if a.db != nil {
+			if s, err := config.LoadSettings(a.db); err == nil && s != nil {
+				apiKey = s.ExaAPIKey
+			}
+		}
+		return llm.SearchWebWithKey(ctx, query, apiKey)
 	}
 }
 

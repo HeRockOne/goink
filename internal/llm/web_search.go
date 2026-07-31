@@ -30,24 +30,19 @@ const (
 	searchTimeout = 30 * time.Second
 )
 
-// exaMCPURLWithKey 返回 Exa MCP URL，支持 EXA_API_KEY 环境变量。
-func exaMCPURLWithKey() string {
-	if key := getEnvOrEmpty("EXA_API_KEY"); key != "" {
-		return exaMCPURL + "?exaApiKey=" + key
-	}
-	return exaMCPURL
-}
-
-func getEnvOrEmpty(key string) string {
-	return "" // placeholder, replaced by os.Getenv in real code
-}
-
-// SearchWeb 通过 Exa AI MCP 端点执行网络搜索。
+// SearchWeb 通过 Exa AI MCP 端点执行网络搜索（无 API key，走 Exa 免费 tier）。
 func SearchWeb(ctx context.Context, query string) (*WebSearchResult, error) {
+	return SearchWebWithKey(ctx, query, "")
+}
+
+// SearchWebWithKey 通过 Exa AI MCP 端点执行网络搜索。
+// apiKey 非空时用 x-api-key header 认证（官方推荐，优先级最高），
+// 空则走免费 tier（有速率限制）。
+func SearchWebWithKey(ctx context.Context, query, apiKey string) (*WebSearchResult, error) {
 	if query == "" {
 		return nil, fmt.Errorf("搜索词不能为空")
 	}
-	return searchExa(ctx, query)
+	return searchExa(ctx, query, apiKey)
 }
 
 type exaMCPRequest struct {
@@ -70,7 +65,7 @@ type exaSearchArgs struct {
 	ContextMaxCharacters int    `json:"contextMaxCharacters"`
 }
 
-func searchExa(ctx context.Context, query string) (*WebSearchResult, error) {
+func searchExa(ctx context.Context, query, apiKey string) (*WebSearchResult, error) {
 	reqBody := exaMCPRequest{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -92,12 +87,17 @@ func searchExa(ctx context.Context, query string) (*WebSearchResult, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, exaMCPURLWithKey(), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, exaMCPURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	// 官方认证优先级：x-api-key header > Authorization Bearer > ?exaApiKey 查询参数
+	// 推荐使用 x-api-key header，比 URL 查询参数更安全（避免 key 出现在日志/代理中）。
+	if apiKey != "" {
+		req.Header.Set("x-api-key", apiKey)
+	}
 	client := &http.Client{Timeout: searchTimeout}
 	resp, err := client.Do(req)
 	if err != nil {

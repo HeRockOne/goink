@@ -8,6 +8,7 @@ var Builtin = map[string]Provider{
 		PlatformURL: "https://platform.deepseek.com",
 		HelpText:    "使用邮箱或手机号注册。完成实名认证后，进入「API Keys」创建密钥。预付费模式，最低充值 ¥1。",
 		Temperature: floatPtr(0.7),
+		BuildRequest: deepseekBuildRequest,
 		Models: []ModelInfo{
 			{
 				ID:               "deepseek-v4-flash",
@@ -28,7 +29,6 @@ var Builtin = map[string]Provider{
 				SupportsVision:   false,
 			},
 		},
-		BuildRequest: nil,
 	},
 	"doubao": {
 		Name:        "Doubao",
