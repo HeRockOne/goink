@@ -85,20 +85,25 @@ mode: always
 
 | 阶段 | 技能 |
 |------|------|
+| init | init-phase, genre-templates, book-outline（总纲） |
 | prepare | common-sense-logic, genre-templates |
-| outline | emotion-injection, chapter-hook-enhanced, maliang-method, dialogue-subtext |
-| write | show-dont-tell, info-density, pov-purity, anti-ai-writing |
-| write后 | revision-pass |
-| review | run_subagent(agent_type="review") |
-| maintain | anti-repetition |
+| outline | book-outline（卷纲/章节蓝图）, emotion-injection, chapter-hook-enhanced, maliang-method, dialogue-subtext, chapter-opening |
+| write | show-dont-tell, info-density, pov-purity, anti-ai-writing, shuangdian-pacing, climax-scene（战斗章）, foreshadow-cycle（埋伏笔） |
+| write后 | revision-pass, anti-ai-grade |
+| review | run_subagent(agent_type="review") → review-standards |
+| maintain | anti-repetition, foreshadow-cycle（回收伏笔） |
+| 完结 | book-completion |
 
 ## 硬约束
 
 - 每章至少1个情绪锚点；情绪浓度高时禁止讲述句
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
+- 每章至少1个爽点（对照 shuangdian-pacing）；章末必有钩子且类型不与前2章重复
 - 禁止功能报告体（连续3段无感官描写）；禁止散文体
 - 每章35-55段，每段60-80字，总字数2500-4000
 - 字数不足禁止转阶段
+- 大战之间必须插非战斗章（对照 climax-scene）
+- 完结前检查伏笔回收率≥90%（对照 foreshadow-cycle / book-completion）
 
 ## 工具使用规则
 
