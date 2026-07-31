@@ -243,13 +243,25 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	}
 
 	g.currentPhase = targetPhase
-	// 回到流程起点 = 完成一轮 prepare→...→maintain，重置已访问记录，开始新一轮
-	if len(g.phases) > 0 && targetPhase == g.phases[0].Name {
+	// 判定一轮完整流程完成：目标阶段是"按 next 链推进回来的、且本轮已访问过"的阶段。
+	// 例：single 的 maintain.next=prepare、batch 的 done.next=prepare，回到 prepare 说明走完一轮。
+	// 此时重置 visited，避免旧 bug：visited 永久累积导致第二轮创作可任意跳转。
+	if current != nil && current.Next == targetPhase && g.wasVisited(targetPhase) {
 		g.visited = []string{targetPhase}
 	} else {
 		g.visited = append(g.visited, targetPhase)
 	}
 	return true, ""
+}
+
+// wasVisited 判断阶段是否已在本轮访问过。
+func (g *PhaseGate) wasVisited(name string) bool {
+	for _, v := range g.visited {
+		if v == name {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckEditPath 检查 edit 工具的目标路径是否在当前阶段允许的范围内。
