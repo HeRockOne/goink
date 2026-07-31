@@ -32,6 +32,7 @@
 | 文档 | 说明 |
 |------|------|
 | [phase-gate-caching-assessment.md](reports/phase-gate-caching-assessment.md) | 门禁配置系统 × 缓存命中优化深度评估 |
+| [comprehensive-optimization-assessment.md](reports/comprehensive-optimization-assessment.md) | 全面潜在优化评估（质量优先 × 行业交叉比对） |
 
 ## archive/ — 过程记录（归档，不再更新）
 
