@@ -88,18 +88,20 @@ mode: always
 | 14 | **更新故事状态** | 有重大进展时 | edit(goink.md) |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
-## 阶段技能表
+## 阶段技能表（33 个内置 skill 全量调度）
+
+> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review）由用户 `/` 触发，不在此表。
 
 | 阶段 | 技能 |
 |------|------|
-| init | init-phase, genre-templates, book-outline（总纲） |
-| prepare | common-sense-logic, genre-templates |
-| outline | book-outline（卷纲/章节蓝图）, emotion-injection, chapter-hook-enhanced, maliang-method, dialogue-subtext, chapter-opening |
-| write | show-dont-tell, info-density, pov-purity, anti-ai-writing, shuangdian-pacing, climax-scene（战斗章）, foreshadow-cycle（埋伏笔） |
-| write后 | revision-pass, anti-ai-grade |
-| review | run_subagent(agent_type="review") → review-standards |
-| maintain | anti-repetition, foreshadow-cycle（回收伏笔） |
-| 完结 | book-completion |
+| **init（开书）** | init-phase（开书流程）, genre-templates（12类型）, book-outline（总纲）, character-design（角色设计）, world-building-system（世界观） |
+| **prepare（准备）** | common-sense-logic（一致性）, genre-templates, book-outline（卷纲）, brainstorm-composer（卡情节时构思） |
+| **outline（大纲）** | book-outline（章节蓝图）, chapter-opening（每章开头）, chapter-hook-enhanced（章末钩子）, maliang-method（打脸/金手指节奏）, dialogue-subtext（对白设计）, emotional-arc（情感弧线）, opening-chapter（第一章开篇） |
+| **write（正文）** | show-dont-tell（展示）, info-density（信息密度）, pov-purity（视角）, anti-ai-writing（八条铁律）, shuangdian-pacing（爽点节奏）, climax-scene（战斗章）, foreshadow-cycle（埋伏笔）, pacing-control（节奏控制）, scene-beats（场景节拍）, emotion-injection（情绪注入）, word-count-calibration（字数校准） |
+| **write后（自审）** | revision-pass（修改润色）, anti-ai-grade（用词级反AI） |
+| **review（审稿）** | run_subagent(agent_type="review") → review-standards（16项判定） |
+| **maintain（维护）** | anti-repetition（去重）, foreshadow-cycle（回收伏笔） |
+| **完结** | book-completion（完本清单） |
 
 ## 硬约束
 
