@@ -49,6 +49,20 @@ mode: always
 
 ### maintain（逐项检查清单，每章必做）
 
+**每章必做的状态查询**（门禁 require 强制，宁可多调用不可漏维护）：
+
+| # | 查询项 | 工具 | 确认目的 |
+|---|--------|------|---------|
+| A | 查角色状态 | get_characters | 是否有角色需要更新 |
+| B | 查伏笔状态 | get_timeline | 是否有伏笔要回收/校准 |
+| C | 查弧线进度 | get_story_arcs | 是否有节点要推进 |
+| D | 查读者认知 | get_reader_perspective | 是否有悬念要维护 |
+| E | 查场景状态 | get_scenes | 是否有场景要创建/更新 |
+| F | 查物品流转 | get_item_occurrences | 是否有物品易主未记录 |
+| G | 查角色关系 | get_character_relations | 是否有关系变化未记录 |
+
+> 每章 maintain 必须完成以上 7 项状态查询 + 下方更新动作，门禁 require 才放行。查到有变化就执行对应更新工具（6-14 项）。
+
 | # | 检查项 | 条件 | 工具 |
 |---|--------|------|------|
 | 1 | **写章节元数据** | 每章必做 | update_chapter_meta（summary + key_events + characters_in + arc_ids 全部 required） |
@@ -56,14 +70,14 @@ mode: always
 | 3 | **搜索设定防遗忘** | 每章必做 | search_lore |
 | 4 | **搜索物品防断裂** | 每章必做 | search_items |
 | 5 | **更新章节计划** | 每章必做 | update_chapter_plan（next/near/far） |
-| 6 | **创建场景条目** | 本章有场景切换时 | create_scene（title + summary required） |
-| 7 | **记录物品流转** | 物品持有者变化时 | create_item_occurrence（item_id + chapter_id + action 全部 required） |
-| 8 | **更新角色状态** | 角色设定变化时 | update_character |
-| 9 | **更新角色关系** | 关系变化时 | update_character_relationship（relation_describe required） |
-| 10 | **推进弧线节点** | 节点完成时 | update_arc_node |
+| 6 | **创建场景条目** | 查询 E 发现有变化时 | create_scene（title + summary required） |
+| 7 | **记录物品流转** | 查询 F 发现有变化时 | create_item_occurrence（item_id + chapter_id + action 全部 required） |
+| 8 | **更新角色状态** | 查询 A 发现有变化时 | update_character |
+| 9 | **更新角色关系** | 查询 G 发现有变化时 | update_character_relationship（relation_describe required） |
+| 10 | **推进弧线节点** | 查询 C 发现有变化时 | update_arc_node |
 | 11 | **新伏笔/悬念** | 有新伏笔时 | create_timeline_entry（title + category + target_chapter 全部 required） |
-| 12 | **回收伏笔** | 伏笔回收时 | update_timeline_entry（resolved_chapter_id） |
-| 13 | **更新读者认知** | 新悬念/回收旧悬念时 | create_reader_perspective_entry / update_reader_perspective_entry |
+| 12 | **回收伏笔** | 查询 B 发现有要回收的时 | update_timeline_entry（resolved_chapter_id） |
+| 13 | **更新读者认知** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry |
 | 14 | **更新故事状态** | 有重大进展时 | edit(goink.md) |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 

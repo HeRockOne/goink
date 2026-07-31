@@ -462,3 +462,59 @@ next: review
 		t.Errorf("visited should not be reset on fallback, got len=%d (want >=2)", len(gate.visited))
 	}
 }
+
+// maintain 阶段 require 含全部状态查询（宁可多调用不要漏维护）：
+// 每章必须查询 场景/物品流转/角色关系，确认无遗漏后才能切出。
+func TestMaintainRequireIncludesStateChecks(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: prepare
+tools: read, get_characters
+require: get_characters
+next: maintain
+-->
+
+<!-- phase-gate-config
+phase: maintain
+tools: read, edit, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items
+require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
+next: prepare
+-->
+`, "single")
+
+	// 先满足 prepare require 进入 maintain
+	gate.OnToolCall("get_characters", true)
+	ok, _ := gate.SetPhase("maintain")
+	if !ok {
+		t.Fatal("prepare->maintain should succeed")
+	}
+
+	// 没查完 → 切出被阻塞
+	gate.OnToolCall("edit", true)
+	gate.OnToolCall("update_chapter_plan", true)
+	gate.OnToolCall("update_chapter_meta", true)
+	gate.OnToolCall("update_writing_snapshot", true)
+	gate.OnToolCall("search_lore", true)
+	gate.OnToolCall("search_items", true)
+	gate.OnToolCall("get_characters", true)
+	gate.OnToolCall("get_timeline", true)
+	gate.OnToolCall("get_story_arcs", true)
+	gate.OnToolCall("get_reader_perspective", true)
+	// 缺 get_scenes / get_item_occurrences / get_character_relations
+	ok, warning := gate.SetPhase("prepare")
+	if ok {
+		t.Error("should BLOCK: missing state checks (get_scenes/item_occurrences/character_relations)")
+	}
+	if warning == "" {
+		t.Error("expected warning listing missing state checks")
+	}
+
+	// 查完 3 个新增查询 → 允许切出
+	gate.OnToolCall("get_scenes", true)
+	gate.OnToolCall("get_item_occurrences", true)
+	gate.OnToolCall("get_character_relations", true)
+	ok, warning = gate.SetPhase("prepare")
+	if !ok {
+		t.Errorf("should allow transition after all 13 requires met, got warning: %s", warning)
+	}
+}
