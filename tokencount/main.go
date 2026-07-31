@@ -3,14 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"novel/internal/agentcfg"
+	"novel/internal/config"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
+	"novel/internal/skill"
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	total := 0
 
 	// 1. Identity
@@ -38,13 +42,24 @@ func main() {
 		total += nt
 	}
 
-	// 4. Tool definitions
+	// 4. Skill catalog（auto 模式 skill 的 name + description 目录）
+	store, err := skill.NewStore(logger, config.UserSkillsDir())
+	if err == nil {
+		all := store.ListMeta(11)
+		catalogMeta := store.ListMetaForCatalog(all)
+		catalog := agentcfg.BuildSkillCatalog(catalogMeta)
+		nt, _ := llm.CountTokens(catalog)
+		fmt.Printf("4. Skill catalog (%d skills):      %6d tokens\n", len(catalogMeta), nt)
+		total += nt
+	}
+
+	// 5. Tool definitions
 	registry := mcp_tools.NewRegistry(nil)
 	mcp_tools.RegisterAllTools(registry)
 	tools := registry.OpenAI(nil)
 	toolsJSON, _ := json.Marshal(tools)
 	nt, _ := llm.CountTokens(string(toolsJSON))
-	fmt.Printf("4. Tool definitions (%d tools):     %6d tokens\n", len(tools), nt)
+	fmt.Printf("5. Tool definitions (%d tools):     %6d tokens\n", len(tools), nt)
 	total += nt
 
 	fmt.Printf("\n=== Total initial injection: %d tokens ===\n", total)
