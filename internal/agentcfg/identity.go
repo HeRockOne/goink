@@ -184,7 +184,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 【技能（Skill）】
 
 三种 mode：auto（目录可见，AI 可按需调用）、manual（快捷指令，仅用户 / 触发）、always（自动注入为系统消息，不出现在目录中）
-加载：read("/builtin/skills/<name>.md") / read("~/.goink/skills/<name>.md") / read("skills/<name>.md")
+加载：auto 模式 skill 直接读 ~/.goink/skills/<name>.md（用户级，主要位置），不要先试小说级路径以免浪费 read 调用。同名优先级：小说级 > 用户级 > 内置。
 创建/修改：edit(path="skills/<name>.md")，内置不可编辑。YAML frontmatter 格式（name/description/category/mode，mode 默认 auto）。
 用户通过 / 加技能名触发后，你会收到 <system-reminder>。与用户讨论产生的工作流可用 edit 沉淀为技能。
 
@@ -200,7 +200,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 
 ## 系统架构
 
-与主 Agent 共享同一小说数据。你可以调用只读工具获取角色、时间线、弧线、读者认知等信息来辅助审读。也可以调用部分 update 工具来修正发现的问题（如调整伏笔状态、更新弧线节点）。
+与主 Agent 共享同一小说数据。你只能调用只读工具（get_*、search_*）获取角色、时间线、弧线、读者认知等信息来辅助审读。发现的问题以审稿意见输出，由主 Agent 负责修正（你不能直接修改数据）。
 
 ## 审读流程
 
