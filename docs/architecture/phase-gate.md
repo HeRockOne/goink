@@ -50,16 +50,19 @@ init → prepare → [outline → write] × N 章循环 → review → maintain 
 
 ## 工具白名单
 
-| 阶段 | 允许的工具 | 阻止的工具 |
-|------|-----------|-----------|
-| prepare | get_*, read, edit, search_story_memory, web_search, web_fetch | update_*, create_*, delete_*, run_subagent, set_phase |
-| outline | read, edit, get_*, search_story_memory, web_search, web_fetch | update_*, create_*, delete_*, run_subagent, set_phase |
-| write | read, edit, search_story_memory, web_search, web_fetch, get_* | update_*, create_*, delete_*, run_subagent, set_phase |
-| review | read, run_subagent, get_*, search_story_memory | edit, update_*, create_*, delete_*, set_phase |
-| maintain | read, edit, update_*, create_*, delete_*, search_story_memory, get_* | run_subagent, set_phase |
+> 下表为简化示意。**精确白名单以数据库配置为准**（`门禁配置示例.md` 或设置面板中的 phase_gate_config）。
+
+| 阶段 | 允许的工具（简化） | 阻止的工具（简化） |
+|------|-------------------|-------------------|
+| init | create_*, get_*, set_phase | edit, update_*, delete_*, run_subagent |
+| prepare | get_*, read, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
+| outline | read, edit(get: outlines/*, goink.md, skills/*), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
+| write | read, edit(get: chapters/*), search_story_memory, get_*, set_phase | update_*, create_*, delete_*, run_subagent |
+| review | read, edit(get: chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
+| maintain | read, edit(goink.md, chapters/*, outlines/*, skills/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
 
 > **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
-> create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 prepare 和 maintain 阶段可用。
+> create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 init 和 maintain 阶段可用（即新建/修改设定的操作集中在开书与维护阶段）。
 > set_phase 在所有阶段始终可用（它是阶段切换的唯一入口）。
 
 ## require 完成条件
