@@ -230,6 +230,7 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 | Custom software icon | Desktop/taskbar/title bar icons unified with theme (see Icon Replacement) |
 | Help center | 52 tools described in Chinese & English with return structure docs |
 | System prompt optimization | ~4700 → ~2400 tokens (49% savings) |
+| Token injection stats | `cmd/count_tokens` precisely counts system prompt + tool definitions (~16.1K tokens currently) |
 | writing-kernel.md | 15-item maintain checklist |
 | config.json removed | Data dir uses exe location directly |
 | Billing panel | Per-model token accumulation, cache hit/miss split, configurable prices (CNY per million tokens) |
@@ -322,6 +323,7 @@ Windows one-click build: `.\build.ps1` or `build.bat`
 ```
 goink/
 ├── app/                    # Wails binding + HTTP API (23 endpoints)
+├── cmd/count_tokens/       # Token counting tool (precise system prompt + tool JSON injection stats)
 ├── internal/
 │   ├── agent/              # Agent loop (MaxTurns 100)
 │   ├── agentcfg/           # System prompt (2400 tokens) + tool whitelist

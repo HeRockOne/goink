@@ -230,6 +230,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | 自定义软件图标 | 桌面图标、任务栏图标、标题栏图标统一匹配主题风格（图标位置见"图标替换"） |
 | 帮助中心 | 52 个工具的中英文描述，含返回结构文档 |
 | 系统提示词精简 | ~4700 token → ~2400 token（省 49%） |
+| Token 注入统计 | `cmd/count_tokens` 精确统计系统提示词 + 工具定义注入量（当前约 16.1K token） |
 | writing-kernel.md | 15 项 maintain 检查清单 |
 | config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
 | 计费面板 | Token 用量按模型累计，缓存命中/未命中分账，价格可配（元/百万 token） |
@@ -322,6 +323,7 @@ Windows 一键构建：`.\build.ps1` 或 `build.bat`
 ```
 goink/
 ├── app/                    # Wails 绑定 + HTTP API（23 端点）
+├── cmd/count_tokens/       # Token 统计工具（精确统计系统提示词 + 工具 JSON 注入）
 ├── internal/
 │   ├── agent/              # Agent loop（MaxTurns 100）
 │   ├── agentcfg/           # 系统提示词（2400 token）+ 工具白名单
