@@ -20,6 +20,9 @@ import (
 type SaveSettingsInput struct {
 	PhaseGateConfig      string   `json:"phase_gate_config,omitempty"`
 	CompressionThreshold *float64 `json:"compression_threshold,omitempty"`
+	PriceInput           *float64 `json:"price_input,omitempty"`
+	PriceOutput          *float64 `json:"price_output,omitempty"`
+	CachePrice           *float64 `json:"cache_price,omitempty"`
 }
 
 // ── 设置 ──────────────────────────────────────────────────
@@ -55,6 +58,15 @@ func (a *App) SaveSettings(input SaveSettingsInput) error {
 	}
 	if input.CompressionThreshold != nil {
 		a.settings.CompressionThreshold = *input.CompressionThreshold
+	}
+	if input.PriceInput != nil {
+		a.settings.PriceInput = *input.PriceInput
+	}
+	if input.PriceOutput != nil {
+		a.settings.PriceOutput = *input.PriceOutput
+	}
+	if input.CachePrice != nil {
+		a.settings.CachePrice = *input.CachePrice
 	}
 	return config.SaveSettings(a.db, a.settings)
 }

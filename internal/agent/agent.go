@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +46,8 @@ type Agent struct {
 	cancelMgr     *CancelManager
 	phaseGateMu   sync.Mutex
 	phaseGate     *PhaseGate // 从 always-mode skill 解析的阶段门禁配置（受 phaseGateMu 保护）
+	prefixHashMu  sync.RWMutex
+	prefixHash    map[string]uint64 // sessionID → 上一轮前缀哈希，用于缓存监控
 }
 
 // phaseGate 读写加锁，避免并发竞争
@@ -62,28 +65,28 @@ func (a *Agent) setPG(pg *PhaseGate) {
 
 // RunOptions 是单次 Run() 的参数。
 type RunOptions struct {
-	TurnID          int
-	SessionID       string
-	NovelID         int64
-	Messages        []map[string]any
-	AllowedTools    map[string]bool
-	ActiveVersion   int
-	SubAgentVersion int // 子 Agent 内存版本计数器，不持久化
-	Model           *llm.ModelInfo
-	ProviderName    string
-	AgentType       string
-	SubTaskID       string // 子 Agent 事件路由 ID
-	EventSeq        *int   // 共享事件序号，nil 时自建（主Agent）；子Agent传入父的指针
-	EventCallback   func(AgentEvent) // API 模式的事件回调（非 nil 时替代 wails.EventsEmit）
-	Broadcast       func(eventType string, data map[string]any) // 双端同步广播（桌面端对话时推送到移动端 WebSocket）
-	MaxTurns        int
-	ReasoningEffort string  // 用户选择的推理等级
-	CompressionThreshold float64 // 压缩触发阈值（0.0-1.0）
-	PhaseConfig     *PhaseGate // 从 always-mode skill 解析的阶段门禁配置
-	PhaseCurrent    string     // 从 session 恢复的当前阶段
-	PhaseCalledJSON string     // 从 session 恢复的已调用工具 JSON
-	PhaseMode       string     // 门禁模式："single" | "batch"
-	PhaseGateEnabled bool      // 门禁总开关，false 时跳过所有门禁检查
+	TurnID               int
+	SessionID            string
+	NovelID              int64
+	Messages             []map[string]any
+	AllowedTools         map[string]bool
+	ActiveVersion        int
+	SubAgentVersion      int // 子 Agent 内存版本计数器，不持久化
+	Model                *llm.ModelInfo
+	ProviderName         string
+	AgentType            string
+	SubTaskID            string                                      // 子 Agent 事件路由 ID
+	EventSeq             *int                                        // 共享事件序号，nil 时自建（主Agent）；子Agent传入父的指针
+	EventCallback        func(AgentEvent)                            // API 模式的事件回调（非 nil 时替代 wails.EventsEmit）
+	Broadcast            func(eventType string, data map[string]any) // 双端同步广播（桌面端对话时推送到移动端 WebSocket）
+	MaxTurns             int
+	ReasoningEffort      string     // 用户选择的推理等级
+	CompressionThreshold float64    // 压缩触发阈值（0.0-1.0）
+	PhaseConfig          *PhaseGate // 从 always-mode skill 解析的阶段门禁配置
+	PhaseCurrent         string     // 从 session 恢复的当前阶段
+	PhaseCalledJSON      string     // 从 session 恢复的已调用工具 JSON
+	PhaseMode            string     // 门禁模式："single" | "batch"
+	PhaseGateEnabled     bool       // 门禁总开关，false 时跳过所有门禁检查
 }
 
 // New 创建 Agent 实例。
@@ -98,6 +101,7 @@ func New(llmClient *llm.Client, registry *mcp_tools.Registry, session *session.S
 		logger:     logger,
 		skillStore: skillStore,
 		cancelMgr:  cancelMgr,
+		prefixHash: make(map[string]uint64),
 	}
 }
 
@@ -223,7 +227,24 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	failCnt := make(map[string]int)
 	retryCount := 0
 	runningTokens := a.InitRunningTokens(opts.Messages)
-	tools := a.registry.OpenAI(opts.AllowedTools)
+	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
+	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
+
+	// 计算前缀哈希，检测缓存稳定性
+	prefixHash := computePrefixHash(opts.Messages, tools)
+	a.prefixHashMu.RLock()
+	lastHash := a.prefixHash[opts.SessionID]
+	a.prefixHashMu.RUnlock()
+	if lastHash != 0 && lastHash != prefixHash {
+		a.logger.Warn("前缀变化，缓存可能失效",
+			"session_id", opts.SessionID,
+			"last_hash", lastHash,
+			"current_hash", prefixHash)
+	}
+	a.prefixHashMu.Lock()
+	a.prefixHash[opts.SessionID] = prefixHash
+	a.prefixHashMu.Unlock()
+
 	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
 	eventSeq := opts.EventSeq
 	if eventSeq == nil {
@@ -303,6 +324,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		callOpts := &llm.CallOptions{}
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
+		}
+		// 传递门禁白名单到 API，让模型知道哪些工具可调用（不改变 tools 数组，保留缓存前缀）
+		if len(opts.AllowedTools) > 0 {
+			allowed := make([]string, 0, len(opts.AllowedTools))
+			for tool := range opts.AllowedTools {
+				allowed = append(allowed, tool)
+			}
+			callOpts.AllowedTools = allowed
 		}
 		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 
@@ -561,7 +590,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if ctx.Err() != nil {
 							return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
 						}
-						stream = a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+					stream = a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 						continue streamLoop
 					}
 					// 不可重试或超过重试次数：保存 partial 后返回
@@ -766,4 +795,33 @@ func parsePhaseGateFromMessages(messages []map[string]any, mode string) *PhaseGa
 		}
 	}
 	return nil
+}
+
+// computePrefixHash 计算前缀哈希，用于检测缓存稳定性。
+// 前缀 = 系统消息 + 工具定义（按顺序）。
+func computePrefixHash(messages []map[string]any, tools []map[string]any) uint64 {
+	h := sha256.New()
+
+	// 哈希系统消息（role=system）
+	for _, m := range messages {
+		if role, _ := m["role"].(string); role == "system" {
+			if content, _ := m["content"].(string); content != "" {
+				h.Write([]byte(content))
+				h.Write([]byte{0}) // 分隔符
+			}
+		}
+	}
+
+	// 哈希工具定义
+	for _, t := range tools {
+		if name, _ := t["function"].(map[string]any)["name"].(string); name != "" {
+			h.Write([]byte(name))
+			h.Write([]byte{0})
+		}
+	}
+
+	// 取前 8 字节作为 uint64
+	hash := h.Sum(nil)
+	return uint64(hash[0])<<56 | uint64(hash[1])<<48 | uint64(hash[2])<<40 | uint64(hash[3])<<32 |
+		uint64(hash[4])<<24 | uint64(hash[5])<<16 | uint64(hash[6])<<8 | uint64(hash[7])
 }

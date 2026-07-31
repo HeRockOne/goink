@@ -47,13 +47,13 @@ func (t *GetScenesTool) Execute(ctx context.Context, args any, tc ToolContext) (
 type CreateSceneArgs struct {
 	ChapterID    int64  `json:"chapter_id" jsonschema:"required,description=章节ID" validate:"required,min=1"`
 	SceneNumber  int    `json:"scene_number" jsonschema:"required,description=场景序号（从1开始）,minimum=1" validate:"required,min=1"`
-	Title        string `json:"title" jsonschema:"description=场景标题" jsonschema:"required,description=场景标题"`
-	LocationID   int64  `json:"location_id" jsonschema:"description=场景地点ID" jsonschema:"required,description=场景地点ID"`
-	CharacterIDs string `json:"character_ids" jsonschema:"description=出场角色ID数组JSON" jsonschema:"required,description=出场角色ID数组JSON，如[127,128,129]"`
-	ArcID        int64  `json:"arc_id" jsonschema:"description=所属弧线ID" jsonschema:"description=所属弧线ID"`
-	ArcNodeID    int64  `json:"arc_node_id" jsonschema:"description=对应弧线节点ID" jsonschema:"description=对应弧线节点ID"`
+	Title        string `json:"title" jsonschema:"required,description=场景标题"`
+	LocationID   int64  `json:"location_id" jsonschema:"required,description=场景地点ID"`
+	CharacterIDs string `json:"character_ids" jsonschema:"required,description=出场角色ID数组JSON，如[127,128,129]"`
+	ArcID        int64  `json:"arc_id" jsonschema:"description=所属弧线ID"`
+	ArcNodeID    int64  `json:"arc_node_id" jsonschema:"description=对应弧线节点ID"`
 	WordCount    int    `json:"word_count" jsonschema:"description=场景字数"`
-	Summary      string `json:"summary" jsonschema:"description=场景摘要，50-100字" jsonschema:"required,description=场景摘要，50-100字概述本场景发生什么"`
+	Summary      string `json:"summary" jsonschema:"required,description=场景摘要，50-100字概述本场景发生什么" validate:"required"`
 }
 type CreateSceneTool struct{}
 

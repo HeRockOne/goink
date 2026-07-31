@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -42,8 +43,14 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		}
 	}
 
-	// 累计 session 级缓存命中/未命中 token
+	// 累计 session 级缓存命中/未命中 token + 输出 token（累计值用于计费面板）
+	// 按模型独立累计，支持全局合计 + 模型级明细
+	// 支持两种缓存格式：
+	// 1. OpenAI 标准格式：prompt_tokens_details.cached_tokens（缓存命中），miss = prompt_tokens - cached
+	// 2. DeepSeek 格式：prompt_cache_hit_tokens + prompt_cache_miss_tokens（各自独立）
 	accHit, accMiss := float64(0), float64(0)
+	accCompletion := float64(0)
+	perModel := make(map[string]map[string]float64) // modelID → {hit, miss, comp}
 	if sess, err := a.session.GetSession(ctx, opts.SessionID); err == nil && sess.Usage != "" {
 		var old map[string]any
 		if json.Unmarshal([]byte(sess.Usage), &old) == nil {
@@ -53,13 +60,111 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 			if v, _ := old["prompt_cache_miss_tokens"].(float64); v > 0 {
 				accMiss = v
 			}
+			if v, _ := old["acc_completion_tokens"].(float64); v > 0 {
+				accCompletion = v
+			}
+			// 读取按模型累计数据
+			if pm, ok := old["per_model"].(map[string]any); ok {
+				for modelID, data := range pm {
+					if d, ok := data.(map[string]any); ok {
+						m := make(map[string]float64)
+						if v, _ := d["hit"].(float64); v > 0 {
+							m["hit"] = v
+						}
+						if v, _ := d["miss"].(float64); v > 0 {
+							m["miss"] = v
+						}
+						if v, _ := d["comp"].(float64); v > 0 {
+							m["comp"] = v
+						}
+						perModel[modelID] = m
+					}
+				}
+			}
 		}
 	}
-	if hit, _ := apiUsage["prompt_cache_hit_tokens"].(float64); hit > 0 {
-		accHit += hit
+
+	// 从 API 提取缓存 token
+	hitTokens, missTokens := float64(0), float64(0)
+	promptTokens, _ := apiUsage["prompt_tokens"].(float64)
+
+	// 优先尝试 OpenAI 标准格式：prompt_tokens_details.cached_tokens
+	var details map[string]any
+	switch d := apiUsage["prompt_tokens_details"].(type) {
+	case map[string]any:
+		details = d
+	case string:
+		json.Unmarshal([]byte(d), &details)
 	}
-	if miss, _ := apiUsage["prompt_cache_miss_tokens"].(float64); miss > 0 {
-		accMiss += miss
+	if details != nil {
+		if cached, ok := details["cached_tokens"].(float64); ok && cached > 0 {
+			hitTokens = cached
+			missTokens = promptTokens - cached
+			if missTokens < 0 {
+				missTokens = 0
+			}
+		}
+	}
+
+	// Fallback 到 DeepSeek 格式
+	if hitTokens == 0 && missTokens == 0 {
+		if hit, ok := apiUsage["prompt_cache_hit_tokens"].(float64); ok && hit > 0 {
+			hitTokens = hit
+		}
+		if miss, ok := apiUsage["prompt_cache_miss_tokens"].(float64); ok && miss > 0 {
+			missTokens = miss
+		}
+	}
+
+	accHit += hitTokens
+	accMiss += missTokens
+	if comp, _ := apiUsage["completion_tokens"].(float64); comp > 0 {
+		accCompletion += comp
+	}
+
+	// 更新按模型累计
+	modelID := ""
+	if opts.Model != nil {
+		modelID = opts.Model.ID
+	}
+	if modelID == "" {
+		modelID = "unknown"
+	}
+	m := perModel[modelID]
+	if m == nil {
+		m = map[string]float64{"hit": 0, "miss": 0, "comp": 0}
+		perModel[modelID] = m
+	}
+
+	// 持久化模型级 token 到专用表（传增量值）
+	deltaComp := float64(0)
+	if v, _ := apiUsage["completion_tokens"].(float64); v > 0 {
+		deltaComp = v
+	}
+	if err := a.session.UpsertModelUsage(ctx, opts.SessionID, modelID, hitTokens, missTokens, deltaComp); err != nil {
+		a.logger.Warn("保存模型 usage 失败", "model", modelID, "err", err)
+	}
+
+	// 更新 per_model 累计
+	m["hit"] += hitTokens
+	m["miss"] += missTokens
+	if deltaComp > 0 {
+		m["comp"] += deltaComp
+	}
+
+	// 保存 API 返回的精确 usage 到当前 assistant 消息（持久化审计）
+	msgModel := modelID
+	if msgModel == "" {
+		msgModel = "unknown"
+	}
+	if err := a.session.UpdateMessageUsage(ctx, opts.SessionID, opts.TurnID, map[string]any{
+		"prompt_tokens":     apiUsage["prompt_tokens"],
+		"completion_tokens": apiUsage["completion_tokens"],
+		"total_tokens":      apiUsage["total_tokens"],
+		"cached_tokens":     hitTokens,
+		"model":             msgModel,
+	}); err != nil {
+		a.logger.Warn("保存消息 usage 失败", "err", err)
 	}
 
 	usage := map[string]any{
@@ -68,9 +173,19 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		"total_tokens":             apiUsage["total_tokens"],
 		"prompt_cache_hit_tokens":  accHit,
 		"prompt_cache_miss_tokens": accMiss,
+		"acc_completion_tokens":    accCompletion,
+		"per_model":                perModel,
 		"context_window":           opts.Model.ContextWindow,
+		"running_tokens":           detail,
 		"detail":                   detail,
 	}
+
+	a.logger.Info("usage 推送",
+		"session", opts.SessionID,
+		"turn", opts.TurnID,
+		"model", modelID,
+		"accComp", accCompletion,
+		"perModel", fmt.Sprintf("%+v", perModel))
 	if opts.Model.ContextWindow > 0 {
 		usage["usage_ratio"] = float64(int(apiTotal)) / float64(opts.Model.ContextWindow) * 100
 	}

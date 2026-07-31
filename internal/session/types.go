@@ -54,6 +54,19 @@ type Message struct {
 
 func (Message) TableName() string { return "messages" }
 
+// ModelUsage 按模型的 token 消耗累计，每 session + model 一条记录。
+type ModelUsage struct {
+	ID               int64     `gorm:"column:id;primaryKey;autoIncrement"         json:"id"`
+	SessionID        string    `gorm:"column:session_id;index:idx_model_usage;not null"  json:"session_id"`
+	ModelID          string    `gorm:"column:model_id;not null"                   json:"model_id"`
+	HitTokens        float64   `gorm:"column:hit_tokens;default:0"                json:"hit_tokens"`
+	MissTokens       float64   `gorm:"column:miss_tokens;default:0"               json:"miss_tokens"`
+	CompletionTokens float64   `gorm:"column:completion_tokens;default:0"         json:"completion_tokens"`
+	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime"           json:"updated_at"`
+}
+
+func (ModelUsage) TableName() string { return "model_usage" }
+
 // ToAPIFormat 转为 OpenAI Chat Completions 兼容的消息格式。
 // 从 ExtraMetadata 提取 tool_calls、thinking_content、tool_call_id 拼入对应字段。
 func (m *Message) ToAPIFormat() map[string]any {

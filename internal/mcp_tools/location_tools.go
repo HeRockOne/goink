@@ -204,8 +204,8 @@ func (t *GetLocationsTool) executeNetwork(ctx context.Context, tc ToolContext, s
 // CreateLocationItem 是 create_location 的单条参数。
 type CreateLocationItem struct {
 	Name             string `json:"name" jsonschema:"required,description=地点名称"             validate:"required"`
-	LocationType     string `json:"location_type" jsonschema:"description=地点类型，自由文本，如'森林'、'城市'、'洞穴'"`
-	Description      string `json:"description" jsonschema:"description=环境氛围、特色等描述"`
+	LocationType string `json:"location_type" jsonschema:"required,description=地点类型：城镇/村落/山脉/建筑/秘境/水域/战场/其他" validate:"required"`
+	Description      string `json:"description" jsonschema:"required,description=地点详细描述，环境氛围、特色等" validate:"required"`
 	DetailJSON       string `json:"detail_json" jsonschema:"description=字符串形式的JSON对象，结构化信息：气候、氛围、历史事件等"`
 	Tags             string `json:"tags" jsonschema:"description=字符串形式的JSON数组，自由标签，如[\"危险\"，\"神秘\"]"`
 	ParentLocationID *int64 `json:"parent_location_id" jsonschema:"description=父级地点ID，用于构建层级树"`

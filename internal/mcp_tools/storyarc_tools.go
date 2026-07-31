@@ -145,7 +145,7 @@ func (t *GetStoryArcsTool) executeFull(ctx context.Context, a *GetStoryArcsArgs,
 type CreateStoryArcItem struct {
 	Name        string `json:"name" jsonschema:"required,description=弧线名称，如'复仇之路'"                          validate:"required"`
 	ArcType     string `json:"arc_type" jsonschema:"required,description=弧线类型,enum=main,enum=sub,enum=character,enum=background" validate:"required,oneof=main sub character background"`
-	Description string `json:"description" jsonschema:"description=弧线整体描述"`
+	Description string `json:"description" jsonschema:"required,description=弧线详细描述，包含目标、冲突、关键节点" validate:"required"`
 	Importance  int    `json:"importance" jsonschema:"description=重要度1-5,default=1,minimum=1,maximum=5"          validate:"omitempty,min=1,max=5"`
 }
 
@@ -270,7 +270,7 @@ func (t *UpdateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 type CreateArcNodeItem struct {
 	StoryArcID    int64  `json:"arc_id" jsonschema:"required,description=所属弧线ID"                  validate:"required,min=1"`
 	Title         string `json:"title" jsonschema:"required,description=节点标题，如'发现仇人身份'"              validate:"required"`
-	Description   string `json:"description" jsonschema:"description=节点详情"`
+	Description   string `json:"description" jsonschema:"required,description=节点详细描述，包括本节点的关键事件和目标" validate:"required"`
 	TargetChapter int    `json:"target_chapter" jsonschema:"required,description=预计发生章节号（不准确不要紧）"       validate:"required,min=1"`
 }
 

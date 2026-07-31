@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -133,6 +134,79 @@ func (s *Store) UpdateSessionUsage(ctx context.Context, sessionID, usageJSON str
 	return nil
 }
 
+// UpdateMessageUsage 将 API 返回的精确 token 用量保存到最后一条 assistant 消息的 ExtraMetadata。
+func (s *Store) UpdateMessageUsage(ctx context.Context, sessionID string, turnID int, usage map[string]any) error {
+	var msg Message
+	if err := s.DB.WithContext(ctx).
+		Where("session_id = ? AND turn_id = ? AND role = 'assistant'", sessionID, turnID).
+		Order("id DESC").Limit(1).First(&msg).Error; err != nil {
+		return fmt.Errorf("session store: find message: %w", err)
+	}
+
+	var meta map[string]any
+	if msg.ExtraMetadata != "" {
+		if err := json.Unmarshal([]byte(msg.ExtraMetadata), &meta); err != nil {
+			meta = make(map[string]any)
+		}
+	}
+	if meta == nil {
+		meta = make(map[string]any)
+	}
+	meta["usage"] = usage
+
+	b, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("session store: marshal usage: %w", err)
+	}
+	return s.DB.WithContext(ctx).Model(&msg).Update("extra_metadata", string(b)).Error
+}
+
+// GetSessionCumulativeUsage 查询 session 内所有消息的累计 token 用量。
+// 从每条 assistant 消息的 ExtraMetadata.usage 中提取并累加。
+func (s *Store) GetSessionCumulativeUsage(ctx context.Context, sessionID string) map[string]float64 {
+	var msgs []Message
+	s.DB.WithContext(ctx).
+		Where("session_id = ? AND role = 'assistant'", sessionID).
+		Order("id ASC").
+		Find(&msgs)
+
+	accHit, accMiss, accCompletion := float64(0), float64(0), float64(0)
+	for _, msg := range msgs {
+		if msg.ExtraMetadata == "" {
+			continue
+		}
+		var meta map[string]any
+		if err := json.Unmarshal([]byte(msg.ExtraMetadata), &meta); err != nil {
+			continue
+		}
+		raw, ok := meta["usage"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, _ := raw["cached_tokens"].(float64); v > 0 {
+			accHit += v
+		}
+		if v, _ := raw["completion_tokens"].(float64); v > 0 {
+			accCompletion += v
+		}
+		if v, _ := raw["prompt_tokens"].(float64); v > 0 {
+			miss := v
+			if cached, _ := raw["cached_tokens"].(float64); cached > 0 {
+				miss -= cached
+			}
+			if miss > 0 {
+				accMiss += miss
+			}
+		}
+	}
+
+	return map[string]float64{
+		"prompt_cache_hit_tokens":  accHit,
+		"prompt_cache_miss_tokens": accMiss,
+		"acc_completion_tokens":    accCompletion,
+	}
+}
+
 // BumpActiveVersion 递增 active_version 并返回新值。
 func (s *Store) BumpActiveVersion(ctx context.Context, sessionID string) (int, error) {
 	var sess Session
@@ -228,4 +302,27 @@ func (s *Store) SavePhaseGateState(sessionID, currentPhase, calledToolsJSON stri
 		}).Error; err != nil {
 		s.logger.Warn("保存阶段门禁状态失败", "session_id", sessionID, "err", err)
 	}
+}
+
+// UpsertModelUsage 更新或插入模型级 token 消耗累计。
+func (s *Store) UpsertModelUsage(ctx context.Context, sessionID, modelID string, hit, miss, comp float64) error {
+	var existing ModelUsage
+	if err := s.DB.WithContext(ctx).
+		Where("session_id = ? AND model_id = ?", sessionID, modelID).
+		First(&existing).Error; err != nil {
+		// 插入
+		return s.DB.WithContext(ctx).Create(&ModelUsage{
+			SessionID:        sessionID,
+			ModelID:          modelID,
+			HitTokens:        hit,
+			MissTokens:       miss,
+			CompletionTokens: comp,
+		}).Error
+	}
+	// 更新
+	return s.DB.WithContext(ctx).Model(&existing).Updates(map[string]any{
+		"hit_tokens":        existing.HitTokens + hit,
+		"miss_tokens":       existing.MissTokens + miss,
+		"completion_tokens": existing.CompletionTokens + comp,
+	}).Error
 }

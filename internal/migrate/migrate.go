@@ -47,6 +47,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&reader.ReaderPerspective{},
 		&session.Session{},
 		&session.Message{},
+		&session.ModelUsage{},
 		&storage.OperationLogRecord{},
 		&rollback.TurnCommit{},
 		&style.Sample{},

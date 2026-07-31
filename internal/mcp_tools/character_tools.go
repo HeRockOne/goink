@@ -172,10 +172,10 @@ func formatRelationEdges(rels []character.CharacterRelation, nameMap map[int64]s
 // CreateCharacterItem 是 create_character 的单条参数。
 type CreateCharacterItem struct {
 	Name        string  `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
-	Description string  `json:"description"  jsonschema:"description=角色自然语言描述，如外貌、身份、背景故事等"`
+	Description string `json:"description" jsonschema:"required,description=角色自然语言描述，如外貌、身份、背景故事等" validate:"required"`
 	Personality string  `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
 	Abilities   string  `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
-	LocationID  *int64  `json:"location_id" jsonschema:"description=角色当前所在地点ID"`
+	LocationID  *int64  `json:"location_id" jsonschema:"required,description=角色当前所在地点ID" validate:"required"`
 }
 
 // CreateCharacterArgs 是 create_character 的参数。
@@ -244,7 +244,7 @@ type UpdateCharacterArgs struct {
 	CharacterID int64  `json:"character_id" jsonschema:"required,description=角色ID"     validate:"required,min=1"`
 	Name        string `json:"name"         jsonschema:"description=新的名称"`
 	Description string `json:"description"  jsonschema:"description=新的自然语言描述（完全替换旧的）"`
-	Personality string `json:"personality"  jsonschema:"description=新的性格/设定，字符串形式JSON（完全替换旧的）"`
+	Personality string `json:"personality" jsonschema:"required,description=新的性格/设定，字符串形式JSON（完全替换旧的）" validate:"required"`
 	Abilities   string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
 	LocationID  *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
 }

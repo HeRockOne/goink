@@ -31,6 +31,8 @@ func ExportNovel(n *novel.Novel, chapters []ChapterWithContent, format, author s
 		return exportMarkdown(n, chapters)
 	case "txt":
 		return exportTxt(n, chapters)
+	case "docx":
+		return exportDocx(n, chapters)
 	default:
 		return nil, "", fmt.Errorf("export: 不支持的格式: %s", format)
 	}

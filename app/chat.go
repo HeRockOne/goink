@@ -203,6 +203,14 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
 	}
 
+	// 8.5 动态注入 NovelState（放在所有消息之后，不破坏前缀缓存）
+	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
+	if err != nil {
+		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
+	} else if novelState != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": novelState})
+	}
+
 	// 9. 运行 Agent 循环
 	emitEvent("started", map[string]any{"session_id": sess.SessionID, "turn_id": turnID})
 
@@ -329,7 +337,8 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 	return sess, true, nil
 }
 
-// writeSystemMessages 在新 session 的事务内写入 AgentIdentity、AlwaysSkills、SkillCatalog、NovelState 到 messages 表。
+// writeSystemMessages 在新 session 的事务内写入 AgentIdentity、AlwaysSkills、SkillCatalog 到 messages 表。
+// NovelState 不在此写入，而是在每轮对话时动态注入（放在 user message 之后），以优化 Prompt Caching。
 func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, turnID int) error {
 	sysMsg := func(content string) *session.Message {
 		return &session.Message{
@@ -348,13 +357,8 @@ func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, 
 		always = agentcfg.BuildAlwaysSkillsContent(all, a.skill, novelID)
 	}
 
-	novelState, err := agentcfg.NovelState(tx, novelID)
-	if err != nil {
-		a.logger.Warn("NovelState 构建失败，写入空消息", "novel_id", novelID, "err", err)
-		novelState = ""
-	}
-
-	for _, c := range []string{identity, always, catalog, novelState} {
+	// 只写入稳定前缀（identity + always + catalog），novelState 动态注入
+	for _, c := range []string{identity, always, catalog} {
 		if c != "" {
 			if err := tx.Create(sysMsg(c)).Error; err != nil {
 				return err

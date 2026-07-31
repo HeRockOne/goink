@@ -87,7 +87,10 @@ type CreateLoreTool struct{}
 
 func (t *CreateLoreTool) Name() string { return "create_lore" }
 func (t *CreateLoreTool) Description() string {
-	return "创建世界观设定条目。创建后自动绑定到当前小说。与 update_lore 保持独立，新建用此工具，修改用 update_lore。"
+	return "创建世界观设定条目。创建后自动绑定到当前小说。与 update_lore 保持独立，新建用此工具，修改用 update_lore。" +
+		"category 可选值：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述。" +
+		"arc_id 关联此设定所属的弧线；reveal_chapter_id 填入读者首次得知此设定的章节ID（控制信息投放节奏）；" +
+		"is_public=true 表示读者已知的公开设定，false 表示秘密（未来反转用）。"
 }
 func (t *CreateLoreTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *CreateLoreTool) JSONSchema() json.RawMessage { return SchemaOf(CreateLoreArgs{}) }

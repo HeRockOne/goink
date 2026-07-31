@@ -36,6 +36,9 @@ type AppSettings struct {
 	APIToken         string `gorm:"column:api_token;default:''" json:"api_token"`                             // API 认证 token
 	PhaseGateConfig  string `gorm:"column:phase_gate_config;type:text" json:"phase_gate_config"`               // 阶段门禁配置
 	APIUseHTTPS      bool   `gorm:"column:api_use_https;default:true" json:"api_use_https"`                    // 移动端 API 使用 HTTPS（默认 true，关掉则用 HTTP）
+	PriceInput       float64 `gorm:"column:price_input;default:1.35" json:"price_input"`                     // 输入价格（元/百万 token）
+	PriceOutput      float64 `gorm:"column:price_output;default:8.1" json:"price_output"`                    // 输出价格（元/百万 token）
+	CachePrice       float64 `gorm:"column:cache_price;default:0.27" json:"cache_price"`                     // 缓存命中价格（元/百万 token）
 }
 
 func (AppSettings) TableName() string { return "app_config" }

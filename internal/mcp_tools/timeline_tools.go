@@ -114,7 +114,7 @@ func (t *GetTimelineTool) executeFull(ctx context.Context, a *GetTimelineArgs, t
 type CreateTimelineEntryItem struct {
 	Category        string `json:"category" jsonschema:"required,description=条目类型,enum=foreshadowing,enum=user_directive" validate:"required,oneof=foreshadowing user_directive"`
 	Title           string `json:"title" jsonschema:"required,description=简短标题"                                   validate:"required"`
-	Content         string `json:"content" jsonschema:"description=详细描述"`
+	Content         string `json:"content" jsonschema:"required,description=详细描述" validate:"required"`
 	DetailJSON      string `json:"detail_json" jsonschema:"description=字符串形式的JSON，结构化数据"`
 	TargetChapter   int    `json:"target_chapter" jsonschema:"required,description=预计回收章节号（不准确不要紧，后续可调整）"        validate:"required,min=1"`
 	Importance      int    `json:"importance" jsonschema:"required,description=重要度1-5（1最低5最高），伏笔越重要越不能忘"         validate:"omitempty,min=1,max=5"`
@@ -134,7 +134,8 @@ func (t *CreateTimelineEntryTool) Name() string { return "create_timeline_entry"
 func (t *CreateTimelineEntryTool) Description() string {
 	return "批量创建伏笔或用户指令（1-6条）。保证原子性，失败时返回具体条目原因。" +
 		"每章写完后发现新埋的伏笔或用户指令时调用。" +
-		"category 为 foreshadowing（伏笔）或 user_directive（用户创作指令）。"
+		"category 为 foreshadowing（伏笔）或 user_directive（用户创作指令）。" +
+		"importance 1-5：1=小伏笔（几章内回收）、3=中等伏笔（一卷内）、5=核心伏笔（贯穿全文）。"
 }
 func (t *CreateTimelineEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -230,6 +231,11 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 
 	if a.Title == "" && a.Content == "" && a.DetailJSON == "" && a.TargetChapter == 0 && a.Importance == 0 && a.Status == "" && a.ResolvedChapterID == 0 {
 		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
+	}
+
+	// 回收伏笔时 resolved_chapter_id 不能为空
+	if a.Status == "resolved" && a.ResolvedChapterID == 0 {
+		return &ToolResult{Success: false, Error: "回收伏笔（status=resolved）时 resolved_chapter_id 不能为空，请填入实际回收章节号"}, nil
 	}
 
 	var entry timeline.TimelineEntry

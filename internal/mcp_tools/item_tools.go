@@ -58,9 +58,9 @@ func (t *GetItemsTool) Execute(ctx context.Context, args any, tc ToolContext) (*
 
 type CreateItemArgs struct {
 	Name                    string `json:"name" jsonschema:"required,description=物品名称" validate:"required"`
-	ItemType                string `json:"item_type" jsonschema:"description=类型：法宝/丹药/灵药/功法/地图/信物/武器/防具/普通物品"`
+	ItemType                string `json:"item_type" jsonschema:"required,description=类型：法宝/丹药/灵药/功法/地图/信物/武器/防具/普通物品"`
 	Grade                   string `json:"grade" jsonschema:"description=品级"`
-	Description             string `json:"description" jsonschema:"description=外观/功能描述"`
+	Description             string `json:"description" jsonschema:"required,description=外观/功能描述" validate:"required"`
 	Lore                    string `json:"lore" jsonschema:"description=来历/历史/传说"`
 	Ability                 string `json:"ability" jsonschema:"description=特殊能力"`
 	ArcID                   int64  `json:"arc_id" jsonschema:"required,description=所属弧线ID"`
@@ -76,7 +76,10 @@ type CreateItemArgs struct {
 type CreateItemTool struct{}
 
 func (t *CreateItemTool) Name() string { return "create_item" }
-func (t *CreateItemTool) Description() string { return "创建物品/法宝条目。填写 arc_id 和 first_chapter_id 以建立关联，填写 narrative_role 标记重要性。" }
+func (t *CreateItemTool) Description() string { return "创建物品/法宝条目。填写 arc_id 和 first_chapter_id 以建立关联，填写 narrative_role 标记重要性。" +
+		"item_type 可选值：法宝/丹药/灵药/功法/地图/信物/武器/防具/普通物品。" +
+		"description 描述外观/功能，lore 描述来历/历史/传说。" +
+		"narrative_role 四级：key_prop（核心道具，影响主线）/ supporting（辅助道具）/ minor（小道具）/ normal（普通物品）。" }
 func (t *CreateItemTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *CreateItemTool) JSONSchema() json.RawMessage { return SchemaOf(CreateItemArgs{}) }
 func (t *CreateItemTool) ExposeToLLM() bool { return true }
