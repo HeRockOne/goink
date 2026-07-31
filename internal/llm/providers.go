@@ -119,6 +119,14 @@ var Builtin = map[string]Provider{
 				SupportsThinking: true,
 				SupportsVision:   true,
 			},
+			{
+				ID:               "qwen3.7-flash",
+				Name:             "Qwen3.7 Flash",
+				ContextWindow:    1_000_000,
+				MaxOutputTokens:  64_000,
+				SupportsThinking: true,
+				SupportsVision:   true,
+			},
 		},
 	},
 	"zhipu": {
@@ -128,6 +136,14 @@ var Builtin = map[string]Provider{
 		HelpText:    "手机号或微信注册。注册后点击「控制台」→「API Keys」→「新建」创建密钥。注册赠送体验额度。",
 		Temperature: floatPtr(1.0),
 		Models: []ModelInfo{
+			{
+				ID:               "glm-5.2",
+				Name:             "GLM-5.2",
+				ContextWindow:    1_000_000,
+				MaxOutputTokens:  128_000,
+				SupportsThinking: true,
+				SupportsVision:   false,
+			},
 			{
 				ID:               "glm-5.1",
 				Name:             "GLM-5.1",
@@ -147,30 +163,6 @@ var Builtin = map[string]Provider{
 			{
 				ID:               "glm-5-turbo",
 				Name:             "GLM-5-Turbo",
-				ContextWindow:    200_000,
-				MaxOutputTokens:  128_000,
-				SupportsThinking: true,
-				SupportsVision:   false,
-			},
-			{
-				ID:               "glm-4.7",
-				Name:             "GLM-4.7",
-				ContextWindow:    200_000,
-				MaxOutputTokens:  128_000,
-				SupportsThinking: true,
-				SupportsVision:   false,
-			},
-			{
-				ID:               "glm-4.7-flashx",
-				Name:             "GLM-4.7-FlashX",
-				ContextWindow:    200_000,
-				MaxOutputTokens:  128_000,
-				SupportsThinking: true,
-				SupportsVision:   false,
-			},
-			{
-				ID:               "glm-4.7-flash",
-				Name:             "GLM-4.7 Flash",
 				ContextWindow:    200_000,
 				MaxOutputTokens:  128_000,
 				SupportsThinking: true,
