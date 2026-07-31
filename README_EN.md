@@ -270,15 +270,15 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 
 | Document | Description |
 |----------|-------------|
-| `docs/README.md` | Project status overview (central index) |
-| `docs/01-architecture.md` | Full architecture (must-read for new AI) |
-| `docs/02-phase-gate.md` | Phase gate documentation |
-| `docs/03-competitor-analysis.md` | Chinese million-word novel tool comparison |
-| `docs/10-billing-panel.md` | Billing panel technical design |
-| `docs/12-prompt-caching-optimization.md` | Prompt caching optimization |
-| `docs/20-narrative-panel.md` | Dynamic narrative panel design |
-| `docs/30-mcp-tools-audit.md` | Tool dependency chain audit |
-| `docs/31-mcp-schema-audit.md` | MCP Schema Required audit |
+| `docs/README.md` | Documentation index (architecture/design/adr/archive) |
+| `docs/architecture/architecture.md` | Full architecture (must-read for new AI) |
+| `docs/architecture/phase-gate.md` | Phase gate documentation |
+| `docs/architecture/competitor-analysis.md` | Chinese million-word novel tool comparison |
+| `docs/architecture/narrative-panel.md` | Dynamic narrative panel design |
+| `docs/architecture/token-injection.md` | Token injection analysis + tokencount usage |
+| `docs/design/token-optimization-plan.md` | Token optimization plan |
+| `docs/adr/0001-prompt-caching.md` | Prompt caching decision record |
+| `docs/archive/` | One-time records (audits/tests/research) |
 | `mobile/API.md` | HTTP API documentation (27 sections) |
 
 ### 16. Skill System

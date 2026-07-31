@@ -7,21 +7,11 @@
 
 ---
 
-## 〇、实测基线（tokencount 精确统计，2026-07-31）
+## 〇、实测基线
 
-> 用 `go run ./tokencount` 实测，与下文规划时的估算口径不同，以本节为准。
+> 当前系统提示词注入构成已用 `tokencount` 精确统计，见 **`architecture/token-injection.md`**（16,122 tokens / 57 工具 / 12,924 工具定义）。
 
-```
-首轮注入合计：16,122 token
-├─ 工具定义（57 个）          12,924 (80%)   ← 最大优化目标
-├─ Identity（系统提示词）      1,322 (8%)
-├─ Always skills（2 个正文）   1,304 (8%)
-└─ Skill catalog（17 个 auto）   572 (4%)
-```
-
-**与规划时数字的差异**：规划假设 52 工具 / 10,500 tokens（62%），实测 **57 工具 / 12,924 tokens（80%）**。工具数因新增场景/物品流转等模块从 52 增至 57。
-
-> ⚠️ 注意：规划中的「分阶段裁剪」已在待办中标记完成，但实际采用**全量发送 + allowed_tools 限制**方案（见 `12-prompt-caching-optimization.md`），工具 JSON 未裁剪，这是刻意为保持缓存前缀稳定做的取舍。分阶段裁剪的 -6,000 收益未兑现。
+> ⚠️ 注意：规划中的「分阶段裁剪」已在待办中标记完成，但实际采用**全量发送 + allowed_tools 限制**方案（见 `archive/prompt-caching-research.md` 与 ADR-0001），工具 JSON 未裁剪，这是刻意为保持缓存前缀稳定做的取舍。分阶段裁剪的 -6,000 收益未兑现。
 
 ---
 
@@ -76,7 +66,7 @@
 
 | 事项 | 状态 | 说明 |
 |------|------|------|
-| 缓存命中率验证 | ✅ 已测 07-30 | 命中率 89-93%，详见 `11-billing-test-report.md` |
+| 缓存命中率验证 | ✅ 已测 07-30 | 命中率 89-93%，详见 `archive/billing-test-report.md` |
 | 缓存命中显示正确性 | ✅ 已测 07-30 | 全局与 per_model 累计一致 |
 
 ### 待实施 ⏳
@@ -532,5 +522,5 @@ Anthropic Claude 4+ 内置的 token-efficient tool use 可以将工具调用结�
 - [x] 实施分阶段裁剪（动态 tools）→ 实际改为全量发送 + allowed_tools 限制（为保缓存前缀稳定）
 - [x] 实施 writing_context 增强
 - [x] 实施 Prompt Caching（消息顺序优化）
-- [x] 测试验证缓存命中率（89-93%，见 11-billing-test-report.md）
+- [x] 测试验证缓存命中率（89-93%，见 archive/billing-test-report.md）
 - [ ] 实施 Token-Efficient Tool Use（待评估，Claude 4+ 专属）

@@ -82,7 +82,7 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 
 - **首轮**：16,122 tokens 全部按未命中（全额）计费——首轮无缓存可命中
 - **后续轮次**：稳定前缀被复用命中缓存 → 按折扣价计费（DeepSeek 约 10%）
-- **实测命中率**：89-93%（商汤 sensenova-6.7-flash-lite，见 `11-billing-test-report.md`）
+- **实测命中率**：89-93%（商汤 sensenova-6.7-flash-lite，见 `archive/billing-test-report.md`）
 
 **结论**：工具定义虽是 80% 的注入大头，但作为稳定前缀，每轮命中缓存享受折扣，成本侧已被 Prompt Caching 抵消大部分。
 
@@ -96,4 +96,4 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 | 工具 schema 精简 | ~2-3K | 合并重复 `$defs`、精简 description | 未实施 |
 | Catalog 瘦身 | 少量 | 17 个 auto skill 目录压缩 | 未实施 |
 
-> 完整方案见 `13-token-optimization-plan.md`。
+> 完整方案见 `design/token-optimization-plan.md`。

@@ -270,15 +270,15 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
 | 文档 | 说明 |
 |------|------|
-| `docs/README.md` | 项目状态总览（中枢索引，最后更新 2026-07-30） |
-| `docs/01-architecture.md` | 完整架构文档（新 AI 接手必读） |
-| `docs/02-phase-gate.md` | 阶段门禁文档 |
-| `docs/03-competitor-analysis.md` | 国内百万字级竞品分析 |
-| `docs/10-billing-panel.md` | 计费面板技术设计 |
-| `docs/12-prompt-caching-optimization.md` | Prompt Caching 缓存优化方案 |
-| `docs/20-narrative-panel.md` | 动态叙事面板设计 |
-| `docs/30-mcp-tools-audit.md` | 工具依赖链审计 |
-| `docs/31-mcp-schema-audit.md` | MCP Schema Required 全面审计 |
+| `docs/README.md` | 文档索引（architecture/design/adr/archive 分层） |
+| `docs/architecture/architecture.md` | 完整架构文档（新 AI 接手必读） |
+| `docs/architecture/phase-gate.md` | 阶段门禁文档 |
+| `docs/architecture/competitor-analysis.md` | 国内百万字级竞品分析 |
+| `docs/architecture/narrative-panel.md` | 动态叙事面板设计 |
+| `docs/architecture/token-injection.md` | Token 注入构成分析 + tokencount 使用说明 |
+| `docs/design/token-optimization-plan.md` | Token 优化方案全集 |
+| `docs/adr/0001-prompt-caching.md` | Prompt Caching 决策记录 |
+| `docs/archive/` | 审计/测试/调研等一次性过程记录 |
 | `mobile/API.md` | HTTP API 文档（27 节） |
 
 ### 十六、Skill 体系

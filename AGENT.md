@@ -7,9 +7,9 @@ Goink — 桌面 AI 写作系统，Wails (Go + React) 构建。
 ## 一、新 AI 接手必读
 
 阅读顺序：
-1. `docs/README.md` — 项目状态总览，含踩坑记录
-2. `docs/01-architecture.md` — 系统架构
-3. `docs/02-phase-gate.md` — 阶段门禁
+1. `docs/README.md` — 文档索引（architecture/design/adr/archive 分层）
+2. `docs/architecture/architecture.md` — 系统架构
+3. `docs/architecture/phase-gate.md` — 阶段门禁
 
 ---
 
@@ -68,7 +68,7 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 - 压缩时递增 `active_version`，不删旧消息
 
 ### 代码
-- 计费有关的缓存字段：优先 `prompt_tokens_details.cached_tokens`，fallback `prompt_cache_hit_tokens`。详见 `docs/10-billing-panel.md`
+- 计费有关的缓存字段：优先 `prompt_tokens_details.cached_tokens`，fallback `prompt_cache_hit_tokens`。详见 `docs/archive/billing-panel.md`
 - `updateUsage` 在 `tokens.go`，每次 EventUsage 触发。改这里要小心 `perModel` 和全局累计值的一致性
 - CGO：ONNX/sqlite-vec 用 `//go:build cgo`，Windows 上 cgo 编译报错是预期行为
 - 不改 `frontend/src/lib/wailsjs/go/models.ts`（Wails 自动生成）
@@ -78,7 +78,7 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 ## 五、规范
 
 - **并行读取文件**，减少来回
-- **每次修改写入审计**到 `docs/README.md`（更新状态总览）
+- **每次修改写入审计**到 `docs/README.md`（更新索引）
 - **每次疑问先 `websearch`** 联网比对
 - **Commit**: 英文，具体描述，无 emoji
 - **用户用中文** — 用中文回复
