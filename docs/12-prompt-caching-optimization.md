@@ -2,7 +2,7 @@
 
 > 基于 Reasonix、OpenCode、Claude Code 等优秀平台的调研
 > 日期：2026-07-28
-> 状态：✅ Phase 1 已实施，待测试验证
+> 状态：✅ Phase 1 已实施，已于 07-30 实测验证（命中率 89-93%，见 `11-billing-test-report.md`）
 
 ---
 

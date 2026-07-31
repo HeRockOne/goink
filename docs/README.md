@@ -1,6 +1,6 @@
 # Goink 项目状态总览
 
-> 最后更新：2026-07-30
+> 最后更新：2026-07-31
 > 本文档是项目的中枢索引，汇总当前任务、完成情况、阻塞项和踩坑记录。
 
 ---
@@ -16,7 +16,7 @@ docs/
 ├── 03-competitor-analysis.md       ← 竞品分析
 │
 ├── 10-billing-panel.md             ← 计费面板技术设计
-├── 11-billing-test-report.md       ← 计费面板测试报告
+├── 11-billing-test-report.md       ← 计费面板测试报告（含缓存命中率实测）
 ├── 12-prompt-caching-optimization.md ← 缓存优化方案
 ├── 13-token-optimization-plan.md   ← Token 优化计划
 │
@@ -29,6 +29,7 @@ docs/
 │
 ├── 40-token-handoff-ai.md          ← Token 优化 AI 交接文档
 ├── 41-token-project-record.md      ← Token 优化完整讨论记录
+├── 42-token-injection.md           ← Token 注入构成分析 + tokencount 使用说明
 │
 └── archive/
     ├── billing-bug-report.md        ← 计费 Bug 原始报告（存档）
@@ -40,11 +41,9 @@ docs/
 
 ## 二、当前任务
 
-### 动态叙事面板布局优化
-- **状态**：进行中
-- **目标**：画布布局按信息层级排布（当前最大，弧线/伏笔次之，过去/未来/读者标准）
-- **阻塞**：DetailTabs 去重（弧线/伏笔/读者重复 tab 待删除）
-- **下一步**：修改 DetailTabs 代码，去掉 3 个重复 tab
+### 无阻塞项
+- 叙事面板 DetailTabs 去重已完成（5 个 tab：角色/地点/物品/世界观/场景）
+- 近期无进行中的开发任务，见下方已完成记录
 
 ---
 
@@ -77,6 +76,24 @@ docs/
 ### 3.6 数据管线整合审计（✅ 2026-07-27）
 - 三层分析：Schema Required → WritingContext → Kanban UI
 - 6 个 schema 缺陷 + 4 个数据层 gap + 3 个 UI bug 全部修复
+
+### 3.7 Prompt Caching 优化（✅ 2026-07-28，已测试 07-30）
+- 消息顺序重构：NovelState 动态注入到 user 消息之后，稳定前缀（identity + always + catalog）
+- 前缀哈希检测（`computePrefixHash`），缓存失效时日志警告
+- 全量工具发送（`registry.OpenAI(nil)`）保证前缀稳定
+- 工具按名称排序（`sort.Strings(keys)`）
+- 实测缓存命中率 89-93%（见 `11-billing-test-report.md`）
+
+### 3.8 HTTPS 开关（✅ 2026-07-31）
+- 设置中可关闭移动端 API 的 HTTPS，改用 HTTP 便于局域网调试
+
+### 3.9 Token 注入统计工具（✅ 2026-07-31）
+- 新增 `tokencount/` 工具，精确统计系统提示词 + 工具 JSON 注入量
+- 实测首轮注入 16,122 tokens（工具定义 12,924 占 80%）
+- 详见 `42-token-injection.md`
+
+### 3.10 叙事面板 DetailTabs 去重（✅ 2026-07-31）
+- 去掉弧线/伏笔/读者重复 tab，保留 5 个：角色/地点/物品/世界观/场景
 
 ---
 
@@ -118,9 +135,9 @@ docs/
 
 | 任务 | 优先级 | 阻塞原因 |
 |------|--------|---------|
-| DetailTabs 去重 | 低 | 等用户确认后改代码 |
 | 首次安装新手引导 | 中 | 已有 InitView + HelpDialog 自动弹出，完善引导文案即可 |
 | 出版格式导出增强 | 低 | DOCX 已有，排版优化待定 |
+| Token-Efficient Tool Use | 低 | Claude 4+ 专属，项目主要用 DeepSeek，暂缓 |
 
 ---
 

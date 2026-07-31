@@ -2,13 +2,13 @@
 
 > **给下一个 AI 的快速交接**
 > 日期：2026-07-28
-> 状态：✅ Phase 1 已实施，待测试验证
+> 状态：✅ Phase 1 已实施，已于 07-30 实测验证缓存命中率（89-93%）
 
 ---
 
 ## 一、当前状态（一句话）
 
-**Phase 1 已实施（Prompt Caching + 缓存统计 + 价格配置），待用户测试验证缓存命中率。**
+**Phase 1 已实施并实测验证（Prompt Caching + 缓存统计 + 价格配置），缓存命中率 89-93%（见 `11-billing-test-report.md`）。Token 注入量已用 `tokencount` 精确统计（16,122 tokens，见 `42-token-injection.md`）。**
 
 ---
 
@@ -16,10 +16,10 @@
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
-| **项目记录** | `docs/token-optimization-project-record.md` | 完整讨论记录、决策原因、实施方案 |
-| **优化方案** | `docs/token-optimization-plan.md` | 行业调研、方案对比、风险评估 |
-| **门禁配置** | `docs/phase-gate.md` | 5阶段工具白名单 |
-| **架构文档** | `docs/architecture.md` | 项目整体架构 |
+| **项目记录** | `docs/41-token-project-record.md` | 完整讨论记录、决策原因、实施方案 |
+| **优化方案** | `docs/13-token-optimization-plan.md` | 行业调研、方案对比、风险评估 |
+| **门禁配置** | `docs/02-phase-gate.md` | 5阶段工具白名单 |
+| **架构文档** | `docs/01-architecture.md` | 项目整体架构 |
 | **系统提示词** | `internal/agentcfg/identity.go` | mainAgentSystem1 + reviewAgentSystem1 |
 | **Agent 循环** | `internal/agent/agent.go` | Run 方法、RunSubAgent |
 | **Token 计数** | `internal/agent/tokens.go` | InitRunningTokens、updateUsage |
@@ -176,11 +176,11 @@ for _, c := range []string{identity, always, catalog, novelState} {
 
 ## 九、下一步
 
-1. 阅读 `docs/token-optimization-project-record.md` 了解完整讨论过程
+1. 阅读 `docs/41-token-project-record.md` 了解完整讨论过程
 2. 阅读 `internal/agent/agent.go` 了解当前消息结构
 3. 阅读 `internal/llm/anthropic.go` 了解当前 LLM 调用
-4. 实施 Prompt Caching
-5. 测试验证
+4. ✅ 实施 Prompt Caching（已完成）
+5. ✅ 测试验证缓存命中率（89-93%）
 6. 实施 Token-Efficient Tool Use
 7. 测试验证
 
