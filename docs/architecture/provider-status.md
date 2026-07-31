@@ -46,7 +46,9 @@
 | 依赖 | 当前 | 最新 | 建议 |
 |------|------|------|------|
 | `sqlite-vec-go-bindings` | v0.1.6 | v0.1.7（2026-03） | 暂不升（v0.1.6 稳定） |
-| ONNX Runtime | 运行时下载 | 季度更新 | 保持 |
+| ONNX Runtime + BGE 模型 | **随安装包分发**（build/runtime/） | 季度更新 | 保持 |
+
+> **ONNX 本地推理可用**：`build/runtime/onnxruntime.dll` + `models/model.onnx`（约 23MB）由 build 脚本打包进安装包。运行搜索链：`<exe_dir>/runtime/` → `~/Goink/runtime/` → 系统 PATH（见 `architecture.md`）。开发时 `go run` 不带 runtime 目录会报"未找到 ONNX 库"，**打包后即可用**，不是功能缺失。
 
 ---
 

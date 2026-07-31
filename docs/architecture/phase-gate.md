@@ -1,5 +1,17 @@
 # 阶段门禁（Phase Gate）
 
+## 设计动机（为什么存在门禁）
+
+门禁不是凭空设计的，来自真实使用 AI 写小说时观察到的三个问题：
+
+1. **AI 写完正文就不维护设定/伏笔**（偷懒跳过 maintain）→ 解决：maintain 15 项强制清单 + require 只统计成功调用
+2. **AI 跳过流程直接写正文**（不听阶段指挥）→ 解决：阶段硬拦截，非白名单工具直接拒绝执行，不自动推进
+3. **AI 设定前后矛盾**（凭记忆写，不查数据库）→ 解决：prepare 9 项必查 + get_writing_context 全量状态树 + 代码级闭环
+
+**设计脉络**：本项目最初在 Chinese-novel-pipeline（用户自研 skill）里用 Python 状态机（`director.py`）验证了"按阶段推进创作"的理念，属于**建议性**状态机（脚本检测，AI 可能绕过）。Goink 将其升级为**强制性**硬拦截状态机：工具执行前检查（`phase_gate.go` + `registry.Execute` 之前拒绝）、require 成功计数防虚报、write 转出强制字数、edit 路径白名单。
+
+**核心原则**：门禁让 AI 始终遵循 prepare → outline → write → review → maintain 稳定推进，防止它忘了更新设定、漏填设定、虚报过程、不读 skill 直接写、埋头不听指挥。宁可多调用工具，不可漏掉状态维护。
+
 ## 概述
 
 阶段门禁是 Goink 的创作流程强制执行系统。它确保 LLM 按照 writing-kernel.md 定义的阶段顺序执行，不能跳步或跳过必要操作。
