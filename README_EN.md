@@ -166,12 +166,13 @@ Settings → Theme → Paste JSON → Click to apply, no confirm button needed.
 
 **Dedup key**: `name__type` (same name, different types can coexist). **Supports comments** (`//` and `/* */`).
 
-**Color variables (51 total):**
+**Color variables (67 total):**
 
 | Variable | Area |
 |----------|------|
 | `--background` / `--foreground` | Page background / text |
 | `--card` / `--card-foreground` | Card/panel/dialog |
+| `--popover` / `--popover-foreground` | Popover/dialog overlays |
 | `--primary🔑` / `--primary-foreground` | Buttons/links/selection/slider/switch |
 | `--secondary` / `--secondary-foreground` | Secondary panels |
 | `--muted` / `--muted-foreground` | Input fields/code blocks/helper text |
@@ -190,7 +191,7 @@ Settings → Theme → Paste JSON → Click to apply, no confirm button needed.
 | `--contribution-0` ~ `--contribution-4📊` | Contribution graph |
 
 **Notes:**
-- All 51 variables required (missing any breaks UI)
+- All 67 variables required (missing any breaks UI)
 - `type` only controls chart light/dark mode, not CSS mode
 - JSON supports `//` and `/* */` comments
 - Monaco editor theme follows CSS variables
@@ -231,6 +232,14 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 | System prompt optimization | ~4700 → ~2400 tokens (49% savings) |
 | writing-kernel.md | 15-item maintain checklist |
 | config.json removed | Data dir uses exe location directly |
+| Billing panel | Per-model token accumulation, cache hit/miss split, configurable prices (CNY per million tokens) |
+| Token usage trend chart | Monthly overview aggregated by date + model, SVG pie chart for cache ratio |
+| Dynamic narrative panel | Canvas-style draggable/resizable cards aggregating 7 narrative info types |
+| DOCX export | Pure standard-library implementation (archive/zip + XML), zero dependencies |
+| Prompt caching optimization | Stable prefix (identity + always + catalog) + dynamic NovelState injection, prefix hash monitoring |
+| Input guide cards | 4 guide cards shown on empty session |
+| HTTPS toggle | Mobile API can switch to HTTP in settings (LAN debugging) |
+| Resizable sidebar | SidePanel width draggable |
 
 ### 12. Field Extensions
 
@@ -246,7 +255,7 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 
 | Upstream | This Fork |
 |----------|-----------|
-| 22 tables | **24** tables (+item_occurrences, scenes) |
+| 22 tables | **25** tables (+item_occurrences, scenes, model_usage) |
 
 ### 14. MCP Tools
 
@@ -260,10 +269,15 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 
 | Document | Description |
 |----------|-------------|
-| `docs/architecture.md` | Full architecture (must-read for new AI) |
-| `docs/mcp-tools-audit.md` | Tool dependency chain audit + phase gate config |
-| `docs/competitor-analysis.md` | Chinese million-word novel tool comparison |
-| `docs/phase-gate.md` | Phase gate documentation |
+| `docs/README.md` | Project status overview (central index) |
+| `docs/01-architecture.md` | Full architecture (must-read for new AI) |
+| `docs/02-phase-gate.md` | Phase gate documentation |
+| `docs/03-competitor-analysis.md` | Chinese million-word novel tool comparison |
+| `docs/10-billing-panel.md` | Billing panel technical design |
+| `docs/12-prompt-caching-optimization.md` | Prompt caching optimization |
+| `docs/20-narrative-panel.md` | Dynamic narrative panel design |
+| `docs/30-mcp-tools-audit.md` | Tool dependency chain audit |
+| `docs/31-mcp-schema-audit.md` | MCP Schema Required audit |
 | `mobile/API.md` | HTTP API documentation (27 sections) |
 
 ### 16. Skill System
@@ -330,7 +344,7 @@ goink/
 │   ├── skill/              # Skill system (3 layers × 3 modes)
 │   ├── cert/               # Auto HTTPS certificate
 │   ├── webdav/             # WebDAV server
-│   └── migrate/            # 24 tables auto-migration
+│   └── migrate/            # 25 tables auto-migration
 ├── mobile/                 # Mobile web frontend
 ├── frontend/               # Desktop React frontend
 ├── docs/                   # Architecture/audit/competitor docs
@@ -349,7 +363,7 @@ goink/
 | Desktop Framework | Wails v2 (Go + WebView) |
 | Frontend | React + TypeScript + Tailwind CSS + shadcn/ui |
 | Mobile | HTTP API + vanilla JS web frontend + idb-keyval offline cache |
-| Database | SQLite + GORM (24 tables + auto-migration) |
+| Database | SQLite + GORM (25 tables + auto-migration) |
 | Vector Search | sqlite-vec + ONNX Runtime (BGE Chinese model) |
 | Version Control | Built-in Git (auto commit / Diff / Revert) |
 

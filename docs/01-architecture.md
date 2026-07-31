@@ -56,7 +56,7 @@ goink-master/
 └── build/                  # 构建输出
 ```
 
-## 3. 数据库表（24 张）
+## 3. 数据库表（25 张）
 
 ### 核心数据表
 
@@ -91,6 +91,7 @@ goink-master/
 | `messages` | Message | 对话消息（append-only，版本化） |
 | `turn_commits` | TurnCommit | Git commit 映射（用于回退） |
 | `operation_log` | OperationLogRecord | 数据操作日志 |
+| `model_usage` | ModelUsage | 按模型的 token 消耗累计（session_id + model_id 唯一） |
 
 ### 关键外键关系
 
@@ -455,7 +456,54 @@ CSS 变量驱动。自定义主题 JSON 格式：
 
 去重键：`name__type`（同名不同深浅可共存）。单击即应用，无需确认按钮。
 
-## 12. 已知技术债
+## 12. Token 计费架构
+
+### 12.1 数据流
+
+```
+LLM API 响应（SSE 流）
+  → stream.go parseSSE 提取 usage
+  → agent.go EventUsage
+  → tokens.go updateUsage
+      ├─ 按模型累加 accHit/accMiss/accCompletion（session 级）
+      ├─ 按模型累加 per_model（模型级明细）
+      ├─ 写入 message.ExtraMetadata.usage（审计）
+      ├─ 写入 model_usage 表（持久化查询）
+      ├─ 更新 session.Usage JSON（前端面板）
+      └─ wails 推送前端
+```
+
+### 12.2 缓存字段优先级
+
+1. OpenAI 标准：`prompt_tokens_details.cached_tokens`（`miss = prompt_tokens - cached`）
+2. DeepSeek：`prompt_cache_hit_tokens` + `prompt_cache_miss_tokens`
+
+### 12.3 按模型累计
+
+`session.Usage.per_model` 结构：
+```json
+{
+  "step-3.7-flash": { "hit": 130496, "miss": 7225, "comp": 1765 },
+  "deepseek-v4-pro":  { "hit": 5000,  "miss": 200,  "comp": 100  }
+}
+```
+
+`model_usage` 表：`session_id + model_id` 唯一，支持跨 session 聚合（个人中心趋势图）。
+
+### 12.4 价格来源
+
+面板从 `app_config` 表读取用户配置的 `price_input` / `price_output` / `cache_price`，不在代码中硬编码。
+
+### 12.5 导出格式
+
+| 格式 | 实现 | 依赖 |
+|------|------|------|
+| TXT | `export/txt.go` | 无 |
+| Markdown | `export/markdown.go` | 无 |
+| EPUB | `export/epub.go` | 无 |
+| **DOCX** | `export/docx.go` | 纯标准库（`archive/zip` + XML） |
+
+## 13. 已知技术债
 
 | 项目 | 描述 |
 |------|------|

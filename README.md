@@ -164,13 +164,14 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
 **去重键**：`name__type`（同名不同深浅可共存）。**支持注释**（`//` 和 `/* */`）。
 
-**颜色变量清单（51 个）：**
+**颜色变量清单（67 个）：**
 
 | 变量 | 影响区域 |
 |------|---------|
 | `--background` | 页面最底层背景 |
 | `--foreground` | 正文/标题/列表文字 |
 | `--card` / `--card-foreground` | 卡片/面板/弹窗 |
+| `--popover` / `--popover-foreground` | 浮层/弹窗 |
 | `--primary`🔑 / `--primary-foreground` | 按钮/链接/选中态/滑块/开关 |
 | `--secondary` / `--secondary-foreground` | 次要面板 |
 | `--muted` / `--muted-foreground` | 输入框/代码块/辅助文字 |
@@ -190,7 +191,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | `--contribution-0` ~ `--contribution-4`📊 | 贡献图色阶 |
 
 **注意事项：**
-- 必须提供全部 51 个变量，缺失会导致 UI 破碎
+- 必须提供全部 67 个变量，缺失会导致 UI 破碎
 - `type` 字段仅控制图表 light/dark 模式，不是 CSS 模式切换
 - JSON 支持 `//` 和 `/* */` 注释
 - Diff 编辑器（Monaco）主题色从 CSS 变量读取，切换主题时自动跟随
@@ -231,8 +232,16 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | 系统提示词精简 | ~4700 token → ~2400 token（省 49%） |
 | writing-kernel.md | 15 项 maintain 检查清单 |
 | config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
+| 计费面板 | Token 用量按模型累计，缓存命中/未命中分账，价格可配（元/百万 token） |
+| 个人中心 Token 趋势图 | 按日期 + 模型聚合的月度消耗总览，SVG 饼图展示缓存占比 |
+| 动态叙事面板 | 画布式可拖拽/缩放卡片面板，聚合当前/过去/未来/弧线/伏笔/读者 7 类叙事信息 |
+| DOCX 导出 | 纯标准库实现（archive/zip + XML），无外部依赖 |
+| Prompt Caching 优化 | 稳定前缀（identity + always + catalog）+ NovelState 动态注入，消息前缀哈希监控缓存稳定性 |
+| 输入框引导提示 | 空会话时显示 4 张引导卡片 |
+| HTTPS 开关 | 移动端 API 可在设置中关闭 HTTPS 改用 HTTP（局域网调试） |
+| 侧边栏宽度拖拽 | SidePanel 可拖拽调整宽度 |
 
-### 十一、字段扩展
+### 十二、字段扩展
 
 | 表 | 上游字段 | 新增字段 |
 |----|----------|---------|
@@ -242,13 +251,13 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | `chapters` | title, summary | key_events, characters_in, arc_ids |
 | `writing_snapshots` | last_chapter_id, current_location | current_arc_id, active_chars, summary, detailed_state |
 
-### 十二、数据库表扩展
+### 十三、数据库表扩展
 
 | 上游 | 本 fork |
 |------|---------|
-| 22 张表 | **24** 张表（+item_occurrences, scenes） |
+| 22 张表 | **25** 张表（+item_occurrences, scenes, model_usage） |
 
-### 十三、MCP 工具扩展
+### 十四、MCP 工具扩展
 
 | 上游 | 本 fork |
 |------|---------|
@@ -256,23 +265,28 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | 部分工具有 Description | **全部标注返回结构** |
 | 部分字段有 required | **依赖链字段全部标注 jsonschema required** |
 
-### 十四、文档
+### 十五、文档
 
 | 文档 | 说明 |
 |------|------|
-| `docs/architecture.md` | 完整架构文档（新 AI 接手必读） |
-| `docs/mcp-tools-audit.md` | 工具依赖链审计 + 门禁配置 |
-| `docs/competitor-analysis.md` | 国内百万字级竞品分析 |
-| `docs/phase-gate.md` | 阶段门禁文档 |
+| `docs/README.md` | 项目状态总览（中枢索引，最后更新 2026-07-30） |
+| `docs/01-architecture.md` | 完整架构文档（新 AI 接手必读） |
+| `docs/02-phase-gate.md` | 阶段门禁文档 |
+| `docs/03-competitor-analysis.md` | 国内百万字级竞品分析 |
+| `docs/10-billing-panel.md` | 计费面板技术设计 |
+| `docs/12-prompt-caching-optimization.md` | Prompt Caching 缓存优化方案 |
+| `docs/20-narrative-panel.md` | 动态叙事面板设计 |
+| `docs/30-mcp-tools-audit.md` | 工具依赖链审计 |
+| `docs/31-mcp-schema-audit.md` | MCP Schema Required 全面审计 |
 | `mobile/API.md` | HTTP API 文档（27 节） |
 
-### 十五、Skill 体系
+### 十六、Skill 体系
 
 三层（内置/用户/小说级）× 三种模式（auto/manual/always）= 9 种策略。
 
 当前 17 个 Skill，新建 `.md` 文件即新 Skill，零代码扩展。
 
-### 十六、安全
+### 十七、安全
 
 - 双层沙箱：正则白名单 + SafePath 杜绝路径穿越
 - 文件编辑写入前重读对比，防止覆盖手动修改
@@ -330,7 +344,7 @@ goink/
 │   ├── skill/              # 技能系统（3 层 × 3 模式）
 │   ├── cert/               # 自动 HTTPS 证书
 │   ├── webdav/             # WebDAV 服务器
-│   └── migrate/            # 24 张表自动迁移
+│   └── migrate/            # 25 张表自动迁移
 ├── mobile/                 # 移动端 Web 前端
 ├── frontend/               # 桌面端 React 前端
 ├── docs/                   # 架构/审计/竞品分析文档
@@ -349,7 +363,7 @@ goink/
 | 桌面框架 | Wails v2（Go + WebView） |
 | 前端 | React + TypeScript + Tailwind CSS + shadcn/ui |
 | 移动端 | HTTP API + 纯原生 JS Web 前端 + idb-keyval 离线缓存 |
-| 数据库 | SQLite + GORM（24 张表 + 自动迁移） |
+| 数据库 | SQLite + GORM（25 张表 + 自动迁移） |
 | 向量搜索 | sqlite-vec + ONNX Runtime（BGE 中文模型） |
 | 版本控制 | 内置 Git（自动 commit / Diff / Revert） |
 

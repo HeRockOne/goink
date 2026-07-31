@@ -1,6 +1,6 @@
 # Goink Mobile API 端点文档
 
-> 基础地址: `http://{IP}:{PORT}` (默认端口 8877)
+> 基础地址: `http（s）://{IP}:{PORT}` (默认端口 8877)
 > 所有响应 Content-Type: `application/json`，除 `/api/chat` 返回 SSE 流。
 > CORS: 允许所有来源 (`Access-Control-Allow-Origin: *`)。
 
@@ -14,7 +14,7 @@
 
 **方式一：HTTP Header（推荐）**
 ```
-Authorization: Bearer <token>
+Authorization: Bearer a95f2e1b78b0c01408bc32a477633c3e（当前）
 ```
 
 **方式二：Query 参数**
