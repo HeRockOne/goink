@@ -324,6 +324,11 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 		return true, ""
 	}
 
+	// 门禁管理工具始终放行（查看/调整门禁配置，与 set_phase 同级）
+	if toolName == "get_phase_gate_config" || toolName == "update_phase_gate_config" {
+		return true, ""
+	}
+
 	// 当前阶段 tools 列表中的工具允许
 	for _, t := range current.Tools {
 		if t == toolName {
