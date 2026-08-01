@@ -5,7 +5,7 @@
 
 ## 1. 项目概览
 
-Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能力是用 MCP 工具驱动 AI 按阶段（prepare→outline→write→review→maintain）写百万字级长篇小说，通过数据库结构化存储维护跨章节一致性。
+Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能力是用 MCP 工具驱动 AI 按阶段（prepare→outline→write→cmd-review→maintain）写百万字级长篇小说，通过数据库结构化存储维护跨章节一致性。
 
 **技术栈**：Go 1.26 + Wails v2.13 + React + SQLite（CGO）+ ONNX（向量检索）
 
@@ -255,7 +255,7 @@ stats:             {total_chapters, min_words, max_words}
 
 ```
 prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → review(run_subagent)
+→ write(edit chapters/) → cmd-review(run_subagent)
 → maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot + search_lore + search_items + set_phase)
 → 回到 prepare → 读到 maintain 回写的最新数据
 ```
@@ -266,7 +266,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 - prepare require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 - outline require: edit
 - write require: edit, get_chapter_list
-- review require: run_subagent
+- cmd-review require: run_subagent
 - maintain require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective
 
 完整配置见 `docs/mcp-tools-audit.md`。
@@ -294,7 +294,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 | `GET /api/stats` | get_stats |
 | `GET /api/writing-snapshot` | get_writing_snapshot |
 | `GET /api/phase-gate-config` | get_phase_gate_config |
-| `GET /api/search-memory` | search_story_memory |
+| `GET /api/search-cmd-memory` | search_story_memory |
 | `GET /api/writing-context` | get_writing_context |
 | `GET /api/read` | read |
 | `POST /api/chat` | - |
@@ -316,24 +316,24 @@ prepare(get_writing_context) → outline(edit outlines/)
 **2 个 always（用户级 `~/.goink/skills/`，可调整）：**
 | Skill | mode | 阶段 |
 |-------|------|------|
-| writing-kernel | always | 核心调度（每对话自动注入） |
-| ai-communication-standard | always | 通信规范（每对话自动注入） |
+| core-writing-kernel | always | 核心调度（每对话自动注入） |
+| core-ai-communication-standard | always | 通信规范（每对话自动注入） |
 
 **41 个内置（`internal/skill/builtin/`，打包进 exe）：**
 
 | 阶段 | Skill |
 |------|-------|
-| init（开书） | init-phase, genre-templates, book-outline, character-design, world-building-system |
-| prepare（准备） | common-sense-logic, genre-templates, book-outline, brainstorm-composer（按需） |
-| outline（大纲） | book-outline, chapter-opening, chapter-hook-enhanced, maliang-method, dialogue-subtext, emotional-arc, opening-chapter |
-| write（正文） | show-dont-tell, info-density, pov-purity, anti-ai-writing, shuangdian-pacing, climax-scene, foreshadow-cycle, pacing-control, scene-beats, emotion-injection, word-count-calibration |
-| write后（自审） | revision-pass, anti-ai-grade |
-| review（审稿） | review-standards（16 项判定） |
-| maintain（维护） | anti-repetition, foreshadow-cycle |
-| 完结 | book-completion |
-| manual（`/` 触发） | collect, memory, next, review |
+| init（开书） | core-init-phase, tech-genre-templates, tech-book-outline, tech-character-design, tech-world-building-system |
+| prepare（准备） | tech-common-sense-logic, tech-genre-templates, tech-book-outline, tech-brainstorm-composer（按需） |
+| outline（大纲） | tech-book-outline, tech-chapter-opening, tech-chapter-hook-enhanced, tech-maliang-method, tech-dialogue-subtext, tech-emotional-arc, tech-opening-chapter |
+| write（正文） | tech-show-dont-tell, tech-info-density, tech-pov-purity, tech-anti-ai-writing, tech-shuangdian-pacing, tech-climax-scene, tech-foreshadow-cycle, tech-pacing-control, tech-scene-beats, tech-emotion-injection, tech-word-count-calibration |
+| write后（自审） | tech-revision-pass, tech-anti-ai-grade |
+| cmd-review（审稿） | tech-cmd-review-standards（16 项判定） |
+| maintain（维护） | tech-anti-repetition, tech-foreshadow-cycle |
+| 完结 | tech-book-completion |
+| manual（`/` 触发） | cmd-collect, cmd-memory, cmd-next, cmd-review |
 
-> 完整阶段技能表见 `skills/writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 writing-kernel 登记。
+> 完整阶段技能表见 `skills/core-writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 core-writing-kernel 登记。
 
 ## 9. LLM 集成
 

@@ -55,7 +55,7 @@
 
 ```
 prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → review(run_subagent)
+→ write(edit chapters/) → cmd-review(run_subagent)
 → maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot
            + search_lore + search_items + set_phase)
 → 回到 prepare → 读到 maintain 回写的最新数据
@@ -67,9 +67,9 @@ prepare(get_writing_context) → outline(edit outlines/)
 
 ### 三、阶段门禁
 
-- 5 阶段校验：prepare → outline → write → review → maintain
+- 5 阶段校验：prepare → outline → write → cmd-review → maintain
 - 每阶段有 tools 白名单 + require 必调列表
-- maintain 阶段 15 项逐项检查清单（详见 `writing-kernel.md`）
+- maintain 阶段 15 项逐项检查清单（详见 `core-writing-kernel.md`）
 - 门禁配置存数据库，不占 AI 上下文
 
 ### 四、HTTP API（23 个端点）
@@ -96,7 +96,7 @@ GET  /api/preferences          偏好
 GET  /api/stats                统计
 GET  /api/writing-snapshot     写作快照
 GET  /api/phase-gate-config    门禁配置
-GET  /api/search-memory        语义搜索
+GET  /api/search-cmd-memory        语义搜索
 GET  /api/writing-context      树状上下文
 GET  /api/read                 读取文件
 POST /api/chat                 AI 对话（SSE）
@@ -232,7 +232,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | 帮助中心 | 57 个工具的中英文描述，含返回结构文档 |
 | 系统提示词精简 | ~4700 token → ~2400 token（省 49%） |
 | Token 注入统计 | `tokencount` 精确统计系统提示词 + 工具定义注入量（当前约 17.5K token） |
-| writing-kernel.md | 15 项 maintain 检查清单 |
+| core-writing-kernel.md | 15 项 maintain 检查清单 |
 | config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
 | 计费面板 | Token 用量按模型累计，缓存命中/未命中分账，价格可配（元/百万 token） |
 | 个人中心 Token 趋势图 | 按日期 + 模型聚合的月度消耗总览，SVG 饼图展示缓存占比 |
