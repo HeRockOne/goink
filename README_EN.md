@@ -5,8 +5,6 @@
 ---
 
 > **Forked from [sigpanic/goink](https://github.com/sigpanic/goink) v1.1**
->
-> All code modifications completed by open-source AI models, based on actual writing requirements.
 
 ---
 

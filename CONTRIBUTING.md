@@ -38,8 +38,9 @@
 
 ## 关于 AI 代码
 
-本项目所有代码由 AI 编写。如果你发现代码有问题，欢迎提 Issue。
-我们不保证代码质量，但保证每个问题都会被认真对待。
+本项目由纯 AI 驱动开发，使用的都是白嫖（免费）大模型，属于作者 fork 练手之作。
+不保证软件能达到你的期望，不保证代码质量，但确保产品可用。
+可能会有未测试出的 bug，如果你发现问题，欢迎提 Issue，也可以自己 fork 本项目修改。
 
 ---
 
@@ -47,8 +48,9 @@
 
 Thanks for your interest in Goink!
 
-> **Note**: The maintainer is not a programmer. All code changes are made by AI.
-> This means responses may be slow, but every Issue and PR will be taken seriously.
+> **Note**: This project is purely AI-driven, built with free open-source models as a fork practice project.
+> We don't guarantee the software meets your expectations, nor the code quality, but we ensure the product is usable.
+> There may be untested bugs — feel free to open Issues, or fork this project and modify it yourself.
 
 ## How to Contribute
 

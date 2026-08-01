@@ -16,7 +16,7 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 
 ### Skill 结构约定
 
-- **内置 skill（`internal/skill/builtin/`）已一次到位**（33 个 auto + 系统 manual），是瑞士军刀全量版，**不改动**
+- **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（33 个 auto + 系统 manual）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
 - **2 个常驻调度 skill**（writing-kernel、ai-communication-standard）在用户级 `~/.goink/skills/`，**需要时可改**（调度流程调整）
 - **新增 skill**：放用户级 `~/.goink/skills/<name>.md`，并在 writing-kernel 的阶段技能表登记
 - 同名优先级：小说级 > 用户级 > 内置（新增到用户级可覆盖内置默认行为）
