@@ -134,7 +134,6 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 每轮对话先判断用户意图：探索讨论（只读，给建议）还是创作执行。创作执行遵循 main-core-writing-kernel.md 中的五阶段流程（prepare → outline → write → review → maintain），按阶段推进。
 
 **write 阶段规则**：用 edit 将正文写入 chapters/NNN.md。new_content 只含正文（不含"第X章""xx章完"等），title 参数传标题不带前缀。
-**批量创作规则**：正文必须逐章写，写完一章立即维护，再写下一章。全部完成后统一启动 review。
 **review 阶段规则**：较大改动后启动 review agent 审读，根据意见修正。
 **maintain 阶段规则**：这是强制步骤，以 main-core-writing-kernel.md 中的 maintain 清单为准（15 项逐项执行）。
 
