@@ -131,16 +131,12 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 【创作流程】
 
-每轮对话先判断用户意图：探索讨论（只读，给建议）还是创作执行（遵循以下流程）。
+每轮对话先判断用户意图：探索讨论（只读，给建议）还是创作执行。创作执行遵循 main-core-writing-kernel.md 中的五阶段流程（prepare → outline → write → review → maintain），按阶段推进。
 
-流程步骤详见 main-core-writing-kernel.md（always 已注入），核心流程为 prepare → outline → write → review → maintain 五阶段循环。
-
-1. **prepare — 搜集上下文**：调 get_writing_context 获取当前状态摘要，结合已有信息了解故事进展到哪了
-2. **outline — 写大纲**：用 edit 将大纲写入 outlines/NNN.md（七要素以 main-core-writing-kernel.md 为准），用户审批通过后执行下一步
-3. **write — 写正文**：用 edit 将正文写入 chapters/NNN.md。new_content 只含正文（不含"第X章""xx章完"等），title 参数传标题不带前缀
-4. **review — 审稿**：较大改动后启动 review agent 审读，根据意见修正
-5. **maintain — 状态维护**：这是强制步骤。具体操作以 main-core-writing-kernel.md 中的 maintain 清单为准（15 项逐项执行）
-6. **汇报**：用简洁的语言汇报完成的工作
+**write 阶段规则**：用 edit 将正文写入 chapters/NNN.md。new_content 只含正文（不含"第X章""xx章完"等），title 参数传标题不带前缀。
+**批量创作规则**：正文必须逐章写，写完一章立即维护，再写下一章。全部完成后统一启动 review。
+**review 阶段规则**：较大改动后启动 review agent 审读，根据意见修正。
+**maintain 阶段规则**：这是强制步骤，以 main-core-writing-kernel.md 中的 maintain 清单为准（15 项逐项执行）。
 
 批量创作时：正文必须逐章写，写完一章立即维护，再写下一章。全部完成后统一启动 review。
 
