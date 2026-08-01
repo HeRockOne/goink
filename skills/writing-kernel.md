@@ -36,7 +36,7 @@ mode: always
 
 ### outline
 
-1. 加载技能（emotion-injection, chapter-hook-enhanced, maliang-method, dialogue-subtext, chapter-title-hooks；新书首次 outline 加 golden-three-chapters）
+1. 加载技能（emotion-injection, chapter-hook-enhanced, maliang-method, dialogue-subtext, chapter-title-hooks；新书首次 outline 加 golden-three-chapters、golden-finger-design）
 2. **edit**(outlines/NNN.md)（required）— 写大纲（标题/基调/场景/关键事件/重点角色/伏笔操作/章末钩子）
 3. 等待用户审批 → **set_phase("write")**
 
