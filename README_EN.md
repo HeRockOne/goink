@@ -54,7 +54,7 @@
 
 ```
 prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → cmd-cmd-main-review(run_subagent)
+→ write(edit chapters/) → review(run_subagent)
 → maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot
            + search_lore + search_items + set_phase)
 → back to prepare → reads latest data from maintain
@@ -66,9 +66,9 @@ prepare(get_writing_context) → outline(edit outlines/)
 
 ### 3. Phase Gate
 
-- 5-phase validation: prepare → outline → write → cmd-cmd-main-review → maintain
+- 5-phase validation: prepare → outline → write → review → maintain
 - Each phase has tools whitelist + required call list
-- maintain phase has 15-item checklist (see `core-core-main-writing-kernel.md`)
+- maintain phase has 15-item checklist (see `main-core-writing-kernel.md`)
 - Config stored in DB, zero token cost for AI
 
 ### 4. HTTP API (23 Endpoints)
@@ -95,7 +95,7 @@ GET  /api/preferences          Preferences
 GET  /api/stats                Statistics
 GET  /api/writing-snapshot     Writing snapshot
 GET  /api/phase-gate-config    Phase gate config
-GET  /api/search-cmd-cmd-main-memory        Semantic search
+GET  /api/search-main-cmd-memory        Semantic search
 GET  /api/writing-context      Writing context tree
 GET  /api/read                 Read file
 POST /api/chat                 AI chat (SSE)
@@ -120,11 +120,11 @@ Access at `https://{LAN_IP}:8877/mobile/`.
 |--------|----------|
 | Bookshelf | Novel list, word counts |
 | Novel Details | Chapters/Characters/Timeline/Arcs/Reader/Preferences/Locations/Lore/Items |
-| Fullscreen Reader | Font/line spacing adjustment, page turning, chapter index, progress cmd-cmd-main-memory |
+| Fullscreen Reader | Font/line spacing adjustment, page turning, chapter index, progress main-cmd-memory |
 | AI Chat | SSE streaming, thinking process, conversation history, model switching, copy button |
 | Settings | Light/dark mode, language (CN/EN), token management, model selection |
 
-- **Offline cache**: idb-keyval + cmd-cmd-main-memory Map, instant read offline
+- **Offline cache**: idb-keyval + main-cmd-memory Map, instant read offline
 - **Service Worker**: Pre-cache static assets for offline use
 - **Real-time sync**: WebSocket full-duplex desktop-mobile sync
 - **QR code connection**: Scan desktop QR code for quick connect
@@ -229,7 +229,7 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 | Help center | 57 tools described in Chinese & English with return structure docs |
 | System prompt optimization | ~4700 → ~2400 tokens (49% savings) |
 | Token injection stats | `tokencount` precisely counts system prompt + tool definitions (~17.5K tokens currently) |
-| core-core-main-writing-kernel.md | 15-item maintain checklist |
+| main-core-writing-kernel.md | 15-item maintain checklist |
 | config.json removed | Data dir uses exe location directly |
 | Billing panel | Per-model token accumulation, cache hit/miss split, configurable prices (CNY per million tokens) |
 | Token usage trend chart | Monthly overview aggregated by date + model, SVG pie chart for cache ratio |

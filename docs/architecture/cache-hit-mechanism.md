@@ -45,8 +45,8 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位置"，**通常覆盖所有历史消息**：
 
 ```
-请求1: [固定前缀][novelstate][user: 写一章][tool: read core-core-main-writing-kernel]...
-请求2: [固定前缀][novelstate][user: 写一章][tool: read core-core-main-writing-kernel][assistant: ...][tool: edit]...
+请求1: [固定前缀][novelstate][user: 写一章][tool: read main-core-writing-kernel]...
+请求2: [固定前缀][novelstate][user: 写一章][tool: read main-core-writing-kernel][assistant: ...][tool: edit]...
          ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
          与请求1逐字节相同 → 全部命中（包括 read 的 skill、写过的正文、设定）
          [assistant][tool edit] ← 新增 → miss
@@ -63,7 +63,7 @@ DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位�
 ### 4.1 门禁阶段重复读 skill → 命中
 
 ```
-请求N:   [固定前缀][历史][tool: read core-core-main-writing-kernel #1]...     → #1 写入缓存
+请求N:   [固定前缀][历史][tool: read main-core-writing-kernel #1]...     → #1 写入缓存
 请求N+1: [固定前缀][历史][read #1][assistant][tool: read #2]... → #1 命中，#2 新追加 miss
 请求N+2: [固定前缀][历史][read #1][...][read #2][user: 继续]...  → #1 #2 都命中，只有新增 miss
 ```

@@ -5,7 +5,7 @@
 
 ## 1. 项目概览
 
-Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能力是用 MCP 工具驱动 AI 按阶段（prepare→outline→write→cmd-cmd-main-review→maintain）写百万字级长篇小说，通过数据库结构化存储维护跨章节一致性。
+Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能力是用 MCP 工具驱动 AI 按阶段（prepare→outline→write→review→maintain）写百万字级长篇小说，通过数据库结构化存储维护跨章节一致性。
 
 **技术栈**：Go 1.26 + Wails v2.13 + React + SQLite（CGO）+ ONNX（向量检索）
 
@@ -255,7 +255,7 @@ stats:             {total_chapters, min_words, max_words}
 
 ```
 prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → cmd-cmd-main-review(run_subagent)
+→ write(edit chapters/) → review(run_subagent)
 → maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot + search_lore + search_items + set_phase)
 → 回到 prepare → 读到 maintain 回写的最新数据
 ```
@@ -266,7 +266,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 - prepare require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 - outline require: edit
 - write require: edit, get_chapter_list
-- cmd-cmd-main-review require: run_subagent
+- review require: run_subagent
 - maintain require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective
 
 完整配置见 `docs/mcp-tools-audit.md`。
@@ -294,7 +294,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 | `GET /api/stats` | get_stats |
 | `GET /api/writing-snapshot` | get_writing_snapshot |
 | `GET /api/phase-gate-config` | get_phase_gate_config |
-| `GET /api/search-cmd-cmd-main-memory` | search_story_memory |
+| `GET /api/search-main-cmd-memory` | search_story_memory |
 | `GET /api/writing-context` | get_writing_context |
 | `GET /api/read` | read |
 | `POST /api/chat` | - |
@@ -316,24 +316,24 @@ prepare(get_writing_context) → outline(edit outlines/)
 **2 个 always（用户级 `~/.goink/skills/`，可调整）：**
 | Skill | mode | 阶段 |
 |-------|------|------|
-| core-core-main-writing-kernel | always | 核心调度（每对话自动注入） |
-| core-core-main-ai-communication-standard | always | 通信规范（每对话自动注入） |
+| main-core-writing-kernel | always | 核心调度（每对话自动注入） |
+| main-core-ai-communication-standard | always | 通信规范（每对话自动注入） |
 
 **41 个内置（`internal/skill/builtin/`，打包进 exe）：**
 
 | 阶段 | Skill |
 |------|-------|
-| init（开书） | core-core-main-init-phase, tech-tech-main-genre-templates, tech-tech-main-book-outline, tech-tech-main-character-design, tech-tech-main-world-building-system |
-| prepare（准备） | tech-tech-main-common-sense-logic, tech-tech-main-genre-templates, tech-tech-main-book-outline, tech-tech-main-brainstorm-composer（按需） |
-| outline（大纲） | tech-tech-main-book-outline, tech-tech-main-chapter-opening, tech-tech-main-chapter-hook-enhanced, tech-tech-main-maliang-method, tech-tech-main-dialogue-subtext, tech-tech-main-emotional-arc, tech-tech-main-opening-chapter |
-| write（正文） | tech-tech-main-show-dont-tell, tech-tech-main-info-density, tech-tech-main-pov-purity, tech-tech-main-anti-ai-writing, tech-tech-main-shuangdian-pacing, tech-tech-main-climax-scene, tech-tech-main-foreshadow-cycle, tech-tech-main-pacing-control, tech-tech-main-scene-beats, tech-tech-main-emotion-injection, tech-tech-main-word-count-calibration |
-| write后（自审） | tech-tech-main-revision-pass, tech-sub-anti-ai-grade |
-| cmd-cmd-main-review（审稿） | tech-cmd-sub-cmd-main-review-standards（16 项判定） |
-| maintain（维护） | tech-tech-main-anti-repetition, tech-tech-main-foreshadow-cycle |
-| 完结 | tech-tech-main-book-completion |
-| manual（`/` 触发） | cmd-cmd-main-collect, cmd-cmd-main-memory, cmd-cmd-main-next, cmd-cmd-main-review |
+| init（开书） | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
+| prepare（准备） | main-tech-common-sense-logic, main-tech-genre-templates, main-tech-book-outline, main-tech-brainstorm-composer（按需） |
+| outline（大纲） | main-tech-book-outline, main-tech-chapter-opening, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-emotional-arc, main-tech-opening-chapter |
+| write（正文） | main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration |
+| write后（自审） | main-tech-revision-pass, sub-tech-anti-ai-grade |
+| review（审稿） | sub-tech-review-standards（16 项判定） |
+| maintain（维护） | main-tech-anti-repetition, main-tech-foreshadow-cycle |
+| 完结 | main-tech-book-completion |
+| manual（`/` 触发） | main-cmd-collect, main-cmd-memory, main-cmd-next, review |
 
-> 完整阶段技能表见 `skills/core-core-main-writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 core-core-main-writing-kernel 登记。
+> 完整阶段技能表见 `skills/main-core-writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 main-core-writing-kernel 登记。
 
 ## 9. LLM 集成
 

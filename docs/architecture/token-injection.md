@@ -29,25 +29,27 @@ go run ./tokencount
 
 **不统计**：用户级 skill（`~/.goink/skills`）、小说级 skill、NovelState（`goink.md`）——这些在工作目录之外，属于运行时动态内容。
 
+> 注意：tokencount 只扫描 `skills/` 目录。内置 41 个 skill（含 8 新增）通过 `//go:embed` 加载，其中 37 auto 进入 catalog，4 manual 不出现。以下实测为 tokencount 直接输出，实际总注入另加内置 catalog 约 1,152 tokens。
+
 ---
 
-## 二、实测构成（2026-08-01，tokencount 实测，含 builtin 目录）
+## 二、实测构成（2026-08-01，`skills/` 目录 tokencount 实测）
 
 ```
-首轮对话注入合计：~18,138 tokens
-├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (71.2%)
-├─ Identity（mainAgentSystem1）               1,340 (7.4%)
-├─ Always skills（core-core-main-writing-kernel + core-core-main-ai-communication-standard 正文）  2,102 (11.6%)
-└─ Skill catalog（37 auto skill 的 name+desc）     1,772 (9.8%)
+首轮对话注入合计（仅 skills/ 目录）：~16,935 tokens
+├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (76.3%)
+├─ Identity（mainAgentSystem1）               1,340 (7.9%)
+├─ Always skills（main-core-writing-kernel + main-core-ai-communication-standard 正文）  2,146 (12.7%)
+└─ Skill catalog（8 auto skill 的 name+desc）       525 (3.1%)
 ```
 
 | 组成部分 | Tokens | 占比 | 说明 |
 |---------|--------|------|------|
-| 工具定义 | 12,924 | 71.2% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
-| Identity | 1,340 | 7.4% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
-| Always skills | 2,102 | 11.6% | core-core-main-writing-kernel 1,994 + core-core-main-ai-communication-standard 108 |
-| Skill catalog | 1,772 | 9.8% | 37 auto skill 仅注入 name + description |
-| **合计** | **18,138** | 100% | |
+| 工具定义 | 12,924 | 76.3% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
+| Identity | 1,340 | 7.9% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
+| Always skills | 2,146 | 12.7% | main-core-writing-kernel 2,038 + main-core-ai-communication-standard 108 |
+| Skill catalog | 525 | 3.1% | 8 auto skill（仅 `skills/` 目录新增，不含内置 29 auto） |
+| **合计** | **16,935** | 100% | + 内置 catalog ~1,152 = 实际总注入 ~18,087 |
 
 ---
 

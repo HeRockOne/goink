@@ -1,5 +1,5 @@
 ---
-name: main-core-writing-kernel
+name: main-core-main-core-writing-kernel
 description: 小说核心写作调度。按阶段工作，禁止跳过。阶段步骤用 set_phase 推进。
 category: 核心系统
 mode: always
@@ -15,8 +15,8 @@ mode: always
 
 ## 流程
 
-单章：prepare → outline → write → cmd-cmd-main-review → maintain → prepare
-批量：prepare → outline ⇄ write（循环N章）→ cmd-cmd-main-review → maintain → done
+单章：prepare → outline → write → review → maintain → prepare
+批量：prepare → outline ⇄ write（循环N章）→ review → maintain → done
 
 ## 阶段指令
 
@@ -35,21 +35,21 @@ mode: always
 
 ### outline
 
-1. 加载技能（tech-tech-main-emotion-injection, tech-tech-main-chapter-hook-enhanced, tech-tech-main-maliang-method, tech-tech-main-dialogue-subtext, tech-tech-main-chapter-title-hooks；新书首次 outline 加 tech-tech-main-golden-three-chapters、tech-tech-main-golden-finger-design，以及对应类型的专精 skill：type-type-main-xuanhuan-cultivation/type-type-main-urban-martial-arts/type-type-main-post-apocalyptic-survival/type-type-main-suspense-rule-horror/type-type-main-historical-time-travel）
+1. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
 2. **edit**(outlines/NNN.md)（required）— 写大纲（标题/基调/场景/关键事件/重点角色/伏笔操作/章末钩子）
 3. 等待用户审批 → **set_phase("write")**
 
 ### write
 
-1. 加载技能（tech-tech-main-show-dont-tell, tech-tech-main-info-density, tech-tech-main-pov-purity, tech-tech-main-anti-ai-writing）
+1. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing）
 2. **edit**(chapters/NNN.md)（required）— 写正文
 3. 校验字数（2500-4000）
 4. 记录关键物品出现 → create_item_occurrence
-5. **set_phase("cmd-cmd-main-review")**
+5. **set_phase("review")**
 
-### cmd-cmd-main-review
+### review
 
-1. **run_subagent**(agent_type="cmd-cmd-main-review")（required）— 启动审稿
+1. **run_subagent**(agent_type="review")（required）— 启动审稿
 2. 根据意见修复
 3. **set_phase("maintain")**
 
@@ -75,7 +75,7 @@ mode: always
 | 2 | **更新写作快照** | 每章必做 | update_writing_snapshot（summary required） |
 | 3 | **搜索设定防遗忘** | 每章必做 | search_lore |
 | 4 | **搜索物品防断裂** | 每章必做 | search_items |
-| 5 | **更新章节计划** | 每章必做 | update_chapter_plan（cmd-cmd-main-next/near/far） |
+| 5 | **更新章节计划** | 每章必做 | update_chapter_plan（main-cmd-main-cmd-next/near/far） |
 | 6 | **创建场景条目** | 查询 E 发现有变化时 | create_scene（title + summary required） |
 | 7 | **记录物品流转** | 查询 F 发现有变化时 | create_item_occurrence（item_id + chapter_id + action 全部 required） |
 | 8 | **更新角色状态** | 查询 A 发现有变化时 | update_character |
@@ -89,29 +89,29 @@ mode: always
 
 ## 阶段技能表（33 个内置 skill 全量调度）
 
-> 每阶段先加载对应技能再执行。manual 模式（cmd-cmd-main-collect/cmd-cmd-main-memory/cmd-cmd-main-next/cmd-cmd-main-review）由用户 `/` 触发，不在此表。
+> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review）由用户 `/` 触发，不在此表。
 
 | 阶段 | 技能 |
 |------|------|
-| **init（开书）** | core-core-main-init-phase（开书流程）, tech-tech-main-genre-templates（12类型）, tech-tech-main-book-outline（总纲）, tech-tech-main-character-design（角色设计）, tech-tech-main-world-building-system（世界观） |
-| **prepare（准备）** | tech-tech-main-common-sense-logic（一致性）, tech-tech-main-genre-templates, tech-tech-main-book-outline（卷纲）, tech-tech-main-brainstorm-composer（卡情节时构思） |
-| **outline（大纲）** | tech-tech-main-book-outline（章节蓝图）, tech-tech-main-chapter-opening（每章开头）, tech-tech-main-chapter-hook-enhanced（章末钩子）, tech-tech-main-maliang-method（打脸/金手指节奏）, tech-tech-main-dialogue-subtext（对白设计）, tech-tech-main-emotional-arc（情感弧线）, tech-tech-main-opening-chapter（第一章开篇） |
-| **write（正文）** | tech-tech-main-show-dont-tell（展示）, tech-tech-main-info-density（信息密度）, tech-tech-main-pov-purity（视角）, tech-tech-main-anti-ai-writing（八条铁律）, tech-tech-main-shuangdian-pacing（爽点节奏）, tech-tech-main-climax-scene（战斗章）, tech-tech-main-foreshadow-cycle（埋伏笔）, tech-tech-main-pacing-control（节奏控制）, tech-tech-main-scene-beats（场景节拍）, tech-tech-main-emotion-injection（情绪注入）, tech-tech-main-word-count-calibration（字数校准） |
-| **write后（自审）** | tech-tech-main-revision-pass（修改润色）, tech-sub-anti-ai-grade（用词级反AI） |
-| **cmd-cmd-main-review（审稿）** | run_subagent(agent_type="cmd-cmd-main-review") → tech-cmd-sub-cmd-main-review-standards（16项判定） |
-| **maintain（维护）** | tech-tech-main-anti-repetition（去重）, tech-tech-main-foreshadow-cycle（回收伏笔） |
-| **完结** | tech-tech-main-book-completion（完本清单） |
+| **init（开书）** | main-core-init-phase（开书流程）, main-tech-genre-templates（12类型）, main-tech-book-outline（总纲）, main-tech-character-design（角色设计）, main-tech-world-building-system（世界观） |
+| **prepare（准备）** | main-tech-common-sense-logic（一致性）, main-tech-genre-templates, main-tech-book-outline（卷纲）, main-tech-brainstorm-composer（卡情节时构思） |
+| **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
+| **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（八条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
+| **write后（自审）** | main-tech-revision-pass（修改润色）, tech-sub-sub-tech-anti-ai-grade（用词级反AI） |
+| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（16项判定） |
+| **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔） |
+| **完结** | main-tech-book-completion（完本清单） |
 
 ## 硬约束
 
 - 每章至少1个情绪锚点；情绪浓度高时禁止讲述句
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
-- 每章至少1个爽点（对照 tech-tech-main-shuangdian-pacing）；章末必有钩子且类型不与前2章重复
+- 每章至少1个爽点（对照 main-tech-shuangdian-pacing）；章末必有钩子且类型不与前2章重复
 - 禁止功能报告体（连续3段无感官描写）；禁止散文体
 - 每章35-55段，每段60-80字，总字数2500-4000
 - 字数不足禁止转阶段
-- 大战之间必须插非战斗章（对照 tech-tech-main-climax-scene）
-- 完结前检查伏笔回收率≥90%（对照 tech-tech-main-foreshadow-cycle / tech-tech-main-book-completion）
+- 大战之间必须插非战斗章（对照 main-tech-climax-scene）
+- 完结前检查伏笔回收率≥90%（对照 main-tech-foreshadow-cycle / main-tech-book-completion）
 
 ## 工具使用规则
 
