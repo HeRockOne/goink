@@ -27,6 +27,7 @@
   - [十四、MCP 工具扩展](#十四mcp-工具扩展)
   - [十五、文档](#十五文档)
   - [十六、Skill 体系](#十六skill-体系)
+    - [内置 41 个（通用 + 类型） + 常驻调度 2 个](#十六skill-体系)
   - [十七、安全](#十七安全)
 - [安装](#安装)
 - [项目结构](#项目结构)
@@ -285,7 +286,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
 三层（内置/用户/小说级）× 三种模式（auto/manual/always）= 9 种策略。
 
-当前共 43 个 Skill（33 内置 + 8 新增类型/通用 + 2 常驻调度）。新建 `.md` 文件即新 Skill，零代码扩展。
+当前共 43 个 Skill（41 内置通用/类型 + 2 常驻调度 `skills/`）。新建 `.md` 文件即新 Skill，零代码扩展。
 
 ### 十七、安全
 
@@ -350,7 +351,7 @@ goink/
 ├── mobile/                 # 移动端 Web 前端
 ├── frontend/               # 桌面端 React 前端
 ├── docs/                   # 架构/审计/竞品分析文档
-├── skills/                 # Skill 源文件仓库（33 内置 + 8 类型 + 2 常驻调度，内置不重复）
+├── skills/                 # Skill 源文件（2 常驻调度）
 ├── build.ps1               # Windows 一键构建
 └── build.bat               # Windows 一键构建
 ```

@@ -29,7 +29,7 @@ go run ./tokencount
 
 **不统计**：用户级 skill（`~/.goink/skills`）、小说级 skill、NovelState（`goink.md`）——这些在工作目录之外，属于运行时动态内容。
 
-> 注意：tokencount 只扫描 `skills/` 目录。实际运行时 catalog 还包含 `internal/skill/builtin/` 的 29 个 auto skill（通过 `//go:embed` 加载），因此总 auto 数为 29（内置）+ 8（skils/ 新增）= 37。以下实测为 tokencount 直接输出，实际总注入另加内置 catalog 约 1,152 tokens。
+> 注意：tokencount 只扫描 `skills/` 目录。内置 41 个 skill（含 8 新增）通过 `//go:embed` 加载，其中 37 auto 进入 catalog，4 manual 不出现。以下实测为 tokencount 直接输出，实际总注入另加内置 catalog 约 1,152 tokens。
 
 ---
 

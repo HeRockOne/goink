@@ -319,7 +319,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 | writing-kernel | always | 核心调度（每对话自动注入） |
 | ai-communication-standard | always | 通信规范（每对话自动注入） |
 
-**33 个内置（`internal/skill/builtin/`，打包进 exe）：**
+**41 个内置（`internal/skill/builtin/`，打包进 exe）：**
 
 | 阶段 | Skill |
 |------|-------|

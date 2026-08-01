@@ -9,10 +9,9 @@ mode: always
 
 ## skill目录（加载顺序，避免浪费 read 调用）
 
-- 本项目的内置/创作 skill 位于**用户级目录**：`~/.goink/skills/<name>.md`
-- 加载时**直接读用户级**，不要先试小说级 `skills/<name>.md`（除非用户明确指定小说级）——避免 read 失败浪费工具调用
+- 内置 skill（41 个通用 + 类型 skill）位于 `/builtin/skills/<name>.md`（只读），auto 模式按需 read
 - 同名 skill 优先级：小说级 > 用户级 > 内置（`/builtin/skills/`）
-- always 模式 skill 已在会话开头注入，无需再 read；auto 模式按需 read
+- always 模式 skill 已在会话开头注入，无需再 read
 
 ## 流程
 
