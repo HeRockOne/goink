@@ -17,8 +17,8 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 ### Skill 结构约定
 
 - **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（41 个：33 原内置 + 8 新增通用/类型 skill）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
-- **2 个常驻调度 skill**（core-writing-kernel、core-ai-communication-standard）在 `skills/`（项目根目录，版本控制），**需要时可改**（调度流程调整）；同步到 `~/.goink/skills/` 后生效
-- **新增 skill**：放 `internal/skill/builtin/<name>.md`，并在 core-writing-kernel 的阶段技能表登记（需重新编译，或放用户级即时生效）
+- **2 个常驻调度 skill**（core-core-main-writing-kernel、core-core-main-ai-communication-standard）在 `skills/`（项目根目录，版本控制），**需要时可改**（调度流程调整）；同步到 `~/.goink/skills/` 后生效
+- **新增 skill**：放 `internal/skill/builtin/<name>.md`，并在 core-core-main-writing-kernel 的阶段技能表登记（需重新编译，或放用户级即时生效）
 - 同名优先级：小说级 > 用户级 > 内置（放用户级可覆盖内置默认行为）
 
 ---
@@ -129,8 +129,8 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 
 ## Review Rules
 - State the bug. Show the fix. Stop.
-- No suggestions beyond the scope of the cmd-review.
-- No compliments on the code before or after the cmd-review.
+- No suggestions beyond the scope of the cmd-cmd-main-review.
+- No compliments on the code before or after the cmd-cmd-main-review.
 
 ## Debugging Rules
 - Never speculate about a bug without reading the relevant code first.

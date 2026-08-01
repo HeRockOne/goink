@@ -10,11 +10,11 @@
 
 **设计脉络**：本项目最初在 Chinese-novel-pipeline（用户自研 skill）里用 Python 状态机（`director.py`）验证了"按阶段推进创作"的理念，属于**建议性**状态机（脚本检测，AI 可能绕过）。Goink 将其升级为**强制性**硬拦截状态机：工具执行前检查（`phase_gate.go` + `registry.Execute` 之前拒绝）、require 成功计数防虚报、write 转出强制字数、edit 路径白名单。
 
-**核心原则**：门禁让 AI 始终遵循 prepare → outline → write → cmd-review → maintain 稳定推进，防止它忘了更新设定、漏填设定、虚报过程、不读 skill 直接写、埋头不听指挥。宁可多调用工具，不可漏掉状态维护。
+**核心原则**：门禁让 AI 始终遵循 prepare → outline → write → cmd-cmd-main-review → maintain 稳定推进，防止它忘了更新设定、漏填设定、虚报过程、不读 skill 直接写、埋头不听指挥。宁可多调用工具，不可漏掉状态维护。
 
 ## 概述
 
-阶段门禁是 Goink 的创作流程强制执行系统。它确保 LLM 按照 core-writing-kernel.md 定义的阶段顺序执行，不能跳步或跳过必要操作。
+阶段门禁是 Goink 的创作流程强制执行系统。它确保 LLM 按照 core-core-main-writing-kernel.md 定义的阶段顺序执行，不能跳步或跳过必要操作。
 
 **核心特性：**
 - 系统级强制：每次对话自动激活，不依赖 LLM 配合
@@ -46,8 +46,8 @@
   ↓ 调 get_chapter_list + get_characters + get_timeline（五门检查）
   ↓ require 满足后，LLM 主动调 set_phase("outline")
 outline → 写大纲（require: edit）→ set_phase("write")
-write → 写正文（require: edit）→ 字数校验 → set_phase("cmd-review")
-cmd-review → 审读（require: run_subagent）→ set_phase("maintain")
+write → 写正文（require: edit）→ 字数校验 → set_phase("cmd-cmd-main-review")
+cmd-cmd-main-review → 审读（require: run_subagent）→ set_phase("maintain")
 maintain → 状态维护（require: update_chapter_plan, edit）→ set_phase("prepare")
   ↓ 回到 prepare（访问记录重置，开始新一轮）
 ```
@@ -55,7 +55,7 @@ maintain → 状态维护（require: update_chapter_plan, edit）→ set_phase("
 ### 批量模式（mode: batch）
 
 ```
-init → prepare → [outline → write] × N 章循环 → cmd-review → maintain → done → prepare
+init → prepare → [outline → write] × N 章循环 → cmd-cmd-main-review → maintain → done → prepare
 ```
 
 每章完成后 maintain→done→prepare，访问记录重置后开始下一章。
@@ -70,7 +70,7 @@ init → prepare → [outline → write] × N 章循环 → cmd-review → maint
 | prepare | get_*, read, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
 | outline | read, edit(get: outlines/*, goink.md, skills/*), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
 | write | read, edit(get: chapters/*), search_story_memory, get_*, set_phase | update_*, create_*, delete_*, run_subagent |
-| cmd-review | read, edit(get: chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
+| cmd-cmd-main-review | read, edit(get: chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
 | maintain | read, edit(goink.md, chapters/*, outlines/*, skills/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
 
 > **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
@@ -84,7 +84,7 @@ init → prepare → [outline → write] × N 章循环 → cmd-review → maint
 | prepare | get_chapter_list, get_characters, get_timeline | 五门检查必须做 |
 | outline | edit | 大纲必须写入文件 |
 | write | edit | 正文必须写入文件 |
-| cmd-review | run_subagent | Review agent 必须启动 |
+| cmd-cmd-main-review | run_subagent | Review agent 必须启动 |
 | maintain | update_chapter_plan, edit | 章节计划和 goink.md 必须更新 |
 
 > require 只统计**成功调用**（`phase_gate.go` `successfulTools`）——失败不算，防止"调了但没做成"蒙混过关。
@@ -105,7 +105,7 @@ mode: single
 phase: prepare
 tools: get_chapter_list, read, edit, get_characters, get_timeline
 require: get_chapter_list, get_characters, get_timeline
-cmd-next: outline
+cmd-cmd-main-next: outline
 -->
 ```
 
@@ -115,7 +115,7 @@ cmd-next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| cmd-next | 是 | require 满足后可进入的下一阶段 |
+| cmd-cmd-main-next | 是 | require 满足后可进入的下一阶段 |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环 |
 
@@ -125,9 +125,9 @@ cmd-next: outline
 |------|------|------|
 | 工具被拦截 | 当前阶段不允许该工具 | 完成当前阶段 require 后，主动调 `set_phase` 切换到目标阶段 |
 | 阶段不推进 | require 未满足，或未调 set_phase | 先调用 require 列表中的工具，再主动 `set_phase` 切换 |
-| 切换被拒 | 目标阶段不在 cmd-next 链，也不在本轮 visited | 只能推进到 cmd-next 或回退到本轮已访问过的阶段 |
+| 切换被拒 | 目标阶段不在 cmd-cmd-main-next 链，也不在本轮 visited | 只能推进到 cmd-cmd-main-next 或回退到本轮已访问过的阶段 |
 | 第二轮可任意跳转（旧 bug） | visited 永久累积 | 已修复：回到 prepare 时重置访问记录 |
-| 批量模式不循环 | write 阶段没有 `loop: true` | 检查 core-writing-kernel.md 配置 |
+| 批量模式不循环 | write 阶段没有 `loop: true` | 检查 core-core-main-writing-kernel.md 配置 |
 | 门禁未激活 | session 的 current_phase 为空 | 每次对话自动激活，检查 DB |
 
 ## 设置开关
@@ -158,35 +158,35 @@ mode: single
 phase: prepare
 tools: get_writing_context, get_chapter_list, read, get_characters, ...
 require: get_writing_context, get_chapter_list, get_characters, ...
-cmd-next: outline
+cmd-cmd-main-next: outline
 
 # outline 阶段：写大纲
 mode: single
 phase: outline
 tools: read, edit, ...
 require: edit
-cmd-next: write
+cmd-cmd-main-next: write
 
 # write 阶段：写正文
 mode: single
 phase: write
 tools: read, edit, ...
 require: edit, get_chapter_list
-cmd-next: cmd-review
+cmd-cmd-main-next: cmd-cmd-main-review
 
-# cmd-review 阶段：审稿
+# cmd-cmd-main-review 阶段：审稿
 mode: single
-phase: cmd-review
+phase: cmd-cmd-main-review
 tools: read, edit, run_subagent, ...
 require: run_subagent
-cmd-next: maintain
+cmd-cmd-main-next: maintain
 
 # maintain 阶段：状态维护
 mode: single
 phase: maintain
 tools: read, edit, update_*, create_*, ...
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, ...
-cmd-next: prepare
+cmd-cmd-main-next: prepare
 ```
 
 完整配置见下方（HTML 注释块，系统解析用）：
@@ -196,14 +196,14 @@ mode: single
 phase: init
 tools: read, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
-cmd-next: prepare
+cmd-cmd-main-next: prepare
 -->
 <!-- phase-gate-config
 mode: single
 phase: prepare
 tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
-cmd-next: outline
+cmd-cmd-main-next: outline
 -->
 <!-- phase-gate-config
 mode: single
@@ -211,7 +211,7 @@ phase: outline
 tools: read, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 edit_paths: outlines/*, goink.md, skills/*
 require: edit
-cmd-next: write
+cmd-cmd-main-next: write
 -->
 <!-- phase-gate-config
 mode: single
@@ -219,15 +219,15 @@ phase: write
 tools: read, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, web_search, web_fetch, set_phase
 edit_paths: chapters/*
 require: edit, get_chapter_list
-cmd-next: cmd-review
+cmd-cmd-main-next: cmd-cmd-main-review
 -->
 <!-- phase-gate-config
 mode: single
-phase: cmd-review
+phase: cmd-cmd-main-review
 tools: read, edit, run_subagent, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 edit_paths: chapters/*
 require: run_subagent
-cmd-next: maintain
+cmd-cmd-main-next: maintain
 -->
 <!-- phase-gate-config
 mode: single
@@ -235,21 +235,21 @@ phase: maintain
 tools: read, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, get_phase_gate_config, update_phase_gate_config, update_chapter_meta, set_phase
 edit_paths: goink.md, chapters/*, outlines/*, skills/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
-cmd-next: prepare
+cmd-cmd-main-next: prepare
 -->
 <!-- phase-gate-config
 mode: batch
 phase: init
 tools: read, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
-cmd-next: prepare
+cmd-cmd-main-next: prepare
 -->
 <!-- phase-gate-config
 mode: batch
 phase: prepare
 tools: get_writing_context, get_chapter_list, read, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
-cmd-next: outline
+cmd-cmd-main-next: outline
 -->
 <!-- phase-gate-config
 mode: batch
@@ -257,7 +257,7 @@ phase: outline
 tools: read, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 edit_paths: outlines/*, goink.md, skills/*
 require: edit
-cmd-next: write
+cmd-cmd-main-next: write
 -->
 <!-- phase-gate-config
 mode: batch
@@ -265,15 +265,15 @@ phase: write
 tools: read, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_phase_gate_config, web_search, web_fetch, set_phase
 edit_paths: chapters/*
 require: edit, get_chapter_list
-cmd-next: cmd-review
+cmd-cmd-main-next: cmd-cmd-main-review
 -->
 <!-- phase-gate-config
 mode: batch
-phase: cmd-review
+phase: cmd-cmd-main-review
 tools: read, edit, run_subagent, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, get_phase_gate_config, search_story_memory, web_search, web_fetch, set_phase
 edit_paths: chapters/*
 require: run_subagent
-cmd-next: maintain
+cmd-cmd-main-next: maintain
 -->
 <!-- phase-gate-config
 mode: batch
@@ -281,11 +281,11 @@ phase: maintain
 tools: read, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, get_phase_gate_config, update_phase_gate_config, update_chapter_meta, set_phase
 edit_paths: goink.md, chapters/*, outlines/*, skills/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
-cmd-next: done
+cmd-cmd-main-next: done
 -->
 <!-- phase-gate-config
 mode: batch
 phase: done
 tools: read
-cmd-next: prepare
+cmd-cmd-main-next: prepare
 -->
