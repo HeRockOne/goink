@@ -29,25 +29,27 @@ go run ./tokencount
 
 **不统计**：用户级 skill（`~/.goink/skills`）、小说级 skill、NovelState（`goink.md`）——这些在工作目录之外，属于运行时动态内容。
 
+> 注意：tokencount 只扫描 `skills/` 目录。实际运行时 catalog 还包含 `internal/skill/builtin/` 的 29 个 auto skill（通过 `//go:embed` 加载），因此总 auto 数为 29（内置）+ 8（skils/ 新增）= 37。以下实测为 tokencount 直接输出，实际总注入另加内置 catalog 约 1,152 tokens。
+
 ---
 
-## 二、实测构成（2026-08-01，tokencount 实测）
+## 二、实测构成（2026-08-01，`skills/` 目录 tokencount 实测）
 
 ```
-首轮对话注入合计：~17,928 tokens
-├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (72.1%)
-├─ Identity（mainAgentSystem1）               1,340 (7.5%)
-├─ Always skills（writing-kernel + ai-communication-standard 正文）  2,146 (12.0%)
-└─ Skill catalog（33 auto skill 的 name+desc）     1,518 (8.5%)
+首轮对话注入合计（仅 skills/ 目录）：~16,935 tokens
+├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (76.3%)
+├─ Identity（mainAgentSystem1）               1,340 (7.9%)
+├─ Always skills（writing-kernel + ai-communication-standard 正文）  2,146 (12.7%)
+└─ Skill catalog（8 auto skill 的 name+desc）       525 (3.1%)
 ```
 
 | 组成部分 | Tokens | 占比 | 说明 |
 |---------|--------|------|------|
-| 工具定义 | 12,924 | 72.1% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
-| Identity | 1,340 | 7.5% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
-| Always skills | 2,146 | 12.0% | writing-kernel 2,038 + ai-communication-standard 108 |
-| Skill catalog | 1,518 | 8.5% | 33 auto skill 仅注入 name + description |
-| **合计** | **17,928** | 100% | |
+| 工具定义 | 12,924 | 76.3% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
+| Identity | 1,340 | 7.9% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
+| Always skills | 2,146 | 12.7% | writing-kernel 2,038 + ai-communication-standard 108 |
+| Skill catalog | 525 | 3.1% | 8 auto skill（仅 `skills/` 目录新增，不含内置 29 auto） |
+| **合计** | **16,935** | 100% | + 内置 catalog ~1,152 = 实际总注入 ~18,087 |
 
 ---
 
@@ -58,7 +60,7 @@ go run ./tokencount
 ```
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
 	L2  Always skills   → 2,146 tokens   always 模式 skill 全量正文
-	L3  Skill catalog   → 1,518 tokens   auto 模式 skill 的 name+description 目录
+	L3  Skill catalog   → 525+1,152 tokens   auto 模式 skill 的 name+description 目录（skills/ 8 auto + builtin 29 auto）
 L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
 ```
 

@@ -348,7 +348,7 @@ goink/
 ├── mobile/                 # Mobile web frontend
 ├── frontend/               # Desktop React frontend
 ├── docs/                   # Architecture/audit/competitor docs
-├── skills/                 # Skill source repo (33 built-in + 8 genre + 2 resident scheduling)
+├── skills/                 # Skill source repo (33 built-in + 8 genre + 2 resident, no duplicated copies)
 ├── build.ps1               # Windows one-click build
 └── build.bat               # Windows one-click build
 ```

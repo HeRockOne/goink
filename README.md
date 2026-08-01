@@ -350,7 +350,7 @@ goink/
 ├── mobile/                 # 移动端 Web 前端
 ├── frontend/               # 桌面端 React 前端
 ├── docs/                   # 架构/审计/竞品分析文档
-├── skills/                 # Skill 源文件仓库（33 内置 + 8 类型 + 2 常驻调度）
+├── skills/                 # Skill 源文件仓库（33 内置 + 8 类型 + 2 常驻调度，内置不重复）
 ├── build.ps1               # Windows 一键构建
 └── build.bat               # Windows 一键构建
 ```
