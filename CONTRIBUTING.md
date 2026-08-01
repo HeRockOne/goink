@@ -2,8 +2,7 @@
 
 感谢你对 Goink 的关注！
 
-> **特别说明**：本项目的维护者不是程序员，所有代码修改由 AI 完成。
-> 这意味着我们可能响应较慢，但每个 Issue 和 PR 都会被认真对待。
+> **特别说明**：本项目由纯 AI 驱动开发，使用的都是白嫖（免费）大模型，属于作者 fork 练手之作。不保证软件能达到你的期望，但确保产品可用；可能会有未测试出的 bug，欢迎提 Issue，也可以自己 fork 本项目修改。
 
 ## 如何贡献
 
@@ -75,5 +74,6 @@ Use the [Skill Contribution](https://github.com/HeRockOne/goink/issues/new?templ
 
 ## About AI Code
 
-All code in this project is written by AI. If you find issues, please report them.
-We don't guarantee code quality, but we guarantee every problem will be taken seriously.
+This project is purely AI-driven, built with free open-source models as a fork practice project.
+We don't guarantee the software meets your expectations, nor the code quality, but we ensure the product is usable.
+There may be untested bugs — feel free to open Issues, or fork this project and modify it yourself.
