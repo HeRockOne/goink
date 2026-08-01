@@ -311,7 +311,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 | 用户级 | `~/.goink/skills/*.md` | 读写 |
 | 小说级 | `{novel_dir}/skills/*.md` | 读写 |
 
-### 当前 Skill 列表（35 个：33 内置 + 2 常驻调度）
+### 当前 Skill 列表
 
 **2 个 always（用户级 `~/.goink/skills/`，可调整）：**
 | Skill | mode | 阶段 |
@@ -319,7 +319,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 | writing-kernel | always | 核心调度（每对话自动注入） |
 | ai-communication-standard | always | 通信规范（每对话自动注入） |
 
-**33 个内置（`internal/skill/builtin/`，一次到位，打包进 exe）：**
+**33 个内置（`internal/skill/builtin/`，打包进 exe）：**
 
 | 阶段 | Skill |
 |------|-------|

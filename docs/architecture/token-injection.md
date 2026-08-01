@@ -38,7 +38,7 @@ go run ./tokencount
 ├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (73.9%)
 ├─ Identity（mainAgentSystem1）               1,340 (7.7%)
 ├─ Always skills（writing-kernel + ai-communication-standard 正文） ~2,088 (11.9%)
-└─ Skill catalog（29 个 auto skill 的 name+desc）    ~1,150 (6.6%)
+└─ Skill catalog（37 个 auto skill 的 name+desc）    ~1,150 (6.6%)
 ```
 
 | 组成部分 | Tokens | 占比 | 说明 |
@@ -46,7 +46,7 @@ go run ./tokencount
 | 工具定义 | 12,924 | 73.9% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
 | Identity | 1,340 | 7.7% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
 | Always skills | ~2,088 | 11.9% | writing-kernel 1,980 + ai-communication-standard 108 |
-| Skill catalog | ~1,150 | 6.6% | 29 个 auto skill 仅注入 name + description |
+| Skill catalog | ~1,150 | 6.6% | 37 个 auto skill 仅注入 name + description |
 | **合计** | **~17,500** | 100% | |
 
 ---
