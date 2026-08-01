@@ -228,9 +228,9 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 | 日志开关 | 设置中启用/禁用文件日志 |
 | 数据备份恢复 | 一键备份/恢复全量数据 |
 | 自定义软件图标 | 桌面图标、任务栏图标、标题栏图标统一匹配主题风格（图标位置见"图标替换"） |
-| 帮助中心 | 52 个工具的中英文描述，含返回结构文档 |
+| 帮助中心 | 57 个工具的中英文描述，含返回结构文档 |
 | 系统提示词精简 | ~4700 token → ~2400 token（省 49%） |
-| Token 注入统计 | `tokencount` 精确统计系统提示词 + 工具定义注入量（当前约 17.1K token） |
+| Token 注入统计 | `tokencount` 精确统计系统提示词 + 工具定义注入量（当前约 17.5K token） |
 | writing-kernel.md | 15 项 maintain 检查清单 |
 | config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
 | 计费面板 | Token 用量按模型累计，缓存命中/未命中分账，价格可配（元/百万 token） |
@@ -262,7 +262,7 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
 | 上游 | 本 fork |
 |------|---------|
-| 33 个工具 | **52** 个工具（+19） |
+| 33 个工具 | **57** 个工具（+24） |
 | 部分工具有 Description | **全部标注返回结构** |
 | 部分字段有 required | **依赖链字段全部标注 jsonschema required** |
 
@@ -327,7 +327,7 @@ goink/
 ├── internal/
 │   ├── agent/              # Agent loop（MaxTurns 100）
 │   ├── agentcfg/           # 系统提示词（2400 token）+ 工具白名单
-│   ├── mcp_tools/          # 52 个 MCP 工具
+│   ├── mcp_tools/          # 57 个 MCP 工具
 │   ├── llm/                # 多提供商 LLM
 │   ├── session/            # 会话 + 消息
 │   ├── character/          # 角色 + 有向关系图
@@ -361,7 +361,7 @@ goink/
 
 | 层 | 选型 |
 |---|---|
-| Agent 引擎 | ReAct 循环（Go，SSE + 52 工具 + 子 Agent，MaxTurns 100） |
+| Agent 引擎 | ReAct 循环（Go，SSE + 57 工具 + 子 Agent，MaxTurns 100） |
 | 桌面框架 | Wails v2（Go + WebView） |
 | 前端 | React + TypeScript + Tailwind CSS + shadcn/ui |
 | 移动端 | HTTP API + 纯原生 JS Web 前端 + idb-keyval 离线缓存 |

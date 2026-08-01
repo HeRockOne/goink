@@ -33,8 +33,8 @@ goink-master/
 │   ├── llm/                # LLM 客户端（多供应商、流式、Token 计数、Web 搜索）
 │   ├── location/           # 地点 + 空间关系 Store
 │   ├── lore/               # 世界观设定 Store
-│   ├── mcp_tools/          # 所有 MCP 工具定义（52 个）
-│   ├── migrate/            # 数据库自动迁移（24 张表）
+│   ├── mcp_tools/          # 所有 MCP 工具定义（57 个）
+│   ├── migrate/            # 数据库自动迁移（25 张表）
 │   ├── novel/              # 小说索引 + 创作偏好 Store
 │   ├── rag/                # RAG 向量检索（ONNX Embedder + sqlite-vec）
 │   ├── reader/             # 读者认知 Store（已知/悬念/误知）
@@ -116,7 +116,7 @@ reader_perspectives.novel_id → novels.id
 writing_snapshots.novel_id → novels.id (primaryKey)
 ```
 
-## 4. MCP 工具清单（52 个）
+## 4. MCP 工具清单（57 个）
 
 ### 按模块分组
 
@@ -311,27 +311,29 @@ prepare(get_writing_context) → outline(edit outlines/)
 | 用户级 | `~/.goink/skills/*.md` | 读写 |
 | 小说级 | `{novel_dir}/skills/*.md` | 读写 |
 
-### 当前 Skill 列表
+### 当前 Skill 列表（35 个：33 内置 + 2 常驻调度）
 
+**2 个 always（用户级 `~/.goink/skills/`，可调整）：**
 | Skill | mode | 阶段 |
 |-------|------|------|
 | writing-kernel | always | 核心调度（每对话自动注入） |
-| anti-ai-writing | auto | write |
-| anti-repetition | auto | maintain |
-| show-dont-tell | auto | write |
-| info-density | auto | write |
-| pov-purity | auto | write |
-| emotion-injection | auto | outline |
-| emotional-arc | auto | outline |
-| chapter-hook-enhanced | auto | outline |
-| maliang-method | auto | outline |
-| dialogue-subtext | auto | outline |
-| common-sense-logic | auto | prepare |
-| genre-templates | auto | prepare |
-| revision-pass | auto | write后 |
-| world-building-system | auto | - |
-| opening-chapter | auto | - |
-| word-count-calibration | auto | - |
+| ai-communication-standard | always | 通信规范（每对话自动注入） |
+
+**33 个内置（`internal/skill/builtin/`，一次到位，打包进 exe）：**
+
+| 阶段 | Skill |
+|------|-------|
+| init（开书） | init-phase, genre-templates, book-outline, character-design, world-building-system |
+| prepare（准备） | common-sense-logic, genre-templates, book-outline, brainstorm-composer（按需） |
+| outline（大纲） | book-outline, chapter-opening, chapter-hook-enhanced, maliang-method, dialogue-subtext, emotional-arc, opening-chapter |
+| write（正文） | show-dont-tell, info-density, pov-purity, anti-ai-writing, shuangdian-pacing, climax-scene, foreshadow-cycle, pacing-control, scene-beats, emotion-injection, word-count-calibration |
+| write后（自审） | revision-pass, anti-ai-grade |
+| review（审稿） | review-standards（16 项判定） |
+| maintain（维护） | anti-repetition, foreshadow-cycle |
+| 完结 | book-completion |
+| manual（`/` 触发） | collect, memory, next, review |
+
+> 完整阶段技能表见 `skills/writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 writing-kernel 登记。
 
 ## 9. LLM 集成
 

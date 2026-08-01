@@ -41,10 +41,10 @@ LLM 请求工具 → CheckToolAllowed(name) → 不通过则注入 <system-remin
 ## 二、缓存优化的现状（ADR-0001 架构）
 
 ```
-固定前缀（缓存命中，≈17,102 tokens）：
+固定前缀（缓存命中，≈17,500 tokens）：
 ├─ L1 Identity（1,340）
-├─ L2 Always skills（1,845）
-├─ L3 Skill catalog（993）
+├─ L2 Always skills（~2,088）
+├─ L3 Skill catalog（~1,150）
 └─ 工具定义 57 个（12,924）
 
 动态部分（缓存失效区）：

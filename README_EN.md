@@ -228,9 +228,9 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 | Log toggle | Enable/disable file logging in settings |
 | Backup & restore | One-click full data backup/restore |
 | Custom software icon | Desktop/taskbar/title bar icons unified with theme (see Icon Replacement) |
-| Help center | 52 tools described in Chinese & English with return structure docs |
+| Help center | 57 tools described in Chinese & English with return structure docs |
 | System prompt optimization | ~4700 → ~2400 tokens (49% savings) |
-| Token injection stats | `tokencount` precisely counts system prompt + tool definitions (~17.1K tokens currently) |
+| Token injection stats | `tokencount` precisely counts system prompt + tool definitions (~17.5K tokens currently) |
 | writing-kernel.md | 15-item maintain checklist |
 | config.json removed | Data dir uses exe location directly |
 | Billing panel | Per-model token accumulation, cache hit/miss split, configurable prices (CNY per million tokens) |
@@ -262,7 +262,7 @@ Built-in WebDAV server. Read novels directly from phone file manager.
 
 | Upstream | This Fork |
 |----------|-----------|
-| 33 tools | **52** tools (+19) |
+| 33 tools | **57** tools (+24) |
 | Some tools have Description | **All tools document return structure** |
 | Some fields have required | **All dependency chain fields have jsonschema required** |
 
@@ -327,7 +327,7 @@ goink/
 ├── internal/
 │   ├── agent/              # Agent loop (MaxTurns 100)
 │   ├── agentcfg/           # System prompt (2400 tokens) + tool whitelist
-│   ├── mcp_tools/          # 52 MCP tools
+│   ├── mcp_tools/          # 57 MCP tools
 │   ├── llm/                # Multi-provider LLM
 │   ├── session/            # Session + messages
 │   ├── character/          # Characters + directed relation graph
@@ -361,7 +361,7 @@ goink/
 
 | Layer | Choice |
 |-------|--------|
-| Agent Engine | ReAct loop (Go, SSE + 52 tools + sub-agent, MaxTurns 100) |
+| Agent Engine | ReAct loop (Go, SSE + 57 tools + sub-agent, MaxTurns 100) |
 | Desktop Framework | Wails v2 (Go + WebView) |
 | Frontend | React + TypeScript + Tailwind CSS + shadcn/ui |
 | Mobile | HTTP API + vanilla JS web frontend + idb-keyval offline cache |
