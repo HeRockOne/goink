@@ -31,23 +31,23 @@ go run ./tokencount
 
 ---
 
-## 二、实测构成（2026-08-01，skill 体系扩充后）
+## 二、实测构成（2026-08-01，tokencount 实测）
 
 ```
-首轮对话注入合计：~17,500 tokens
-├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (73.9%)
-├─ Identity（mainAgentSystem1）               1,340 (7.7%)
-├─ Always skills（writing-kernel + ai-communication-standard 正文） ~2,088 (11.9%)
-└─ Skill catalog（37 个 auto skill 的 name+desc）    ~1,150 (6.6%)
+首轮对话注入合计：~17,928 tokens
+├─ 工具定义（57 个工具的完整 JSON Schema）  12,924 (72.1%)
+├─ Identity（mainAgentSystem1）               1,340 (7.5%)
+├─ Always skills（writing-kernel + ai-communication-standard 正文）  2,146 (12.0%)
+└─ Skill catalog（33 auto skill 的 name+desc）     1,518 (8.5%)
 ```
 
 | 组成部分 | Tokens | 占比 | 说明 |
 |---------|--------|------|------|
-| 工具定义 | 12,924 | 73.9% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
-| Identity | 1,340 | 7.7% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
-| Always skills | ~2,088 | 11.9% | writing-kernel 1,980 + ai-communication-standard 108 |
-| Skill catalog | ~1,150 | 6.6% | 37 个 auto skill 仅注入 name + description |
-| **合计** | **~17,500** | 100% | |
+| 工具定义 | 12,924 | 72.1% | 57 个工具 name + description + parameters schema（含 `$defs` 内联） |
+| Identity | 1,340 | 7.5% | 系统提示词（人设/创作流程/阶段门禁/技能说明） |
+| Always skills | 2,146 | 12.0% | writing-kernel 2,038 + ai-communication-standard 108 |
+| Skill catalog | 1,518 | 8.5% | 33 auto skill 仅注入 name + description |
+| **合计** | **17,928** | 100% | |
 
 ---
 
@@ -57,8 +57,8 @@ go run ./tokencount
 
 ```
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
-L2  Always skills   → ~2,088 tokens   always 模式 skill 全量正文
-L3  Skill catalog   →   993 tokens   auto 模式 skill 的 name+description 目录
+	L2  Always skills   → 2,146 tokens   always 模式 skill 全量正文
+	L3  Skill catalog   → 1,518 tokens   auto 模式 skill 的 name+description 目录
 L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
 ```
 
