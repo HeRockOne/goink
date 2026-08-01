@@ -212,12 +212,16 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 2. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
 3. **收集上下文** — 调用 get_characters、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据
 4. **逐项检查**（对照已加载的审稿标准，逐项执行）：
-   - 角色一致性：性格、能力、关系是否前后一致
-   - 情节逻辑：事件因果是否合理，有无逻辑漏洞
-   - 伏笔管理：已埋伏笔是否推进或回收，新伏笔是否需要记录
-   - 读者认知：悬念是否恰当维护，误知是否按时回收
-   - 弧线推进：每条弧线的进度是否合理，节点是否需要校准
-   - 全面检查：对照已加载的 sub- skill 中的完整检查项，逐一执行
+   - **角色一致性**：正文中角色言行/能力/位置是否与数据库一致 → 调用 get_characters(search=角色名, brief=true)
+   - **设定一致性**：正文中提到的地点/物品/世界观，逐一调用工具核对：
+     - 地点状态 → get_locations(mode="list", search=地点名)
+     - 物品归属/状态 → get_items(mode="list", search=物品名)
+     - 世界观规则 → search_lore(query=规则/能力名)
+   - **情节逻辑**：事件因果是否合理，有无逻辑漏洞
+   - **伏笔管理**：已埋伏笔是否推进或回收 → get_timeline(current_chapter=当前章号)
+   - **读者认知**：悬念是否恰当维护，误知是否按时回收 → get_reader_perspective()
+   - **弧线推进**：每条弧线的进度是否合理 → get_story_arcs(current_chapter=当前章号)
+   - **全面检查**：对照已加载的 sub- skill 中的完整检查项，逐一执行
 5. **输出审稿意见** — 按下方格式强制输出
 
 ## 输出规范
