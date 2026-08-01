@@ -132,6 +132,22 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	msgs := []map[string]any{
 		{"role": "system", "content": sysPrompt},
 	}
+
+	// review 子 Agent 额外注入审稿标准和反 AI 检测标准
+	if at == agentcfg.ReviewAgent {
+		if sk, ok := a.skillStore.Get(req.NovelID, "review-standards"); ok {
+			msgs = append(msgs, map[string]any{
+				"role":    "system",
+				"content": "【审稿标准】\n" + sk.Content,
+			})
+		}
+		if sk, ok := a.skillStore.Get(req.NovelID, "anti-ai-grade"); ok {
+			msgs = append(msgs, map[string]any{
+				"role":    "system",
+				"content": "【反AI检测标准】\n" + sk.Content,
+			})
+		}
+	}
 	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
 		msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
 	}
