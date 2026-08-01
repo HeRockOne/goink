@@ -21,9 +21,8 @@ func main() {
 	fmt.Printf("1. Identity (mainAgentSystem1):    %6d tokens\n", n)
 	total += n
 
-	// 2. 扫描项目内 skills/ 目录，按 mode 分组
+	// 2a. 扫描 skills/ 目录获取 always 技能
 	var always []*skill.Skill
-	var autoMeta []skill.SkillMeta
 	entries, _ := os.ReadDir("skills")
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
@@ -33,10 +32,23 @@ func main() {
 		if err != nil {
 			continue
 		}
-		switch sk.Mode {
-		case skill.ModeAlways:
+		if sk.Mode == skill.ModeAlways {
 			always = append(always, sk)
-		case skill.ModeAuto:
+		}
+	}
+
+	// 2b. 扫描 internal/skill/builtin/ 目录获取 auto 技能（catalog 来源）
+	var autoMeta []skill.SkillMeta
+	entries, _ = os.ReadDir("internal/skill/builtin")
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		sk, err := skill.ParseFile("internal/skill/builtin/" + e.Name())
+		if err != nil {
+			continue
+		}
+		if sk.Mode == skill.ModeAuto {
 			autoMeta = append(autoMeta, sk.Meta("builtin"))
 		}
 	}
