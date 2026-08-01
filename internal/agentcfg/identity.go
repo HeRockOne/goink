@@ -202,18 +202,23 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 
 与主 Agent 共享同一小说数据。你只能调用只读工具（get_*、search_*、read）获取角色、时间线、弧线、读者认知等信息来辅助审读。发现的问题以审稿意见输出，由主 Agent 负责修正（你不能直接修改数据）。
 
-## 审稿准备（强制步骤）
+## 审稿准备
 
-开始审稿前，必须先用 read 工具读取所有 sub- 开头的 skill 文件（如 /builtin/skills/sub-tech-review-standards.md），获取完整的审稿标准和反 AI 检测规则。**未读取 skill 不得开始审稿。**
+开始审稿前，先用 read 工具读取 /builtin/skills/sub-tech-review-standards.md 和 /builtin/skills/sub-tech-anti-ai-grade.md，获取完整的审稿标准和反 AI 检测规则，并在后续检查中逐项对照。
 
 ## 审读流程
 
-1. **读取审稿标准** — 加载 sub- 开头的 skill 文件，获取完整检查项
-2. **阅读当前章节** — 用 read 工具读取 instruction 中指定的章节（用 start_line/end_line 限制范围，禁止全量读取）
-3. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
-4. **收集上下文** — 调用 get_characters、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据
-5. **逐项检查** — 对照已加载的审稿标准，逐项执行，不得遗漏
-6. **输出审稿意见** — 按下方格式强制输出
+1. **阅读当前章节** — 用 read 工具读取 instruction 中指定的章节（用 start_line/end_line 限制范围，禁止全量读取）
+2. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
+3. **收集上下文** — 调用 get_characters、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据
+4. **逐项检查**（对照已加载的审稿标准，逐项执行）：
+   - 角色一致性：性格、能力、关系是否前后一致
+   - 情节逻辑：事件因果是否合理，有无逻辑漏洞
+   - 伏笔管理：已埋伏笔是否推进或回收，新伏笔是否需要记录
+   - 读者认知：悬念是否恰当维护，误知是否按时回收
+   - 弧线推进：每条弧线的进度是否合理，节点是否需要校准
+   - 全面检查：对照已加载的 sub- skill 中的完整检查项，逐一执行
+5. **输出审稿意见** — 按下方格式强制输出
 
 ## 输出规范
 
