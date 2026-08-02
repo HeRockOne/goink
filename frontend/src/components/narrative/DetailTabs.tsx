@@ -1,6 +1,7 @@
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, memo, useRef } from 'react'
 import { useApp } from '@/hooks/useApp'
 import { GetSceneListByNovel } from '@/lib/wailsjs/go/app/App'
+import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 
 type TabId = 'characters' | 'locations' | 'items' | 'lore' | 'scenes'
 
@@ -62,6 +63,50 @@ export default memo(function DetailTabs({ novelId, chapterNum }: Props) {
     load()
     return () => { cancelled = true }
   }, [activeTab, novelId, chapterNum, app])
+
+  // 事件监听：对话完成或文件变更时自动刷新当前 Tab
+  const refreshRef = useRef(0)
+  useEffect(() => {
+    if (!novelId) return
+    const refresh = () => {
+      const id = ++refreshRef.current
+      setTimeout(() => {
+        if (id !== refreshRef.current) return // 防抖，只执行最后一次
+        setLoading(true)
+        const load = async () => {
+          try {
+            let result: any = null
+            switch (activeTab) {
+              case 'characters': result = await app.GetCharacters(novelId); break
+              case 'locations': result = await app.GetLocations(novelId); break
+              case 'items': result = await app.GetItemList(novelId, '', '', '', 1, 20); break
+              case 'lore': result = await app.GetLoreList(novelId, '', '', 1, 20); break
+              case 'scenes': {
+                result = await GetSceneListByNovel(novelId)
+                try {
+                  const chapters = await app.GetChapters(novelId)
+                  if (Array.isArray(chapters)) {
+                    const map: Record<number, number> = {}
+                    for (const ch of chapters) { map[ch.id] = ch.chapter_number }
+                    setChMap(map)
+                  }
+                } catch { /* */ }
+                break
+              }
+            }
+            if (result) setData(result)
+          } catch { /* */ }
+          setLoading(false)
+        }
+        load()
+      }, 300)
+    }
+    const subs = [
+      EventsOn('chat:api_done', refresh),
+      EventsOn('chat:session_created', refresh),
+    ]
+    return () => { subs.forEach(s => s?.()) }
+  }, [novelId, activeTab, app])
 
   return (
     <div className="detail-tabs">

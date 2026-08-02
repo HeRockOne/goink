@@ -36,18 +36,18 @@ export default function ActivityBar({ activeId, onSelect }: Props) {
   const { t } = useTranslation()
 
   return (
-    <nav className="w-12 flex flex-col items-center py-3 gap-1.5 border-r bg-sidebar select-none cursor-default">
+    <nav className="w-auto flex flex-col py-3 gap-0.5 border-r bg-sidebar select-none cursor-default min-w-fit px-2">
       {activities.map((a, i) => {
         const isActive = a.id === activeId
         return (
           <div key={a.id}>
-            {i === 0 && <div className="w-6 h-px bg-border my-1 mx-auto" />}
-            {i === 3 && <div className="w-6 h-px bg-border my-1 mx-auto" />}
+            {i === 0 && <div className="h-px bg-border my-1 mx-2" />}
+            {i === 3 && <div className="h-px bg-border my-1 mx-2" />}
             <button
               disabled={a.disabled}
               onClick={() => onSelect(a.id)}
               title={`${t(a.labelKey)}${a.disabled ? t('shell.comingSoon') : ''}`}
-              className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200
+              className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-200 text-left whitespace-nowrap
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                 ${a.disabled
                   ? 'text-muted-foreground/40 cursor-not-allowed'
@@ -59,7 +59,8 @@ export default function ActivityBar({ activeId, onSelect }: Props) {
               {isActive && !a.disabled && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
               )}
-              <a.icon className="w-5 h-5" />
+              <a.icon className="w-4 h-4 shrink-0" />
+              <span className="text-xs leading-none">{t(a.labelKey)}</span>
             </button>
           </div>
         )
