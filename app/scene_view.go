@@ -15,6 +15,10 @@ func (a *App) GetSceneList(novelID int64, chapterNumber int) ([]scene.Scene, err
 	return a.scene.ListByChapter(a.ctx, novelID, ch.ID)
 }
 
+func (a *App) GetSceneListByNovel(novelID int64) ([]scene.Scene, error) {
+	return a.scene.ListByNovel(a.ctx, novelID)
+}
+
 func (a *App) GetSceneDetail(sceneID int64) (*scene.Scene, error) {
 	return a.scene.GetByID(a.ctx, sceneID, a.settings.LastNovelID)
 }

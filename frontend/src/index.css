@@ -555,6 +555,13 @@ body {
 .detail-tabs-content { max-height: 200px; overflow-y: auto; padding: 0.4rem; }
 .detail-list-item { display: flex; align-items: flex-start; gap: 0.4rem; padding: 0.3rem 0.4rem; border-radius: 0.3rem; font-size: 0.82rem; transition: background 150ms; word-break: break-word; }
 .detail-list-item:hover { background: var(--narrative-current-bg); }
+.detail-list-group { border-bottom: 1px solid var(--narrative-divider); }
+.detail-list-group-header { display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; cursor: pointer; border-radius: 0.3rem; font-size: 0.82rem; font-weight: 600; transition: background 150ms; }
+.detail-list-group-header:hover { background: var(--narrative-current-bg); }
+.detail-list-arrow { font-size: 0.7rem; transition: transform 150ms; color: var(--muted-foreground); }
+.detail-list-arrow.open { transform: rotate(90deg); }
+.detail-list-group-title { flex: 1; }
+.detail-list-group-count { font-size: 0.75rem; color: var(--muted-foreground); font-weight: 400; }
 .detail-list-name { font-weight: 500; color: var(--sidebar-foreground); line-height: 1.4; font-size: 0.85rem; }
 .detail-list-desc { font-size: 0.78rem; color: var(--muted-foreground); line-height: 1.4; margin-top: 0.08rem; }
 .detail-empty { text-align: center; padding: 0.8rem; font-size: 0.82rem; color: var(--muted-foreground); }

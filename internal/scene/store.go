@@ -25,6 +25,15 @@ func (s *Store) ListByChapter(ctx context.Context, novelID, chapterID int64) ([]
 	return items, nil
 }
 
+func (s *Store) ListByNovel(ctx context.Context, novelID int64) ([]Scene, error) {
+	var items []Scene
+	if err := s.DB.WithContext(ctx).Where("novel_id = ?", novelID).
+		Order("chapter_id ASC, scene_number ASC").Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (s *Store) GetByID(ctx context.Context, id, novelID int64) (*Scene, error) {
 	var sc Scene
 	if err := s.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", id, novelID).First(&sc).Error; err != nil {

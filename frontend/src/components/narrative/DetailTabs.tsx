@@ -1,6 +1,6 @@
 import { useState, useEffect, memo } from 'react'
 import { useApp } from '@/hooks/useApp'
-import { GetSceneList } from '@/lib/wailsjs/go/app/App'
+import { GetSceneListByNovel } from '@/lib/wailsjs/go/app/App'
 
 type TabId = 'characters' | 'locations' | 'items' | 'lore' | 'scenes'
 
@@ -22,6 +22,7 @@ export default memo(function DetailTabs({ novelId, chapterNum }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('characters')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [chMap, setChMap] = useState<Record<number, number>>({})
 
   useEffect(() => {
     if (!novelId) return
@@ -37,7 +38,19 @@ export default memo(function DetailTabs({ novelId, chapterNum }: Props) {
           case 'locations': result = await app.GetLocations(novelId); break
           case 'items': result = await app.GetItemList(novelId, '', '', '', 1, 20); break
           case 'lore': result = await app.GetLoreList(novelId, '', '', 1, 20); break
-          case 'scenes': result = await GetSceneList(novelId, chapterNum); break
+          case 'scenes': {
+            result = await GetSceneListByNovel(novelId)
+            // 加载章节映射 chapter_id → chapter_number
+            try {
+              const chapters = await app.GetChapters(novelId)
+              if (Array.isArray(chapters)) {
+                const map: Record<number, number> = {}
+                for (const ch of chapters) { map[ch.id] = ch.chapter_number }
+                if (!cancelled) setChMap(map)
+              }
+            } catch { /* */ }
+            break
+          }
         }
         if (!cancelled && result) setData(result)
       } catch (e) {
@@ -60,13 +73,13 @@ export default memo(function DetailTabs({ novelId, chapterNum }: Props) {
         ))}
       </div>
       <div className="detail-tabs-content">
-        {loading ? <div className="detail-empty">加载中…</div> : <TabContent tab={activeTab} data={data} />}
+        {loading ? <div className="detail-empty">加载中…</div> : <TabContent tab={activeTab} data={data} chMap={chMap} />}
       </div>
     </div>
   )
 })
 
-function TabContent({ tab, data }: { tab: TabId; data: any }) {
+function TabContent({ tab, data, chMap }: { tab: TabId; data: any; chMap?: Record<number, number> }) {
   if (!data) return <div className="detail-empty">暂无数据</div>
 
   switch (tab) {
@@ -104,9 +117,17 @@ function TabContent({ tab, data }: { tab: TabId; data: any }) {
     }
     case 'scenes': {
       const items = Array.isArray(data) ? data : []
-      return items.length ? (
-        <div>{items.slice(0, 8).map((s: any) => (
-          <div key={s.id} className="detail-list-item"><span>🎬</span><div><div className="detail-list-name">{s.title}</div>{s.summary && <div className="detail-list-desc">{s.summary}</div>}</div></div>
+      // 按 chapter_id 分组
+      const byChapter: Record<number, any[]> = {}
+      for (const s of items) {
+        const cid = s.chapter_id || 0
+        if (!byChapter[cid]) byChapter[cid] = []
+        byChapter[cid].push(s)
+      }
+      const chapterIds = Object.keys(byChapter).map(Number).sort((a, b) => b - a)
+      return chapterIds.length ? (
+        <div>{chapterIds.map(cid => (
+          <SceneChapterGroup key={cid} chapterNum={chMap?.[cid] || cid} scenes={byChapter[cid]} />
         ))}</div>
       ) : <EmptyState />
     }
@@ -116,4 +137,26 @@ function TabContent({ tab, data }: { tab: TabId; data: any }) {
 
 function EmptyState() {
   return <div className="detail-empty">暂无数据</div>
+}
+
+function SceneChapterGroup({ chapterNum, scenes }: { chapterNum: number; scenes: any[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="detail-list-group">
+      <div className="detail-list-group-header" onClick={() => setOpen(!open)}>
+        <span className={`detail-list-arrow ${open ? 'open' : ''}`}>▸</span>
+        <span className="detail-list-group-title">第 {chapterNum} 章</span>
+        <span className="detail-list-group-count">{scenes.length} 场景</span>
+      </div>
+      {open && scenes.map((s: any) => (
+        <div key={s.id} className="detail-list-item" style={{ paddingLeft: '1.5rem' }}>
+          <span>🎬</span>
+          <div>
+            <div className="detail-list-name">{s.title}</div>
+            {s.summary && <div className="detail-list-desc">{s.summary}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
