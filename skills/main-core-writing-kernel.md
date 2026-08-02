@@ -36,7 +36,11 @@ mode: always
 ### outline
 
 1. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
-2. **edit**(outlines/NNN.md)（required）— 写大纲（标题/基调/场景/关键事件/重点角色/伏笔操作/章末钩子）
+2. **edit**(outlines/NNN.md)（required）— 写大纲。
+   **格式要求（必须遵守，否则叙事面板解析失败）：**
+   - 章节标题用 `# 第N章 标题`（单井号，一行）
+   - 各 section 用 `## 标题`（双井号，如 `## 场景设计`、`## 关键事件`、`## 重点角色`、`## 伏笔操作`、`## 章末钩子`）
+   - 禁止使用 `**加粗**` 代替 `##` 标题
 3. 等待用户审批 → **set_phase("write")**
 
 ### write

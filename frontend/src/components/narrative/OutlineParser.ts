@@ -114,7 +114,7 @@ export function parseOutline(markdown: string, chapterNum: number): ParsedOutlin
 function splitByHeaders(markdown: string): Record<string, string> {
   const sections: Record<string, string> = {}
   // 先尝试用 ## 标题分割
-  const regex = /^[#]+\s+(.+?)\s*$/gm
+  const regex = /^#{2,}\s+(.+?)\s*$/gm
   let lastIndex = 0
   let lastTitle = ''
   let match: RegExpExecArray | null
