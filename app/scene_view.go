@@ -3,11 +3,16 @@ package app
 import (
 	"fmt"
 
+	"novel/internal/chapter"
 	"novel/internal/scene"
 )
 
-func (a *App) GetSceneList(novelID, chapterID int64) ([]scene.Scene, error) {
-	return a.scene.ListByChapter(a.ctx, novelID, chapterID)
+func (a *App) GetSceneList(novelID int64, chapterNumber int) ([]scene.Scene, error) {
+	var ch chapter.Chapter
+	if err := a.db.Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).First(&ch).Error; err != nil {
+		return nil, fmt.Errorf("chapter not found: %w", err)
+	}
+	return a.scene.ListByChapter(a.ctx, novelID, ch.ID)
 }
 
 func (a *App) GetSceneDetail(sceneID int64) (*scene.Scene, error) {
