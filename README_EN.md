@@ -71,13 +71,20 @@ GET  /api/arcs                 story arcs
 GET  /api/arc-nodes            arc nodes
 GET  /api/reader               reader perspective
 GET  /api/preferences          preferences
-GET  /api/stats                statistics
 GET  /api/writing-snapshot     writing snapshot
 GET  /api/phase-gate-config    phase gate config
-GET  /api/search-main-cmd-memory        semantic search
 GET  /api/writing-context      tree context
+GET  /api/search-memory        semantic search
 GET  /api/read                 read file
+GET  /api/stats                statistics
+GET  /api/sessions             session list
+GET  /api/health               health check
+GET  /api/info                 server info
+GET  /api/sync/state           sync state
 POST /api/chat                 AI chat (SSE)
+POST /api/chat/cancel          cancel chat
+POST /api/settings/model       model switch
+WS   /api/ws                   dual-end sync WebSocket
 ```
 
 Bearer Token authentication. See [mobile/API.md](mobile/API.md) for details.

@@ -77,13 +77,20 @@ GET  /api/arcs                 弧线
 GET  /api/arc-nodes            弧线节点
 GET  /api/reader               读者认知
 GET  /api/preferences          偏好
-GET  /api/stats                统计
 GET  /api/writing-snapshot     写作快照
 GET  /api/phase-gate-config    门禁配置
-GET  /api/search-main-cmd-memory        语义搜索
 GET  /api/writing-context      树状上下文
+GET  /api/search-memory        语义搜索
 GET  /api/read                 读取文件
+GET  /api/stats                统计
+GET  /api/sessions             会话列表
+GET  /api/health               健康检查
+GET  /api/info                 服务器信息
+GET  /api/sync/state           同步状态
 POST /api/chat                 AI 对话（SSE）
+POST /api/chat/cancel          取消对话
+POST /api/settings/model       模型切换
+WS   /api/ws                   双端同步 WebSocket
 ```
 
 Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
