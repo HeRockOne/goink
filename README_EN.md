@@ -4,353 +4,242 @@
 
 ---
 
-> **Forked from [sigpanic/goink](https://github.com/sigpanic/goink) v1.1**
+> Forked from [sigpanic/goink](https://github.com/sigpanic/goink) v1.1, with significant expansion of creative modules, tool system, and engineering capabilities.
 
 ---
 
 ## Table of Contents
 
-- [Differences from Upstream v1.1](#differences-from-upstream-v11)
-  - [1. New Creative Modules](#1-new-creative-modules)
-  - [2. Data Pipeline Architecture](#2-data-pipeline-architecture)
-  - [3. Phase Gate](#3-phase-gate)
-  - [4. HTTP API](#4-http-api-23-endpoints)
-  - [5. Model Config Enhancements](#5-model-config-enhancements)
-  - [6. Mobile Web Frontend](#6-mobile-web-frontend)
-  - [7. Chat UI Improvements](#7-chat-ui-improvements)
-  - [8. Custom Themes](#8-custom-themes)
-  - [9. Icon Replacement](#9-icon-replacement)
-  - [10. WebDAV](#10-webdav)
-  - [11. Other Features](#11-other-features)
-  - [12. Field Extensions](#12-field-extensions)
-  - [13. Database Tables](#13-database-tables)
-  - [14. MCP Tools](#14-mcp-tools)
-  - [15. Documentation](#15-documentation)
-  - [16. Skill System](#16-skill-system)
-  - [17. Security](#17-security)
+- [Features](#features)
 - [Installation](#installation)
 - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
+- [Comparison with Upstream](#comparison-with-upstream)
 - [License](#license)
 
 ---
 
-## Differences from Upstream v1.1
+## Features
 
-### 1. New Creative Modules (8)
+### Industrial-Grade Creative Pipeline
 
-| Module | Description |
+Goink's core is a **five-stage phase-gated pipeline** that guides AI from preparation to maintenance:
+
+```
+prepare → outline → write → review → maintain → back to prepare
+```
+
+- **prepare**: `get_writing_context` fetches full context (characters/arcs/foreshadowing/reader perception/scenes/items/stats) in one call
+- **outline**: Write outline to `outlines/NNN.md`
+- **write**: Write chapter content to `chapters/NNN.md`, released only when word count meets threshold
+- **review**: Launch review sub-agent to check character consistency, setting contradictions, foreshadowing recovery, arc progression
+- **maintain**: Force-write all state updates (characters/timeline/arcs/reader perception), 15-item checklist
+
+Each phase has a **tools whitelist** and **require list**. Gate config is stored in DB, not in AI context.
+
+### 8 New Creative Modules
+
+| Module | Capabilities |
 |--------|-------------|
-| Lore (World Settings) | 5 MCP tools + frontend UI + arc_id linking |
-| Item (Artifacts) | 5 MCP tools + frontend UI + arc_id linking |
-| ItemOccurrence | 2 MCP tools, track item appearances across chapters |
-| Scene | 4 MCP tools + backend API, linked to arc nodes |
-| ChapterMeta (update_chapter_meta) | summary / key_events / characters_in / arc_ids |
-| Tree Context (get_writing_context) | One call gets all related data + overdue foreshadowing detection |
-| Writing Snapshot | current_arc_id / active_chars / summary / detailed_state |
-| Stats | word count / arc progress / foreshadowing rate / character count / location count |
+| Worldbuilding (Lore) | 5 MCP tools + frontend UI, arc_id linkage |
+| Items/Artifacts (Item) | 5 MCP tools + frontend UI, arc_id linkage |
+| Item Occurrences | Track item appearances and state changes across chapters |
+| Scene Management (Scene) | 4 MCP tools, arc_node_id linkage |
+| Chapter Metadata (ChapterMeta) | summary / key_events / characters_in / arc_ids |
+| Tree Context (WritingContext) | 8 data sources in one call + overdue foreshadowing detection |
+| Writing Snapshot (Snapshot) | current_arc_id / active_chars / summary / detailed_state |
+| Creative Stats (Stats) | word count / arc progress / foreshadowing recovery rate / entity counts |
 
-### 2. Data Pipeline Architecture
+### HTTP API + Mobile Frontend
 
-```
-prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → review(run_subagent)
-→ maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot
-           + search_lore + search_items + set_phase)
-→ back to prepare → reads latest data from maintain
-```
-
-- prepare requires `get_writing_context` for complete state in one call
-- maintain requires `update_chapter_meta` + `update_writing_snapshot` + `search_lore` + `search_items` enforced data write-back
-- **Dual-layer required**: phase gate require forces tool calls, jsonschema required forces complete fields
-
-### 3. Phase Gate
-
-- 5-phase validation: prepare → outline → write → review → maintain
-- Each phase has tools whitelist + required call list
-- maintain phase has 15-item checklist (see `main-core-writing-kernel.md`)
-- Config stored in DB, zero token cost for AI
-
-### 4. HTTP API (23 Endpoints)
-
-No API in original. All read endpoints added:
+23 REST endpoints + SSE chat stream, full Goink functionality from mobile browser:
 
 ```
-GET  /api/novels              Novel list
-GET  /api/novels/{id}/chapters  Chapter list
-GET  /api/chapters/{id}        Chapter content
-GET  /api/characters           Characters
-GET  /api/character-relations  Character relations
-GET  /api/locations            Locations
-GET  /api/location-relations   Location relations
-GET  /api/lore                 World settings
-GET  /api/items                Items
-GET  /api/item-occurrences     Item occurrences
-GET  /api/scenes               Scenes
-GET  /api/timeline             Timeline
-GET  /api/arcs                 Story arcs
-GET  /api/arc-nodes            Arc nodes
-GET  /api/reader               Reader perspective
-GET  /api/preferences          Preferences
-GET  /api/stats                Statistics
-GET  /api/writing-snapshot     Writing snapshot
-GET  /api/phase-gate-config    Phase gate config
-GET  /api/search-main-cmd-memory        Semantic search
-GET  /api/writing-context      Writing context tree
-GET  /api/read                 Read file
+GET  /api/novels              novel list
+GET  /api/novels/{id}/chapters  chapter list
+GET  /api/chapters/{id}        chapter content
+GET  /api/characters           characters
+GET  /api/character-relations  character relations
+GET  /api/locations            locations
+GET  /api/location-relations   location relations
+GET  /api/lore                 worldbuilding entries
+GET  /api/items                items
+GET  /api/item-occurrences     item occurrences
+GET  /api/scenes               scenes
+GET  /api/timeline             timeline
+GET  /api/arcs                 story arcs
+GET  /api/arc-nodes            arc nodes
+GET  /api/reader               reader perspective
+GET  /api/preferences          preferences
+GET  /api/stats                statistics
+GET  /api/writing-snapshot     writing snapshot
+GET  /api/phase-gate-config    phase gate config
+GET  /api/search-main-cmd-memory        semantic search
+GET  /api/writing-context      tree context
+GET  /api/read                 read file
 POST /api/chat                 AI chat (SSE)
 ```
 
-Bearer Token authentication. See [mobile/API.md](mobile/API.md).
+Bearer Token authentication. See [mobile/API.md](mobile/API.md) for details.
 
-### 5. Model Config Enhancements
+- **Offline cache**: idb-keyval + in-memory dual cache
+- **Service Worker**: Pre-cached static assets, offline-ready
+- **Real-time sync**: WebSocket full-duplex between desktop and mobile
+- **QR code connect**: Scan QR from desktop settings to connect mobile
+- **Auto HTTPS**: Self-signed cert generated on startup
 
-| Change | Description |
-|--------|-------------|
-| model.dev auto-fetch | Auto-fetch model list and parameters |
-| Thinking mode | Deep reasoning toggle (high/max) |
-| Custom model edit button | Click pencil icon to modify parameters after adding |
-| Max turns per round | 50 → **100** |
+### Dynamic Narrative Panel
 
-### 6. Mobile Web Frontend
+Canvas-based draggable/resizable card panel, all writing context in one IPC call:
 
-Access at `https://{LAN_IP}:8877/mobile/`.
+- 7 cards: Current/Past/Future/Arcs/Foreshadowing/Reader/Detail
+- Drag, resize, snap, rename, show/hide
+- Layout persisted in localStorage
+- Auto-refresh on file changes and chat events, 300ms debounce
 
-| Module | Features |
-|--------|----------|
-| Bookshelf | Novel list, word counts |
-| Novel Details | Chapters/Characters/Timeline/Arcs/Reader/Preferences/Locations/Lore/Items |
-| Fullscreen Reader | Font/line spacing adjustment, page turning, chapter index, progress main-cmd-memory |
-| AI Chat | SSE streaming, thinking process, conversation history, model switching, copy button |
-| Settings | Light/dark mode, language (CN/EN), token management, model selection |
+### 57 MCP Tools
 
-- **Offline cache**: idb-keyval + main-cmd-memory Map, instant read offline
-- **Service Worker**: Pre-cache static assets for offline use
-- **Real-time sync**: WebSocket full-duplex desktop-mobile sync
-- **QR code connection**: Scan desktop QR code for quick connect
-- **Auto HTTPS**: Auto-generate certificate on startup
-- **Mobile theme**: Warm wood-study theme
+AI manages all novel data through 57 Function Calling tools. Each tool has detailed descriptions teaching AI creative methodology (worldbuilding classification, foreshadowing timing, plot twist design).
 
-### 7. Chat UI Improvements
+New tool categories:
 
-| Change | Description |
-|--------|-------------|
-| Copy button on bubble edge | Outside bubble (AI right/user left), no content overlap |
-| Scroll-to-bottom button | Quick jump to latest message |
-| Message spacing | Increased spacing between AI and user messages |
-| Phase gate block message | Moved below progress bar |
+| Category | Count | Description |
+|----------|-------|-------------|
+| Worldbuilding (Lore) | 5 | CRUD + semantic search |
+| Item | 5 | CRUD + semantic search |
+| Item Occurrence | 2 | Track item appearances |
+| Scene | 4 | CRUD |
+| Stats | 1 | Creative data aggregation |
+| Snapshot | 2 | Writing progress snapshot |
+| Phase Gate | 2 | Gate config read/write |
+| Writing Context | 1 | 8 data sources in one call |
+| Chapter Meta | 1 | Update chapter summary/events/characters |
+| Web Search/Fetch | 2 | Exa API search + web fetch |
+| Sub Agent | 1 | Launch review/memory sub-agent |
+| Delete | 1 | Generic record deletion |
 
-### 8. Custom Themes
+### 43 Skills
 
-Settings → Theme → Paste JSON → Click to apply, no confirm button needed.
+Three-layer skill system (builtin/user/novel x auto/manual/always), zero-code extension:
 
-**JSON format:**
-```json
-{
-  "name": "Darkwood Study",
-  "type": "dark",
-  "colors": {
-    "--background": "#0f1a14",
-    "--foreground": "#d8e8d8",
-    "--primary": "#5a9a6a",
-    ...
-  }
-}
-```
+| Category | Count | Description |
+|----------|-------|-------------|
+| Core System | 5 | Creative pipeline dispatch, phase init |
+| Writing Technique | 20+ | Show-dont-tell, chapter hooks, dialogue subtext, pacing, foreshadowing cycles |
+| Genre Specialization | 8 | Xianxia cultivation, urban martial arts, post-apocalyptic, suspense, historical time-travel |
+| Sub Skills | 8 | Review standards, anti-AI detection scoring |
 
-- `name` — Theme name
-- `type` — `light` or `dark`, controls chart color scheme
-- `colors` — All CSS variable key-value pairs
+### Model Configuration
 
-**Dedup key**: `name__type` (same name, different types can coexist). **Supports comments** (`//` and `/* */`).
+- Auto-discover model list (`DiscoverModels`)
+- Reasoning mode support (high / max)
+- Max turns per session: 100
+- LLM auto-retry: exponential backoff for 429 and retryable errors, up to 60s
+- Configurable compression threshold (default 0.7)
+- Web search via Exa API
 
-**Color variables (67 total):**
+### Billing Panel
 
-| Variable | Area |
-|----------|------|
-| `--background` / `--foreground` | Page background / text |
-| `--card` / `--card-foreground` | Card/panel/dialog |
-| `--popover` / `--popover-foreground` | Popover/dialog overlays |
-| `--primary🔑` / `--primary-foreground` | Buttons/links/selection/slider/switch |
-| `--secondary` / `--secondary-foreground` | Secondary panels |
-| `--muted` / `--muted-foreground` | Input fields/code blocks/helper text |
-| `--accent` / `--accent-foreground` | Hover/highlight rows |
-| `--destructive` / `--destructive-foreground` | Delete buttons/error messages |
-| `--border` / `--input` / `--ring` | Borders/focus rings |
-| `--chart-1` ~ `--chart-5` | Chart colors |
-| `--sidebar-*` (6 vars) | Sidebar |
-| `--tag-*` (6 colors × 2) | Tags/badges |
-| `--reader-bg` / `--reader-paper` | Reading mode |
-| `--bubble-user💬` / `--bubble-user-foreground` | User message bubble |
-| `--success✅` / `--success-foreground` / `--success-border` | Success messages |
-| `--danger-bg⚠️` / `--danger-border` | Error/warning messages |
-| `--status-warning` / `--status-ok` | Status indicators |
-| `--tool-*🔧` (4 colors × 2) | Tool call cards |
-| `--contribution-0` ~ `--contribution-4📊` | Contribution graph |
+- Compatible with OpenAI standard + DeepSeek cache format
+- Per-model consumption tracking
+- Token trend chart (date + model aggregation, SVG pie chart)
+- Cache hit rate: 89-93% measured
 
-**Notes:**
-- All 67 variables required (missing any breaks UI)
-- `type` only controls chart light/dark mode, not CSS mode
-- JSON supports `//` and `/* */` comments
-- Monaco editor theme follows CSS variables
+### Built-in WebDAV
 
-### 9. Icon Replacement
+- Configurable port/user/password
+- Auto-export TXT after each chat session
+- Direct reading from mobile file managers
 
-| Location | Usage | Format |
-|----------|-------|--------|
-| `build/windows/icon.ico` | exe icon + window title bar icon | ICO (multi-size) |
-| `appicon.png` | Wails app icon | PNG |
-| `frontend/public/logo.svg` | Logo in title bar | SVG |
-| `frontend/public/favicon.svg` | Browser tab icon | SVG |
-| `assets/logo.svg` | Logo source file | SVG |
+### Custom Themes
 
-**Steps:**
-1. Prepare new icons (SVG or HD PNG recommended)
-2. Replace files:
-   - **exe icon**: Convert PNG to ICO, replace `build/windows/icon.ico`
-   - **App icon**: Place PNG at project root as `appicon.png`, copy to `build/appicon.png`
-   - **Title bar logo**: Place SVG at `frontend/public/logo.svg`
-   - **Favicon**: Place SVG at `frontend/public/favicon.svg`
-3. Run `.\build.ps1` to rebuild
-4. If exe icon not updating, clear Windows icon cache or restart
+- 67 CSS variables fully covered
+- Light/dark modes
+- JSON paste to apply
+- Sample theme: "Green Study"
+- `normalizeTheme()` auto-fills missing variables
 
-### 10. WebDAV
+### Security
 
-Built-in WebDAV server. Read novels directly from phone file manager.
-
-### 11. Other Features
-
-| Feature | Description |
-|---------|-------------|
-| Chapter word count range | Custom min/max words per chapter |
-| Log toggle | Enable/disable file logging in settings |
-| Backup & restore | One-click full data backup/restore |
-| Custom software icon | Desktop/taskbar/title bar icons unified with theme (see Icon Replacement) |
-| Help center | 57 tools described in Chinese & English with return structure docs |
-| System prompt optimization | ~4700 → ~2400 tokens (49% savings) |
-| Token injection stats | `tokencount` precisely counts system prompt + tool definitions (~17.5K tokens currently) |
-| main-core-writing-kernel.md | 15-item maintain checklist |
-| config.json removed | Data dir uses exe location directly |
-| Billing panel | Per-model token accumulation, cache hit/miss split, configurable prices (CNY per million tokens) |
-| Token usage trend chart | Monthly overview aggregated by date + model, SVG pie chart for cache ratio |
-| Dynamic narrative panel | Canvas-style draggable/resizable cards aggregating 7 narrative info types |
-| DOCX export | Pure standard-library implementation (archive/zip + XML), zero dependencies |
-| Prompt caching optimization | Stable prefix (identity + always + catalog) + dynamic NovelState injection, prefix hash monitoring |
-| Input guide cards | 4 guide cards shown on empty session |
-| HTTPS toggle | Mobile API can switch to HTTP in settings (LAN debugging) |
-| Resizable sidebar | SidePanel width draggable |
-
-### 12. Field Extensions
-
-| Table | Upstream Fields | Added Fields |
-|-------|-----------------|--------------|
-| `lore_entries` | reference_type, reference_id | arc_id, reveal_chapter_id, is_public |
-| `items` | owner_id, location_id, status | arc_id, first_chapter_id, status_changed_chapter_id, narrative_role, previous_owner_id |
-| `scenes` | chapter_id, character_ids, location_id | arc_id, arc_node_id |
-| `chapters` | title, summary | key_events, characters_in, arc_ids |
-| `writing_snapshots` | last_chapter_id, current_location | current_arc_id, active_chars, summary, detailed_state |
-
-### 13. Database Tables
-
-| Upstream | This Fork |
-|----------|-----------|
-| 22 tables | **25** tables (+item_occurrences, scenes, model_usage) |
-
-### 14. MCP Tools
-
-| Upstream | This Fork |
-|----------|-----------|
-| 33 tools | **57** tools (+24) |
-| Some tools have Description | **All tools document return structure** |
-| Some fields have required | **All dependency chain fields have jsonschema required** |
-
-### 15. Documentation
-
-| Document | Description |
-|----------|-------------|
-| `docs/README.md` | Documentation index (architecture/design/adr/archive) |
-| `docs/architecture/architecture.md` | Full architecture (must-read for new AI) |
-| `docs/architecture/phase-gate.md` | Phase gate documentation |
-| `docs/architecture/competitor-analysis.md` | Chinese million-word novel tool comparison |
-| `docs/architecture/narrative-panel.md` | Dynamic narrative panel design |
-| `docs/architecture/token-injection.md` | Token injection analysis + tokencount usage |
-| `docs/design/token-optimization-plan.md` | Token optimization plan |
-| `docs/adr/0001-prompt-caching.md` | Prompt caching decision record |
-| `docs/archive/` | One-time records (audits/tests/research) |
-| `mobile/API.md` | HTTP API documentation (27 sections) |
-
-### 16. Skill System
-
-Three layers (builtin/user/novel) × three modes (auto/manual/always) = 9 strategies.
-
-43 skills total (41 built-in + 2 resident scheduling in `skills/`). Create a new `.md` file to add a Skill, zero-code.
-
-### 17. Security
-
-- Dual sandbox: regex whitelist + SafePath path traversal protection
-- File edit re-reads before writing, prevents overwriting manual changes
+- **Dual sandbox**: Regex whitelist + SafePath prevents path traversal
+- **File editing**: Re-read before write to prevent overwriting manual changes
+- **API authentication**: Bearer Token, auto-generated
+- **Audit log**: All DB changes are logged
 
 ---
 
 ## Installation
 
-Download from [Releases](https://github.com/HeRockOne/goink/releases).
-
 ### Runtime Dependencies
 
-| Dependency | Description |
-|------------|-------------|
-| WebView2 Runtime | Built-in on Windows 11; requires install on Windows 10 |
-| LLM API Key | OpenAI-compatible (DeepSeek, OpenAI, Claude, NVIDIA, etc.) |
+- **Windows 10+**: WebView2 Runtime only (built-in)
+- **macOS 11+**: System WebView only
+- **Linux**: WebKit2GTK 4.1
 
 ### Build from Source
 
-```bash
-git clone https://github.com/HeRockOne/goink.git
-cd goink
-sudo apt install libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc  # Linux
-make deps && make build  # or make dev
+```powershell
+# Windows
+.\build.ps1
+
+# macOS / Linux
+make build
 ```
 
-Windows one-click build: `.\build.ps1` or `build.bat`
+Binary output in `build/bin/`, auto-deployed to `D:\Goink\` (Windows) or same directory.
 
 ---
 
 ## Project Structure
 
 ```
-goink/
-├── app/                    # Wails binding + HTTP API (23 endpoints)
-├── tokencount/            # Token counting tool (precise system prompt + tool JSON injection stats)
-├── internal/
-│   ├── agent/              # Agent loop (MaxTurns 100)
-│   ├── agentcfg/           # System prompt (2400 tokens) + tool whitelist
-│   ├── mcp_tools/          # 57 MCP tools
-│   ├── llm/                # Multi-provider LLM
-│   ├── session/            # Session + messages
-│   ├── character/          # Characters + directed relation graph
-│   ├── chapter/            # Chapter metadata
-│   ├── timeline/           # Foreshadowing + chapter plan
-│   ├── storyarc/           # Story arcs + nodes
-│   ├── reader/             # Reader perspective
-│   ├── location/           # Location graph
-│   ├── lore/               # World settings
-│   ├── item/               # Items/artifacts
-│   ├── itemoccurrence/     # Item occurrence tracking
-│   ├── scene/              # Scene management
-│   ├── writing/            # Writing log + snapshot
-│   ├── rag/                # Vector search (ONNX)
-│   ├── search/             # Full-text search
-│   ├── skill/              # Skill system (3 layers × 3 modes)
-│   ├── cert/               # Auto HTTPS certificate
-│   ├── webdav/             # WebDAV server
-│   └── migrate/            # 25 tables auto-migration
-├── mobile/                 # Mobile web frontend
-├── frontend/               # Desktop React frontend
-├── docs/                   # Architecture/audit/competitor docs
-├── skills/                 # Skill source (2 resident scheduling skills)
-├── build.ps1               # Windows one-click build
-└── build.bat               # Windows one-click build
+goink-fork/
+├── main.go              # Entry point
+├── app/                 # Wails binding layer (42 files)
+│   ├── handler.go       #   App struct + lifecycle
+│   ├── chat.go          #   Chat entry
+│   ├── api_server.go    #   HTTP API server
+│   ├── novel.go         #   Novel CRUD
+│   └── ...              #   View APIs, settings, backup, content
+├── internal/            # Core logic (~150 files)
+│   ├── agent/           #   ReAct Agent engine + phase gate
+│   ├── agentcfg/        #   System prompts + tool allowlists
+│   ├── mcp_tools/       #   57 MCP tool registry
+│   ├── llm/             #   Multi-provider LLM client
+│   ├── skill/           #   Three-layer skill system (41 builtin)
+│   ├── rag/             #   Vector search (ONNX + sqlite-vec)
+│   ├── search/          #   Three-way merged search
+│   ├── session/         #   Session storage
+│   ├── storage/         #   SQLite connection pool
+│   ├── git/             #   Built-in Git management
+│   ├── migrate/         #   25 table auto-migration
+│   ├── ws/              #   WebSocket sync
+│   ├── cert/            #   Self-signed certificate
+│   ├── webdav/          #   LAN file sharing
+│   ├── export/          #   TXT/MD/EPUB/DOCX
+│   ├── import/          #   TXT/EPUB/LLM import
+│   └── 20+ domain stores # Character/location/arc/timeline/etc.
+├── frontend/            # React desktop (70+ files)
+│   └── src/
+│       ├── components/  # 25+ component directories
+│       │   ├── chat/    #   Chat panel
+│       │   ├── content/ #   Content editor
+│       │   ├── narrative/ # Narrative panel
+│       │   ├── character/ # Character graph
+│       │   ├── settings/  # Settings
+│       │   └── ...
+│       └── i18n/        # Chinese/English
+├── mobile/              # Mobile web frontend
+│   ├── app.js           #   App logic (77k lines)
+│   ├── style.css        #   Styles (33k lines)
+│   └── API.md           #   API documentation
+├── skills/              # Persistent dispatch skills
+├── docs/                # Documentation
+│   ├── architecture/    #   System design
+│   ├── adr/             #   Decision records
+│   ├── design/          #   Proposals
+│   └── archive/         #   Archives
+└── tokencount/          # Token counting tool
 ```
 
 ---
@@ -359,16 +248,82 @@ goink/
 
 | Layer | Choice |
 |-------|--------|
-| Agent Engine | ReAct loop (Go, SSE + 57 tools + sub-agent, MaxTurns 100) |
-| Desktop Framework | Wails v2 (Go + WebView) |
-| Frontend | React + TypeScript + Tailwind CSS + shadcn/ui |
-| Mobile | HTTP API + vanilla JS web frontend + idb-keyval offline cache |
-| Database | SQLite + GORM (25 tables + auto-migration) |
-| Vector Search | sqlite-vec + ONNX Runtime (BGE Chinese model) |
-| Version Control | Built-in Git (auto commit / Diff / Revert) |
+| Desktop Framework | Wails v2 (Go + WebView2) |
+| Frontend | React 18 + TypeScript + Tailwind CSS + shadcn/ui |
+| Backend | Go 1.26, GORM + SQLite |
+| Agent Engine | ReAct loop (SSE + 57 tools + sub-agents, MaxTurns 100) |
+| Vector Search | ONNX Runtime (BGE Chinese) + sqlite-vec |
+| Version Control | Built-in Git (per-novel repository) |
+| Mobile | Vanilla JS + idb-keyval + Service Worker |
+| i18n | react-i18next (Chinese/English) |
+
+---
+
+## Comparison with Upstream
+
+This fork is based on [sigpanic/goink](https://github.com/sigpanic/goink) v1.1. Key differences:
+
+### Creative Modules
+
+| Module | Upstream v1.1 | This Fork |
+|--------|---------------|-----------|
+| Worldbuilding (Lore) | None | 5 MCP tools + frontend UI |
+| Items/Artifacts | None | 5 MCP tools + frontend UI |
+| Item Occurrences | None | 2 MCP tools |
+| Scene Management | None | 4 MCP tools |
+| Chapter Metadata | None | summary / key_events / characters_in |
+| Tree Context | None | 8 data sources in one call |
+| Writing Snapshot | None | Progress snapshot |
+| Creative Stats | None | Word count / arc / foreshadowing stats |
+
+### Tools & Skills
+
+| Metric | Upstream v1.1 | This Fork |
+|--------|---------------|-----------|
+| MCP Tools | 33 | **57** |
+| Builtin Skills | 12 | **41** |
+| Database Tables | 17 | **25** |
+
+### Engineering
+
+| Feature | Upstream v1.1 | This Fork |
+|---------|---------------|-----------|
+| Phase Gate | None | 5-stage validation + whitelist + require |
+| HTTP API | None | 23 endpoints + SSE chat |
+| Mobile Frontend | None | Full web app + offline cache |
+| WebDAV | None | Built-in server |
+| Billing Panel | None | Token stats + trend chart |
+| Narrative Panel | None | 7-card canvas layout |
+| Custom Themes | None | 67 CSS variables |
+| DOCX Export | None | Pure stdlib implementation |
+| Wails Version | v2.12.0 | **v2.13.0** |
+| Go Version | 1.25 | **1.26** |
+| Max Turns | 50 | **100** |
+| Web Search | DeepSeek | **Exa API** |
+
+### Data Pipeline
+
+```
+Upstream:  get_* one by one → manual maintenance
+This fork: prepare(get_writing_context) → outline → write → review → maintain(force write-back)
+```
+
+- prepare requires `get_writing_context` for full state
+- maintain requires `update_chapter_meta` + `update_writing_snapshot` + `search_lore` + `search_items` forced write-back
+- Dual-layer required: gate require forces tool calls, jsonschema required forces complete fields
+
+### Field Extensions
+
+| Table | New Fields |
+|-------|-----------|
+| chapters | avatar_url, summary, key_events, characters_in |
+| characters | avatar_url, location_id, description |
+| locations | avatar_url, location_type, description |
+| sessions | current_phase, called_tools, reasoning_effort |
+| messages | thinking_content, extra_metadata, agent_type, sub_task_id |
 
 ---
 
 ## License
 
-AGPL-3.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+AGPL-3.0. See [LICENSE](LICENSE).

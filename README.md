@@ -4,77 +4,61 @@
 
 ---
 
-> **基于 [sigpanic/goink](https://github.com/sigpanic/goink) v1.1 fork**
+> 基于 [sigpanic/goink](https://github.com/sigpanic/goink) v1.1 fork，大幅扩展了创作模块、工具系统和工程能力。
 
 ---
 
 ## 目录
 
-- [与上游 v1.1 的差异](#与上游-v11-的差异)
-  - [一、全新创作模块](#一全新创作模块)
-  - [二、数据管线架构](#二数据管线架构)
-  - [三、阶段门禁](#三阶段门禁)
-  - [四、HTTP API](#四http-api23-个端点)
-  - [五、模型配置增强](#五模型配置增强)
-  - [六、移动端 Web 前端](#六移动端-web-前端)
-  - [七、对话界面优化](#七对话界面优化)
-  - [八、自定义主题](#八自定义主题)
-  - [九、图标替换](#九图标替换)
-  - [十、WebDAV](#十webdav)
-  - [十一、其他功能](#十一其他功能)
-  - [十二、字段扩展](#十二字段扩展)
-  - [十三、数据库表扩展](#十三数据库表扩展)
-  - [十四、MCP 工具扩展](#十四mcp-工具扩展)
-  - [十五、文档](#十五文档)
-  - [十六、Skill 体系](#十六skill-体系)
-    - [内置 41 个（通用 + 类型） + 常驻调度 2 个](#十六skill-体系)
-  - [十七、安全](#十七安全)
+- [特色功能](#特色功能)
 - [安装](#安装)
 - [项目结构](#项目结构)
 - [技术栈](#技术栈)
+- [与上游对比](#与上游对比)
 - [License](#license)
 
 ---
 
-## 与上游 v1.1 的差异
+## 特色功能
 
-### 一、全新创作模块（8 个）
+### 工业化创作管线
 
-| 模块 | 说明 |
+Goink 的核心是一套**五阶段门禁管线**，规范 AI 从准备到维护的完整创作流程：
+
+```
+prepare → outline → write → review → maintain → 回到 prepare
+```
+
+- **prepare**：`get_writing_context` 一次获取全量上下文（角色/弧线/伏笔/读者认知/场景/物品/统计）
+- **outline**：将大纲写入 `outlines/NNN.md`
+- **write**：将正文写入 `chapters/NNN.md`，字数达标后门禁放行
+- **review**：启动审稿子 Agent，逐项检查角色一致性、设定矛盾、伏笔回收、弧线推进
+- **maintain**：强制回写角色/时间线/弧线/读者认知等所有状态，15 项检查清单
+
+每阶段有 **tools 白名单**和 **require 必调列表**，不满足条件无法推进到下一阶段。门禁配置存数据库，不占 AI 上下文。
+
+### 8 个全新创作模块
+
+| 模块 | 能力 |
 |------|------|
-| 世界观设定（Lore） | 5 个 MCP 工具 + 前端 UI + arc_id 关联弧线 |
-| 物品/法宝（Item） | 5 个 MCP 工具 + 前端 UI + arc_id 关联弧线 |
-| 物品流转记录（ItemOccurrence） | 2 个 MCP 工具，追踪物品在各章节的出现和状态变化 |
-| 场景管理（Scene） | 4 个 MCP 工具 + 后端 API，arc_node_id 关联弧线节点 |
-| 章节元数据（update_chapter_meta） | summary / key_events / characters_in / arc_ids |
-| 树状上下文（get_writing_context） | 一次调用获取全量关联数据 + 超期伏笔检测 |
+| 世界观设定（Lore） | 5 个 MCP 工具 + 前端 UI，arc_id 关联弧线 |
+| 物品/法宝（Item） | 5 个 MCP 工具 + 前端 UI，arc_id 关联弧线 |
+| 物品流转记录（ItemOccurrence） | 追踪物品在各章节的出现和状态变化 |
+| 场景管理（Scene） | 4 个 MCP 工具，arc_node_id 关联弧线节点 |
+| 章节元数据（ChapterMeta） | summary / key_events / characters_in / arc_ids |
+| 树状上下文（WritingContext） | 一次调用获取 8 个数据源 + 超期伏笔检测 |
 | 写作进度快照（Snapshot） | current_arc_id / active_chars / summary / detailed_state |
 | 创作统计（Stats） | 字数 / 弧线进度 / 伏笔回收率 / 角色数 / 地点数 |
 
-### 二、数据管线架构
+### HTTP API + 移动端
 
-```
-prepare(get_writing_context) → outline(edit outlines/)
-→ write(edit chapters/) → review(run_subagent)
-→ maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot
-           + search_lore + search_items + set_phase)
-→ 回到 prepare → 读到 maintain 回写的最新数据
-```
+23 个 REST 端点 + SSE 对话流，手机浏览器可完整使用 Goink：
 
-- prepare require `get_writing_context` 一次获取全量状态
-- maintain require `update_chapter_meta` + `update_writing_snapshot` + `search_lore` + `search_items` 强制回写
-- **双层 required**：门禁 require 强制调用工具，jsonschema required 强制填完整字段
-
-### 三、阶段门禁
-
-- 5 阶段校验：prepare → outline → write → review → maintain
-- 每阶段有 tools 白名单 + require 必调列表
-- maintain 阶段 15 项逐项检查清单（详见 `main-core-writing-kernel.md`）
-- 门禁配置存数据库，不占 AI 上下文
-
-### 四、HTTP API（23 个端点）
-
-原版无 API。新增全部读端点：
+- **书架**：小说列表、字数统计、当前书籍标识
+- **小说详情**：章节/角色/时间线/弧线/读者/偏好/地点/世界观/物品 九大模块
+- **全屏阅读器**：字号行距调节、左右翻页、章节目录、进度记忆
+- **AI 对话**：流式 SSE、思考过程、会话历史、模型切换、复制按钮
+- **设置**：深浅模式、中英语言、Token 管理、模型选择
 
 ```
 GET  /api/novels              小说列表
@@ -104,27 +88,6 @@ POST /api/chat                 AI 对话（SSE）
 
 Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 
-### 五、模型配置增强
-
-| 改动 | 说明 |
-|------|------|
-| model.dev 取模型数据 | 自动获取模型列表和参数 |
-| 思考模式支持 | 深度推理开关（high/max） |
-| 自定义模型编辑按钮 | 添加后可点击铅笔图标修改参数 |
-| 单轮最大轮次 | 50 → **100** |
-
-### 六、移动端 Web 前端
-
-手机浏览器访问 `https://{局域网IP}:8877/mobile/`。
-
-| 模块 | 功能 |
-|------|------|
-| 书架 | 小说列表、字数统计、当前书籍标识 |
-| 小说详情 | 章节/角色/时间线/弧线/读者/偏好/地点/世界观/物品 九大模块 |
-| 全屏阅读器 | 字号行距调节、左右翻页、章节目录、进度记忆 |
-| AI 对话 | 流式 SSE、思考过程、会话历史、模型切换、复制按钮 |
-| 设置 | 深浅模式、中英语言、Token 管理、模型选择 |
-
 - **离线缓存**：`idb-keyval` + 内存 Map 双缓存，断网秒读
 - **Service Worker**：预缓存静态资源，断网页面骨架正常加载
 - **双端实时同步**：桌面端与移动端 WebSocket 全双工同步
@@ -132,228 +95,158 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 - **自动 HTTPS**：启动时自动生成证书
 - **移动端主题**：木艺书阁·暖卷沉光主题
 
-### 七、对话界面优化
+### 动态叙事面板
 
-| 改动 | 说明 |
-|------|------|
-| 消息泡复制按钮 | 在消息泡边框外（AI 泡右侧/用户泡左侧），不遮挡内容 |
-| 一键到达底部按钮 | 快速跳转到最新消息 |
-| 消息间距 | AI 消息和用户消息之间增加间距 |
-| 门禁拦截提示 | 移到进度条下方，不再遮挡进度条 |
+画布式可拖拽/缩放卡片面板，一次 IPC 调用聚合全部写作上下文：
 
-### 八、自定义主题
+- 7 张卡片：当前/过去/未来/弧线/伏笔/读者/详细设定
+- 四边四角拖拽缩放，自动吸附其他卡片边缘
+- 卡片标题可双击重命名，布局存 localStorage
+- 实时刷新：监听文件变更和对话事件，300ms 防抖
 
-设置 → 主题 → 粘贴 JSON → 单击即应用，无需确认按钮。
+### 57 个 MCP 工具
 
-**JSON 格式：**
-```json
-{
-  "name": "墨绿书斋",
-  "type": "dark",
-  "colors": {
-    "--background": "#0f1a14",
-    "--foreground": "#d8e8d8",
-    "--primary": "#5a9a6a",
-    ...
-  }
-}
-```
+AI 通过 57 个 Function Calling 工具管理小说的全部数据。工具按领域划分，每个工具都有详尽的 description 教会 AI 创作方法论（世界观分类、伏笔回收节奏、悬念反转设计）。
 
-- `name` — 主题名称
-- `type` — `light` 或 `dark`，决定图表配色方案
-- `colors` — 全部 CSS 变量键值对，缺任意变量会导致 UI 异常
+新增工具分类：
 
-**去重键**：`name__type`（同名不同深浅可共存）。**支持注释**（`//` 和 `/* */`）。
+| 分类 | 工具数 | 说明 |
+|------|--------|------|
+| 世界观（Lore） | 5 | CRUD + 语义搜索 |
+| 物品（Item） | 5 | CRUD + 语义搜索 |
+| 物品流转（ItemOccurrence） | 2 | 追踪物品出现和状态 |
+| 场景（Scene） | 4 | CRUD |
+| 统计（Stats） | 1 | 创作数据聚合 |
+| 快照（Snapshot） | 2 | 写作进度快照读写 |
+| 门禁（PhaseGate） | 2 | 门禁配置读写 |
+| 树状上下文（WritingContext） | 1 | 一次获取 8 个数据源 |
+| 章节元数据（ChapterMeta） | 1 | 更新章节摘要/事件/角色 |
+| 网络搜索/抓取（WebSearch） | 2 | Exa API 搜索 + 网页抓取 |
+| 子 Agent（Subagent） | 1 | 启动审稿/记忆子 Agent |
+| 通用删除（Delete） | 1 | 删除任意记录 |
 
-**颜色变量清单（67 个）：**
+### 43 个 Skill（技能系统）
 
-| 变量 | 影响区域 |
-|------|---------|
-| `--background` | 页面最底层背景 |
-| `--foreground` | 正文/标题/列表文字 |
-| `--card` / `--card-foreground` | 卡片/面板/弹窗 |
-| `--popover` / `--popover-foreground` | 浮层/弹窗 |
-| `--primary`🔑 / `--primary-foreground` | 按钮/链接/选中态/滑块/开关 |
-| `--secondary` / `--secondary-foreground` | 次要面板 |
-| `--muted` / `--muted-foreground` | 输入框/代码块/辅助文字 |
-| `--accent` / `--accent-foreground` | 悬浮/高亮行 |
-| `--destructive` / `--destructive-foreground` | 删除按钮/错误提示 |
-| `--border` / `--input` / `--ring` | 边框/聚焦光晕 |
-| `--chart-1` ~ `--chart-5` | 图表色序 |
-| `--sidebar*`（6 个） | 侧边栏 |
-| `--tag-blue` / `--tag-green` / `--tag-amber` / `--tag-rose` / `--tag-teal` / `--tag-purple`🔖（含 `-foreground`） | 标签/徽章色系 |
-| `--reader-bg` / `--reader-paper` | 阅读模式背景/纸张 |
-| `--bubble-user`💬 / `--bubble-user-foreground` | 用户消息气泡 |
-| `--action-extract` / `--action-save` | 操作按钮 |
-| `--success`✅ / `--success-foreground` / `--success-border` | 成功提示 |
-| `--danger-bg`⚠️ / `--danger-border` | 错误/警告提示 |
-| `--status-warning` / `--status-ok` | 状态色 |
-| `--tool-blue` / `--tool-amber` / `--tool-green` / `--tool-red`🔧（含 `-border`） | 工具调用块 |
-| `--contribution-0` ~ `--contribution-4`📊 | 贡献图色阶 |
+三层 Skill 系统（内置/用户/小说 x auto/manual/always），零代码扩展：
 
-**注意事项：**
-- 必须提供全部 67 个变量，缺失会导致 UI 破碎
-- `type` 字段仅控制图表 light/dark 模式，不是 CSS 模式切换
-- JSON 支持 `//` 和 `/* */` 注释
-- Diff 编辑器（Monaco）主题色从 CSS 变量读取，切换主题时自动跟随
-
-### 九、图标替换
-
-| 位置 | 用途 | 格式 |
+| 分类 | 数量 | 说明 |
 |------|------|------|
-| `build/windows/icon.ico` | exe 文件图标 + 窗口标题栏图标 | ICO（多尺寸） |
-| `appicon.png` | Wails 构建用的应用图标 | PNG |
-| `frontend/public/logo.svg` | 标题栏左上角 Logo | SVG |
-| `frontend/public/favicon.svg` | 浏览器标签页图标 | SVG |
-| `assets/logo.svg` | Logo 源文件 | SVG |
+| 核心系统（core） | 5 | 创作流程调度、阶段初始化 |
+| 写作技术（tech） | 20+ | 展示而非讲述、章节钩子、对白潜台词、节奏控制、伏笔循环等 |
+| 类型专精（type） | 8 | 玄幻修仙、都市武侠、末世生存、悬疑规则怪谈、历史穿越等 |
+| 子技能（sub） | 8 | 审稿标准、反 AI 检测评分等 |
 
-**替换步骤：**
-1. 准备新图标（推荐 SVG 或高清 PNG）
-2. 替换对应文件：
-   - **exe 图标**：用在线工具将 PNG 转为 ICO，替换 `build/windows/icon.ico`
-   - **应用图标**：将 PNG 放到项目根目录，重命名为 `appicon.png`，同时复制到 `build/appicon.png`
-   - **标题栏 Logo**：将 SVG 放到 `frontend/public/logo.svg`
-   - **Favicon**：将 SVG 放到 `frontend/public/favicon.svg`
-3. 运行 `.\build.ps1` 重新构建
-4. 若 exe 图标未更新，清除 Windows 图标缓存或重启电脑
+### 模型配置增强
 
-### 十、WebDAV
+- 自动获取模型列表（`DiscoverModels`）
+- 思考模式支持（`ReasoningEffort`：high / max）
+- 单轮最大轮次：100
+- LLM 自动重试：429 限流和可重试错误指数退避，最长 60 秒
+- 可配置压缩阈值（默认 0.7）
+- 网络搜索：Exa API
 
-内置 WebDAV 服务器，手机文件管理器直接阅读小说。
+### 计费面板
 
-### 十一、其他功能
+- 兼容 OpenAI 标准格式 + DeepSeek 格式缓存字段
+- 按模型独立累计消耗
+- Token 趋势图（日期 + 模型聚合，SVG 饼图）
+- 缓存命中率实测 89-93%
 
-| 功能 | 说明 |
-|------|------|
-| 章节字数范围调整 | 设置中自定义最少/最多字数 |
-| 日志开关 | 设置中启用/禁用文件日志 |
-| 数据备份恢复 | 一键备份/恢复全量数据 |
-| 自定义软件图标 | 桌面图标、任务栏图标、标题栏图标统一匹配主题风格（图标位置见"图标替换"） |
-| 帮助中心 | 57 个工具的中英文描述，含返回结构文档 |
-| 系统提示词精简 | ~4700 token → ~2400 token（省 49%） |
-| Token 注入统计 | `tokencount` 精确统计系统提示词 + 工具定义注入量（当前约 17.5K token） |
-| main-core-writing-kernel.md | 15 项 maintain 检查清单 |
-| config.json 移除 | 数据目录直接用 exe 位置，无需 config.json |
-| 计费面板 | Token 用量按模型累计，缓存命中/未命中分账，价格可配（元/百万 token） |
-| 个人中心 Token 趋势图 | 按日期 + 模型聚合的月度消耗总览，SVG 饼图展示缓存占比 |
-| 动态叙事面板 | 画布式可拖拽/缩放卡片面板，聚合当前/过去/未来/弧线/伏笔/读者 7 类叙事信息 |
-| DOCX 导出 | 纯标准库实现（archive/zip + XML），无外部依赖 |
-| Prompt Caching 优化 | 稳定前缀（identity + always + catalog）+ NovelState 动态注入，消息前缀哈希监控缓存稳定性 |
-| 输入框引导提示 | 空会话时显示 4 张引导卡片 |
-| HTTPS 开关 | 移动端 API 可在设置中关闭 HTTPS 改用 HTTP（局域网调试） |
-| 侧边栏宽度拖拽 | SidePanel 可拖拽调整宽度 |
+### 内置 WebDAV
 
-### 十二、字段扩展
+- 可配置端口/用户/密码
+- 对话结束后自动导出 TXT
+- 手机文件管理器直接阅读
 
-| 表 | 上游字段 | 新增字段 |
-|----|----------|---------|
-| `lore_entries` | reference_type, reference_id | arc_id, reveal_chapter_id, is_public |
-| `items` | owner_id, location_id, status | arc_id, first_chapter_id, status_changed_chapter_id, narrative_role, previous_owner_id |
-| `scenes` | chapter_id, character_ids, location_id | arc_id, arc_node_id |
-| `chapters` | title, summary | key_events, characters_in, arc_ids |
-| `writing_snapshots` | last_chapter_id, current_location | current_arc_id, active_chars, summary, detailed_state |
+### 自定义主题
 
-### 十三、数据库表扩展
+- 67 个 CSS 变量全量覆盖
+- 亮色/暗色双模式
+- JSON 粘贴即应用
+- 示例主题「墨绿书斋」
+- `normalizeTheme()` 自动补全缺失变量
 
-| 上游 | 本 fork |
-|------|---------|
-| 22 张表 | **25** 张表（+item_occurrences, scenes, model_usage） |
+### 安全
 
-### 十四、MCP 工具扩展
-
-| 上游 | 本 fork |
-|------|---------|
-| 33 个工具 | **57** 个工具（+24） |
-| 部分工具有 Description | **全部标注返回结构** |
-| 部分字段有 required | **依赖链字段全部标注 jsonschema required** |
-
-### 十五、文档
-
-| 文档 | 说明 |
-|------|------|
-| `docs/README.md` | 文档索引（architecture/design/adr/archive 分层） |
-| `docs/architecture/architecture.md` | 完整架构文档（新 AI 接手必读） |
-| `docs/architecture/phase-gate.md` | 阶段门禁文档 |
-| `docs/architecture/competitor-analysis.md` | 国内百万字级竞品分析 |
-| `docs/architecture/narrative-panel.md` | 动态叙事面板设计 |
-| `docs/architecture/token-injection.md` | Token 注入构成分析 + tokencount 使用说明 |
-| `docs/design/token-optimization-plan.md` | Token 优化方案全集 |
-| `docs/adr/0001-prompt-caching.md` | Prompt Caching 决策记录 |
-| `docs/archive/` | 审计/测试/调研等一次性过程记录 |
-| `mobile/API.md` | HTTP API 文档（27 节） |
-
-### 十六、Skill 体系
-
-三层（内置/用户/小说级）× 三种模式（auto/manual/always）= 9 种策略。
-
-当前共 43 个 Skill（41 内置通用/类型 + 2 常驻调度 `skills/`）。新建 `.md` 文件即新 Skill，零代码扩展。
-
-### 十七、安全
-
-- 双层沙箱：正则白名单 + SafePath 杜绝路径穿越
-- 文件编辑写入前重读对比，防止覆盖手动修改
+- **双层沙箱**：正则白名单 + SafePath 杜绝路径穿越
+- **文件编辑**：写入前重读对比，防止覆盖手动修改
+- **API 认证**：Bearer Token，自动生成
+- **操作日志**：所有 DB 变更操作可审计
 
 ---
 
 ## 安装
 
-从 [Releases] 下载安装包。
-
 ### 运行时依赖
 
-| 依赖 | 说明 |
-|------|------|
-| WebView2 Runtime | Windows 11 内置；Windows 10 需要安装 |
-| LLM API Key | 兼容 OpenAI 格式（DeepSeek、OpenAI、Claude、NVIDIA 等） |
+- **Windows 10+**：仅需 WebView2 Runtime（系统内置）
+- **macOS 11+**：仅需系统 WebView
+- **Linux**：需要 WebKit2GTK 4.1
 
 ### 从源码构建
 
-```bash
-git clone https://github.com
-cd goink
-sudo apt install libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc  # Linux
-make deps && make build  # 或 make dev
+```powershell
+# Windows
+.\build.ps1
+
+# macOS / Linux
+make build
 ```
 
-Windows 一键构建：`.\build.ps1` 或 `build.bat`
+构建产物在 `build/bin/` 目录，自动部署到 `D:\Goink\`（Windows）或同级目录。
 
 ---
 
 ## 项目结构
 
 ```
-goink/
-├── app/                    # Wails 绑定 + HTTP API（23 端点）
-├── tokencount/            # Token 统计工具（精确统计系统提示词 + 工具 JSON 注入）
-├── internal/
-│   ├── agent/              # Agent loop（MaxTurns 100）
-│   ├── agentcfg/           # 系统提示词（2400 token）+ 工具白名单
-│   ├── mcp_tools/          # 57 个 MCP 工具
-│   ├── llm/                # 多提供商 LLM
-│   ├── session/            # 会话 + 消息
-│   ├── character/          # 角色 + 有向关系图
-│   ├── chapter/            # 章节元数据
-│   ├── timeline/           # 伏笔 + 章节计划
-│   ├── storyarc/           # 故事弧线 + 节点
-│   ├── reader/             # 读者认知
-│   ├── location/           # 地点图
-│   ├── lore/               # 世界观设定
-│   ├── item/               # 物品/法宝
-│   ├── itemoccurrence/     # 物品流转记录
-│   ├── scene/              # 场景管理
-│   ├── writing/            # 写作日志 + 快照
-│   ├── rag/                # 向量搜索（ONNX）
-│   ├── search/             # 全文搜索
-│   ├── skill/              # 技能系统（3 层 × 3 模式）
-│   ├── cert/               # 自动 HTTPS 证书
-│   ├── webdav/             # WebDAV 服务器
-│   └── migrate/            # 25 张表自动迁移
-├── mobile/                 # 移动端 Web 前端
-├── frontend/               # 桌面端 React 前端
-├── docs/                   # 架构/审计/竞品分析文档
-├── skills/                 # Skill 源文件（2 常驻调度）
-├── build.ps1               # Windows 一键构建
-└── build.bat               # Windows 一键构建
+goink-fork/
+├── main.go              # 入口
+├── app/                 # Wails 绑定层（42 文件）
+│   ├── handler.go       #   App 结构体 + 生命周期
+│   ├── chat.go          #   对话入口
+│   ├── api_server.go    #   HTTP API 服务器
+│   ├── novel.go         #   小说 CRUD
+│   └── ...              #   视图 API、设置、备份、内容编辑
+├── internal/            # 核心逻辑（~150 文件）
+│   ├── agent/           #   ReAct Agent 引擎 + 阶段门禁
+│   ├── agentcfg/        #   系统提示词 + 工具白名单
+│   ├── mcp_tools/       #   57 个 MCP 工具注册表
+│   ├── llm/             #   多供应商 LLM 客户端
+│   ├── skill/           #   三层 Skill 系统（41 内置）
+│   ├── rag/             #   向量检索（ONNX + sqlite-vec）
+│   ├── search/          #   三路合并搜索
+│   ├── session/         #   会话存储
+│   ├── storage/         #   SQLite 连接池
+│   ├── git/             #   内置 Git 管理
+│   ├── migrate/         #   25 张表自动迁移
+│   ├── ws/              #   WebSocket 同步
+│   ├── cert/            #   自签名证书
+│   ├── webdav/          #   局域网文件共享
+│   ├── export/          #   TXT/MD/EPUB/DOCX
+│   ├── import/          #   TXT/EPUB/LLM 导入
+│   └── 20+ 领域 Store   #   角色/地点/弧线/时间线/等
+├── frontend/            # React 桌面端（70+ 文件）
+│   └── src/
+│       ├── components/  # 25+ 组件目录
+│       │   ├── chat/    #   对话面板
+│       │   ├── content/ #   内容编辑器
+│       │   ├── narrative/ # 叙事面板
+│       │   ├── character/ # 角色图谱
+│       │   ├── settings/  # 设置
+│       │   └── ...
+│       └── i18n/        # 中英双语
+├── mobile/              # 移动端 Web 前端
+│   ├── app.js           #   应用逻辑（77k 行）
+│   ├── style.css        #   样式（33k 行）
+│   └── API.md           #   API 文档
+├── skills/              # 常驻调度 Skill
+├── docs/                # 文档
+│   ├── architecture/    #   系统设计
+│   ├── adr/             #   决策记录
+│   ├── design/          #   方案
+│   └── archive/         #   归档
+└── tokencount/          # Token 统计工具
 ```
 
 ---
@@ -362,16 +255,82 @@ goink/
 
 | 层 | 选型 |
 |---|---|
-| Agent 引擎 | ReAct 循环（Go，SSE + 57 工具 + 子 Agent，MaxTurns 100） |
-| 桌面框架 | Wails v2（Go + WebView） |
-| 前端 | React + TypeScript + Tailwind CSS + shadcn/ui |
-| 移动端 | HTTP API + 纯原生 JS Web 前端 + idb-keyval 离线缓存 |
-| 数据库 | SQLite + GORM（25 张表 + 自动迁移） |
-| 向量搜索 | sqlite-vec + ONNX Runtime（BGE 中文模型） |
-| 版本控制 | 内置 Git（自动 commit / Diff / Revert） |
+| 桌面框架 | Wails v2 (Go + WebView2) |
+| 前端 | React 18 + TypeScript + Tailwind CSS + shadcn/ui |
+| 后端 | Go 1.26, GORM + SQLite |
+| Agent 引擎 | ReAct 循环 (SSE + 57 工具 + 子 Agent, MaxTurns 100) |
+| 向量搜索 | ONNX Runtime (BGE 中文) + sqlite-vec |
+| 版本控制 | 内置 Git (每本小说独立仓库) |
+| 移动端 | 原生 JS + idb-keyval + Service Worker |
+| 国际化 | react-i18next (中/英) |
+
+---
+
+## 与上游对比
+
+本 fork 基于 [sigpanic/goink](https://github.com/sigpanic/goink) v1.1，以下是主要差异：
+
+### 创作模块
+
+| 模块 | 上游 v1.1 | 本 fork |
+|------|-----------|---------|
+| 世界观设定（Lore） | 无 | 5 个 MCP 工具 + 前端 UI |
+| 物品/法宝（Item） | 无 | 5 个 MCP 工具 + 前端 UI |
+| 物品流转记录 | 无 | 2 个 MCP 工具 |
+| 场景管理（Scene） | 无 | 4 个 MCP 工具 |
+| 章节元数据 | 无 | summary / key_events / characters_in |
+| 树状上下文 | 无 | 一次获取 8 个数据源 |
+| 写作快照 | 无 | 进度快照 |
+| 创作统计 | 无 | 字数/弧线/伏笔统计 |
+
+### 工具与技能
+
+| 指标 | 上游 v1.1 | 本 fork |
+|------|-----------|---------|
+| MCP 工具 | 33 个 | **57 个** |
+| 内置 Skill | 12 个 | **41 个** |
+| 数据库表 | 17 张 | **25 张** |
+
+### 工程能力
+
+| 功能 | 上游 v1.1 | 本 fork |
+|------|-----------|---------|
+| 阶段门禁 | 无 | 5 阶段校验 + 白名单 + require |
+| HTTP API | 无 | 23 端点 + SSE 对话 |
+| 移动端 | 无 | 完整 Web 前端 + 离线缓存 |
+| WebDAV | 无 | 内置服务器 |
+| 计费面板 | 无 | Token 统计 + 趋势图 |
+| 叙事面板 | 无 | 7 卡片画布式布局 |
+| 自定义主题 | 无 | 67 CSS 变量 |
+| DOCX 导出 | 无 | 纯标准库实现 |
+| Wails 版本 | v2.12.0 | **v2.13.0** |
+| Go 版本 | 1.25 | **1.26** |
+| 单轮最大轮次 | 50 | **100** |
+| 网络搜索 | DeepSeek | **Exa API** |
+
+### 数据管线
+
+```
+上游：get_* 逐个调用 → 手动维护
+本 fork：prepare(get_writing_context) → outline → write → review → maintain(强制回写)
+```
+
+- prepare require `get_writing_context` 一次获取全量状态
+- maintain require `update_chapter_meta` + `update_writing_snapshot` + `search_lore` + `search_items` 强制回写
+- 双层 required：门禁 require 强制调用工具，jsonschema required 强制填完整字段
+
+### 字段扩展
+
+| 表 | 新增字段 |
+|----|----------|
+| chapters | avatar_url, summary, key_events, characters_in |
+| characters | avatar_url, location_id, description |
+| locations | avatar_url, location_type, description |
+| sessions | current_phase, called_tools, reasoning_effort |
+| messages | thinking_content, extra_metadata, agent_type, sub_task_id |
 
 ---
 
 ## License
 
-AGPL-3.0。详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
+AGPL-3.0. See [LICENSE](LICENSE).
