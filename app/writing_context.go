@@ -7,22 +7,22 @@ import (
 	"novel/internal/location"
 	"novel/internal/reader"
 	"novel/internal/scene"
+	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
 	"novel/internal/writing"
-	"novel/internal/storage"
 )
 
 // WritingContext 聚合叙事上下文，前端一次调用拿全部。
 type WritingContext struct {
 	Chapter         WritingChapter          `json:"chapter"`
-	RecentChapters []WritingChapterBrief   `json:"recent_chapters"`
-	Characters     []WritingCharacterBrief `json:"characters"`
-	ActiveArcs     []WritingArcBrief       `json:"active_arcs"`
-	Timeline       WritingTimeline         `json:"timeline"`
-	Reader         WritingReader           `json:"reader"`
+	RecentChapters  []WritingChapterBrief   `json:"recent_chapters"`
+	Characters      []WritingCharacterBrief `json:"characters"`
+	ActiveArcs      []WritingArcBrief       `json:"active_arcs"`
+	Timeline        WritingTimeline         `json:"timeline"`
+	Reader          WritingReader           `json:"reader"`
 	WritingSnapshot *WritingSnapshotBrief   `json:"writing_snapshot"`
-	Scenes         []WritingSceneBrief     `json:"scenes"`
+	Scenes          []WritingSceneBrief     `json:"scenes"`
 }
 
 type WritingChapter struct {
@@ -131,20 +131,18 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		ch.WordCount = chap.WordCount
 	}
 
-	// 近5章摘要
+	// 近5章摘要（以当前章节为锚点）
 	cs := chapter.NewStore(a.db, a.logger)
-	chs, _ := cs.ListByNovel(ctx, novelID, chapter.ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Page: 1, Size: 5}})
+	chs, _ := cs.GetRecentBefore(ctx, novelID, chapterNum, 5)
 	var recent []WritingChapterBrief
-	if chs != nil {
-		for _, c := range chs.Items {
-			recent = append(recent, WritingChapterBrief{
-				Num:       c.ChapterNumber,
-				Title:     c.Title,
-				Summary:   c.Summary,
-				KeyEvents: c.KeyEvents,
-				WordCnt:   c.WordCount,
-			})
-		}
+	for _, c := range chs {
+		recent = append(recent, WritingChapterBrief{
+			Num:       c.ChapterNumber,
+			Title:     c.Title,
+			Summary:   c.Summary,
+			KeyEvents: c.KeyEvents,
+			WordCnt:   c.WordCount,
+		})
 	}
 
 	// 角色 + 所在地 + 持有物品数
@@ -281,15 +279,15 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 	}
 
 	return &WritingContext{
-		Chapter:         ch,
-		RecentChapters:  recent,
-		Characters:      charBriefs,
-		ActiveArcs:      arcBriefs,
-		Timeline:        tl,
+		Chapter:        ch,
+		RecentChapters: recent,
+		Characters:     charBriefs,
+		ActiveArcs:     arcBriefs,
+		Timeline:       tl,
 		Reader: WritingReader{
 			Known: int(knownCount), Suspense: suspenseCount, Misconception: misconCount, Entries: readerEntries,
 		},
 		WritingSnapshot: snapBrief,
-		Scenes:         sceneBriefs,
+		Scenes:          sceneBriefs,
 	}, nil
 }

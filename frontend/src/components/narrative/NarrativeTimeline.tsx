@@ -208,13 +208,14 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
       JSON.parse((ctx!.writing_snapshot as any).active_chars).forEach((id: number) => activeCharIds.add(id))
     }
   } catch { /* */ }
-  const activeChars = ctx?.characters.filter((c: any) => activeCharIds.size === 0 || activeCharIds.has(c.id)) ?? []
+  const activeChars = (ctx?.characters ?? []).filter((c: any) => activeCharIds.size === 0 || activeCharIds.has(c.id))
   const snap = ctx?.writing_snapshot as any
   const effectiveChapter = snap?.last_chapter_num && activeChapterNum <= snap.last_chapter_num ? snap.last_chapter_num : activeChapterNum
   const currentChapter = ctx?.chapter?.num ? ctx.chapter : { num: effectiveChapter, title: '', word_count: 0 }
   const pendingByChapter: Record<number, any[]> = {}
   for (const p of ctx?.timeline.pending ?? []) {
     const k = (p as any).target_chapter || 0
+    if (k <= 0) continue // 跳过未设置目标章节的条目，避免在 current/foreshadow 卡片中错误显示
     if (!pendingByChapter[k]) pendingByChapter[k] = []
     pendingByChapter[k].push(p)
   }
@@ -262,7 +263,7 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
             <div className="narrative-card-body">
               {card.id === 'current' && <>
                 {snap?.current_location && <div className="card-sec"><div className="card-sec-title">📍 地点</div><div className="card-val">{snap.current_location}</div></div>}
-                {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{(ctx!.recent_chapters as any[]).find((c: any) => c.num === currentChapter.num)?.summary}</div></div>}
+                {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary}</div></div>}
                 {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 出场角色 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}<div className="card-item-tags">{c.items?.length > 0 ? <span className="card-item-tag">📦 {c.items.join(', ')}</span> : ''}{c.location?.name ? <span className="card-item-tag" title="角色静态存储位置，可能与当前章节实际位置不同">📍 {c.location.name}</span> : ''}</div></div>)}</div>}
                 {Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).length > 0 && <div className="card-sec"><div className="card-sec-title">⏳ 近期待收</div>{Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).map(([c, es]) => <div key={c} className="card-item"><span className="card-item-name">第{c}章</span> {es.map((e: any) => <span key={e.id} className="card-item-tag" title={IMP[e.importance]}>{e.title}</span>)}</div>)}</div>}
               </>}

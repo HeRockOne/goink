@@ -71,23 +71,18 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	}
 	result["chapter"] = chapterData
 
-	// ── 1.5 最近 5 章列表 ──
+	// ── 1.5 最近 5 章列表（以当前章节为锚点） ──
 	cs := chapter.NewStore(db, log)
-	recentChs, _ := cs.ListByNovel(ctx, nid, chapter.ListByNovelOptions{
-		Order:      "desc",
-		PageParams: storage.PageParams{Page: 1, Size: 5},
-	})
+	recentChs, _ := cs.GetRecentBefore(ctx, nid, chapNum, 5)
 	recentList := make([]map[string]any, 0)
-	if recentChs != nil {
-		for _, ch := range recentChs.Items {
-			recentList = append(recentList, map[string]any{
-				"num":        ch.ChapterNumber,
-				"title":      ch.Title,
-				"summary":    ch.Summary,
-				"key_events": ch.KeyEvents,
-				"word_cnt":   ch.WordCount,
-			})
-		}
+	for _, ch := range recentChs {
+		recentList = append(recentList, map[string]any{
+			"num":        ch.ChapterNumber,
+			"title":      ch.Title,
+			"summary":    ch.Summary,
+			"key_events": ch.KeyEvents,
+			"word_cnt":   ch.WordCount,
+		})
 	}
 	result["recent_chapters"] = recentList
 
@@ -116,13 +111,13 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 				}
 			}
 			sceneList = append(sceneList, map[string]any{
-				"id":          s.ID,
-				"title":       s.Title,
-				"summary":     s.Summary,
-				"word_count":  s.WordCount,
-				"location":    locInfo,
-				"arc_node":    nodeInfo,
-				"scene_num":   s.SceneNumber,
+				"id":         s.ID,
+				"title":      s.Title,
+				"summary":    s.Summary,
+				"word_count": s.WordCount,
+				"location":   locInfo,
+				"arc_node":   nodeInfo,
+				"scene_num":  s.SceneNumber,
 			})
 		}
 	}
@@ -171,11 +166,11 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 				items = append(items, map[string]any{"id": it.ID, "name": it.Name, "role": it.NarrativeRole})
 			}
 			charList = append(charList, map[string]any{
-				"id":          ch.ID,
-				"name":        ch.Name,
-				"location":    locInfo,
-				"items":       items,
-				"item_count":  countItemsForChar(itemStore, ctx, nid, ch.ID),
+				"id":         ch.ID,
+				"name":       ch.Name,
+				"location":   locInfo,
+				"items":      items,
+				"item_count": countItemsForChar(itemStore, ctx, nid, ch.ID),
 			})
 		}
 	}

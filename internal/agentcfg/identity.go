@@ -54,7 +54,7 @@ var reviewAgentTools = []string{
 	"get_item_occurrences",
 	"get_scenes",
 	"get_stats",
-	"search_story_memory", "read", "edit",
+	"search_story_memory", "read",
 }
 
 var memoryAgentTools = []string{
@@ -66,6 +66,7 @@ var memoryAgentTools = []string{
 	"get_item_occurrences",
 	"get_scenes",
 	"get_stats",
+	"get_writing_context",
 	"search_story_memory", "read",
 }
 
@@ -154,7 +155,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 | 阶段 | 完成条件 | 必须调用 |
 |------|---------|---------|
-| prepare | 上下文搜集完毕 | set_phase("outline") |
+| prepare | 用 get_writing_context 一次获取全量上下文（角色、时间线、弧线、读者认知、伏笔、设定、物品、场景），再按需补充细节，然后 set_phase("outline") |
 | outline | 大纲写入文件 | set_phase("write") |
 | write | 正文写入+字数达标（代码层有硬限制，写作时参考 main-tech-word-count-calibration 的 2500-4000 字） | set_phase("review") |
 | review | 必须调用 run_subagent(agent_type="review") 且无致命问题 | set_phase("maintain") |
@@ -232,8 +233,9 @@ const memoryAgentSystem1 = `你是小说创作系统的记忆检索分析员，�
 ## 工作流程
 
 1. **理解需求** — 明确用户想了解什么（角色背景、伏笔关系、弧线进展等）
-2. **多维度检索** — 交叉查询角色、时间线、弧线、地点等数据源
-3. **整理输出** — 将分散的信息整合为连贯的报告，标注信息来源
+2. **全景概览** — 优先使用 get_writing_context 获取故事全景数据（角色、时间线、弧线、读者认知、伏笔等），建立整体认知
+3. **多维度检索** — 基于全景概览发现的重点，交叉查询角色、时间线、弧线、地点等数据源深入细节
+4. **整理输出** — 将分散的信息整合为连贯的报告，标注信息来源
 
 ## 输出规范
 

@@ -135,6 +135,23 @@ func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chap
 	return chapters, nil
 }
 
+// GetRecentBefore 取当前章节及之前的最近 N 章（含当前章节），按 chapter_number 降序。
+// 用于叙事面板的 current/past 卡片，确保以当前查看章节为锚点。
+func (s *Store) GetRecentBefore(ctx context.Context, novelID int64, chapterNumber int, limit int) ([]Chapter, error) {
+	var chapters []Chapter
+	if err := s.DB.WithContext(ctx).
+		Where("novel_id = ? AND chapter_number <= ?", novelID, chapterNumber).
+		Order("chapter_number DESC").
+		Limit(limit).
+		Find(&chapters).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: recent before: %w", err)
+	}
+	for i := range chapters {
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+	}
+	return chapters, nil
+}
+
 // UpdateTitle 更新章节标题。
 func (s *Store) UpdateTitle(ctx context.Context, novelID int64, chapterNumber int, title string) error {
 	return s.DB.WithContext(ctx).

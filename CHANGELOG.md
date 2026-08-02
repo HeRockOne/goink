@@ -33,10 +33,16 @@
 
 ### 修复
 
-- **stream.go 恢复原始代码**：移除本地未提交的 `hasFinish` 检查修改
-- **per_model 双倍累加**：`m["hit"] += hitTokens` 重复写入导致数值翻倍
-- **UpsertModelUsage 传值错误**：传入累计值而非增量导致 DB 数据重复
-- **面板 fallback 逻辑**：`selectedModel` 无数据时不回退全局合计
+- **审稿 Agent 安全边界**：从 reviewAgentTools 移除 `edit`，审稿 Agent 不再能直接修改文件
+- **叙事面板空数据崩溃**：`NarrativeTimeline` 在 `ctx` 为 null 时因 `ctx?.characters.filter()` 调用在 undefined 上抛出 TypeError，修复为 `(ctx?.characters ?? []).filter()`
+- **叙事面板非空断言隐患**：`ctx!.recent_chapters` 替换为 `ctx?.recent_chapters`，消除依赖 `&&` 短路的安全假象
+- **叙事面板无关伏笔显示**：`pendingByChapter` 分组时跳过 `target_chapter <= 0` 的条目，避免未设置目标章节的伏笔在 current/foreshadow 卡片中错误显示
+- **recent_chapters 锚点错位**：`GetWritingContext` 和 `get_writing_context` 工具的 `recent_chapters` 改为以当前章节为锚点（`chapter_number <= currentChapter`），而非取全局最新 5 章。新增 `chapter.Store.GetRecentBefore()` 方法
+
+### 优化
+
+- **MemoryAgent 检索效率**：向 memoryAgentTools 添加 `get_writing_context`，一次获取 8 个数据源全景
+- **系统提示词引导**：mainAgentSystem1 prepare 阶段描述引导使用 `get_writing_context`；memoryAgentSystem1 工作流程增加"全景概览"步骤
 
 ### 优化
 
