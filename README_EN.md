@@ -52,7 +52,7 @@ Each phase has a **tools whitelist** and **require list**. Gate config is stored
 
 ### HTTP API + Mobile Frontend
 
-23 REST endpoints + SSE chat stream, full Goink functionality from mobile browser:
+29 REST endpoints + SSE chat stream + WebSocket dual-end sync, full Goink functionality from mobile browser:
 
 ```
 GET  /api/novels              novel list
@@ -296,7 +296,7 @@ This fork is based on [sigpanic/goink](https://github.com/sigpanic/goink) v1.1. 
 | Feature | Upstream v1.1 | This Fork |
 |---------|---------------|-----------|
 | Phase Gate | None | 5-stage validation + whitelist + require |
-| HTTP API | None | 23 endpoints + SSE chat |
+| HTTP API | None | 29 endpoints + SSE chat + WebSocket |
 | Mobile Frontend | None | Full web app + offline cache |
 | WebDAV | None | Built-in server |
 | Billing Panel | None | Token stats + trend chart |

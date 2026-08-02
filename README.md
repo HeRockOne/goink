@@ -52,7 +52,7 @@ prepare → outline → write → review → maintain → 回到 prepare
 
 ### HTTP API + 移动端
 
-23 个 REST 端点 + SSE 对话流，手机浏览器可完整使用 Goink：
+29 个 REST 端点 + SSE 对话流 + WebSocket 双端同步，手机浏览器可完整使用 Goink：
 
 - **书架**：小说列表、字数统计、当前书籍标识
 - **小说详情**：章节/角色/时间线/弧线/读者/偏好/地点/世界观/物品 九大模块
@@ -61,8 +61,11 @@ prepare → outline → write → review → maintain → 回到 prepare
 - **设置**：深浅模式、中英语言、Token 管理、模型选择
 
 ```
-GET  /api/novels              小说列表
-GET  /api/novels/{id}/chapters  章节列表
+GET  /api/health               健康检查
+GET  /api/info                 服务器信息
+GET  /api/sync/state           同步状态
+GET  /api/novels               小说列表
+GET  /api/novels/{id}/chapters 章节列表
 GET  /api/chapters/{id}        章节内容
 GET  /api/characters           角色
 GET  /api/character-relations  角色关系
@@ -84,9 +87,6 @@ GET  /api/search-memory        语义搜索
 GET  /api/read                 读取文件
 GET  /api/stats                统计
 GET  /api/sessions             会话列表
-GET  /api/health               健康检查
-GET  /api/info                 服务器信息
-GET  /api/sync/state           同步状态
 POST /api/chat                 AI 对话（SSE）
 POST /api/chat/cancel          取消对话
 POST /api/settings/model       模型切换
@@ -303,7 +303,7 @@ goink-fork/
 | 功能 | 上游 v1.1 | 本 fork |
 |------|-----------|---------|
 | 阶段门禁 | 无 | 5 阶段校验 + 白名单 + require |
-| HTTP API | 无 | 23 端点 + SSE 对话 |
+| HTTP API | 无 | 29 端点 + SSE 对话 + WebSocket |
 | 移动端 | 无 | 完整 Web 前端 + 离线缓存 |
 | WebDAV | 无 | 内置服务器 |
 | 计费面板 | 无 | Token 统计 + 趋势图 |
