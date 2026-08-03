@@ -234,6 +234,20 @@ body::after {
 }
 
 /* 每一层书架 */
+.novels-header { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+.novels-title { font-size: 1rem; font-weight: 700; color: var(--text); }
+.novels-create-btn { background: var(--accent); color: #fff; border: none; padding: 0.35rem 0.7rem; border-radius: 0.4rem; font-size: 0.8rem; cursor: pointer; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.overlay.hidden { display: none; }
+.dialog { background: var(--surface); border-radius: 0.6rem; width: 85%; max-width: 360px; overflow: hidden; }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.95rem; }
+.dialog-close { background: none; border: none; font-size: 1.1rem; color: var(--text3); cursor: pointer; padding: 0.2rem; }
+.dialog-body { padding: 1rem; }
+.form-group { margin-bottom: 0.8rem; }
+.form-group label { display: block; font-size: 0.8rem; color: var(--text2); margin-bottom: 0.3rem; }
+.form-input { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 0.4rem; background: var(--bg); color: var(--text); font-size: 0.85rem; }
+.form-input:focus { outline: none; border-color: var(--accent); }
+.btn-primary { width: 100%; padding: 0.55rem; background: var(--accent); color: #fff; border: none; border-radius: 0.4rem; font-size: 0.9rem; cursor: pointer; }
 .novel-card {
   background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface) 100%);
   border: 1px solid var(--border-strong);

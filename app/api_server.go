@@ -49,16 +49,16 @@ func generateToken() string {
 }
 
 type apiServer struct {
-	port      int
-	useHTTPS  bool
-	app       *App
-	logger    *slog.Logger
-	server    *http.Server
-	mux       *http.ServeMux
-	mu        sync.Mutex
-	running   bool
-	frontend  *embed.FS
-	mobile    *embed.FS
+	port     int
+	useHTTPS bool
+	app      *App
+	logger   *slog.Logger
+	server   *http.Server
+	mux      *http.ServeMux
+	mu       sync.Mutex
+	running  bool
+	frontend *embed.FS
+	mobile   *embed.FS
 }
 
 func newAPIServer(port int, useHTTPS bool, app *App, logger *slog.Logger, frontend *embed.FS, mobile *embed.FS) *apiServer {
@@ -94,7 +94,7 @@ func newAPIServer(port int, useHTTPS bool, app *App, logger *slog.Logger, fronte
 	s.mux.HandleFunc("/api/arc-nodes", s.handleArcNodes)
 	s.mux.HandleFunc("/api/chat/cancel", s.handleChatCancel)
 	s.mux.HandleFunc("/api/settings/model", s.handleModelSettings) // 模型切换
-	s.mux.HandleFunc("/api/ws", s.handleWebSocket) // 双端同步 WebSocket
+	s.mux.HandleFunc("/api/ws", s.handleWebSocket)                 // 双端同步 WebSocket
 	// 前端静态文件
 	if s.frontend != nil {
 		sub, err := fs.Sub(s.frontend, "frontend/dist")
@@ -245,6 +245,10 @@ func (s *apiServer) handleNovels(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"novels": []any{}})
 		return
 	}
+	if r.Method == "POST" {
+		s.handleCreateNovel(w, r)
+		return
+	}
 	ns := novel.NewStore(s.app.db, s.logger)
 	result, err := ns.List(r.Context(), novel.ListNovelsOptions{})
 	if err != nil {
@@ -252,6 +256,32 @@ func (s *apiServer) handleNovels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"novels": result.Items, "total": result.Total})
+}
+
+func (s *apiServer) handleCreateNovel(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Title       string `json:"title"`
+		Genre       string `json:"genre"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, map[string]any{"error": "无效的请求体"})
+		return
+	}
+	if input.Title == "" {
+		writeJSON(w, map[string]any{"error": "小说名称不能为空"})
+		return
+	}
+	n, err := s.app.CreateNovel(CreateNovelInput{
+		Title:       input.Title,
+		Genre:       input.Genre,
+		Description: input.Description,
+	})
+	if err != nil {
+		writeJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"novel": n})
 }
 
 func (s *apiServer) handleNovelChapters(w http.ResponseWriter, r *http.Request) {
@@ -433,7 +463,6 @@ func (s *apiServer) handleLore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"lore": result.Items, "total": result.Total})
 }
 
-
 func (s *apiServer) handleReadFile(w http.ResponseWriter, r *http.Request) {
 	novelID := parseIntQuery(r, "novel_id")
 	path := r.URL.Query().Get("path")
@@ -532,11 +561,17 @@ func (s *apiServer) handleItemOccurrences(w http.ResponseWriter, r *http.Request
 	store := itemoccurrence.NewStore(s.app.db, s.logger)
 	if itemID > 0 {
 		items, err := store.ListByItem(r.Context(), novelID, itemID)
-		if err != nil { writeError(w, err); return }
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		writeJSON(w, map[string]any{"occurrences": items})
 	} else {
 		result, err := store.ListByNovel(r.Context(), novelID, storage.PageParams{Page: 1, Size: 9999})
-		if err != nil { writeError(w, err); return }
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		writeJSON(w, map[string]any{"occurrences": result.Items, "total": result.Total})
 	}
 }
@@ -549,7 +584,10 @@ func (s *apiServer) handleCharacterRelations(w http.ResponseWriter, r *http.Requ
 	}
 	cs := character.NewStore(s.app.db, s.logger)
 	rels, err := cs.ListCurrentByNovel(r.Context(), novelID)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, map[string]any{"relations": rels})
 }
 
@@ -561,7 +599,10 @@ func (s *apiServer) handleLocationRelations(w http.ResponseWriter, r *http.Reque
 	}
 	ls := location.NewStore(s.app.db, s.logger)
 	rels, err := ls.ListRelationsByNovel(r.Context(), novelID)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, map[string]any{"relations": rels})
 }
 
@@ -571,7 +612,9 @@ func (s *apiServer) getChapterBrief(ctx context.Context, novelID int64, chapNum 
 	r := map[string]any{"num": chapNum, "title": "", "id": 0}
 	var ch chapter.Chapter
 	if err := s.app.db.WithContext(ctx).Where("novel_id = ? AND chapter_number = ?", novelID, chapNum).First(&ch).Error; err == nil {
-		r["id"] = ch.ID; r["title"] = ch.Title; r["word_count"] = ch.WordCount
+		r["id"] = ch.ID
+		r["title"] = ch.Title
+		r["word_count"] = ch.WordCount
 	}
 	return r
 }
@@ -642,15 +685,21 @@ func (s *apiServer) getReaderCounts(ctx context.Context, novelID int64) map[stri
 	var active []reader.ReaderPerspective
 	s.app.db.WithContext(ctx).Where("novel_id = ? AND (revealed_chapter = 0 OR revealed_chapter IS NULL)", novelID).Find(&active)
 	for _, e := range active {
-		if e.Type == "suspense" { sCount++ }
-		if e.Type == "misconception" { mCount++ }
+		if e.Type == "suspense" {
+			sCount++
+		}
+		if e.Type == "misconception" {
+			mCount++
+		}
 	}
 	return map[string]int{"known": int(k), "suspense": sCount, "misconception": mCount}
 }
 func (s *apiServer) getSnap(ctx context.Context, novelID int64) map[string]any {
 	ws := writing.NewSnapshotStore(s.app.db, s.logger)
 	snap, _ := ws.Get(ctx, novelID)
-	if snap == nil { return nil }
+	if snap == nil {
+		return nil
+	}
 	return map[string]any{"last_chapter_num": snap.LastChapterNum, "current_arc_id": snap.CurrentArcID, "current_location": snap.CurrentLocation, "active_chars": snap.ActiveChars}
 }
 func (s *apiServer) getNovelStats(ctx context.Context, novelID int64) map[string]any {
@@ -658,17 +707,35 @@ func (s *apiServer) getNovelStats(ctx context.Context, novelID int64) map[string
 	s.app.db.WithContext(ctx).Model(&chapter.Chapter{}).Where("novel_id = ?", novelID).Count(&tc)
 	snap, _ := writing.NewSnapshotStore(s.app.db, s.logger).Get(ctx, novelID)
 	st := map[string]any{"total_chapters": tc}
-	if snap != nil { st["last_chapter_num"] = snap.LastChapterNum }
+	if snap != nil {
+		st["last_chapter_num"] = snap.LastChapterNum
+	}
 	return st
 }
 
 func arcTypeZh(t string) string {
-	switch t { case "main": return "主线"; case "sub": return "支线"; case "character": return "角色弧"; case "background": return "背景"; case "volume": return "卷纲"; default: return t }
+	switch t {
+	case "main":
+		return "主线"
+	case "sub":
+		return "支线"
+	case "character":
+		return "角色弧"
+	case "background":
+		return "背景"
+	case "volume":
+		return "卷纲"
+	default:
+		return t
+	}
 }
 
 func (s *apiServer) handlePhaseGateConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, err := config.LoadSettings(s.app.db)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, map[string]any{"config": cfg.PhaseGateConfig, "enabled": cfg.PhaseGateEnabled != nil && *cfg.PhaseGateEnabled})
 }
 
@@ -700,7 +767,10 @@ func (s *apiServer) handleSearchMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	results, err := svc.SearchAll(r.Context(), novelID, query)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	writeJSON(w, map[string]any{"results": results})
 }
 func (s *apiServer) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -749,10 +819,10 @@ func (s *apiServer) handleSessionMessages(w http.ResponseWriter, r *http.Request
 	for _, m := range msgs {
 		if m.Role == "user" || m.Role == "assistant" {
 			result = append(result, map[string]any{
-				"role":              m.Role,
-				"content":           m.Content,
-				"thinking_content":  m.ThinkingContent,
-				"created_at":        m.CreatedAt,
+				"role":             m.Role,
+				"content":          m.Content,
+				"thinking_content": m.ThinkingContent,
+				"created_at":       m.CreatedAt,
 			})
 		}
 	}
@@ -978,7 +1048,7 @@ func (s *apiServer) handleModelSettings(w http.ResponseWriter, r *http.Request) 
 
 	case http.MethodPost:
 		var req struct {
-			ModelKey       string `json:"model_key"`
+			ModelKey        string `json:"model_key"`
 			ReasoningEffort string `json:"reasoning_effort"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -998,7 +1068,7 @@ func (s *apiServer) handleModelSettings(w http.ResponseWriter, r *http.Request) 
 		}
 		// 通过 WebSocket 广播模型变更到移动端
 		s.app.BroadcastChatEvent("model_changed", map[string]any{
-			"model_key":       req.ModelKey,
+			"model_key":        req.ModelKey,
 			"reasoning_effort": req.ReasoningEffort,
 		})
 		// 同时通过 Wails 事件通知桌面端前端刷新模型选择

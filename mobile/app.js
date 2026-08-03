@@ -636,6 +636,27 @@ async function loadNovels() {
 
 function openNovel(id, title) { state.novelId = id; state.novelTitle = title; switchPage('novel-detail'); }
 
+// ═══════════ 新建作品 ═══════════
+function showCreateNovel() {
+  document.getElementById('createNovelOverlay').classList.remove('hidden');
+  document.getElementById('createNovelTitle').value = '';
+  document.getElementById('createNovelGenre').value = '';
+  document.getElementById('createNovelDesc').value = '';
+  setTimeout(() => document.getElementById('createNovelTitle').focus(), 100);
+}
+function hideCreateNovel() { document.getElementById('createNovelOverlay').classList.add('hidden'); }
+async function doCreateNovel() {
+  const title = document.getElementById('createNovelTitle').value.trim();
+  if (!title) { toast('请输入作品名称'); return; }
+  hideCreateNovel();
+  toast('创建中…');
+  try {
+    const r = await api('/api/novels', { method: 'POST', body: { title, genre: document.getElementById('createNovelGenre').value.trim(), description: document.getElementById('createNovelDesc').value.trim() } });
+    if (r.novel) { toast('✅ 已创建'); loadNovels(); }
+    else { toast('❌ ' + (r.error || '创建失败')); }
+  } catch (_) { toast('❌ 创建失败'); }
+}
+
 // ═══════════ 小说详情 ═══════════
 let novelTab = 'chapters';
 const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }, { id: 'lore', label: () => '📜 ' + t('lore') }, { id: 'items', label: () => '⚔️ ' + t('items') }, { id: 'scenes', label: () => '🎬 ' + t('scenes') }];
