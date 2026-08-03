@@ -576,6 +576,9 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
                   style={hidden ? {} : { backgroundColor: c.fill, borderColor: c.stroke, color: c.text }}
                 >
                   {arc.name}{arcStatusTag(arc.status)}
+                  {arc.arc_type === 'volume' && arc.start_chapter > 0 && (
+                    <span className="ml-2 text-[10px] text-muted-foreground">· 第{arc.start_chapter}-{arc.end_chapter}章</span>
+                  )}
                   {/* Hover actions */}
                   <span className="ml-1 opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 transition-opacity" style={{ color: hidden ? undefined : c.text }}>
                     <span
@@ -658,6 +661,34 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
               {renderFormButtons(handleCreateNode)}
             </div>
           )}
+
+          {/* Volume details */}
+          {arcs.length === 1 && arcs[0]?.arc_type === 'volume' && arcs[0]?.detail_json && (() => {
+            let dj: any = {}
+            try { dj = JSON.parse(arcs[0].detail_json) } catch {}
+            return (
+              <div className="space-y-3 px-1">
+                {dj.core_event && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="text-xs font-medium text-foreground mb-1">核心事件</div>
+                    <div className="text-xs text-muted-foreground">{dj.core_event}</div>
+                  </div>
+                )}
+                {dj.ending_hook && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="text-xs font-medium text-foreground mb-1">卷末钩子</div>
+                    <div className="text-xs text-muted-foreground">{dj.ending_hook}</div>
+                  </div>
+                )}
+                {dj.protagonist_change && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="text-xs font-medium text-foreground mb-1">主角变化</div>
+                    <div className="text-xs text-muted-foreground">{typeof dj.protagonist_change === 'object' ? JSON.stringify(dj.protagonist_change) : dj.protagonist_change}</div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Node list */}
           {grouped.length === 0 ? (
