@@ -8,6 +8,26 @@
 
 ### 新增
 
+- **卷纲体系**（长篇宏观一致性）：`story_arc` 加 `arc_type=volume` 枚举、`detail_json` 卷纲数据、`start_chapter`/`end_chapter` 卷边界
+  - `create_story_arc` 强制校验：`arc_type=volume` 必须填起止章，否则报错
+  - 前端弧线面板：卷类型筛选 + 起止章表单输入 + 前端校验
+  - 系统提示词 + skill 引导：长篇必须建卷，卷必填起止章
+- **get_writing_context 卷级聚合**：返回 `volume_entities`（本卷章节范围内的角色/物品/设定/伏笔 ID 列表）
+  - 查询时从现有表派生（scene、item_occurrence、lore、timeline），零缓存表，零同步负担
+  - 只返回 ID+名字，省 token；按卷边界过滤，不依赖 AI 填 entities 字段
+- **get_writing_context 规划场景**：返回 `chapter_id IS NULL` 的规划场景（关联当前卷弧线）
+- **get_writing_context recent_chapters 结构化**：暴露 `characters_in`（角色 ID）和 `arc_ids`（弧线 ID），数据已存在之前未返回
+- **场景规划**：`scene.chapter_id` 改为 `*int64` nullable，AI 可在写前创建规划场景，写完后 `update_scene` 回填 chapter_id
+- **反查工具 `get_entity_appearances`**：回溯"实体 X 出现在哪些章节"
+  - 角色：通过 scene.character_ids 反查
+  - 物品：通过 item_occurrence 流转史
+  - 设定：通过 reveal_chapter_id
+  - 伏笔：通过 timeline 埋/收/目标章
+- **程序化一致性检查工具 `check_story_consistency`**：review agent 自动调用，SQL 实证返回三类问题
+  - `foreshadow_overdue`：超期未回收伏笔（硬错误）
+  - `character_vanished`：近 30 章未出场的角色（断档警告）
+  - `item_conflict`：已销毁/丢失物品在后续章节出现（硬错误）
+- **系统提示词强制消费**：prepare 阶段描述要求必须检查 `volume_entities`；review agent 流程集成 `check_story_consistency` + `get_entity_appearances`
 - **动态叙事面板**（NarrativeTimeline）：画布式可拖拽/缩放卡片面板，聚合写作上下文
   - 当前/过去/未来/弧线/伏笔/读者/详细设定 7 张卡片，自由布局，持久化存储
   - 四边四角拖拽缩放，自动吸附其他卡片边缘

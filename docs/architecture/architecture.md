@@ -116,7 +116,7 @@ reader_perspectives.novel_id → novels.id
 writing_snapshots.novel_id → novels.id (primaryKey)
 ```
 
-## 4. MCP 工具清单（57 个）
+## 4. MCP 工具清单（59 个）
 
 ### 按模块分组
 
@@ -224,7 +224,7 @@ writing_snapshots.novel_id → novels.id (primaryKey)
 | `read` | GET | path(R) |
 | `edit` | WRITE | path(R), change_type(R) |
 
-#### 搜索/辅助（6 个）
+#### 搜索/辅助（8 个）
 | 工具 | 类型 | required 字段 |
 |------|------|--------------|
 | `search_story_memory` | GET | query(R) |
@@ -232,12 +232,22 @@ writing_snapshots.novel_id → novels.id (primaryKey)
 | `web_fetch` | GET | url(R) |
 | `run_subagent` | ACTION | agent_type(R) |
 | `delete_record` | DELETE | table(R), record_id(R) |
+| `get_entity_appearances` | GET | entity_type(R), entity_id(R) |
+| `check_story_consistency` | GET | current_chapter(R) |
 
 ## 5. get_writing_context 返回结构
 
 ```
 chapter:           {num, title, word_count}
-recent_chapters[]: {num, title, summary, key_events, word_cnt}
+recent_chapters[]: {num, title, summary, key_events, word_cnt, characters_in, arc_ids}
+scenes[]:           {id, title, summary, word_count, location, ...}
+characters[]:       {id, name, desc, location, items, ...}
+active_arcs[]:      {name, type_zh, nodes_done, nodes_total, nodes[]}
+timeline:           {pending[], resolved[], overdue[]}
+reader:             {known, suspense, misconception}
+writing_snapshot:   {last_chapter_num, ...}
+volume:             {name, description, detail_json, start_chapter, end_chapter}
+volume_entities:    {characters[], items[], lore[], foreshadow[]}  // ID+name 列表
 scenes[]:          {title, summary, word_count, location:{name,type}, arc_node:{title,arc_name}}
 characters[]:      {name, location:{name}, items:[{name,role}], item_count}
 active_arcs[]:     {name, type_zh, nodes_done, nodes_total, related_lore[], related_items[]}
