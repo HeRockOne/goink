@@ -28,6 +28,7 @@ type CreateCharacterInput struct {
 	Personality string `json:"personality,omitempty"` // JSON 自由格式
 	Abilities   string `json:"abilities,omitempty"`   // JSON 数组
 	LocationID  *int64 `json:"location_id,omitempty"` // 当前所在地点 ID
+	Status      string `json:"status,omitempty"`      // alive/dead/missing/unknown
 }
 
 // CreateCharacter 创建一个角色。
@@ -42,6 +43,7 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 		Personality: input.Personality,
 		Abilities:   input.Abilities,
 		LocationID:  input.LocationID,
+		Status:      input.Status,
 	}
 	if err := a.character.DB.WithContext(a.ctx).Create(&char).Error; err != nil {
 		return nil, fmt.Errorf("create character: %w", err)
@@ -56,6 +58,7 @@ type UpdateCharacterInput struct {
 	Personality string `json:"personality,omitempty"`
 	Abilities   string `json:"abilities,omitempty"`
 	LocationID  *int64 `json:"location_id,omitempty"`
+	Status      string `json:"status,omitempty"`
 }
 
 // UpdateCharacter 更新角色。只更新非零值字段。

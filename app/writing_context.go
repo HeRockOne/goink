@@ -179,9 +179,38 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		})
 	}
 
-	// 角色 + 所在地 + 持有物品数
+	// 卷纲查询：查找当前活跃的卷（放在角色查询之前，用于按卷过滤角色）
+	var volume *WritingVolume
+	var volumeEntities *WritingVolumeEntities
+	var vol storyarc.StoryArc
+	if err := a.db.WithContext(ctx).
+		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).
+		Order("importance DESC").
+		First(&vol).Error; err == nil {
+		volume = &WritingVolume{
+			Name:        vol.Name,
+			Description: vol.Description,
+			ArcType:     vol.ArcType,
+			DetailJSON:  vol.DetailJSON,
+		}
+		// 卷级聚合：查卷范围内（start_chapter ~ end_chapter）涉及的所有实体
+		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
+			volumeEntities = a.buildVolumeEntities(ctx, novelID, vol)
+		}
+	}
+
+	// 角色 + 所在地 + 持有物品数（按卷过滤，省 token）
 	var chars []character.Character
-	a.db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chars)
+	if volumeEntities != nil && len(volumeEntities.Characters) > 0 {
+		ids := make([]int64, 0, len(volumeEntities.Characters))
+		for _, c := range volumeEntities.Characters {
+			ids = append(ids, c.ID)
+		}
+		a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, ids).Find(&chars)
+	} else {
+		// 无卷时返回全部角色（兼容老书）
+		a.db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chars)
+	}
 	var charBriefs []WritingCharacterBrief
 	for _, c := range chars {
 		cb := WritingCharacterBrief{ID: c.ID, Name: c.Name, Desc: c.Description}
@@ -211,7 +240,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		a.db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ? AND status = 'completed'", ar.ID).Count(&done)
 		// 弧线节点详情
 		var nodes []storyarc.ArcNode
-		a.db.WithContext(ctx).Where("story_arc_id = ?", ar.ID).Order("target_chapter ASC").Find(&nodes)
+		a.db.WithContext(ctx).Where("story_arc_id = ?", ar.ID).Order("target_chapter ASC").Limit(50).Find(&nodes)
 		var nodeBriefs []WritingArcNodeBrief
 		for _, n := range nodes {
 			nodeBriefs = append(nodeBriefs, WritingArcNodeBrief{
@@ -228,29 +257,9 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		})
 	}
 
-	// 卷纲查询：查找当前活跃的卷
-	var volume *WritingVolume
-	var volumeEntities *WritingVolumeEntities
-	var vol storyarc.StoryArc
-	if err := a.db.WithContext(ctx).
-		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).
-		Order("importance DESC").
-		First(&vol).Error; err == nil {
-		volume = &WritingVolume{
-			Name:        vol.Name,
-			Description: vol.Description,
-			ArcType:     vol.ArcType,
-			DetailJSON:  vol.DetailJSON,
-		}
-		// 卷级聚合：查卷范围内（start_chapter ~ end_chapter）涉及的所有实体
-		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
-			volumeEntities = a.buildVolumeEntities(ctx, novelID, vol)
-		}
-	}
-
 	// 伏笔分类
 	ts := timeline.NewStore(a.db, a.logger)
-	tlEntries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 20}})
+	tlEntries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 100}})
 	tl := WritingTimeline{
 		Pending:  make([]WritingTimelineEntry, 0),
 		Resolved: make([]WritingTimelineEntry, 0),

@@ -239,7 +239,7 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	// ── 5. 时间线 ──
 	tlStore := timeline.NewStore(db, log)
 	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
-		PageParams: storage.PageParams{Page: 1, Size: 20},
+		PageParams: storage.PageParams{Page: 1, Size: 100},
 	})
 	if err == nil {
 		pending := make([]map[string]any, 0)

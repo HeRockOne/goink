@@ -11,7 +11,8 @@ type Character struct {
 	Description string    `gorm:"column:description"                json:"description"`
 	Personality string    `gorm:"column:personality"                json:"personality"`
 	Abilities   string    `gorm:"column:abilities"                  json:"abilities"`
-	LocationID  *int64    `gorm:"column:location_id;index"          json:"location_id"`  // FK → locations.id，当前所在地点
+	LocationID  *int64    `gorm:"column:location_id;index"          json:"location_id"` // FK → locations.id，当前所在地点
+	Status      string    `gorm:"column:status;default:alive"       json:"status"`      // alive | dead | missing | unknown
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"`
 }

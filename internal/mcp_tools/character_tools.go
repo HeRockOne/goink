@@ -63,7 +63,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 				"id":          ch.ID,
 				"name":        ch.Name,
 				"location_id": ch.LocationID,
-				"item_count":   countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+				"item_count":  countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
 			}
 		} else {
 			items[i] = map[string]any{
@@ -73,7 +73,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 				"personality": parseJSONField(ch.Personality),
 				"abilities":   parseJSONField(ch.Abilities),
 				"location_id": ch.LocationID,
-				"item_count":   countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+				"item_count":  countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
 			}
 		}
 	}
@@ -171,11 +171,12 @@ func formatRelationEdges(rels []character.CharacterRelation, nameMap map[int64]s
 
 // CreateCharacterItem 是 create_character 的单条参数。
 type CreateCharacterItem struct {
-	Name        string  `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
+	Name        string `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
 	Description string `json:"description" jsonschema:"required,description=角色自然语言描述，如外貌、身份、背景故事等" validate:"required"`
-	Personality string  `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
-	Abilities   string  `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
-	LocationID  *int64  `json:"location_id" jsonschema:"required,description=角色当前所在地点ID" validate:"required"`
+	Personality string `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
+	Abilities   string `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
+	LocationID  *int64 `json:"location_id" jsonschema:"required,description=角色当前所在地点ID" validate:"required"`
+	Status      string `json:"status"      jsonschema:"description=角色状态,enum=alive,enum=dead,enum=missing,enum=unknown,default=alive"`
 }
 
 // CreateCharacterArgs 是 create_character 的参数。
@@ -214,6 +215,7 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 				Personality: item.Personality,
 				Abilities:   item.Abilities,
 				LocationID:  item.LocationID,
+				Status:      item.Status,
 			}
 			if err := tx.Create(&ch).Error; err != nil {
 				failedName = item.Name
@@ -247,6 +249,7 @@ type UpdateCharacterArgs struct {
 	Personality string `json:"personality" jsonschema:"required,description=新的性格/设定，字符串形式JSON（完全替换旧的）" validate:"required"`
 	Abilities   string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
 	LocationID  *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
+	Status      string `json:"status"       jsonschema:"description=新的角色状态,enum=alive,enum=dead,enum=missing,enum=unknown"`
 }
 
 // UpdateCharacterTool 更新角色字段。
@@ -266,7 +269,7 @@ func (t *UpdateCharacterTool) NewArgs() any                { return &UpdateChara
 func (t *UpdateCharacterTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateCharacterArgs)
 
-	if a.Name == "" && a.Description == "" && a.Personality == "" && a.Abilities == "" {
+	if a.Name == "" && a.Description == "" && a.Personality == "" && a.Abilities == "" && a.Status == "" && a.LocationID == nil {
 		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
 	}
 
@@ -455,4 +458,3 @@ func RegisterCharacterTools(r *Registry) {
 	r.Register(&UpdateCharacterTool{})
 	r.Register(&UpdateCharacterRelationshipTool{})
 }
-

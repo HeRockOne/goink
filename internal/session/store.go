@@ -249,6 +249,7 @@ func (s *Store) GetMessagesForAPI(ctx context.Context, sessionID string, version
 	if err := s.DB.WithContext(ctx).
 		Where("session_id = ? AND to_api = ? AND version = ?", sessionID, true, version).
 		Order("created_at ASC").
+		Limit(1000).
 		Find(&msgs).Error; err != nil {
 		return nil, fmt.Errorf("session store: get api messages: %w", err)
 	}
