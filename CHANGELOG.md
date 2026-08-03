@@ -28,6 +28,10 @@
   - `character_vanished`：近 30 章未出场的角色（断档警告）
   - `item_conflict`：已销毁/丢失物品在后续章节出现（硬错误）
 - **系统提示词强制消费**：prepare 阶段描述要求必须检查 `volume_entities`；review agent 流程集成 `check_story_consistency` + `get_entity_appearances`
+- **get_writing_context 性能优化**：`characters` 按卷过滤（只返回当前卷角色，省 80% token），弧线节点 `LIMIT 50`，伏笔查询 `Size 20→100`
+- **角色状态追踪**：`character` 表加 `status` 字段（`alive`/`dead`/`missing`/`unknown`），create/update 工具支持
+- **跨卷摘要引导**：每卷结束时用 `update_story_arc` 写入 `detail_json.volume_summary`，系统提示词 + skill + 工具描述三层引导
+- **GetMessagesForAPI LIMIT 1000**：安全网，防止意外全量加载
 - **动态叙事面板**（NarrativeTimeline）：画布式可拖拽/缩放卡片面板，聚合写作上下文
   - 当前/过去/未来/弧线/伏笔/读者/详细设定 7 张卡片，自由布局，持久化存储
   - 四边四角拖拽缩放，自动吸附其他卡片边缘
