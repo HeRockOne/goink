@@ -65,7 +65,7 @@ goink-master/
 | `novels` | Novel | 小说索引 |
 | `chapters` | Chapter | 章节元数据（num/title/summary/key_events/characters_in/arc_ids/word_count） |
 | `chapter_arcs` | ChapterArc | 章节-弧线关联 |
-| `characters` | Character | 角色（name/description/personality/abilities/location_id） |
+| `characters` | Character | 角色（name/description/personality/abilities/location_id/status） |
 | `character_relations` | CharacterRelation | 角色关系（append-only，is_current 标记当前状态） |
 | `locations` | Location | 地点（name/type/description/parent_location_id） |
 | `location_relations` | LocationRelation | 地点连通关系（无向边） |
