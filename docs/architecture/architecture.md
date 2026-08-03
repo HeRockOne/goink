@@ -15,7 +15,7 @@ Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能�
 goink-master/
 ├── app/                    # Wails 绑定 + HTTP API 服务器
 │   ├── handler.go          # Wails 绑定函数
-│   ├── api_server.go       # HTTP REST API（23 个读端点 + chat）
+│   ├── api_server.go       # HTTP REST API（29 个读端点 + chat）
 │   ├── dialog.go           # 系统对话框
 │   └── tray.go             # 系统托盘
 ├── internal/
@@ -281,7 +281,7 @@ prepare(get_writing_context) → outline(edit outlines/)
 
 完整配置见 `docs/mcp-tools-audit.md`。
 
-## 7. HTTP API（23 个读端点）
+## 7. HTTP API（29 个读端点）
 
 | 端点 | 对应工具 |
 |------|---------|
@@ -447,7 +447,7 @@ mobile/
 ├── jsQR.js             # QR 码扫描（扫码连接桌面端）
 ├── wspulse.mjs         # WebSocket 同步模块
 ├── manifest.json       # PWA 配置
-└── API.md              # HTTP API 文档（27 节，23 个端点）
+└── API.md              # HTTP API 文档（27 节，29 个端点）
 ```
 
 **部署**：桌面端 `webdav` 包提供只读 HTTP 服务，移动端通过 `https://桌面IP:端口/mobile/` 访问

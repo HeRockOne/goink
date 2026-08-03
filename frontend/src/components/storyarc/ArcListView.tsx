@@ -663,9 +663,10 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
           )}
 
           {/* Volume details */}
-          {arcs.length === 1 && arcs[0]?.arc_type === 'volume' && arcs[0]?.detail_json && (() => {
+          {arcs.some(a => a.arc_type === 'volume') && (() => {
+            const vol = arcs.find(a => a.arc_type === 'volume')
+            if (!vol?.detail_json) return null
             let dj: any = {}
-            try { dj = JSON.parse(arcs[0].detail_json) } catch {}
             return (
               <div className="space-y-3 px-1">
                 {dj.core_event && (
