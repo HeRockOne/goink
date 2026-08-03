@@ -40,6 +40,7 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 8px 36px rgba(0, 0, 0, 0.6);
+  --accent: #c4956a;
 
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
@@ -49,14 +50,14 @@
 
 /* ── 浅色：素笺晴窗 ── */
 [data-theme="light"] {
-  --oak: #8b6b4a;
-  --oak-light: #a8825a;
-  --oak-dark: #5a3e2e;
+  --oak: #0071e3;
+  --oak-light: #409cff;
+  --oak-dark: #0051a2;
   --walnut: #8b6b4a;
-  --maple: #c4704a;
-  --maple-glow: rgba(196, 112, 74, 0.08);
-  --gold: #b8945a;
-  --gold-light: #d4b480;
+  --maple: #0071e3;
+  --maple-glow: rgba(0, 113, 227, 0.08);
+  --gold: #0071e3;
+  --gold-light: #409cff;
   --parchment: #f5f5f7;
   --parchment-dim: #e8e8ed;
 
@@ -79,6 +80,7 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 36px rgba(0, 0, 0, 0.12);
+  --accent: #0071e3;
 }
 
 /* ═══════════════ BASE ═══════════════ */
