@@ -32,6 +32,8 @@
 - **角色状态追踪**：`character` 表加 `status` 字段（`alive`/`dead`/`missing`/`unknown`），create/update 工具支持
 - **跨卷摘要引导**：每卷结束时用 `update_story_arc` 写入 `detail_json.volume_summary`，系统提示词 + skill + 工具描述三层引导
 - **GetMessagesForAPI LIMIT 1000**：安全网，防止意外全量加载
+- **POST /api/novels 创建端点**：接受 `{title, genre, description}`，返回 `{novel}`；移动端书架页加"新建"按钮 + 对话框（类型下拉选择，与桌面一致）
+- **移动端 Apple 浅色主题**：纯白背景 `#ffffff`，Apple 蓝 `#0071e3` 强调色，修复 `--accent` 未定义导致按钮不可见问题
 - **动态叙事面板**（NarrativeTimeline）：画布式可拖拽/缩放卡片面板，聚合写作上下文
   - 当前/过去/未来/弧线/伏笔/读者/详细设定 7 张卡片，自由布局，持久化存储
   - 四边四角拖拽缩放，自动吸附其他卡片边缘
