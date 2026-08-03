@@ -203,9 +203,23 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 			"related_items": itemIDs,
 		})
 	}
-	result["active_arcs"] = arcList
+result["active_arcs"] = arcList
 
-	// ── 5. 时间线 ──
+		// ── 4.5 卷纲 ──
+		var vol storyarc.StoryArc
+		if err := db.WithContext(ctx).
+			Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", nid).
+			Order("importance DESC").
+			First(&vol).Error; err == nil {
+			volData := map[string]any{
+				"name":        vol.Name,
+				"description": vol.Description,
+				"detail_json": vol.DetailJSON,
+			}
+			result["volume"] = volData
+		}
+
+		// ── 5. 时间线 ──
 	tlStore := timeline.NewStore(db, log)
 	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: 1, Size: 20},
@@ -305,19 +319,21 @@ func parseJSONInt64Array(raw string) []int64 {
 
 // arcTypeZh 将弧线类型英文映射为中文
 func arcTypeZh(t string) string {
-	switch t {
-	case "main":
-		return "主线"
-	case "sub":
-		return "支线"
-	case "character":
-		return "角色弧"
-	case "background":
-		return "背景"
-	default:
-		return t
+		switch t {
+		case "main":
+			return "主线"
+		case "sub":
+			return "支线"
+		case "character":
+			return "角色弧"
+		case "background":
+			return "背景"
+		case "volume":
+			return "卷纲"
+		default:
+			return t
+		}
 	}
-}
 
 func RegisterWritingContextTool(r *Registry) {
 	r.Register(&GetWritingContextTool{})

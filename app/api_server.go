@@ -663,7 +663,7 @@ func (s *apiServer) getNovelStats(ctx context.Context, novelID int64) map[string
 }
 
 func arcTypeZh(t string) string {
-	switch t { case "main": return "主线"; case "sub": return "支线"; case "character": return "角色弧"; case "background": return "背景"; default: return t }
+	switch t { case "main": return "主线"; case "sub": return "支线"; case "character": return "角色弧"; case "background": return "背景"; case "volume": return "卷纲"; default: return t }
 }
 
 func (s *apiServer) handlePhaseGateConfig(w http.ResponseWriter, r *http.Request) {

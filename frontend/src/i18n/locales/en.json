@@ -490,6 +490,7 @@
     "subplot": "Subplot",
     "characterLine": "Character Line",
     "backgroundLine": "Background Line",
+    "volume": "Volume",
     "active": "Active",
     "paused": "Paused",
     "list": "List",

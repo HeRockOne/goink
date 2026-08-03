@@ -13,6 +13,14 @@ import (
 	"novel/internal/writing"
 )
 
+// WritingVolume 卷纲摘要，由 get_writing_context 返回。
+type WritingVolume struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ArcType     string `json:"arc_type"`
+	DetailJSON  string `json:"detail_json,omitempty"`
+}
+
 // WritingContext 聚合叙事上下文，前端一次调用拿全部。
 type WritingContext struct {
 	Chapter         WritingChapter          `json:"chapter"`
@@ -23,6 +31,7 @@ type WritingContext struct {
 	Reader          WritingReader           `json:"reader"`
 	WritingSnapshot *WritingSnapshotBrief   `json:"writing_snapshot"`
 	Scenes          []WritingSceneBrief     `json:"scenes"`
+	Volume          *WritingVolume          `json:"volume,omitempty"`
 }
 
 type WritingChapter struct {
@@ -194,6 +203,21 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		})
 	}
 
+	// 卷纲查询：查找当前活跃的卷
+	var volume *WritingVolume
+	var vol storyarc.StoryArc
+	if err := a.db.WithContext(ctx).
+		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).
+		Order("importance DESC").
+		First(&vol).Error; err == nil {
+		volume = &WritingVolume{
+			Name:        vol.Name,
+			Description: vol.Description,
+			ArcType:     vol.ArcType,
+			DetailJSON:  vol.DetailJSON,
+		}
+	}
+
 	// 伏笔分类
 	ts := timeline.NewStore(a.db, a.logger)
 	tlEntries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 20}})
@@ -289,5 +313,6 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		},
 		WritingSnapshot: snapBrief,
 		Scenes:          sceneBriefs,
+		Volume:          volume,
 	}, nil
 }

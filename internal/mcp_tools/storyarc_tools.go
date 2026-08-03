@@ -18,7 +18,7 @@ import (
 // GetStoryArcsArgs 是 get_story_arcs 的参数。
 type GetStoryArcsArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"description=当前章节号。传入时对活跃弧线做窗口切分并检测异常，暂停弧线显示断点和恢复条件。写新章时必填" validate:"omitempty,min=1"`
-	ArcType        string `json:"arc_type" jsonschema:"description=按类型筛选,enum=main,enum=sub,enum=character,enum=background"`
+	ArcType        string `json:"arc_type" jsonschema:"description=按类型筛选,enum=main,enum=sub,enum=character,enum=background,enum=volume"`
 	Status         string `json:"status" jsonschema:"description=按状态筛选,enum=active,enum=paused,enum=completed,enum=abandoned"`
 	PageArgs              // 嵌入分页参数（仅不传 current_chapter 时生效）
 }
@@ -143,11 +143,12 @@ func (t *GetStoryArcsTool) executeFull(ctx context.Context, a *GetStoryArcsArgs,
 
 // CreateStoryArcItem 是 create_story_arc 的单条参数。
 type CreateStoryArcItem struct {
-	Name        string `json:"name" jsonschema:"required,description=弧线名称，如'复仇之路'"                          validate:"required"`
-	ArcType     string `json:"arc_type" jsonschema:"required,description=弧线类型,enum=main,enum=sub,enum=character,enum=background" validate:"required,oneof=main sub character background"`
-	Description string `json:"description" jsonschema:"required,description=弧线详细描述，包含目标、冲突、关键节点" validate:"required"`
-	Importance  int    `json:"importance" jsonschema:"description=重要度1-5,default=1,minimum=1,maximum=5"          validate:"omitempty,min=1,max=5"`
-}
+		Name        string `json:"name" jsonschema:"required,description=弧线名称，如'复仇之路'"                          validate:"required"`
+		ArcType     string `json:"arc_type" jsonschema:"required,description=弧线类型,enum=main,enum=sub,enum=character,enum=background,enum=volume" validate:"required,oneof=main sub character background volume"`
+		Description string `json:"description" jsonschema:"required,description=弧线详细描述，包含目标、冲突、关键节点" validate:"required"`
+		Importance  int    `json:"importance" jsonschema:"description=重要度1-5,default=1,minimum=1,maximum=5"          validate:"omitempty,min=1,max=5"`
+		DetailJSON  string `json:"detail_json" jsonschema:"description=卷纲专用：JSON格式的结构化数据（core_event, protagonist_change, ending_hook等），仅arc_type=volume时填写"`
+	}
 
 // CreateStoryArcArgs 是 create_story_arc 的参数。
 type CreateStoryArcArgs struct {
@@ -159,9 +160,9 @@ type CreateStoryArcTool struct{}
 
 func (t *CreateStoryArcTool) Name() string { return "create_story_arc" }
 func (t *CreateStoryArcTool) Description() string {
-	return "批量创建叙事弧线（1-5个）。保证原子性，失败时返回具体条目原因。" +
-		"弧线类型：main（主线）/ sub（支线）/ character（角色线）/ background（背景线）。" +
-		"弧线是跨越多章节的故事线容器，内部节点通过 create_arc_node 添加。"
+return "批量创建叙事弧线（1-5个）。保证原子性，失败时返回具体条目原因。" +
+			"弧线类型：main（主线）/ sub（支线）/ character（角色线）/ background（背景线）/ volume（卷纲）。" +
+			"弧线是跨越多章节的故事线容器，内部节点通过 create_arc_node 添加。"
 }
 func (t *CreateStoryArcTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -181,14 +182,15 @@ func (t *CreateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 			if importance == 0 {
 				importance = 1
 			}
-			arc := storyarc.StoryArc{
-				NovelID:     tc.NovelID,
-				Name:        item.Name,
-				ArcType:     item.ArcType,
-				Description: item.Description,
-				Importance:  importance,
-				Status:      "active",
-			}
+arc := storyarc.StoryArc{
+					NovelID:     tc.NovelID,
+					Name:        item.Name,
+					ArcType:     item.ArcType,
+					Description: item.Description,
+					Importance:  importance,
+					Status:      "active",
+					DetailJSON:  item.DetailJSON,
+				}
 			if err := tx.Create(&arc).Error; err != nil {
 				failedName = item.Name
 				failedErr = err
@@ -215,14 +217,15 @@ func (t *CreateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 
 // UpdateStoryArcArgs 是 update_story_arc 的参数。
 type UpdateStoryArcArgs struct {
-	ArcID        int64  `json:"arc_id" jsonschema:"required,description=弧线ID"                         validate:"required,min=1"`
-	Name         string `json:"name" jsonschema:"description=新的弧线名称"`
-	Description  string `json:"description" jsonschema:"description=新的描述"`
-	ArcType      string `json:"arc_type" jsonschema:"description=新的弧线类型,enum=main,enum=sub,enum=character,enum=background"`
-	Importance   int    `json:"importance" jsonschema:"description=新的重要度1-5,minimum=1,maximum=5"`
-	Status       string `json:"status" jsonschema:"description=新状态,enum=active,enum=paused,enum=completed,enum=abandoned"`
-	ReactivateAt string `json:"reactivate_at" jsonschema:"description=暂停弧线的恢复条件，自然语言。状态改为paused时填写"`
-}
+		ArcID        int64  `json:"arc_id" jsonschema:"required,description=弧线ID"                         validate:"required,min=1"`
+		Name         string `json:"name" jsonschema:"description=新的弧线名称"`
+		Description  string `json:"description" jsonschema:"description=新的描述"`
+		ArcType      string `json:"arc_type" jsonschema:"description=新的弧线类型,enum=main,enum=sub,enum=character,enum=background,enum=volume"`
+		Importance   int    `json:"importance" jsonschema:"description=新的重要度1-5,minimum=1,maximum=5"`
+		Status       string `json:"status" jsonschema:"description=新状态,enum=active,enum=paused,enum=completed,enum=abandoned"`
+		ReactivateAt string `json:"reactivate_at" jsonschema:"description=暂停弧线的恢复条件，自然语言。状态改为paused时填写"`
+		DetailJSON   string `json:"detail_json" jsonschema:"description=卷纲专用：JSON格式的结构化数据，仅arc_type=volume时有效"`
+	}
 
 // UpdateStoryArcTool 更新叙事弧线元数据（PATCH 语义）。
 type UpdateStoryArcTool struct{}
@@ -241,7 +244,7 @@ func (t *UpdateStoryArcTool) NewArgs() any                { return &UpdateStoryA
 func (t *UpdateStoryArcTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateStoryArcArgs)
 
-	if a.Name == "" && a.Description == "" && a.ArcType == "" && a.Importance == 0 && a.Status == "" && a.ReactivateAt == "" {
+	if a.Name == "" && a.Description == "" && a.ArcType == "" && a.Importance == 0 && a.Status == "" && a.ReactivateAt == "" && a.DetailJSON == "" {
 		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
 	}
 

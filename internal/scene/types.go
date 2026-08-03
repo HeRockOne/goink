@@ -6,7 +6,7 @@ import "time"
 type Scene struct {
 	ID           int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	NovelID      int64     `gorm:"column:novel_id;not null;index"    json:"novel_id"`
-	ChapterID    int64     `gorm:"column:chapter_id;not null;index"  json:"chapter_id"`
+	ChapterID    *int64    `gorm:"column:chapter_id;index"  json:"chapter_id"`
 	SceneNumber  int       `gorm:"column:scene_number;not null"      json:"scene_number"`
 	Title        string    `gorm:"column:title"                      json:"title"`
 	LocationID   *int64    `gorm:"column:location_id;index"          json:"location_id"`

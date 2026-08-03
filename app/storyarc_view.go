@@ -39,25 +39,27 @@ func (a *App) GetArcNodes(novelID int64, fromChapter int, toChapter int) ([]stor
 
 // CreateStoryArcInput 是 CreateStoryArc 的参数。
 type CreateStoryArcInput struct {
-	Name        string `json:"name"`                  // 弧线名称，必填
-	ArcType     string `json:"arc_type"`              // 弧线类型，必填
-	Description string `json:"description,omitempty"` // 弧线整体描述
-	Importance  int    `json:"importance,omitempty"`  // 重要度 1-5
-}
+		Name        string `json:"name"`                  // 弧线名称，必填
+		ArcType     string `json:"arc_type"`              // 弧线类型，必填
+		Description string `json:"description,omitempty"` // 弧线整体描述
+		Importance  int    `json:"importance,omitempty"`  // 重要度 1-5
+		DetailJSON  string `json:"detail_json,omitempty"` // 卷纲专用：JSON结构数据
+	}
 
 // CreateStoryArc 创建一条叙事弧线。
 func (a *App) CreateStoryArc(novelID int64, input CreateStoryArcInput) (*storyarc.StoryArc, error) {
 	if input.Name == "" || input.ArcType == "" {
 		return nil, fmt.Errorf("弧线名称和类型不能为空")
 	}
-	arc := storyarc.StoryArc{
-		NovelID:     novelID,
-		Name:        input.Name,
-		ArcType:     input.ArcType,
-		Description: input.Description,
-		Importance:  input.Importance,
-		Status:      "active",
-	}
+arc := storyarc.StoryArc{
+			NovelID:     novelID,
+			Name:        input.Name,
+			ArcType:     input.ArcType,
+			Description: input.Description,
+			Importance:  input.Importance,
+			Status:      "active",
+			DetailJSON:  input.DetailJSON,
+		}
 	if arc.Importance == 0 {
 		arc.Importance = 1
 	}
@@ -70,13 +72,14 @@ func (a *App) CreateStoryArc(novelID int64, input CreateStoryArcInput) (*storyar
 // UpdateStoryArcInput 是 UpdateStoryArc 的参数。
 // 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
 type UpdateStoryArcInput struct {
-	Name         string `json:"name,omitempty"`
-	Description  string `json:"description,omitempty"`
-	ArcType      string `json:"arc_type,omitempty"`
-	Importance   int    `json:"importance,omitempty"`
-	Status       string `json:"status,omitempty"`        // "active" | "paused" | "completed" | "abandoned"
-	ReactivateAt string `json:"reactivate_at,omitempty"` // 暂停恢复条件
-}
+		Name         string `json:"name,omitempty"`
+		Description  string `json:"description,omitempty"`
+		ArcType      string `json:"arc_type,omitempty"`
+		Importance   int    `json:"importance,omitempty"`
+		Status       string `json:"status,omitempty"`        // "active" | "paused" | "completed" | "abandoned"
+		ReactivateAt string `json:"reactivate_at,omitempty"` // 暂停恢复条件
+		DetailJSON   string `json:"detail_json,omitempty"`   // 卷纲专用：JSON结构数据
+	}
 
 // UpdateStoryArc 更新叙事弧线。只更新非零值字段。
 func (a *App) UpdateStoryArc(novelID int64, arcID int64, input UpdateStoryArcInput) error {

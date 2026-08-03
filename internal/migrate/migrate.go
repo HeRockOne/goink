@@ -27,10 +27,15 @@ import (
 
 // Run 自动创建/更新全部数据表，幂等安全。
 func Run(db *gorm.DB, log *slog.Logger) error {
-	// 移除旧 novels 表的 dir_path 列（该字段从未被读取过）。幂等：列不存在时报错忽略。
-	if err := db.Exec("ALTER TABLE novels DROP COLUMN dir_path").Error; err != nil {
-		log.Warn("迁移：删除 novels.dir_path 列失败（如列已不存在则无害）", "err", err)
-	}
+// 移除旧 novels 表的 dir_path 列（该字段从未被读取过）。幂等：列不存在时报错忽略。
+		if err := db.Exec("ALTER TABLE novels DROP COLUMN dir_path").Error; err != nil {
+			log.Warn("迁移：删除 novels.dir_path 列失败（如列已不存在则无害）", "err", err)
+		}
+
+		// scenes.chapter_id 改为 nullable（支持规划场景）。GORM AutoMigrate 不处理 NOT NULL 约束变更。
+		if err := db.Exec("ALTER TABLE scenes ALTER COLUMN chapter_id DROP NOT NULL").Error; err != nil {
+			log.Warn("迁移：scenes.chapter_id 改为 nullable 失败（SQLite 可能不支持 ALTER COLUMN，表已重建则无害）", "err", err)
+		}
 
 	models := []any{
 		&config.AppSettings{},

@@ -41,11 +41,12 @@ const FILTERS: { key: Filter; label: string }[] = [
 ]
 
 const ARC_TYPES = [
-  { value: 'main', label: 'storyarc.mainline' },
-  { value: 'sub', label: 'storyarc.subplot' },
-  { value: 'character', label: 'storyarc.characterLine' },
-  { value: 'background', label: 'storyarc.backgroundLine' },
-]
+	  { value: 'main', label: 'storyarc.mainline' },
+	  { value: 'sub', label: 'storyarc.subplot' },
+	  { value: 'character', label: 'storyarc.characterLine' },
+	  { value: 'background', label: 'storyarc.backgroundLine' },
+	  { value: 'volume', label: 'storyarc.volume' },
+	]
 
 const ARC_STATUSES = [
   { value: 'active', label: 'storyarc.active' },

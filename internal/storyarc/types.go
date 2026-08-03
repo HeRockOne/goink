@@ -11,10 +11,11 @@ type StoryArc struct {
 	NovelID      int64     `gorm:"column:novel_id;not null;index"    json:"novel_id"`
 	Name         string    `gorm:"column:name;not null"              json:"name"`          // 弧线名称，如"复仇之路"
 	Description  string    `gorm:"column:description"                json:"description"`   // 弧线整体描述
-	ArcType      string    `gorm:"column:arc_type;not null;index"    json:"arc_type"`      // "main" | "sub" | "character" | "background"
+	ArcType      string    `gorm:"column:arc_type;not null;index"    json:"arc_type"`      // "main" | "sub" | "character" | "background" | "volume"
 	Importance   int       `gorm:"column:importance;default:1"       json:"importance"`    // 1-5，同类型内的排序优先度
 	Status       string    `gorm:"column:status;not null;index"      json:"status"`        // "active" | "paused" | "completed" | "abandoned"
 	ReactivateAt string    `gorm:"column:reactivate_at"              json:"reactivate_at"` // 自然语言，暂停弧线的恢复条件。LLM 填写，MCP 工具格式化后呈现给 LLM 自行判断
+	DetailJSON   string    `gorm:"column:detail_json;type:text"      json:"detail_json"`   // 卷纲专用：JSON 格式的结构化数据（core_event, protagonist_change, ending_hook 等）
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"`
 }

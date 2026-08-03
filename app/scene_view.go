@@ -25,9 +25,10 @@ func (a *App) GetSceneDetail(sceneID int64) (*scene.Scene, error) {
 
 func (a *App) CreateScene(novelID int64, chapterID int64, sceneNumber int, title string, locationID int64, characterIDs string, wordCount int, summary string) (*scene.Scene, error) {
 	sc := &scene.Scene{
-		NovelID: novelID, ChapterID: chapterID, SceneNumber: sceneNumber,
+		NovelID: novelID, SceneNumber: sceneNumber,
 		Title: title, CharacterIDs: characterIDs, WordCount: wordCount, Summary: summary,
 	}
+	if chapterID > 0 { sc.ChapterID = &chapterID }
 	if locationID > 0 { sc.LocationID = &locationID }
 	if err := a.scene.Create(a.ctx, sc); err != nil {
 		return nil, fmt.Errorf("create scene: %w", err)
