@@ -88,38 +88,58 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 
 	// ── 2. 本章场景 → 角色 → 地点 → 弧线节点 ──
 	sceneStore := scene.NewStore(db, log)
-	scenes, err := sceneStore.ListByChapter(ctx, nid, curCh.ID)
-	sceneList := make([]map[string]any, 0)
-	if err == nil {
-		for _, s := range scenes {
-			// 地点
-			locInfo := map[string]any{"id": 0, "name": ""}
-			if s.LocationID != nil {
-				var loc location.Location
-				if err := db.WithContext(ctx).First(&loc, *s.LocationID).Error; err == nil {
-					locInfo = map[string]any{"id": loc.ID, "name": loc.Name, "type": loc.LocationType}
-				}
-			}
-			// 弧线节点
-			nodeInfo := map[string]any(nil)
-			if s.ArcNodeID != nil {
-				var node storyarc.ArcNode
-				if err := db.WithContext(ctx).First(&node, *s.ArcNodeID).Error; err == nil {
-					var arcName string
-					db.WithContext(ctx).Model(&storyarc.StoryArc{}).Select("name").Where("id = ?", node.StoryArcID).Scan(&arcName)
-					nodeInfo = map[string]any{"id": node.ID, "title": node.Title, "arc_id": node.StoryArcID, "arc_name": arcName}
-				}
-			}
-			sceneList = append(sceneList, map[string]any{
-				"id":         s.ID,
-				"title":      s.Title,
-				"summary":    s.Summary,
-				"word_count": s.WordCount,
-				"location":   locInfo,
-				"arc_node":   nodeInfo,
-				"scene_num":  s.SceneNumber,
-			})
+	// 先查当前卷，用于筛选规划场景
+	var plannedArcID int64
+	var vol storyarc.StoryArc
+	if err := db.WithContext(ctx).
+		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", nid).
+		Order("importance DESC").
+		First(&vol).Error; err == nil {
+		plannedArcID = vol.ID
+		result["volume"] = map[string]any{
+			"name":        vol.Name,
+			"description": vol.Description,
+			"detail_json": vol.DetailJSON,
 		}
+	}
+	var scenes []scene.Scene
+	if plannedArcID > 0 {
+		db.WithContext(ctx).Raw(
+			"SELECT * FROM scenes WHERE novel_id = ? AND (chapter_id = ? OR (chapter_id IS NULL AND arc_id = ?)) ORDER BY scene_number ASC",
+			nid, curCh.ID, plannedArcID,
+		).Scan(&scenes)
+	} else {
+		scenes, _ = sceneStore.ListByChapter(ctx, nid, curCh.ID)
+	}
+	sceneList := make([]map[string]any, 0)
+	for _, s := range scenes {
+		// 地点
+		locInfo := map[string]any{"id": 0, "name": ""}
+		if s.LocationID != nil {
+			var loc location.Location
+			if err := db.WithContext(ctx).First(&loc, *s.LocationID).Error; err == nil {
+				locInfo = map[string]any{"id": loc.ID, "name": loc.Name, "type": loc.LocationType}
+			}
+		}
+		// 弧线节点
+		nodeInfo := map[string]any(nil)
+		if s.ArcNodeID != nil {
+			var node storyarc.ArcNode
+			if err := db.WithContext(ctx).First(&node, *s.ArcNodeID).Error; err == nil {
+				var arcName string
+				db.WithContext(ctx).Model(&storyarc.StoryArc{}).Select("name").Where("id = ?", node.StoryArcID).Scan(&arcName)
+				nodeInfo = map[string]any{"id": node.ID, "title": node.Title, "arc_id": node.StoryArcID, "arc_name": arcName}
+			}
+		}
+		sceneList = append(sceneList, map[string]any{
+			"id":         s.ID,
+			"title":      s.Title,
+			"summary":    s.Summary,
+			"word_count": s.WordCount,
+			"location":   locInfo,
+			"arc_node":   nodeInfo,
+			"scene_num":  s.SceneNumber,
+		})
 	}
 	result["scenes"] = sceneList
 
@@ -203,23 +223,9 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 			"related_items": itemIDs,
 		})
 	}
-result["active_arcs"] = arcList
+	result["active_arcs"] = arcList
 
-		// ── 4.5 卷纲 ──
-		var vol storyarc.StoryArc
-		if err := db.WithContext(ctx).
-			Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", nid).
-			Order("importance DESC").
-			First(&vol).Error; err == nil {
-			volData := map[string]any{
-				"name":        vol.Name,
-				"description": vol.Description,
-				"detail_json": vol.DetailJSON,
-			}
-			result["volume"] = volData
-		}
-
-		// ── 5. 时间线 ──
+	// ── 5. 时间线 ──
 	tlStore := timeline.NewStore(db, log)
 	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: 1, Size: 20},
@@ -319,21 +325,21 @@ func parseJSONInt64Array(raw string) []int64 {
 
 // arcTypeZh 将弧线类型英文映射为中文
 func arcTypeZh(t string) string {
-		switch t {
-		case "main":
-			return "主线"
-		case "sub":
-			return "支线"
-		case "character":
-			return "角色弧"
-		case "background":
-			return "背景"
-		case "volume":
-			return "卷纲"
-		default:
-			return t
-		}
+	switch t {
+	case "main":
+		return "主线"
+	case "sub":
+		return "支线"
+	case "character":
+		return "角色弧"
+	case "background":
+		return "背景"
+	case "volume":
+		return "卷纲"
+	default:
+		return t
 	}
+}
 
 func RegisterWritingContextTool(r *Registry) {
 	r.Register(&GetWritingContextTool{})

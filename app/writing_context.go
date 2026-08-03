@@ -285,12 +285,19 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		}
 	}
 
-	// 当前章节的场景列表
-	var sceneBriefs []WritingSceneBrief
-	if ch.ID > 0 {
-		var scenes []scene.Scene
-		a.db.WithContext(ctx).Where("chapter_id = ?", ch.ID).Order("scene_number ASC").Find(&scenes)
-		for _, s := range scenes {
+// 当前章节的场景列表 + 规划场景
+		var sceneBriefs []WritingSceneBrief
+		if ch.ID > 0 {
+			var scenes []scene.Scene
+			if vol.ID > 0 {
+				a.db.WithContext(ctx).Raw(
+					"SELECT * FROM scenes WHERE novel_id = ? AND (chapter_id = ? OR (chapter_id IS NULL AND arc_id = ?)) ORDER BY scene_number ASC",
+					novelID, ch.ID, vol.ID,
+				).Scan(&scenes)
+			} else {
+				a.db.WithContext(ctx).Where("novel_id = ? AND chapter_id = ?", novelID, ch.ID).Order("scene_number ASC").Find(&scenes)
+			}
+			for _, s := range scenes {
 			sb := WritingSceneBrief{ID: s.ID, SceneNumber: s.SceneNumber, Title: s.Title, Summary: s.Summary}
 			if s.LocationID != nil {
 				var l location.Location
