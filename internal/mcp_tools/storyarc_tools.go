@@ -255,7 +255,8 @@ type UpdateStoryArcTool struct{}
 func (t *UpdateStoryArcTool) Name() string { return "update_story_arc" }
 func (t *UpdateStoryArcTool) Description() string {
 	return "更新叙事弧线的元数据。只需传入要修改的字段。" +
-		"常用：暂停弧线（status=paused + reactivate_at）、完成弧线（status=completed）、废弃弧线（status=abandoned）。"
+		"常用：暂停弧线（status=paused + reactivate_at）、完成弧线（status=completed）、废弃弧线（status=abandoned）。" +
+		"卷结束时：用 detail_json 字段写入 volume_summary，格式：{\"volume_summary\":\"本卷核心事件概括（50-120字）\"}"
 }
 func (t *UpdateStoryArcTool) Category() ToolCategory { return CategoryWritingAssistant }
 

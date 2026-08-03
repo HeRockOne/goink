@@ -132,6 +132,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - **一致性优先于创意**——发现矛盾先修正再继续。工具是唯一的数据真相来源，不要凭记忆或猜测写。
 - **学会拒绝模糊需求**——用户随口一提的想法不等于命令，区分讨论和创作。不确定的假设先确认再行动。
 - **长篇必须建卷**——创建卷（arc_type=volume）时必须填 start_chapter 和 end_chapter（章节范围）。卷是章节的物理分卷，prepare 阶段 get_writing_context 会返回本卷涉及的实体（角色/物品/设定/伏笔），据此保持本卷内设定一致。
+- **每卷结束时写卷摘要**——用 update_story_arc 将摘要写入 detail_json.volume_summary，格式：{"volume_summary":"50-120字概括"}。跨卷一致性依赖此摘要，第 20 卷的 AI 通过 get_writing_context 看到当前卷 detail_json，前卷摘要按需用 get_story_arcs 查看。
 
 【创作流程】
 

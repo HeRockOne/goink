@@ -25,6 +25,9 @@ mode: always
 - 每卷必填：name（如"第一卷·崛起"）、description（卷纲概述）、start_chapter、end_chapter
 - 可选：detail_json（卷级规划：core_event / protagonist_change / ending_hook 等 JSON）
 - 卷创建后，get_writing_context 会在 prepare 阶段返回本卷涉及的实体（角色/物品/设定/伏笔），供写作参考
+- **每卷结束时必须写卷摘要**：用 update_story_arc 将本卷摘要写入 detail_json.volume_summary，格式为 JSON 对象：
+  `{"volume_summary": "本卷核心事件、角色变化、关键转折的一句话概括（50-120字）"}`
+  - 跨卷连续性依赖卷摘要——第 20 卷的 AI 通过 get_writing_context 的 volume.detail_json 看到前 19 卷摘要，但不注入全量（只返回当前卷的 detail_json，前卷摘要由 AI 按需调用 get_story_arcs 查看）
 
 ## 阶段指令
 
