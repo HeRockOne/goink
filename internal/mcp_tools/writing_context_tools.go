@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"log/slog"
 
+	"gorm.io/gorm"
+
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
 	"novel/internal/item"
+	"novel/internal/itemoccurrence"
 	"novel/internal/location"
 	"novel/internal/lore"
 	"novel/internal/reader"
@@ -77,11 +80,13 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	recentList := make([]map[string]any, 0)
 	for _, ch := range recentChs {
 		recentList = append(recentList, map[string]any{
-			"num":        ch.ChapterNumber,
-			"title":      ch.Title,
-			"summary":    ch.Summary,
-			"key_events": ch.KeyEvents,
-			"word_cnt":   ch.WordCount,
+			"num":           ch.ChapterNumber,
+			"title":         ch.Title,
+			"summary":       ch.Summary,
+			"key_events":    ch.KeyEvents,
+			"word_cnt":      ch.WordCount,
+			"characters_in": ch.CharactersIn,
+			"arc_ids":       ch.ArcIDs,
 		})
 	}
 	result["recent_chapters"] = recentList
@@ -97,9 +102,15 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		First(&vol).Error; err == nil {
 		plannedArcID = vol.ID
 		result["volume"] = map[string]any{
-			"name":        vol.Name,
-			"description": vol.Description,
-			"detail_json": vol.DetailJSON,
+			"name":          vol.Name,
+			"description":   vol.Description,
+			"detail_json":   vol.DetailJSON,
+			"start_chapter": vol.StartChapter,
+			"end_chapter":   vol.EndChapter,
+		}
+		// 卷级聚合：查卷范围内实体（ID 列表，省 token）
+		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
+			result["volume_entities"] = buildVolumeEntitiesData(ctx, db, nid, vol)
 		}
 	}
 	var scenes []scene.Scene
@@ -343,4 +354,100 @@ func arcTypeZh(t string) string {
 
 func RegisterWritingContextTool(r *Registry) {
 	r.Register(&GetWritingContextTool{})
+}
+
+// buildVolumeEntitiesData 查询时聚合当前卷范围内涉及的所有实体（ID 列表，省 token）。
+// 从已有实体表派生，不建缓存表，避免同步负担。
+func buildVolumeEntitiesData(ctx context.Context, db *gorm.DB, nid int64, vol storyarc.StoryArc) map[string]any {
+	ve := map[string]any{
+		"characters": []any{},
+		"items":      []any{},
+		"lore":       []any{},
+		"foreshadow": []any{},
+	}
+
+	var chIDs []int64
+	if err := db.WithContext(ctx).Model(&chapter.Chapter{}).
+		Where("novel_id = ? AND chapter_number BETWEEN ? AND ?", nid, vol.StartChapter, vol.EndChapter).
+		Pluck("id", &chIDs).Error; err != nil || len(chIDs) == 0 {
+		return ve
+	}
+
+	// 角色：从卷内章节的场景中提取 character_ids
+	charIDSet := map[int64]bool{}
+	var scenes []scene.Scene
+	if err := db.WithContext(ctx).Where("novel_id = ? AND chapter_id IN ?", nid, chIDs).Find(&scenes).Error; err == nil {
+		for _, sc := range scenes {
+			for _, id := range parseJSONInt64Array(sc.CharacterIDs) {
+				if id > 0 {
+					charIDSet[id] = true
+				}
+			}
+		}
+	}
+	if len(charIDSet) > 0 {
+		ids := make([]int64, 0, len(charIDSet))
+		for id := range charIDSet {
+			ids = append(ids, id)
+		}
+		var chars []character.Character
+		db.WithContext(ctx).Where("novel_id = ? AND id IN ?", nid, ids).Find(&chars)
+		list := make([]any, 0, len(chars))
+		for _, c := range chars {
+			list = append(list, map[string]any{"id": c.ID, "name": c.Name})
+		}
+		ve["characters"] = list
+	}
+
+	// 物品：item_occurrence
+	var occs []itemoccurrence.ItemOccurrence
+	if err := db.WithContext(ctx).Where("novel_id = ? AND chapter_id IN ?", nid, chIDs).Find(&occs).Error; err == nil {
+		itemIDSet := map[int64]bool{}
+		for _, o := range occs {
+			if o.ItemID > 0 {
+				itemIDSet[o.ItemID] = true
+			}
+		}
+		if len(itemIDSet) > 0 {
+			ids := make([]int64, 0, len(itemIDSet))
+			for id := range itemIDSet {
+				ids = append(ids, id)
+			}
+			var items []item.Item
+			db.WithContext(ctx).Where("novel_id = ? AND id IN ?", nid, ids).Find(&items)
+			list := make([]any, 0, len(items))
+			for _, it := range items {
+				list = append(list, map[string]any{"id": it.ID, "name": it.Name})
+			}
+			ve["items"] = list
+		}
+	}
+
+	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷
+	var lores []lore.LoreEntry
+	if err := db.WithContext(ctx).
+		Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ?)", nid, chIDs, vol.ID).
+		Find(&lores).Error; err == nil {
+		list := make([]any, 0, len(lores))
+		for _, l := range lores {
+			list = append(list, map[string]any{"id": l.ID, "name": l.Title})
+		}
+		ve["lore"] = list
+	}
+
+	// 伏笔：target_chapter 在卷范围内
+	var tls []timeline.TimelineEntry
+	if err := db.WithContext(ctx).
+		Where("novel_id = ? AND target_chapter BETWEEN ? AND ?", nid, vol.StartChapter, vol.EndChapter).
+		Find(&tls).Error; err == nil {
+		list := make([]any, 0, len(tls))
+		for _, e := range tls {
+			if e.ID > 0 {
+				list = append(list, map[string]any{"id": e.ID, "name": e.Title})
+			}
+		}
+		ve["foreshadow"] = list
+	}
+
+	return ve
 }

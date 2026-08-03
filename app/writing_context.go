@@ -1,10 +1,15 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
+
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/item"
+	"novel/internal/itemoccurrence"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/reader"
 	"novel/internal/scene"
 	"novel/internal/storage"
@@ -21,6 +26,20 @@ type WritingVolume struct {
 	DetailJSON  string `json:"detail_json,omitempty"`
 }
 
+// WritingVolumeEntity 卷内实体的紧凑标识。
+type WritingVolumeEntity struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// WritingVolumeEntities 卷级聚合：当前卷涉及的所有实体（ID 列表，省 token）。
+type WritingVolumeEntities struct {
+	Characters []WritingVolumeEntity `json:"characters,omitempty"`
+	Items      []WritingVolumeEntity `json:"items,omitempty"`
+	Lore       []WritingVolumeEntity `json:"lore,omitempty"`
+	Foreshadow []WritingVolumeEntity `json:"foreshadow,omitempty"`
+}
+
 // WritingContext 聚合叙事上下文，前端一次调用拿全部。
 type WritingContext struct {
 	Chapter         WritingChapter          `json:"chapter"`
@@ -32,6 +51,7 @@ type WritingContext struct {
 	WritingSnapshot *WritingSnapshotBrief   `json:"writing_snapshot"`
 	Scenes          []WritingSceneBrief     `json:"scenes"`
 	Volume          *WritingVolume          `json:"volume,omitempty"`
+	VolumeEntities  *WritingVolumeEntities  `json:"volume_entities,omitempty"`
 }
 
 type WritingChapter struct {
@@ -47,6 +67,9 @@ type WritingChapterBrief struct {
 	Summary   string `json:"summary"`
 	KeyEvents string `json:"key_events"`
 	WordCnt   int    `json:"word_cnt"`
+	// 结构化实体字段（数据已存在，现在暴露给 AI）
+	CharactersIn string `json:"characters_in"`
+	ArcIDs       string `json:"arc_ids"`
 }
 
 type WritingCharacterBrief struct {
@@ -146,11 +169,13 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 	var recent []WritingChapterBrief
 	for _, c := range chs {
 		recent = append(recent, WritingChapterBrief{
-			Num:       c.ChapterNumber,
-			Title:     c.Title,
-			Summary:   c.Summary,
-			KeyEvents: c.KeyEvents,
-			WordCnt:   c.WordCount,
+			Num:          c.ChapterNumber,
+			Title:        c.Title,
+			Summary:      c.Summary,
+			KeyEvents:    c.KeyEvents,
+			WordCnt:      c.WordCount,
+			CharactersIn: c.CharactersIn,
+			ArcIDs:       c.ArcIDs,
 		})
 	}
 
@@ -205,6 +230,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 
 	// 卷纲查询：查找当前活跃的卷
 	var volume *WritingVolume
+	var volumeEntities *WritingVolumeEntities
 	var vol storyarc.StoryArc
 	if err := a.db.WithContext(ctx).
 		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).
@@ -215,6 +241,10 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 			Description: vol.Description,
 			ArcType:     vol.ArcType,
 			DetailJSON:  vol.DetailJSON,
+		}
+		// 卷级聚合：查卷范围内（start_chapter ~ end_chapter）涉及的所有实体
+		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
+			volumeEntities = a.buildVolumeEntities(ctx, novelID, vol)
 		}
 	}
 
@@ -285,19 +315,19 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		}
 	}
 
-// 当前章节的场景列表 + 规划场景
-		var sceneBriefs []WritingSceneBrief
-		if ch.ID > 0 {
-			var scenes []scene.Scene
-			if vol.ID > 0 {
-				a.db.WithContext(ctx).Raw(
-					"SELECT * FROM scenes WHERE novel_id = ? AND (chapter_id = ? OR (chapter_id IS NULL AND arc_id = ?)) ORDER BY scene_number ASC",
-					novelID, ch.ID, vol.ID,
-				).Scan(&scenes)
-			} else {
-				a.db.WithContext(ctx).Where("novel_id = ? AND chapter_id = ?", novelID, ch.ID).Order("scene_number ASC").Find(&scenes)
-			}
-			for _, s := range scenes {
+	// 当前章节的场景列表 + 规划场景
+	var sceneBriefs []WritingSceneBrief
+	if ch.ID > 0 {
+		var scenes []scene.Scene
+		if vol.ID > 0 {
+			a.db.WithContext(ctx).Raw(
+				"SELECT * FROM scenes WHERE novel_id = ? AND (chapter_id = ? OR (chapter_id IS NULL AND arc_id = ?)) ORDER BY scene_number ASC",
+				novelID, ch.ID, vol.ID,
+			).Scan(&scenes)
+		} else {
+			a.db.WithContext(ctx).Where("novel_id = ? AND chapter_id = ?", novelID, ch.ID).Order("scene_number ASC").Find(&scenes)
+		}
+		for _, s := range scenes {
 			sb := WritingSceneBrief{ID: s.ID, SceneNumber: s.SceneNumber, Title: s.Title, Summary: s.Summary}
 			if s.LocationID != nil {
 				var l location.Location
@@ -321,5 +351,107 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		WritingSnapshot: snapBrief,
 		Scenes:          sceneBriefs,
 		Volume:          volume,
+		VolumeEntities:  volumeEntities,
 	}, nil
+}
+
+// buildVolumeEntities 查询时聚合当前卷（start~end 章）涉及的所有实体。
+// 从已有表派生，不建缓存表，避免同步负担。
+func (a *App) buildVolumeEntities(ctx context.Context, novelID int64, vol storyarc.StoryArc) *WritingVolumeEntities {
+	db := a.db.WithContext(ctx)
+	ve := &WritingVolumeEntities{
+		Characters: []WritingVolumeEntity{},
+		Items:      []WritingVolumeEntity{},
+		Lore:       []WritingVolumeEntity{},
+		Foreshadow: []WritingVolumeEntity{},
+	}
+
+	// 卷范围内的章节 ID
+	var chIDs []int64
+	db.Model(&chapter.Chapter{}).
+		Where("novel_id = ? AND chapter_number BETWEEN ? AND ?", novelID, vol.StartChapter, vol.EndChapter).
+		Pluck("id", &chIDs)
+	if len(chIDs) == 0 {
+		return ve
+	}
+
+	// 角色：从卷内章节的场景字符 ID 提取
+	charIDSet := map[int64]bool{}
+	var scenes []scene.Scene
+	if err := db.Where("novel_id = ? AND chapter_id IN ?", novelID, chIDs).Find(&scenes).Error; err == nil {
+		for _, sc := range scenes {
+			for _, id := range appParseInt64Array(sc.CharacterIDs) {
+				if id > 0 {
+					charIDSet[id] = true
+				}
+			}
+		}
+	}
+	if len(charIDSet) > 0 {
+		var chars []character.Character
+		ids := make([]int64, 0, len(charIDSet))
+		for id := range charIDSet {
+			ids = append(ids, id)
+		}
+		db.Where("novel_id = ? AND id IN ?", novelID, ids).Find(&chars)
+		for _, c := range chars {
+			ve.Characters = append(ve.Characters, WritingVolumeEntity{ID: c.ID, Name: c.Name})
+		}
+	}
+
+	// 物品：从 item_occurrence（章节范围内出现过）
+	var occs []itemoccurrence.ItemOccurrence
+	if err := db.Where("novel_id = ? AND chapter_id IN ?", novelID, chIDs).Find(&occs).Error; err == nil {
+		itemIDSet := map[int64]bool{}
+		for _, o := range occs {
+			if o.ItemID > 0 {
+				itemIDSet[o.ItemID] = true
+			}
+		}
+		if len(itemIDSet) > 0 {
+			var items []item.Item
+			ids := make([]int64, 0, len(itemIDSet))
+			for id := range itemIDSet {
+				ids = append(ids, id)
+			}
+			db.Where("novel_id = ? AND id IN ?", novelID, ids).Find(&items)
+			for _, it := range items {
+				ve.Items = append(ve.Items, WritingVolumeEntity{ID: it.ID, Name: it.Name})
+			}
+		}
+	}
+
+	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷
+	var lores []lore.LoreEntry
+	if err := db.Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ?)", novelID, chIDs, vol.ID).
+		Find(&lores).Error; err == nil {
+		for _, l := range lores {
+			ve.Lore = append(ve.Lore, WritingVolumeEntity{ID: l.ID, Name: l.Title})
+		}
+	}
+
+	// 伏笔：target_chapter 在卷范围内
+	var tls []timeline.TimelineEntry
+	if err := db.Where("novel_id = ? AND target_chapter BETWEEN ? AND ?", novelID, vol.StartChapter, vol.EndChapter).
+		Find(&tls).Error; err == nil {
+		for _, e := range tls {
+			if e.ID > 0 {
+				ve.Foreshadow = append(ve.Foreshadow, WritingVolumeEntity{ID: e.ID, Name: e.Title})
+			}
+		}
+	}
+
+	return ve
+}
+
+// appParseInt64Array 解析 "[1,5,12]" 格式的 JSON 数组到 []int64。
+func appParseInt64Array(raw string) []int64 {
+	if raw == "" {
+		return nil
+	}
+	var ids []int64
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return nil
+	}
+	return ids
 }

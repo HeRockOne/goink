@@ -18,6 +18,14 @@ mode: always
 单章：prepare → outline → write → review → maintain → prepare
 批量：prepare → outline ⇄ write（循环N章）→ review → maintain → done
 
+## 卷结构（长篇必建）
+
+开书/开新卷时，用 create_story_arc 创建卷（arc_type=volume），**必须填 start_chapter 和 end_chapter**（卷的章节范围）。
+- 卷是章节的物理分卷，与叙事弧线（main/sub/character/background）不同——卷管"第几章到第几章"，弧线管"故事线"
+- 每卷必填：name（如"第一卷·崛起"）、description（卷纲概述）、start_chapter、end_chapter
+- 可选：detail_json（卷级规划：core_event / protagonist_change / ending_hook 等 JSON）
+- 卷创建后，get_writing_context 会在 prepare 阶段返回本卷涉及的实体（角色/物品/设定/伏笔），供写作参考
+
 ## 阶段指令
 
 ### prepare

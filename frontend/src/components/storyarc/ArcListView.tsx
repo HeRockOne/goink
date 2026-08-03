@@ -71,10 +71,10 @@ type EditMode =
   | { type: 'edit_node'; node: storyarc.ArcNode }
   | null
 
-type ArcForm = { name: string; arc_type: string; description?: string; importance?: number; status?: string; reactivate_at?: string }
+type ArcForm = { name: string; arc_type: string; description?: string; importance?: number; status?: string; reactivate_at?: string; start_chapter?: number; end_chapter?: number }
 type NodeForm = { story_arc_id: number; title: string; description?: string; target_chapter: number; actual_chapter?: number; status?: string }
 
-const EMPTY_ARC: ArcForm = { name: '', arc_type: 'main' }
+const EMPTY_ARC: ArcForm = { name: '', arc_type: 'main', start_chapter: 0, end_chapter: 0 }
 const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: '', target_chapter: 1 }
 
 export default function ArcListView({ novelId, focusArcId }: Props) {
@@ -191,6 +191,8 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       arc_type: arc.arc_type,
       description: arc.description || '',
       importance: arc.importance,
+      start_chapter: arc.start_chapter || 0,
+      end_chapter: arc.end_chapter || 0,
     })
     setEditMode({ type: 'edit_arc', arc })
   }
@@ -198,6 +200,8 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   async function handleCreateArc() {
     if (!arcForm.name.trim()) { setError(t('storyarc.pleaseEnterArcName')); return }
     if (!arcForm.arc_type) { setError(t('storyarc.pleaseSelectArcType')); return }
+    if (arcForm.arc_type === 'volume' && (!arcForm.start_chapter || !arcForm.end_chapter)) { setError(t('storyarc.volumeRequiresRange')); return }
+    if (arcForm.arc_type === 'volume' && arcForm.end_chapter! < arcForm.start_chapter!) { setError(t('storyarc.volumeRangeInvalid')); return }
     setSaving(true)
     try {
       await app.CreateStoryArc(novelId, arcForm)
@@ -379,6 +383,28 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
             placeholder={t('storyarc.arcDescription')}
           />
         </div>
+        {arcForm.arc_type === 'volume' && (
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('storyarc.startChapter')}</label>
+              <input
+                type="number" min={1}
+                value={arcForm.start_chapter || ''}
+                onChange={e => setArcForm(f => ({ ...f, start_chapter: parseInt(e.target.value) || 0 }))}
+                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('storyarc.endChapter')}</label>
+              <input
+                type="number" min={1}
+                value={arcForm.end_chapter || ''}
+                onChange={e => setArcForm(f => ({ ...f, end_chapter: parseInt(e.target.value) || 0 }))}
+                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          </div>
+        )}
         {!isCreate && editMode?.type === 'edit_arc' && (
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('storyarc.status')}</label>
