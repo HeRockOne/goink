@@ -24,5 +24,6 @@ func RegisterAllTools(r *Registry) {
 	RegisterItemOccurrenceTools(r)
 	RegisterPhaseGateConfigTool(r)
 	RegisterWritingContextTool(r)
+	RegisterAppearanceTools(r)
 	RegisterChapterMetaTool(r)
 }

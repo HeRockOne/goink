@@ -43,6 +43,7 @@ var mainAgentTools = []string{
 	"update_phase_gate_config",
 	"get_writing_context",
 	"update_chapter_meta",
+	"get_entity_appearances",
 }
 
 var reviewAgentTools = []string{
@@ -55,6 +56,7 @@ var reviewAgentTools = []string{
 	"get_scenes",
 	"get_stats",
 	"search_story_memory", "read",
+	"get_entity_appearances", "check_story_consistency",
 }
 
 var memoryAgentTools = []string{
@@ -156,7 +158,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 | 阶段 | 完成条件 | 必须调用 |
 |------|---------|---------|
-| prepare | 用 get_writing_context 一次获取全量上下文（角色、时间线、弧线、读者认知、伏笔、设定、物品、场景），再按需补充细节，然后 set_phase("outline") |
+| prepare | 用 get_writing_context 一次获取全量上下文（角色、时间线、弧线、读者认知、伏笔、设定、物品、场景），**必须检查 volume_entities（本卷涉及的实体清单）**，确认本卷设定约束、伏笔状态、物品流转，再按需补充细节。发现有异常（如角色断档、设定前后矛盾）用 get_entity_appearances 反查确认，然后 set_phase("outline") |
 | outline | 大纲写入文件 | set_phase("write") |
 | write | 正文写入+字数达标（代码层有硬限制，写作时参考 main-tech-word-count-calibration 的 2500-4000 字） | set_phase("review") |
 | review | 必须调用 run_subagent(agent_type="review") 且无致命问题 | set_phase("maintain") |
@@ -193,13 +195,14 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 
 开始审稿前，先用 read 工具读取 /builtin/skills/sub-tech-review-standards.md 和 /builtin/skills/sub-tech-anti-ai-grade.md，获取完整的审稿标准和反 AI 检测规则，并在后续检查中逐项对照。
 
-## 审读流程
+## 审稿流程
 
 1. **阅读当前章节** — 用 read 工具读取 instruction 中指定的章节（用 start_line/end_line 限制范围，禁止全量读取）
 2. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
 3. **收集上下文** — 调用 get_characters、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据
-4. **逐项检查**（对照已加载的审稿标准，逐项执行）：
-   - **角色一致性**：正文中角色言行/能力/位置是否与数据库一致 → 调用 get_characters(search=角色名, brief=true)
+4. **程序化一致性检查** — 调用 check_story_consistency 获取 SQL 实证数据（伏笔超期、角色断档、物品冲突），作为以下人工检查的硬数据参考
+5. **逐项检查**（对照已加载的审稿标准，逐项执行）：
+   - **角色一致性**：正文中角色言行/能力/位置是否与数据库一致 → 调用 get_characters(search=角色名, brief=true) 核对当前状态，如有疑问用 get_entity_appearances(character, 角色ID) 回溯历史表现
    - **设定一致性**：正文中提到的地点/物品/世界观，逐一调用工具核对：
      - 地点状态 → get_locations(mode="list", search=地点名)
      - 物品归属/状态 → get_items(mode="list", search=物品名)
