@@ -7,13 +7,74 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sys/windows/registry"
 )
 
+// initWindowsProxy 读取 Windows 系统代理设置并写入环境变量 HTTP_PROXY/HTTPS_PROXY。
+// Go 的 http.ProxyFromEnvironment 只读环境变量，不读 Windows 注册表。
+// 此函数确保 Go 的 HTTP 客户端能走系统代理（如 clash/v2ray 等）。
+func initWindowsProxy() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
+		return
+	}
+	k, err := registry.OpenKey(registry.CURRENT_USER,
+		`Software\Microsoft\Windows\CurrentVersion\Internet Settings`,
+		registry.QUERY_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+
+	enabled, _, err := k.GetIntegerValue("ProxyEnable")
+	if err != nil || enabled == 0 {
+		return
+	}
+	proxy, _, err := k.GetStringValue("ProxyServer")
+	if err != nil || proxy == "" {
+		return
+	}
+	if !strings.HasPrefix(proxy, "http://") && !strings.HasPrefix(proxy, "https://") {
+		proxy = "http://" + proxy
+	}
+	os.Setenv("HTTP_PROXY", proxy)
+	os.Setenv("HTTPS_PROXY", proxy)
+
+	override, _, err := k.GetStringValue("ProxyOverride")
+	if err == nil && strings.Contains(override, "<local>") {
+		os.Setenv("NO_PROXY", "localhost,127.0.0.1,.local")
+	}
+}
+
+var initWindowsProxyOnce sync.Once
+
+func ensureWindowsProxy() {
+	if runtime.GOOS == "windows" {
+		initWindowsProxyOnce.Do(initWindowsProxy)
+	}
+}
+
+// newHTTPClient 创建带超时和代理的 HTTP 客户端。
+func newHTTPClient(timeout time.Duration) *http.Client {
+	ensureWindowsProxy()
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+	}
+}
+
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
-// 从 chatURL 推导 modelsURL（去掉 /chat/completions，拼接 /models），
-// 解析标准 OpenAI 格式及 Kimi 等扩展字段。返回的 ModelInfo 中未获取到的字段留零值。
+// 优先从服务商自己的 /models 端点获取；失败时从 models.dev 回退匹配。
 func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, error) {
 	chatURL = normalizeURL(chatURL)
 	baseURL := strings.TrimSuffix(chatURL, "/chat/completions")
@@ -21,27 +82,45 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
 	if err != nil {
+		// 请求构造失败，直接回退到 models.dev
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
+		// 网络错误（超时/代理等），回退到 models.dev
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		// 服务商不支持 /models，回退到 models.dev
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, httpError(resp.StatusCode, errBody)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 	if looksLikeHTML(body) {
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, fmt.Errorf("该端点不支持自动发现（服务端返回了网页而非 JSON）")
 	}
 
@@ -55,6 +134,9 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
 		return nil, fmt.Errorf("解析模型列表失败（该端点可能不支持 /models）: %w", err)
 	}
 
@@ -67,7 +149,6 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 			ID:   item.ID,
 			Name: modelIDToName(item.ID),
 		}
-		// 1. 优先使用 API 返回的字段
 		if item.ContextLength > 0 {
 			m.ContextWindow = item.ContextLength
 		}
@@ -80,7 +161,7 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 			m.SupportsVision = true
 		}
 
-		// 2. API 没返回的字段，从 models.dev 补充
+		// 从 models.dev 补充缺失字段
 		if m.ContextWindow == 0 || m.MaxOutputTokens == 0 {
 			if globalModelsDev != nil {
 				if spec := globalModelsDev.LookupModelSpec(item.ID); spec != nil {
@@ -103,7 +184,6 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 			}
 		}
 
-		// 3. 兜底默认值
 		if m.ContextWindow == 0 {
 			m.ContextWindow = 128_000
 		}
@@ -114,7 +194,21 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 		models = append(models, m)
 	}
 
+	if len(models) == 0 {
+		if fallback := tryModelsDevFallback(chatURL); fallback != nil {
+			return fallback, nil
+		}
+	}
+
 	return models, nil
+}
+
+// tryModelsDevFallback 从 models.dev 查找服务商模型列表作为回退。
+func tryModelsDevFallback(chatURL string) []ModelInfo {
+	if globalModelsDev == nil {
+		return nil
+	}
+	return globalModelsDev.LookupProviderModels(chatURL)
 }
 
 func looksLikeHTML(body []byte) bool {

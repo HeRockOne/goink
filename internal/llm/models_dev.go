@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,6 +98,93 @@ func (c *ModelsDevClient) LookupModelSpec(modelID string) *ModelSpec {
 	return nil
 }
 
+// LookupProviderModels 从 chat URL 推断服务商名，从 models.dev 查找该服务商的全部模型。
+// 返回 ModelInfo 列表（含从 models.dev 获取的精确上下文窗口等参数）或 nil。
+func (c *ModelsDevClient) LookupProviderModels(chatURL string) []ModelInfo {
+	c.ensureCache()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.cache == nil || chatURL == "" {
+		return nil
+	}
+
+	// 从 URL 中提取候选服务商名（如 "api.stepfun.com" → "stepfun"）
+	domain := extractDomain(chatURL)
+	if domain == "" {
+		return nil
+	}
+	candidates := []string{domain}
+	// 去掉常见前缀：api. → ""；api.stepfun.com → stepfun
+	if strings.HasPrefix(domain, "api.") {
+		candidates = append(candidates, domain[4:])
+	}
+	// 去掉后缀：stepfun.com → stepfun
+	if idx := strings.Index(domain, "."); idx > 0 {
+		candidates = append(candidates, domain[:idx])
+		// 再去掉 api. 前缀: api.stepfun → stepfun
+		if strings.HasPrefix(domain[:idx], "api.") {
+			candidates = append(candidates, domain[:idx][4:])
+		}
+	}
+
+	lower := func(s string) string { return strings.ToLower(s) }
+	for _, pname := range c.cache.Providers {
+		matched := false
+		for _, cand := range candidates {
+			if cand == "" {
+				continue
+			}
+			if lower(pname.Name) == lower(cand) || lower(pname.ID) == lower(cand) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		// 找到匹配的服务商，将其模型转换为 ModelInfo
+		models := make([]ModelInfo, 0, len(pname.Models))
+		for _, m := range pname.Models {
+			mi := ModelInfo{
+				ID:               m.ID,
+				Name:             m.Name,
+				ContextWindow:    m.Limit.Context,
+				MaxOutputTokens:  m.Limit.Output,
+				SupportsThinking: m.Reasoning,
+				SupportsVision:   containsAny(m.Modalities.Input, "image", "video", "pdf"),
+			}
+			for _, ro := range m.ReasoningOptions {
+				if ro.Type == "effort" && len(ro.Values) > 0 {
+					mi.ReasoningLevels = append([]string{}, ro.Values...)
+					break
+				}
+			}
+			models = append(models, mi)
+		}
+		if len(models) > 0 {
+			return models
+		}
+	}
+	return nil
+}
+
+// extractDomain 从 URL 中提取域名部分（不含端口和路径）。
+func extractDomain(rawURL string) string {
+	// 先去掉协议
+	s := rawURL
+	if idx := strings.Index(s, "://"); idx >= 0 {
+		s = s[idx+3:]
+	}
+	// 去掉路径和端口
+	if idx := strings.Index(s, "/"); idx >= 0 {
+		s = s[:idx]
+	}
+	if idx := strings.Index(s, ":"); idx >= 0 {
+		s = s[:idx]
+	}
+	return s
+}
+
 func (c *ModelsDevClient) toSpec(m modelsDevModel) *ModelSpec {
 	spec := &ModelSpec{
 		ContextWindow:    m.Limit.Context,
@@ -162,7 +248,7 @@ func (c *ModelsDevClient) loadFromDisk() bool {
 }
 
 func (c *ModelsDevClient) fetchFromNetwork() {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := newHTTPClient(30 * time.Second)
 	resp, err := client.Get(modelsDevURL)
 	if err != nil {
 		fmt.Printf("[models.dev] 获取模型数据失败: %v\n", err)
