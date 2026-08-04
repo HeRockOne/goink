@@ -166,6 +166,11 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     contentRef.current?.openFile('goink.md', t('workspace.storyStatus'))
   }
 
+  function handleSelectBookOutline() {
+    setTabTarget({ path: 'book-outline.md', title: t('workspace.bookOutline') })
+    contentRef.current?.openFile('book-outline.md', t('workspace.bookOutline'))
+  }
+
   // ── Approval ────────────────────────────────────────────
 
   async function handleApprove(toolId: string, feedback: string) {
@@ -419,6 +424,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             onSelectNovel={handleSelectNovel}
             onSelectChapter={handleSelectChapter}
             onSelectGoink={handleSelectGoink}
+            onSelectBookOutline={handleSelectBookOutline}
             onExportNovel={(id) => setExportNovelId(id)}
             target={tabTarget}
             showCreate={showCreate}

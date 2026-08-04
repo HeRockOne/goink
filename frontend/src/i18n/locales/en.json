@@ -55,6 +55,7 @@
     "darkMode": "Dark Mode",
     "lightMode": "Light Mode",
     "storyStatus": "Story Status",
+    "bookOutline": "Book Outline",
     "skillLabel": "Skill: ",
     "profile": "Profile",
     "help": "Help",
@@ -104,6 +105,7 @@
     "add": "Add",
     "cancel": "Cancel",
     "storyStatus": "Story Status",
+    "bookOutline": "Book Outline",
     "noChapters": "No chapters yet",
     "createFirstChapter": "Click + to create the first chapter",
     "novels": "Novels",
@@ -923,6 +925,7 @@
   "content": {
     "loadFailedCloseTab": "Load failed, please close the tab and retry",
     "storyStatus": "Story Status",
+    "bookOutline": "Book Outline",
     "skillLabel": "Skill: ",
     "selectOrCreateChapter": "Select or create a chapter to start writing",
     "selectTab": "Select Tab",

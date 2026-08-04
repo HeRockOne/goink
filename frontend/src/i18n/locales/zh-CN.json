@@ -55,6 +55,7 @@
     "darkMode": "深色模式",
     "lightMode": "浅色模式",
     "storyStatus": "故事状态",
+    "bookOutline": "全书总纲",
     "skillLabel": "技能: ",
     "profile": "个人中心",
     "help": "帮助",
@@ -103,6 +104,7 @@
     "add": "添加",
     "cancel": "取消",
     "storyStatus": "故事状态",
+    "bookOutline": "全书总纲",
     "noChapters": "暂无章节",
     "createFirstChapter": "点击 + 创建第一章",
     "novels": "作品",
@@ -884,6 +886,7 @@
   "content": {
     "loadFailedCloseTab": "加载失败，请关闭标签页后重试",
     "storyStatus": "故事状态",
+    "bookOutline": "全书总纲",
     "skillLabel": "技能: ",
     "selectOrCreateChapter": "选择或创建章节开始写作",
     "selectTab": "选择标签页",

@@ -12,12 +12,13 @@ interface Props {
   target: { path: string; title: string } | null
   onSelectChapter: (ch: chapter.Chapter) => void
   onSelectGoink: () => void
+  onSelectBookOutline: () => void
   onExportNovel: () => void
 }
 
 const BLOCK_SIZE = 100
 
-export default function ChapterList({ novelId, target, onSelectChapter, onSelectGoink, onExportNovel }: Props) {
+export default function ChapterList({ novelId, target, onSelectChapter, onSelectGoink, onSelectBookOutline, onExportNovel }: Props) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -47,7 +48,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
   useEffect(() => {
     const unsub = EventsOn('file:changed', (data: any) => {
       if (data.novel_id !== novelId) return
-      if (data.path && (data.path.startsWith('chapters/') || data.path.startsWith('outlines/') || data.path === 'goink.md')) {
+      if (data.path && (data.path.startsWith('chapters/') || data.path.startsWith('outlines/') || data.path === 'goink.md' || data.path === 'book-outline.md')) {
         loadChapters()
       }
     })
@@ -170,6 +171,18 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
         )}
         <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span className="flex-1 text-sm truncate">{t('sidebar.storyStatus')}</span>
+      </button>
+
+      <button
+        onClick={onSelectBookOutline}
+        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50
+          ${target?.path === 'book-outline.md' ? 'bg-primary/10 font-medium' : ''}`}
+      >
+        {target?.path === 'book-outline.md' && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
+        )}
+        <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="flex-1 text-sm truncate">{t('sidebar.bookOutline')}</span>
       </button>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">

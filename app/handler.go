@@ -410,8 +410,15 @@ func (a *App) GetWebDAVInfo() string {
 }
 
 // saveWindowState 保存窗口大小和位置到 JSON 文件
+// isWailsContext 判断 ctx 是否携带 Wails frontend 值。
+// wails runtime 在无效 context 下会 log.Fatalf（os.Exit），无法 recover，
+// 因此调用 wails runtime 前必须显式检查（测试/非 Wails 场景为 false）。
+func isWailsContext(ctx context.Context) bool {
+	return ctx != nil && ctx.Value("frontend") != nil
+}
+
 func (a *App) saveWindowState() {
-	if a.ctx == nil {
+	if a.ctx == nil || !isWailsContext(a.ctx) {
 		return
 	}
 	width, height := wailsRuntime.WindowGetSize(a.ctx)
@@ -427,7 +434,7 @@ func (a *App) saveWindowState() {
 
 // restoreWindowState 从 JSON 文件恢复窗口大小和位置
 func (a *App) restoreWindowState() {
-	if a.ctx == nil {
+	if a.ctx == nil || !isWailsContext(a.ctx) {
 		return
 	}
 	path := filepath.Join(config.DataDirPath(), "window-state.json")

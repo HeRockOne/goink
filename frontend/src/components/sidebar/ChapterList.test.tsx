@@ -37,6 +37,7 @@ describe('ChapterList', () => {
     target: null as { path: string; title: string } | null,
     onSelectChapter: vi.fn(),
     onSelectGoink: vi.fn(),
+    onSelectBookOutline: vi.fn(),
     onExportNovel: vi.fn(),
   }
 

@@ -16,7 +16,7 @@ import (
 
 func TestNew(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelError}))
-	a := New(logger)
+	a := New(logger, nil, nil)
 	require.NotNil(t, a)
 	assert.NotNil(t, a.logger, "logger should be set by New")
 }
@@ -27,7 +27,7 @@ func TestNew(t *testing.T) {
 
 func TestIsInitialized_BeforeStartup(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, &slog.HandlerOptions{Level: slog.LevelError}))
-	a := New(logger)
+	a := New(logger, nil, nil)
 	assert.False(t, a.IsInitialized(), "fresh App should not be initialized before startup/setup")
 }
 
@@ -42,7 +42,7 @@ func TestIsInitialized_AfterSetup(t *testing.T) {
 
 func TestOnStartup_NoConfig(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	a := New(logger)
+	a := New(logger, nil, nil)
 
 	// Call OnStartup. Whether it fully initializes depends on whether
 	// ~/.goink/config.json exists. The key invariant is: no panic.

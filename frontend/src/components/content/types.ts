@@ -31,8 +31,12 @@ export function goinkPath(): string {
   return 'goink.md'
 }
 
+export function bookOutlinePath(): string {
+  return 'book-outline.md'
+}
+
 export function isContentPath(p: string): boolean {
-  return p.startsWith('chapters/') || p === 'goink.md'
+  return p.startsWith('chapters/') || p === 'goink.md' || p === 'book-outline.md'
 }
 
 export function isOutlinePath(p: string): boolean {

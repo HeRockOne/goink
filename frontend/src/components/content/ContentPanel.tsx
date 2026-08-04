@@ -345,6 +345,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
       return t('sidebar.chapterN', { n: num })
     }
     if (p === 'goink.md') return t('content.storyStatus')
+    if (p === 'book-outline.md') return t('content.bookOutline')
     if (isSkillPath(p)) return `${t('content.skillLabel')}${skillNameFromPath(p)}`
     return p
   }, [t])

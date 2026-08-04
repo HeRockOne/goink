@@ -25,6 +25,7 @@ interface Props {
   onSelectNovel: (n: novel.Novel) => void
   onSelectChapter: (ch: chapter.Chapter) => void
   onSelectGoink: () => void
+  onSelectBookOutline: () => void
   onExportNovel: (novelId: number) => void
   target: { path: string; title: string } | null
   showCreate: boolean
@@ -52,7 +53,7 @@ interface Props {
 export default function SidePanel({
   activePanel,
   novels, novelId, onSelectNovel,
-  onSelectChapter, onSelectGoink, onExportNovel, target,
+  onSelectChapter, onSelectGoink, onSelectBookOutline, onExportNovel, target,
   showCreate, setShowCreate, title, setTitle, description, setDescription,
   onCreateNovel,
   activeSkillName, onSelectSkill, onEditSkill, onNewSkill,
@@ -114,6 +115,7 @@ export default function SidePanel({
           target={target}
           onSelectChapter={onSelectChapter}
           onSelectGoink={onSelectGoink}
+          onSelectBookOutline={onSelectBookOutline}
           onExportNovel={() => onExportNovel(novelId)}
         />
       ) : activePanel === 'characters' ? (
