@@ -86,7 +86,7 @@ result["progress"] = map[string]any{
 - **约束单向**：rule 字段显式声明"服务总纲"，防止 AI 把卷纲当最终约束。
 
 **改动 B — NovelState 注入进度锚点**（`internal/agentcfg/novel_state.go`）：
-- NovelState 已含 goink.md（故事状态）。在《故事状态文档》前加一行动态进度（轮末动态字节，符合 P1 协议）：
+- NovelState 含书名/类型/简介 + 进度 + goink.md（已收敛为章节指纹账本，注入尾部最近 1500 字符，见 `goink-fingerprint-ledger.md`）。在进度行后加动态进度锚点（轮末动态字节，符合 P1 协议）：
   ```
   【当前进度】第 N 章（本卷 X~Y 章）。创作须服务于全书总纲（book-outline.md），只展开本卷情节。
   ```
