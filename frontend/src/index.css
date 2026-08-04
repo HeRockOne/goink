@@ -740,17 +740,18 @@ body {
   vertical-align: middle;
 }
 
-/* 章节状态标签（过去卡顶部） */
+/* 章节状态标签（过去卡顶部）——字色跟随卡片规范（muted-foreground），状态用背景+前景色区分 */
 .ch-status {
   min-width: 1.9rem;
   text-align: center;
   margin: 0.1rem 0.1rem 0 0;
   font-size: 0.7rem;
   padding: 0.1rem 0.25rem;
+  border: 1px solid var(--border);
 }
-.ch-status-done { background: color-mix(in oklab, var(--success) 15%, transparent); color: var(--success); }
-.ch-status-drafting { background: color-mix(in oklab, var(--status-warning) 20%, transparent); color: var(--status-warning); }
-.ch-status-todo { background: var(--muted); color: var(--muted-foreground); opacity: 0.6; }
+.ch-status-done { background: color-mix(in oklab, var(--success-foreground) 12%, transparent); color: var(--success-foreground); }
+.ch-status-drafting { background: color-mix(in oklab, var(--status-warning) 18%, transparent); color: var(--status-warning); }
+.ch-status-todo { background: var(--muted); color: var(--muted-foreground); }
 
 .card-item-events {
   margin-top: 0.2rem;
