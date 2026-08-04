@@ -103,7 +103,7 @@ mode: always
 | 11 | **新伏笔/悬念** | 有新伏笔时 | create_timeline_entry（title + category + target_chapter 全部 required） |
 | 12 | **回收伏笔** | 查询 B 发现有要回收的时 | update_timeline_entry（resolved_chapter_id） |
 | 13 | **更新读者认知** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry |
-| 14 | **更新故事状态** | 有重大进展时 | edit(goink.md) |
+| 14 | **追加创作资产** | 每章必做 | edit(goink.md)（追加章节指纹 + 推理链 + 新悬念埋设索引；只追加不覆盖，实时状态交给 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
 ## 阶段技能表（33 个内置 skill 全量调度）
