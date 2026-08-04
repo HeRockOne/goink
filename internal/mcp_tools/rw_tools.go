@@ -57,7 +57,7 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 
 	// 1. 校验路径格式
 	if !validPath(a.Path) {
-		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"}, nil
+		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、book-outline.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"}, nil
 	}
 
 	// 2. 读取当前文件
@@ -520,7 +520,7 @@ func lineRangeReplace(content string, startLine, endLine int, newContent string)
 
 // ── 路径校验 ──────────────────────────────────────────────
 
-var pathRe = regexp.MustCompile(`^(chapters/\d{3,6}\.md|goink\.md|outlines/\d{3,6}\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
+var pathRe = regexp.MustCompile(`^(chapters/\d{3,6}\.md|goink\.md|book-outline\.md|outlines/\d{3,6}\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
 
 func validPath(p string) bool {
 	return pathRe.MatchString(p)
@@ -561,6 +561,7 @@ const editDescription = `编辑小说文件（章节正文或大纲或故事状�
 路径格式：
 - chapters/001.md ~ chapters/999999.md（三位数字补齐的章节文件）
 - outlines/001.md ~ outlines/999999.md（章节大纲文件）
+- book-outline.md（全书总纲，init 阶段写入，含核心矛盾/主角成长弧线/结局方向/篇幅规划）
 - goink.md（故事状态文档）
 - skills/<name>.md（小说级技能）
 - ~/.goink/skills/<name>.md（用户级技能）
@@ -609,7 +610,7 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	}
 
 	if !validPath(a.Path) {
-		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md、/builtin/skills/<name>.md（只读）"}, nil
+		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、book-outline.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md、/builtin/skills/<name>.md（只读）"}, nil
 	}
 
 	content, err := git.ReadFile(tc.NovelID, a.Path)
@@ -709,6 +710,7 @@ const readDescription = `读取小说文件或技能文件。
 路径格式（与 edit 工具一致）：
 - chapters/001.md ~ chapters/999999.md（章节文件）
 - outlines/001.md ~ outlines/999999.md（章节大纲）
+- book-outline.md（全书总纲）
 - goink.md（故事状态文档）
 - skills/<name>.md（小说级技能）
 - ~/.goink/skills/<name>.md（用户级技能）

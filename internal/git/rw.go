@@ -21,6 +21,11 @@ func GoinkPath() string {
 	return "goink.md"
 }
 
+// BookOutlinePath 全书总纲文件（init 阶段写入，prepare 读档时注入摘要）。
+func BookOutlinePath() string {
+	return "book-outline.md"
+}
+
 func CoverPath() string {
 	return "cover.jpg"
 }

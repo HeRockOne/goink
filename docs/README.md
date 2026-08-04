@@ -22,6 +22,17 @@
 | 文档 | 说明 |
 |------|------|
 | [token-optimization-plan.md](design/token-optimization-plan.md) | Token 优化方案全集（含行业调研、风险、Grilling 结论） |
+| [cache-hit-fix-implementation.md](design/cache-hit-fix-implementation.md) | 缓存命中率技术修复方案（P1 NS 落库协议 + P2 压缩 NS 修复） |
+| [outline-on-demand-fix.md](design/outline-on-demand-fix.md) | 大纲按需加载 + 防越界方案（总纲落点 book-outline.md + 卷纲强制 + 进度锚点） |
+
+> 2026-08-04：cache-hit-fix-implementation.md 已实施（P1: NS 每轮落库 + 保留 K=3 快照；P2: NS 移出压缩系统区，改末尾落库；store 排序改 id；新增 compress_test/store_test）。未落地部分：P4（命中率报警阈值）、P5（用户运营纪律）。
+> 2026-08-04：outline-on-demand-fix.md 已实施（book-outline.md 总纲落点 + get_writing_context 注入总纲摘要/进度锚点 + kernel/init-phase/门禁示例更新）。
+
+## tools/ — 验证工具（可运行）
+
+| 工具 | 说明 |
+|------|------|
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率字节级探针：严格按门禁配置完整流程（prepare→maintain，40 次调用/轮，真实 skill 内容），NS 落库后 miss 降 35.0%，`go run ./cmd/cacheprobe compare` |
 
 ## adr/ — 决策记录（长存，不可变）
 
@@ -35,6 +46,7 @@
 |------|------|
 | [phase-gate-caching-assessment.md](reports/phase-gate-caching-assessment.md) | 门禁配置系统 × 缓存命中优化深度评估 |
 | [comprehensive-optimization-assessment.md](reports/comprehensive-optimization-assessment.md) | 全面潜在优化评估（质量优先 × 行业交叉比对） |
+| [cache-hit-rate-analysis.md](reports/cache-hit-rate-analysis.md) | 缓存命中率分析（92% 构成、根因、优化建议） |
 | [system-reminder-assessment.md](reports/system-reminder-assessment.md) | system-reminder 注入机制评估（能否 Go 替代） |
 
 ## archive/ — 过程记录（归档，不再更新）

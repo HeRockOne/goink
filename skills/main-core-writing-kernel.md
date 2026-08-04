@@ -46,13 +46,17 @@ mode: always
 
 ### outline
 
-1. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
-2. **edit**(outlines/NNN.md)（required）— 写大纲。
+1. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
+   - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
+   - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
+   - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
+2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
+3. **edit**(outlines/NNN.md)（required）— 写大纲。
    **格式要求（必须遵守，否则叙事面板解析失败）：**
    - 章节标题用 `# 第N章 标题`（单井号，一行）
    - 各 section 用 `## 标题`（双井号，如 `## 场景设计`、`## 关键事件`、`## 重点角色`、`## 伏笔操作`、`## 章末钩子`）
    - 禁止使用 `**加粗**` 代替 `##` 标题
-3. 等待用户审批 → **set_phase("write")**
+4. 等待用户审批 → **set_phase("write")**
 
 ### write
 
@@ -119,7 +123,8 @@ mode: always
 
 ## 硬约束
 
-- 每章至少1个情绪锚点；情绪浓度高时禁止讲述句
+- 开书（init）必须先写全书总纲到 book-outline.md（核心矛盾/主角成长弧线/结局方向/篇幅规划），未写总纲禁止切换 prepare
+- 每章 at least 1 个情绪锚点；情绪浓度高时禁止讲述句
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
 - 每章至少1个爽点（对照 main-tech-shuangdian-pacing）；章末必有钩子且类型不与前2章重复
 - 禁止功能报告体（连续3段无感官描写）；禁止散文体

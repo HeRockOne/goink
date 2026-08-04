@@ -191,6 +191,7 @@ mode: auto
 
 | # | 项目 | 工具 | required 字段 | 依赖 |
 |---|------|------|--------------|------|
+| 0 | **写全书总纲**（1000-3000 字：核心矛盾/主角成长弧线/结局方向/篇幅规划） | edit(book-outline.md) | - | 无（最先写，后续所有设定服务于它） |
 | 1 | **创建故事弧线**（至少1条主线） | create_story_arc | name(R), arc_type(R) | 无 |
 | 2 | **创建核心地点**（至少3个） | create_location | name(R) | 无 |
 | 3 | **创建核心角色**（至少2个，传 location_id） | create_character | name(R), description(R) | → location |
@@ -199,6 +200,8 @@ mode: auto
 | 6 | **创建物品**（重要物品，关联持有者+弧线） | create_item | name(R), arc_id(R), owner_id(R), narrative_role(R) | → arc, character |
 | 7 | **创建偏好**（写作规则） | create_preference | category(R), content(R) | 无 |
 | 8 | **创建伏笔**（至少3条，标记目标章节+重要度） | create_timeline_entry | title(R), category(R), target_chapter(R), importance(R) | → arc |
+
+> **总纲是方向层**：写总纲时用 `main-tech-book-outline` 的「第一级：总纲」模板（核心矛盾一句话/主角成长弧线/主题立意/结局方向/篇幅规划），写入 `book-outline.md`。之后每章写作前，get_writing_context 会注入总纲摘要，全部章节必须服务于它。
 
 ## 跨模块关联清单（创建后必须做的关联操作）
 
@@ -214,6 +217,7 @@ mode: auto
 
 | # | 验证项 | 工具 | 通过条件 |
 |---|--------|------|---------|
+| 0 | 总纲已写入 | read(book-outline.md) | 非空且包含核心矛盾/结局方向 |
 | 1 | 角色已创建 | get_characters | characters.length > 0 |
 | 2 | 地点已创建 | get_locations | locations.length >= 3 |
 | 3 | 弧线已创建 | get_story_arcs | arcs.length >= 1 |

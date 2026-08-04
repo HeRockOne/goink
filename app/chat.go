@@ -157,7 +157,14 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		a.logger.Warn("保存阶段门禁状态失败", "err", err)
 	}
 
-	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息原子写入）
+	// 6.6 构建 NovelState（本轮落库用，缓存协议：NS 快照放轮次末尾，见 design/cache-hit-fix-implementation.md）
+	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
+	if err != nil {
+		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
+		novelState = ""
+	}
+
+	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息 + NS 快照原子写入）
 	userMsg := &session.Message{
 		SessionID:  sess.SessionID,
 		TurnID:     turnID,
@@ -169,6 +176,23 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		AgentType:  "main",
 	}
 	if err := a.session.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 只保留最近 keepNovelStateSnapshots-1 份 to_api=true 的 NS 快照，其余置 false
+		var keepIDs []int64
+		if err := tx.Model(&session.Message{}).
+			Where("session_id = ? AND version = ? AND to_api = ? AND extra_metadata LIKE ?",
+				sess.SessionID, sess.ActiveVersion, true, agentcfg.NovelStateKindLike).
+			Order("id DESC").Limit(agentcfg.KeepNovelStateSnapshots - 1).
+			Pluck("id", &keepIDs).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&session.Message{}).
+			Where("session_id = ? AND version = ? AND extra_metadata LIKE ?",
+				sess.SessionID, sess.ActiveVersion, agentcfg.NovelStateKindLike).
+			Where("id NOT IN ?", keepIDs).
+			Update("to_api", false).Error; err != nil {
+			return err
+		}
+
 		if isNew {
 			if err := a.writeSystemMessages(tx, sess.SessionID, input.NovelID, turnID); err != nil {
 				return err
@@ -188,7 +212,26 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 				return err
 			}
 		}
-		return tx.Create(userMsg).Error
+		if err := tx.Create(userMsg).Error; err != nil {
+			return err
+		}
+		// NS 快照紧跟 user 消息之后写入（ID 序 = [user][NS][assistant...]，保证跨轮字节连续）
+		if novelState != "" {
+			if err := tx.Create(&session.Message{
+				SessionID:     sess.SessionID,
+				TurnID:        turnID,
+				Role:          "system",
+				Content:       novelState,
+				Version:       sess.ActiveVersion,
+				ToAPI:         true,
+				ToFrontend:    false,
+				AgentType:     "main",
+				ExtraMetadata: agentcfg.NovelStateKindJSON,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("持久化消息失败: %w", err)
 	}
@@ -197,18 +240,10 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		a.logger.Info("slash injected", "name", injectName, "session", sess.SessionID)
 	}
 
-	// 8. 构建消息列表：全部来自 DB（含系统消息/历史/用户消息）
+	// 8. 构建消息列表：全部来自 DB（含系统消息/历史/用户消息/NS 快照）
 	messages, err := a.loadAPIMessages(ctx, sess.SessionID, sess.ActiveVersion)
 	if err != nil {
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
-	}
-
-	// 8.5 动态注入 NovelState（放在所有消息之后，不破坏前缀缓存）
-	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
-	if err != nil {
-		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
-	} else if novelState != "" {
-		messages = append(messages, map[string]any{"role": "system", "content": novelState})
 	}
 
 	// 9. 运行 Agent 循环

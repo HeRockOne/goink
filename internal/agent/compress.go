@@ -246,12 +246,6 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 				return fmt.Errorf("write SkillCatalog: %w", err)
 			}
 		}
-		// NovelState
-		if novelState != "" {
-			if err := msg("system", novelState, true, false, ""); err != nil {
-				return fmt.Errorf("write NovelState: %w", err)
-			}
-		}
 		// 提醒语
 		if err := msg("user", compressionReminder, true, false, ""); err != nil {
 			return fmt.Errorf("write compression reminder: %w", err)
@@ -265,6 +259,23 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 			rm := apiMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
 			if err := tx.Create(rm).Error; err != nil {
 				return fmt.Errorf("写入保留消息失败: %w", err)
+			}
+		}
+		// NS 快照落库到压缩后末尾（不写系统区，避免双份 NS；带 kind 标记供过期清理）
+		if novelState != "" {
+			if err := tx.Create(&session.Message{
+				SessionID:     opts.SessionID,
+				TurnID:        opts.TurnID,
+				Role:          "system",
+				Content:       novelState,
+				Version:       newVersion,
+				ToAPI:         true,
+				ToFrontend:    false,
+				EventType:     "",
+				AgentType:     "main",
+				ExtraMetadata: agentcfg.NovelStateKindJSON,
+			}).Error; err != nil {
+				return fmt.Errorf("write NovelState: %w", err)
 			}
 		}
 		// 边界标记
@@ -384,6 +395,12 @@ func retainMessages(messages []map[string]any) []map[string]any {
 
 	retained := make([]map[string]any, 0, len(history)-keepFrom)
 	for _, m := range history[keepFrom:] {
+		// NS 快照不进入保留副本（压缩后统一重新落库一份，见 persistCompression）
+		if role, _ := m["role"].(string); role == "system" {
+			if content, ok := m["content"].(string); ok && strings.HasPrefix(content, agentcfg.NovelStatePrefix) {
+				continue
+			}
+		}
 		dup := make(map[string]any, len(m))
 		maps.Copy(dup, m)
 		retained = append(retained, dup)

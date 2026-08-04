@@ -10,6 +10,7 @@ import (
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
+	"novel/internal/git"
 	"novel/internal/item"
 	"novel/internal/itemoccurrence"
 	"novel/internal/location"
@@ -319,6 +320,31 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	}
 	result["stats"] = stats
 
+	// ── 9. 全书总纲摘要（方向层，防 AI 偏离主线） ──
+	// 从 book-outline.md 读取前 N 字注入；约束单向：总纲→卷纲→章纲。
+	outlineMap := map[string]any{}
+	if bo, err := git.ReadFile(nid, git.BookOutlinePath()); err == nil && bo != "" {
+		outlineMap["summary"] = truncateRunes(bo, 400)
+		outlineMap["source"] = "book-outline.md"
+	} else {
+		outlineMap["summary"] = "（未写入全书总纲。创作前应先创建 book-outline.md，含核心矛盾/主角成长弧线/结局方向/篇幅规划。）"
+		outlineMap["source"] = ""
+	}
+	result["outline"] = outlineMap
+
+	// ── 10. 进度锚点（位置层，防越界写后续卷情节） ──
+	progress := map[string]any{
+		"current_chapter": chapNum,
+		"volume_start":    0,
+		"volume_end":      0,
+		"rule": "只展开当前卷（volume_start~volume_end）范围内的情节；后续卷设定不得提前使用；所有章节事件必须服务于 outline 的核心矛盾与结局方向。",
+	}
+	if vol.StartChapter > 0 {
+		progress["volume_start"] = vol.StartChapter
+		progress["volume_end"] = vol.EndChapter
+	}
+	result["progress"] = progress
+
 	return &ToolResult{Success: true, Data: result}, nil
 }
 
@@ -332,6 +358,15 @@ func parseJSONInt64Array(raw string) []int64 {
 		return nil
 	}
 	return ids
+}
+
+// truncateRunes 按 rune 截断字符串（避免按字节截断中文产生乱码）。
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 // arcTypeZh 将弧线类型英文映射为中文
