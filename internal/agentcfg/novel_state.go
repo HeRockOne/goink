@@ -47,15 +47,15 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 
 	state, err := git.ReadFile(novelID, git.GoinkPath())
 	if err == nil && state != "" {
-		b = append(b, "\n【创作资产台账】\n"...)
-		// goink.md 是累积式台账（指纹/推理链/悬念索引），随章节增长；
-		// 只注入前 maxGoinkChars 字符（固定截断，字节稳定，符合 P1 缓存协议），
-		// 保留最近章节的指纹与推理链。完整内容由 AI 用 read 按需读取。
+		// goink.md 只记录章节指纹（追加式，最新在末尾）。
+		// 注入最近 maxGoinkChars 字符（尾部截断，保留最新指纹供防重复，
+		// 固定窗口字节稳定，符合 P1 缓存协议）。完整内容由 AI 用 read 按需读取。
+		b = append(b, "\n【章节指纹（最近）】\n"...)
 		const maxGoinkChars = 1500
 		r := []rune(state)
 		if len(r) > maxGoinkChars {
-			b = append(b, string(r[:maxGoinkChars])...)
-			b = append(b, "\n…（台账较长已截断，如需完整内容用 read(goink.md)）\n"...)
+			b = append(b, string(r[len(r)-maxGoinkChars:])...)
+			b = append(b, "\n…（更早指纹已截断，如需完整内容用 read(goink.md)）\n"...)
 		} else {
 			b = append(b, state...)
 		}

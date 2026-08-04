@@ -180,13 +180,16 @@ auto 模式 skill 的 name+description 通过 skill catalog 注入到对话中�
 
 【goink.md 维护】
 
-goink.md 是创作资产台账（累积式），不是实时状态。实时状态一律以数据库为准（进度看 get_writing_context / get_writing_snapshot，角色看 get_characters，伏笔看 get_timeline），goink.md 不重复记录这些。
+goink.md 只做一件事：记录章节指纹（追加式，每章一行，用于防重复，对照 anti-repetition）。
 
-goink.md 只累积系统跟踪不了的跨章资产，只追加、不覆盖：
-- 章节指纹：每章写完后按 anti-repetition 格式追加一行（开篇/对话/场景/情感/钩子/感官），写作前读最近 3 章指纹防重复
-- 推理链沉淀：跨章形成的世界观推理结论、体系完整认知（如某设定其实是什么、某组织真相）
-- 未回收悬念的埋设索引（伏笔标题 + 埋设章节，供跨章回收定位）
-- 创作经验：与用户讨论沉淀的写作偏好、有效技法
+其他所有内容一律写入数据库，不要写进 goink.md：
+- 当前进展 → get_writing_context / get_writing_snapshot / update_writing_snapshot
+- 角色动态 → update_character / update_character_relationship
+- 开着的悬念 → create_timeline_entry / update_timeline_entry
+- 推理链/世界观认知 → create_lore / update_lore
+- 创作偏好/经验 → create_preference / update_preference
+
+goink.md 只追加、不覆盖，不记录上述任何 DB 内容。
 `
 
 const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对已完成章节进行专业审读。
