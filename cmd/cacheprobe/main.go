@@ -24,54 +24,106 @@ import (
 	"runtime"
 	"strings"
 
+	"novel/internal/llm"
 	"novel/internal/mcp_tools"
 )
 
-// ---- 字节级缓存模拟器（复刻 provider 语义） ----
+// ---- 消息级缓存模拟器（复刻 provider 语义 + tiktoken 精确计数） ----
 
-type ByteCache struct {
-	prev []byte
-	hit  int64
-	miss int64
-	// 累计发送 token 估算（hit+miss）/4，用于压缩阈值判断
-	tokens int64
+// TokenCache 以"消息"为单位模拟前缀缓存：
+// - 连续性判定：消息序列的字节级公共前缀（精确，消息内容相同则字节相同）
+// - token 统计：每条消息用 tiktoken 精确计数（llm.CountMessageTokens），
+//   命中 = 公共前缀覆盖的消息 token 和，miss = 其余消息 token 和
+// - tools 定义作为第一条固定前缀消息参与计数
+type TokenCache struct {
+	prevBytes []byte // 上次请求的完整字节（连续性判定）
+	prevMsgs  []map[string]any
+	hit       int64 // token
+	miss      int64 // token
 }
 
-func NewByteCache() *ByteCache { return &ByteCache{} }
+func NewTokenCache() *TokenCache { return &TokenCache{} }
 
-// Step 每次 LLM 调用。返回 (hit, miss) 字节数。
-// 首调或压缩重建后 prev 为 nil：全部 miss，并记住本次请求供下次匹配。
-func (c *ByteCache) Step(req []byte) (int, int) {
-	if c.prev == nil {
-		c.miss += int64(len(req))
-		c.prev = req
-		c.tokens += int64(len(req)) / 4
-		return 0, len(req)
+// msgTokens 计算单条消息的精确 token 数（含 tool_calls/tool_call_id/reasoning）。
+func msgTokens(m map[string]any) int {
+	n, err := llm.CountMessageTokens(m)
+	if err != nil {
+		return 0
 	}
-	lcp := longestCommonPrefix(c.prev, req)
-	hit := lcp
-	miss := len(req) - lcp
-	c.hit += int64(hit)
-	c.miss += int64(miss)
-	c.prev = req
-	c.tokens += int64(len(req)) / 4
+	return n
+}
+
+// requestTokens 计算完整请求的 token 数：tools 前缀（固定 system 消息）+ 各消息。
+func requestTokens(messages []map[string]any) (int64, int64) {
+	toolsJSON, _ := json.Marshal(toolDefs)
+	toolsN, _ := llm.CountTokens(string(toolsJSON))
+	var msgsN int64
+	for _, m := range messages {
+		msgsN += int64(msgTokens(m))
+	}
+	return int64(toolsN), msgsN
+}
+
+// Step 每次 LLM 调用。返回 (hit, miss) token 数。
+// 连续性判定用字节公共前缀；token 统计按消息级精确计数。
+func (c *TokenCache) Step(messages []map[string]any) (int64, int64) {
+	toolsN, msgsN := requestTokens(messages)
+	total := toolsN + msgsN
+
+	// tools 前缀固定，始终作为第一条；消息数组整体字节用于连续性判定
+	reqBytes := promptBytes(messages)
+
+	if c.prevBytes == nil {
+		c.miss += total
+		c.prevBytes = reqBytes
+		c.prevMsgs = append([]map[string]any{}, messages...)
+		return 0, total
+	}
+
+	lcp := longestCommonPrefix(c.prevBytes, reqBytes)
+	// 由字节公共前缀反推覆盖了多少条消息：逐条累加字节长度，直到超出 lcp
+	hitMsgs := int64(0)
+	covered := 0
+	var acc int
+	prefix := []byte(`[{"role":"system","content":`)
+	toolsJSON, _ := json.Marshal(toolDefs)
+	acc += len(prefix) + len(toolsJSON) + 2 // tools 前缀消息本身
+	if acc > lcp {
+		// 连 tools 前缀都没完全命中（正常不会发生，tools 固定）
+		hitMsgs = 0
+	} else {
+		for _, m := range messages {
+			b, err := json.Marshal(m)
+			if err != nil {
+				break
+			}
+			acc += 1 + len(b) // 逗号 + 消息体
+			if acc > lcp {
+				break
+			}
+			hitMsgs += int64(msgTokens(m))
+			covered++
+		}
+	}
+
+	hit := toolsN + hitMsgs
+	miss := total - hit
+	c.hit += hit
+	c.miss += miss
+	c.prevBytes = reqBytes
+	c.prevMsgs = append([]map[string]any{}, messages...)
 	return hit, miss
 }
 
 // Reset 压缩重建：丢弃整个链，此后首次调用全 miss。
-func (c *ByteCache) Reset() {
-	c.prev = nil
-	c.tokens = 0
+func (c *TokenCache) Reset() {
+	c.prevBytes = nil
+	c.prevMsgs = nil
+	c.hit = 0
+	c.miss = 0
 }
 
-func (c *ByteCache) TotalTokens() int64 { return c.tokens }
-
-func (c *ByteCache) Rate() float64 {
-	if c.hit+c.miss == 0 {
-		return 0
-	}
-	return 100 * float64(c.hit) / float64(c.hit+c.miss)
-}
+func (c *TokenCache) TotalTokens() int64 { return c.hit + c.miss }
 
 func longestCommonPrefix(a, b []byte) int {
 	n := len(a)
@@ -233,8 +285,8 @@ func novelState(turn int) string {
 // 两种模式下 NS 都紧跟当轮 user 消息（旧实现把 loadAPIMessages 结果 append 后交给
 // agent 循环，NS 在 user 之后、工具循环之前，且当轮内保持）。唯一差异是历史是否保留 NS。
 
-func buildShortQA(mode string, cache *ByteCache) [][2]int {
-	results := [][2]int{}
+func buildShortQA(mode string, cache *TokenCache) [][2]int64 {
+	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
 	for turn := 1; turn <= 5; turn++ {
@@ -242,8 +294,8 @@ func buildShortQA(mode string, cache *ByteCache) [][2]int {
 		cur := []map[string]any{userMsg(fmt.Sprintf("第 %d 问：这个世界的修炼体系是什么？", turn))}
 		cur = append(cur, sysMsg(novelState(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
-		hit, miss := cache.Step(promptBytes(req))
-		results = append(results, [2]int{hit, miss})
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
 
 		// 历史更新：now 含 NS；legacy 不含 NS（NS 未落库）
 		if mode == "now" {
@@ -454,8 +506,8 @@ func compressionSummary() string {
 // 两种协议的差异与短问答相同：NS 是否进入历史。
 // NS 在当轮紧跟 user（旧实现注入在 loadAPIMessages 结果之后、工具循环之前），
 // 当轮内保持；唯一差异是历史是否保留 NS。
-func buildGate(mode string, cache *ByteCache) [][2]int {
-	results := [][2]int{}
+func buildGate(mode string, cache *TokenCache) [][2]int64 {
+	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
 	for turn := 1; turn <= 5; turn++ {
@@ -467,8 +519,8 @@ func buildGate(mode string, cache *ByteCache) [][2]int {
 		plays := gateScript(turn)
 		for i, p := range plays {
 			req := append(append([]map[string]any{}, history...), cur...)
-			hit, miss := cache.Step(promptBytes(req))
-			results = append(results, [2]int{hit, miss})
+			hit, miss := cache.Step(req)
+			results = append(results, [2]int64{hit, miss})
 			// 模型产出的 tool_call + 执行结果，进入当轮累积
 			cur = append(cur,
 				asstToolCall(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.args),
@@ -478,8 +530,8 @@ func buildGate(mode string, cache *ByteCache) [][2]int {
 		// 最后一轮工具后模型产出最终正文
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
-		hit, miss := cache.Step(promptBytes(req))
-		results = append(results, [2]int{hit, miss})
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
 
 		// 更新历史：now 含 NS；legacy 不含 NS（NS 未落库）
 		if mode == "now" {
@@ -513,7 +565,7 @@ func main() {
 
 	label := map[string]string{"now": "修复后：NS 落库", "legacy": "修复前：NS 不落库"}[mode]
 	fmt.Println("================================================================")
-	fmt.Println(" cacheprobe：字节级缓存命中模拟（1 token ≈ 4 字节）")
+	fmt.Println(" cacheprobe：消息级缓存命中模拟（tiktoken 精确计数）")
 	fmt.Println(" 协议: " + label)
 	fmt.Println("================================================================")
 
@@ -524,37 +576,37 @@ func main() {
 // runCompare 一次跑完两种协议并输出汇总对照。
 func runCompare() {
 	fmt.Println("================================================================")
-	fmt.Println(" cacheprobe：缓存命中对照（字节级前缀模拟，1 token ≈ 4 字节）")
+	fmt.Println(" cacheprobe：缓存命中对照（消息级前缀模拟，tiktoken 精确计数）")
 	fmt.Println("  对比：修复前（NS 不落库） vs 修复后（NS 落库）")
 	fmt.Println("================================================================")
 
 	type scenario struct {
 		name string
-		fn   func(string, *ByteCache) [][2]int
+		fn   func(string, *TokenCache) [][2]int64
 	}
 	for _, s := range []scenario{
 		{"短问答 5 轮", buildShortQA},
 		{"门禁创作 5 轮", buildGate},
 	} {
-		nowCache := NewByteCache()
-		legacyCache := NewByteCache()
+		nowCache := NewTokenCache()
+		legacyCache := NewTokenCache()
 		nowR := s.fn("now", nowCache)
 		legR := s.fn("legacy", legacyCache)
 
 		var nowHit, nowMiss, legHit, legMiss int64
 		for _, pr := range nowR {
-			nowHit += int64(pr[0])
-			nowMiss += int64(pr[1])
+			nowHit += pr[0]
+			nowMiss += pr[1]
 		}
 		for _, pr := range legR {
-			legHit += int64(pr[0])
-			legMiss += int64(pr[1])
+			legHit += pr[0]
+			legMiss += pr[1]
 		}
 		fmt.Printf("\n=== %s ===\n", s.name)
 		fmt.Printf("  修复前  hit=%12d miss=%12d 命中率=%5.1f%%\n", legHit, legMiss, pct(legHit, legMiss))
 		fmt.Printf("  修复后  hit=%12d miss=%12d 命中率=%5.1f%%\n", nowHit, nowMiss, pct(nowHit, nowMiss))
 		missSave := float64(legMiss-nowMiss) / float64(legMiss) * 100
-		fmt.Printf("  miss 降幅 = %.1f%%（未命中的字节直接按全价计费，此项即真实成本节约）\n", missSave)
+		fmt.Printf("  miss 降幅 = %.1f%%（未命中的 token 直接按全价计费，此项即真实成本节约）\n", missSave)
 	}
 }
 
@@ -565,15 +617,15 @@ func pct(hit, miss int64) float64 {
 	return 100 * float64(hit) / float64(hit+miss)
 }
 
-func runScenario(name, mode string, fn func(string, *ByteCache) [][2]int) {
-	cache := NewByteCache()
+func runScenario(name, mode string, fn func(string, *TokenCache) [][2]int64) {
+	cache := NewTokenCache()
 	fmt.Printf("\n=== %s ===\n", name)
 	fmt.Printf("%4s | %12s | %12s | %8s\n", "调用", "hit", "miss", "累计命中率")
 	fmt.Println("------|--------------|--------------|----------")
 	totHit, totMiss := int64(0), int64(0)
 	for i, pr := range fn(mode, cache) {
-		totHit += int64(pr[0])
-		totMiss += int64(pr[1])
+		totHit += pr[0]
+		totMiss += pr[1]
 		rate := 0.0
 		if totHit+totMiss > 0 {
 			rate = 100 * float64(totHit) / float64(totHit+totMiss)

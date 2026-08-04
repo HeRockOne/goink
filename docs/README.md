@@ -34,7 +34,7 @@
 
 | 工具 | 说明 |
 |------|------|
-| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率字节级探针：严格按门禁配置完整流程（prepare→maintain，40 次调用/轮，真实 skill 内容），NS 落库后 miss 降 35.0%，`go run ./cmd/cacheprobe compare` |
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：严格按门禁配置完整流程，NS 落库后 miss 降 29.1%，`go run ./cmd/cacheprobe compare` |
 
 ## adr/ — 决策记录（长存，不可变）
 

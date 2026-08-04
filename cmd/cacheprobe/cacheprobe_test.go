@@ -34,18 +34,18 @@ func TestPrefixChain_NowModeContinuous(t *testing.T) {
 func TestCumulativeMiss_NowBelowLegacy(t *testing.T) {
 	initTools()
 
-	nowCache := NewByteCache()
-	legacyCache := NewByteCache()
+	nowCache := NewTokenCache()
+	legacyCache := NewTokenCache()
 
 	nowResults := buildGate("now", nowCache)
 	legacyResults := buildGate("legacy", legacyCache)
 
 	var nowMiss, legacyMiss int64
 	for _, pr := range nowResults {
-		nowMiss += int64(pr[1])
+		nowMiss += pr[1]
 	}
 	for _, pr := range legacyResults {
-		legacyMiss += int64(pr[1])
+		legacyMiss += pr[1]
 	}
 
 	if nowMiss >= legacyMiss {
@@ -54,28 +54,53 @@ func TestCumulativeMiss_NowBelowLegacy(t *testing.T) {
 	t.Logf("门禁创作5轮 累计miss now=%d legacy=%d", nowMiss, legacyMiss)
 }
 
-// 短问答 5 轮：消息历史极小（每轮一问一答 ~200 字节），两种协议差异几乎可忽略，
-// 修复前后 miss 应相近（允许 ±200 字节噪声）。真实收益随历史规模增长（见门禁场景）。
+// 短问答 5 轮：消息历史极小，两种协议差异几乎可忽略，修复前后 miss 应相近。
 func TestCumulativeMiss_NowBelowLegacy_ShortQA(t *testing.T) {
 	initTools()
 
-	nowCache := NewByteCache()
-	legacyCache := NewByteCache()
+	nowCache := NewTokenCache()
+	legacyCache := NewTokenCache()
 
 	nowResults := buildShortQA("now", nowCache)
 	legacyResults := buildShortQA("legacy", legacyCache)
 
 	var nowMiss, legacyMiss int64
 	for _, pr := range nowResults {
-		nowMiss += int64(pr[1])
+		nowMiss += pr[1]
 	}
 	for _, pr := range legacyResults {
-		legacyMiss += int64(pr[1])
+		legacyMiss += pr[1]
 	}
 
 	diff := nowMiss - legacyMiss
-	if diff > 200 || diff < -200 {
-		t.Fatalf("短问答差异超出噪声范围：now=%d legacy=%d diff=%d", nowMiss, legacyMiss, diff)
+	// 精确口径下短问答仍有真实差异：NS 位置不同（轮末 vs 紧跟 user）影响相邻消息命中，
+	// 差异量级 = NS + 相邻消息的 token 数（几百）。不视为噪声，仅要求差异远小于门禁场景。
+	if diff > 500 || diff < -500 {
+		t.Fatalf("短问答差异超出范围：now=%d legacy=%d diff=%d", nowMiss, legacyMiss, diff)
 	}
-	t.Logf("短问答5轮 累计miss now=%d legacy=%d（历史极小，差异可忽略）", nowMiss, legacyMiss)
+	t.Logf("短问答5轮 累计miss now=%d legacy=%d（NS 位置差异，量级远小于门禁场景）", nowMiss, legacyMiss)
 }
+
+// tiktoken 精确计数：命中+未命中应等于请求总 token（含 tools 前缀）。
+func TestTokenCache_HitPlusMissEqualsTotal(t *testing.T) {
+	initTools()
+	cache := NewTokenCache()
+
+	req1 := append([]map[string]any{}, fixedSystem()...)
+	req1 = append(req1, userMsg("第 1 问：这个世界的修炼体系是什么？"), sysMsg(novelState(1)))
+	_, miss1 := cache.Step(req1)
+
+	req2 := append([]map[string]any{}, req1...)
+	req2 = append(req2, asstText(shortAnswer()), userMsg("第 2 问：这个世界的修炼体系是什么？"), sysMsg(novelState(2)))
+	hit2, miss2 := cache.Step(req2)
+
+	toolsN, msgsN := requestTokens(req2)
+	total := toolsN + msgsN
+	if hit2+miss2 != total {
+		t.Fatalf("hit+miss 应等于请求总 token：hit=%d miss=%d total=%d", hit2, miss2, total)
+	}
+	if miss1 <= 0 {
+		t.Fatalf("首次调用应全 miss，got %d", miss1)
+	}
+}
+
