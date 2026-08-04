@@ -318,7 +318,7 @@ body {
   --narrative-current-border: var(--primary);
   --narrative-overdue-bg: color-mix(in oklab, var(--destructive) 12%, var(--sidebar));
   --narrative-overdue-text: var(--destructive);
-  --narrative-resolved-text: #3a7a3a;
+  --narrative-resolved-text: var(--success-foreground);
   --narrative-resolved-bg: color-mix(in oklab, #3a7a3a 10%, var(--sidebar));
   --narrative-pending-text: var(--tag-blue-foreground);
   --narrative-pending-bg: var(--tag-blue);
@@ -334,7 +334,7 @@ body {
   --narrative-current-border: var(--primary);
   --narrative-overdue-bg: color-mix(in oklab, var(--destructive) 15%, var(--sidebar));
   --narrative-overdue-text: #e88070;
-  --narrative-resolved-text: #7ac07a;
+  --narrative-resolved-text: var(--success-foreground);
   --narrative-resolved-bg: color-mix(in oklab, #7ac07a 10%, var(--sidebar));
   --narrative-pending-text: var(--tag-blue-foreground);
   --narrative-pending-bg: var(--tag-blue);
@@ -678,15 +678,24 @@ body {
   gap: 0.3rem;
 }
 
-/* 数据段标题 */
+/* 数据段标题 + 边框 */
 .card-sec {
   margin-top: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--card);
 }
 .card-sec-title {
   font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted-foreground);
-  margin-bottom: 0.15rem;
+  font-weight: 700;
+  color: var(--sidebar-foreground);
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 .card-val {
   font-size: 0.85rem;
@@ -759,6 +768,45 @@ body {
   color: var(--muted-foreground);
 }
 .card-item-content { flex: 1; min-width: 0; }
+
+/* 未来卡片：大纲 Markdown 渲染 */
+.outline-markdown h1, .outline-markdown h2, .outline-markdown h3, .outline-markdown h4 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--sidebar-foreground);
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--muted);
+}
+.outline-markdown h1 { font-size: 0.85rem; }
+.outline-markdown p {
+  margin: 0.15rem 0;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.outline-markdown ul, .outline-markdown ol {
+  padding-left: 1.2rem;
+  margin: 0.15rem 0;
+}
+.outline-markdown li {
+  margin: 0.1rem 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+.outline-markdown strong {
+  font-weight: 700;
+  color: var(--sidebar-foreground);
+}
+.outline-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.3rem 0;
+}
 
 /* 卡片内分组 */
 .card-section {
