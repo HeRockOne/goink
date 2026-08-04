@@ -189,7 +189,7 @@ goink.md 只做一件事：记录章节指纹（追加式，每章一行，用�
 - 推理链/世界观认知 → create_lore / update_lore
 - 创作偏好/经验 → create_preference / update_preference
 
-goink.md 只追加、不覆盖，不记录上述任何 DB 内容。
+写入指纹必须用 edit 的 append 模式（change_type=append，追加到文件末尾），禁止 full_replace 重写整个文件（会覆盖历史指纹）。
 `
 
 const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对已完成章节进行专业审读。

@@ -558,3 +558,28 @@ func TestLineRangeReplace_StartAfterEnd(t *testing.T) {
 		t.Error("should error when start > end")
 	}
 }
+
+// ── append 追加模式（goink.md 指纹累积专用） ──────────────
+
+func TestAppend_ToExistingFile(t *testing.T) {
+	result, err := applyChange(&EditArgs{ChangeType: "append", NewContent: "第2章：开篇=行动 对话=独白"}, "第1章：开篇=环境 对话=极简")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "第1章") || !strings.Contains(result, "第2章") {
+		t.Errorf("append should keep old content and add new: %s", result)
+	}
+	if !strings.HasSuffix(result, "第2章：开篇=行动 对话=独白\n") {
+		t.Errorf("new content should be at end: %q", result)
+	}
+}
+
+func TestAppend_ToEmptyFile(t *testing.T) {
+	result, err := applyChange(&EditArgs{ChangeType: "append", NewContent: "第1章：开篇=行动"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != "第1章：开篇=行动" {
+		t.Errorf("append to empty should return content as-is: %q", result)
+	}
+}
