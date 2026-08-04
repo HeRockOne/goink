@@ -68,7 +68,7 @@ init → prepare → [outline → write] × N 章循环 → review → maintain 
 |------|-------------------|-------------------|
 | init | create_*, get_*, set_phase | edit, update_*, delete_*, run_subagent |
 | prepare | get_*, read, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
-| outline | read, edit(get: outlines/*, goink.md, skills/*), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
+| outline | read, edit(get: outlines/*, goink.md, book-outline.md, skills/*), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
 | write | read, edit(get: chapters/*), search_story_memory, get_*, set_phase | update_*, create_*, delete_*, run_subagent |
 | review | read, edit(get: chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
 | maintain | read, edit(goink.md, chapters/*, outlines/*, skills/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
