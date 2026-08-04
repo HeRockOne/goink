@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, memo } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import { useApp } from '@/hooks/useApp'
 import { useOutlineCache } from './useOutlineCache'
@@ -65,6 +65,7 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
   const [showToolbar, setShowToolbar] = useState(false)
   const [labels, setLabels] = useState<Record<string, string>>(loadLabels)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [chapters, setChapters] = useState<Array<{ chapter_number: number; title: string; word_count: number }>>([])
   const renameRef = useRef<HTMLInputElement>(null)
   const toolbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const maxZRef = useRef(10)
@@ -175,6 +176,11 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
       const parsed: Record<number, ParsedOutline> = {}
       results.forEach((content, i) => { if (content) parsed[chapters[i]] = parseOutline(content, chapters[i]) })
       setOutlines(parsed)
+      // 章节状态：已写（有正文）/ 待写（仅大纲或空）
+      try {
+        const chs = await app.GetChapters(novelId)
+        setChapters((chs ?? []).map((c: any) => ({ chapter_number: c.chapter_number, title: c.title, word_count: c.word_count })))
+      } catch { /* 章节状态加载失败不影响主面板 */ }
     } catch (e) { console.error('[NarrativeTimeline]', e) }
   }, [novelId, app, loadOutlines])
 
@@ -222,6 +228,21 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
   const pastChapters = (ctx?.recent_chapters ?? []).filter(c => c.summary && c.num <= currentChapter.num).slice(0, 3)
   const hasCard = (id: string) => layout.some(c => c.id === id)
 
+  // 章节状态维护：已写（word_count>0）/ 待写（有章记录但无正文）/ 未开始（无记录）
+  const chapterStatus = useMemo(() => {
+    const maxNum = Math.max(currentChapter.num, ...chapters.map(c => c.chapter_number))
+    const written = new Map<number, number>() // chapter_number -> word_count
+    for (const c of chapters) written.set(c.chapter_number, c.word_count)
+    const list: Array<{ num: number; status: 'done' | 'drafting' | 'todo'; wordCount: number }> = []
+    for (let n = 1; n <= Math.max(maxNum, 1); n++) {
+      const wc = written.get(n)
+      if (wc !== undefined && wc > 0) list.push({ num: n, status: 'done', wordCount: wc })
+      else if (wc !== undefined) list.push({ num: n, status: 'drafting', wordCount: 0 })
+      else list.push({ num: n, status: 'todo', wordCount: 0 })
+    }
+    return list
+  }, [chapters, currentChapter.num])
+
   return (
     <div className="narrative-panel" style={{ width, minWidth: 240 }}>
       <div className="narrative-resize-handle" onMouseDown={e => {
@@ -267,12 +288,15 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
                 {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 出场角色 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}<div className="card-item-tags">{c.items?.length > 0 ? <span className="card-item-tag">📦 {c.items.join(', ')}</span> : ''}{c.location?.name ? <span className="card-item-tag" title="角色静态存储位置，可能与当前章节实际位置不同">📍 {c.location.name}</span> : ''}</div></div>)}</div>}
                 {Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).length > 0 && <div className="card-sec"><div className="card-sec-title">⏳ 近期待收</div>{Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).map(([c, es]) => <div key={c} className="card-item"><span className="card-item-name">第{c}章</span> {es.map((e: any) => <span key={e.id} className="card-item-tag" title={IMP[e.importance]}>{e.title}</span>)}</div>)}</div>}
               </>}
-              {card.id === 'past' && pastChapters.map(ch => {
+              {card.id === 'past' && <>
+                <div className="card-sec"><div className="card-sec-title">📑 章节进度</div><div className="card-item-tags" style={{ flexWrap: 'wrap' }}>{chapterStatus.slice(-12).map(s => <span key={s.num} className={`card-item-tag ch-status ch-status-${s.status}`} title={s.status === 'done' ? `第${s.num}章 已写 ${s.wordCount} 字` : s.status === 'drafting' ? `第${s.num}章 写作中` : `第${s.num}章 未开始`}>{s.num}{s.status === 'done' ? '✓' : s.status === 'drafting' ? '✍' : ''}</span>)}</div></div>
+                {pastChapters.map(ch => {
                 let events: string[] = []
                 try { events = JSON.parse(ch.key_events || '[]') } catch { /* */ }
                 events = events.filter(e => e?.length > 5).map(e => e.replace(/^[埋推种揭铺设]*[：:]\s*/, '')).slice(0, 3)
                 return <div key={ch.num} className="card-item"><div className="card-item-name">第{ch.num}章「{ch.title}」{ch.word_cnt > 0 && <span className="card-item-tag">{ch.word_cnt}字</span>}</div>{ch.summary && <><div className="card-sec-title" style={{ marginTop: 4 }}>📖 剧情概要</div><div className="card-item-desc">{ch.summary}</div></>}{events.length > 0 && <><div className="card-sec-title" style={{ marginTop: 4 }}>📌 关键事件</div>{events.map((e, i) => <div key={i} className="card-item-events">• {e}</div>)}</>}</div>
               })}
+              </>}
               {card.id === 'future' && <>
                 {Object.keys(outlines).map(Number).sort((a, b) => b - a).map(n => { const o = outlines[n]; return <div key={n} className="card-item"><div className="card-item-name">第{n}章 · {o.title || '未命名'}</div>{o.tone && <span className="card-item-tag">🎵 {o.tone}</span>}{o.keyEvents.length > 0 && <><div className="card-sec-title">📌 关键事件</div>{o.keyEvents.slice(0, 2).map((e, i) => <div key={i} className="card-item-events">• {e.replace(/\*\*/g, '')}</div>)}</>}{o.endingHook?.content && <div className="card-item-hook"><span className="card-item-tag">🎣 章末钩子</span>{o.endingHook.type && `${o.endingHook.type}——`}{o.endingHook.content}</div>}</div> })}
                 {Object.keys(outlines).length === 0 && <div className="card-item" style={{ color: 'var(--muted-foreground)' }}>暂无章纲</div>}

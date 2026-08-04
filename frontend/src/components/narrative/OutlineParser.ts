@@ -59,39 +59,39 @@ export function parseOutline(markdown: string, chapterNum: number): ParsedOutlin
   const result: ParsedOutline = {
     chapter: chapterNum,
     title: extractTitle(markdown, sections),
-    scenes: extractScenes(sections['场景设计'] || sections['场景'] || ''),
-    keyEvents: extractListItems(sections['关键事件'] || ''),
-    characters: extractCharacters(sections['重点角色'] || ''),
-    foreshadowing: extractForeshadowing(sections['伏笔操作'] || sections['伏笔'] || ''),
+    scenes: extractScenes(getSection(sections, '场景设计', '场景')),
+    keyEvents: extractListItems(getSection(sections, '关键事件', '剧情事件', '事件')),
+    characters: extractCharacters(getSection(sections, '重点角色', '出场角色', '角色')),
+    foreshadowing: extractForeshadowing(getSection(sections, '伏笔操作', '伏笔')),
   }
 
   // 基调与字数
-  const toneSection = sections['基调与字数'] || ''
+  const toneSection = getSection(sections, '基调与字数', '基调')
   if (toneSection) {
     const toneMatch = toneSection.match(/基调[：:]([^字\n]+)/)
     if (toneMatch) result.tone = toneMatch[1].trim()
-    const wordMatch = toneSection.match(/(?:预估)?字数[：:]?\s*(\d+[~-]\d+字|\d+字)/)
+    const wordMatch = toneSection.match(/(?:预估|预计)?字数[：:]?\s*(\d+[~-～]\d+字|\d+字)/)
     if (wordMatch) result.wordCount = wordMatch[1].trim()
   }
 
   // 开篇策略
-  if (sections['开篇策略']) {
-    result.openingStrategy = sections['开篇策略'].trim()
+  if (getSection(sections, '开篇策略', '开篇')) {
+    result.openingStrategy = getSection(sections, '开篇策略', '开篇').trim()
   }
 
   // 情绪设计
-  if (sections['情绪设计']) {
-    result.emotionalDesign = extractEmotionalDesign(sections['情绪设计'])
+  if (getSection(sections, '情绪设计', '情绪')) {
+    result.emotionalDesign = extractEmotionalDesign(getSection(sections, '情绪设计', '情绪'))
   }
 
   // 章末钩子
-  if (sections['章末钩子']) {
-    result.endingHook = extractEndingHook(sections['章末钩子'])
+  if (getSection(sections, '章末钩子', '钩子', '结尾钩子')) {
+    result.endingHook = extractEndingHook(getSection(sections, '章末钩子', '钩子', '结尾钩子'))
   }
 
   // 金手指状态
-  if (sections['金手指状态']) {
-    result.goldenFinger = sections['金手指状态'].trim()
+  if (getSection(sections, '金手指状态', '金手指')) {
+    result.goldenFinger = getSection(sections, '金手指状态', '金手指').trim()
   }
 
   // 保留其他未解析字段
@@ -107,25 +107,32 @@ export function parseOutline(markdown: string, chapterNum: number): ParsedOutlin
 }
 
 /**
- * 按 ## 标题分割 markdown，返回 { 标题: 内容 }
- * 支持：## 标题、## **加粗标题**、# 标题 等格式
+ * 按标题分割 markdown，返回 { 标题: 内容 }
+ * 支持：## 标题、## **加粗标题**、# 标题、### 标题、【标题】
  * 也支持 **字段名**：格式（无 ## 标题的情况）
  */
 function splitByHeaders(markdown: string): Record<string, string> {
   const sections: Record<string, string> = {}
-  // 先尝试用 ## 标题分割
-  const regex = /^#{2,}\s+(.+?)\s*$/gm
+  // 先尝试用 ## 标题分割（1-4 级井号都识别，但排除"# 第N章"章节标题行）
+  const regex = /^#{1,4}\s+(.+?)\s*$/gm
   let lastIndex = 0
   let lastTitle = ''
   let match: RegExpExecArray | null
   let hasHeaders = false
 
   while ((match = regex.exec(markdown)) !== null) {
+    const rawTitle = match[1]
+    // 跳过章节标题行（# 第N章 XXX / # XXX 无冒号且是首行）——作为 section 标题的唯一条件是像字段名
+    const isChapterLine = /^第\s*\d+\s*章/.test(rawTitle) || /^第\s*[一二三四五六七八九十百千万]+\s*[章回节]/.test(rawTitle)
+    if (isChapterLine && !rawTitle.includes('：') && !rawTitle.includes(':')) {
+      lastIndex = regex.lastIndex
+      continue
+    }
     hasHeaders = true
     if (lastTitle) {
       sections[lastTitle] = markdown.slice(lastIndex, match.index).trim()
     }
-    lastTitle = match[1].replace(/\*\*/g, '').replace(/[`]/g, '').trim()
+    lastTitle = normalizeTitle(rawTitle)
     lastIndex = regex.lastIndex
   }
 
@@ -142,7 +149,7 @@ function splitByHeaders(markdown: string): Record<string, string> {
       if (lastFieldName) {
         sections[lastFieldName] = markdown.slice(lastFieldIndex, match.index).trim()
       }
-      lastFieldName = match[1].trim()
+      lastFieldName = normalizeTitle(match[1])
       lastFieldIndex = fieldRegex.lastIndex
     }
     if (lastFieldName) {
@@ -154,15 +161,47 @@ function splitByHeaders(markdown: string): Record<string, string> {
 }
 
 /**
+ * 标题归一化：去 markdown 标记、全角空格、首尾空白；【】包裹时去括号。
+ */
+function normalizeTitle(t: string): string {
+  return t
+    .replace(/\*\*/g, '')
+    .replace(/[`]/g, '')
+    .replace(/【(.+)】/, '$1')
+    .replace(/\u3000/g, ' ')
+    .trim()
+}
+
+/**
+ * 查找 section 内容，支持多种标题变体（全角/半角、加粗、【】）。
+ */
+function getSection(sections: Record<string, string>, ...names: string[]): string {
+  for (const n of names) {
+    if (sections[n] !== undefined) return sections[n]
+  }
+  // 模糊匹配：忽略格式差异（如"关键事件（本章）"）
+  const wanted = names[0]
+  if (wanted) {
+    const found = Object.keys(sections).find(k => k.replace(/[（(].*[）)]/, '').trim() === wanted)
+    if (found) return sections[found]
+  }
+  return ''
+}
+
+/**
  * 提取章节标题（从 # 或 ## 标题行）
  * 支持：# 标题、## 标题、## **加粗标题** 等
  */
 function extractTitle(markdown: string, sections: Record<string, string>): string {
   // 先找 # 或 ## 标题（有些大纲第一个是 #，有些是 ##）
   const hashMatch = markdown.match(/^[#]+\s+(.+)\s*$/m)
-  if (hashMatch) return hashMatch[1].replace(/\*\*/g, '').replace(/[`]/g, '').trim()
+  if (hashMatch) {
+    const t = hashMatch[1].replace(/\*\*/g, '').replace(/[`]/g, '').trim()
+    // 剥离"第N章"前缀：第3章 破镜 → 破镜；第 32 章 · 破镜 → 破镜
+    return t.replace(/^第\s*\d+\s*章[·:：\s]*/, '').replace(/^第\s*[一二三四五六七八九十百千万]+\s*[章回节][·:：\s]*/, '').trim()
+  }
   // 或者找 ## 章节标题（去掉"章节标题"等前缀）
-  const chapterTitle = sections['章节标题']
+  const chapterTitle = getSection(sections, '章节标题', '标题')
   if (chapterTitle) return chapterTitle.replace(/\*\*/g, '').trim()
   // 用第一个 ## 标题作为标题
   const firstSection = Object.values(sections)[0]
@@ -189,7 +228,7 @@ function extractScenes(text: string): SceneEntry[] {
     // 有序列表项（1. 2. 3.）- 支持 **加粗** 标题和（情绪功能：描述）格式
     const orderedMatch = trimmed.match(/^\d+[..、)]\s+\*?\*?(.+?)\*?\s*[（(]/)
     if (orderedMatch) {
-      const entry: SceneEntry = { title: orderedMatch[1].replace(/\*\*/g, '').trim() }
+      const entry: SceneEntry = { title: orderedMatch[1].replace(/\*\*/g, '').replace(/\*$/, '').trim() }
       // 提取括号内的内容作为描述
       const bracketMatch = trimmed.match(/[（(]([^）)]+)[）)]/)
       if (bracketMatch) {
@@ -215,7 +254,7 @@ function extractScenes(text: string): SceneEntry[] {
     // **场景名**：描述 格式
     const boldMatch = trimmed.match(/^\*?\*?(.+?)\*?\*?[：:：]\s*(.+)/)
     if (boldMatch) {
-      const entry: SceneEntry = { title: boldMatch[1].replace(/\*\*/g, '').trim() }
+      const entry: SceneEntry = { title: boldMatch[1].replace(/\*\*/g, '').replace(/\*$/, '').trim() }
       const desc = boldMatch[2].trim()
       if (desc) {
         const emotionMatch = desc.match(/[（(]([^）)]+)[）)]/)
@@ -241,7 +280,10 @@ function extractListItems(text: string): string[] {
     if (!trimmed) continue
     // 去掉列表前缀（- 、* 、1. 、2. 、1) 、1、 等）
     const cleaned = trimmed.replace(/^[-*→]\s+/, '').replace(/^\d+[..、)]\s+/, '').replace(/^\d+[、，]\s+/, '')
-    if (cleaned) items.push(cleaned.replace(/\*\*/g, '').trim())
+    if (!cleaned) continue
+    // **事件**：细节 → 事件：细节（保留冒号后的细节作为完整事件描述）
+    const clean = cleaned.replace(/\*\*/g, '').trim()
+    if (clean) items.push(clean)
   }
   return items
 }
@@ -283,14 +325,19 @@ function extractForeshadowing(text: string): ForeshadowingEntry {
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
-    // 去掉列表前缀（- 、* 、→ 等）
-    const cleaned = trimmed.replace(/^[-*→]\s+/, '').replace(/^\*?\*?/, '').replace(/\*?\*?$/, '')
-    if (cleaned.startsWith('回收：') || cleaned.startsWith('回收:')) {
-      result.resolve.push(cleaned.replace(/^回收[：:]\s*/, '').trim())
-    } else if (cleaned.startsWith('埋下：') || cleaned.startsWith('埋下:') || cleaned.startsWith('埋设：') || cleaned.startsWith('埋设:')) {
-      result.bury.push(cleaned.replace(/^埋[下设][：:]\s*/, '').trim())
-    } else if (cleaned.startsWith('推进：') || cleaned.startsWith('推进:')) {
-      result.advance.push(cleaned.replace(/^推进[：:]\s*/, '').trim())
+    // 去掉列表前缀（- 、* 、→ 等）和 **加粗**
+    const cleaned = trimmed
+      .replace(/^[-*→]\s+/, '')
+      .replace(/^\*?\*?/, '')
+      .replace(/\*?\*?$/, '')
+      .replace(/\*\*/g, '')
+      .trim()
+    if (cleaned.startsWith('回收：') || cleaned.startsWith('回收:') || cleaned.startsWith('回收 ') || cleaned.startsWith('回收　')) {
+      result.resolve.push(cleaned.replace(/^回收[：:\s　]*/, '').trim())
+    } else if (cleaned.startsWith('埋下：') || cleaned.startsWith('埋下:') || cleaned.startsWith('埋设：') || cleaned.startsWith('埋设:') || cleaned.startsWith('埋下 ') || cleaned.startsWith('埋设 ')) {
+      result.bury.push(cleaned.replace(/^埋[下设][：:\s　]*/, '').trim())
+    } else if (cleaned.startsWith('推进：') || cleaned.startsWith('推进:') || cleaned.startsWith('推进 ')) {
+      result.advance.push(cleaned.replace(/^推进[：:\s　]*/, '').trim())
     } else if (cleaned && !cleaned.startsWith('**') && !cleaned.startsWith('-') && !cleaned.startsWith('*')) {
       // 没有前缀的当作推进
       result.advance.push(cleaned)

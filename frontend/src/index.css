@@ -740,6 +740,18 @@ body {
   vertical-align: middle;
 }
 
+/* 章节状态标签（过去卡顶部） */
+.ch-status {
+  min-width: 1.9rem;
+  text-align: center;
+  margin: 0.1rem 0.1rem 0 0;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.25rem;
+}
+.ch-status-done { background: color-mix(in oklab, var(--success) 15%, transparent); color: var(--success); }
+.ch-status-drafting { background: color-mix(in oklab, var(--status-warning) 20%, transparent); color: var(--status-warning); }
+.ch-status-todo { background: var(--muted); color: var(--muted-foreground); opacity: 0.6; }
+
 .card-item-events {
   margin-top: 0.2rem;
   font-size: 0.8rem;
