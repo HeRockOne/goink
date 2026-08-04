@@ -52,9 +52,16 @@ mode: always
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
 2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
 3. **edit**(outlines/NNN.md)（required）— 写大纲。
-   **格式要求（必须遵守，否则叙事面板解析失败）：**
+   **格式要求：**
    - 章节标题用 `# 第N章 标题`（单井号，一行）
-   - 各 section 用 `## 标题`（双井号，如 `## 场景设计`、`## 关键事件`、`## 重点角色`、`## 伏笔操作`、`## 章末钩子`）
+   - 各 section 用 `## 标题`（双井号），至少包含以下 section，可自由扩展：
+     - `## 场景设计`：核心场景、环境氛围、时间、地点
+     - `## 关键事件`：按叙事节拍编号（1. 2. 3.），标注字数区间和功能
+     - `## 重点角色`：角色动机、叙事功能、本章状态
+     - `## 伏笔操作`：埋设/回收/推进，标注伏笔 ID 和目标章节
+     - `## 章末钩子`：类型、设计、预期读者效果
+     - （推荐扩展）`## 写作要点`：情绪节奏、信息密度、禁忌项
+     - （推荐扩展）`## 字数预估`：目标字数、段落数、每段字数
    - 禁止使用 `**加粗**` 代替 `##` 标题
 4. 等待用户审批 → **set_phase("write")**
 
