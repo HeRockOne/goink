@@ -120,3 +120,28 @@ func CountMessagesTokens(messages []map[string]any) (total int, byRole map[strin
 	}
 	return total, byRole, nil
 }
+
+// CountSystemInjection 精确计算首轮固定前缀的 token 数。
+// 与 tokencount 工具口径一致：identity + always skills 正文 + skill catalog + 工具定义 JSON。
+// 固定前缀字节完全确定，一次计算即可缓存复用（系统角色 detail 的精确值来源）。
+func CountSystemInjection(identity, always, catalog string, tools []map[string]any) (systemTokens, toolsTokens int) {
+	if identity != "" {
+		n, _ := CountTokens(identity)
+		systemTokens += n
+	}
+	if always != "" {
+		n, _ := CountTokens(always)
+		systemTokens += n
+	}
+	if catalog != "" {
+		n, _ := CountTokens(catalog)
+		systemTokens += n
+	}
+	if len(tools) > 0 {
+		if b, err := json.Marshal(tools); err == nil {
+			n, _ := CountTokens(string(b))
+			toolsTokens = n
+		}
+	}
+	return systemTokens, toolsTokens
+}

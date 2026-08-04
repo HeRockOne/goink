@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"novel/internal/agentcfg"
 	"novel/internal/config"
 	"novel/internal/git"
+	"novel/internal/llm"
 	"novel/internal/rollback"
 	"novel/internal/session"
 )
@@ -374,6 +376,8 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 
 // writeSystemMessages 在新 session 的事务内写入 AgentIdentity、AlwaysSkills、SkillCatalog 到 messages 表。
 // NovelState 不在此写入，而是在每轮对话时动态注入（放在 user message 之后），以优化 Prompt Caching。
+// 同时计算固定前缀（identity+always+catalog+tools）的精确 token 数，存入 session extra_metadata，
+// 供 token 统计面板的 detail.system 使用（精确值，非估算）。
 func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, turnID int) error {
 	sysMsg := func(content string) *session.Message {
 		return &session.Message{
@@ -397,6 +401,19 @@ func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, 
 		if c != "" {
 			if err := tx.Create(sysMsg(c)).Error; err != nil {
 				return err
+			}
+		}
+	}
+
+	// 精确计算固定前缀 token（与 tokencount 口径一致），存入 session
+	if a.registry != nil {
+		tools := a.registry.OpenAI(nil)
+		sysTokens, toolsTokens := llm.CountSystemInjection(identity, always, catalog, tools)
+		meta := map[string]any{"fixed_prefix_tokens": sysTokens + toolsTokens}
+		if b, err := json.Marshal(meta); err == nil {
+			if err := tx.Model(&session.Session{}).Where("session_id = ?", sessionID).
+				Update("extra_metadata", string(b)).Error; err != nil {
+				a.logger.Warn("保存固定前缀 token 失败", "err", err)
 			}
 		}
 	}

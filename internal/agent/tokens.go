@@ -31,16 +31,35 @@ func (a *Agent) InitRunningTokens(messages []map[string]any) map[string]int {
 // updateUsage 计算 usage_ratio + 分角色 detail → 持久化到 session + 推送前端。
 // 缓存命中 token 做 session 级累计，每次请求累加到历史值上。
 func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runningTokens map[string]int, opts RunOptions) {
-	localTotal := runningTokens["system"] + runningTokens["user"] + runningTokens["assistant"] + runningTokens["tool"]
 	apiTotal, _ := apiUsage["total_tokens"].(float64)
+
+	// 分角色 detail：
+	// - system 用固定前缀的精确值（首轮写入 session.extra_metadata.fixed_prefix_tokens），
+	//   不含动态 system 消息（phase reminder 等，量小归入格式开销）
+	// - user/assistant/tool 用 runningTokens 本地计数（tiktoken 估算，量级准确）
+	// - 差值（工具定义已计入固定前缀；剩余为消息格式开销 + 动态 system）单独展示为 overhead
+	fixedPrefix := 0
+	if sess, err := a.session.GetSession(ctx, opts.SessionID); err == nil && sess.ExtraMetadata != "" {
+		var meta map[string]any
+		if json.Unmarshal([]byte(sess.ExtraMetadata), &meta) == nil {
+			if v, _ := meta["fixed_prefix_tokens"].(float64); v > 0 {
+				fixedPrefix = int(v)
+			}
+		}
+	}
 
 	detail := make(map[string]int)
 	for role, tokens := range runningTokens {
-		if localTotal > 0 && int(apiTotal) > 0 {
-			detail[role] = int(float64(tokens) * apiTotal / float64(localTotal))
+		if role == "system" && fixedPrefix > 0 {
+			detail[role] = fixedPrefix
 		} else {
 			detail[role] = tokens
 		}
+	}
+	detailSum := detail["system"] + detail["user"] + detail["assistant"] + detail["tool"]
+	overhead := 0
+	if int(apiTotal) > detailSum {
+		overhead = int(apiTotal) - detailSum
 	}
 
 	// 累计 session 级缓存命中/未命中 token + 输出 token（累计值用于计费面板）
@@ -178,6 +197,8 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		"context_window":           opts.Model.ContextWindow,
 		"running_tokens":           detail,
 		"detail":                   detail,
+		"detail_is_estimate":       true, // 分角色仅 system 精确（固定前缀），其余为 tiktoken 估算
+		"overhead_tokens":          overhead,
 	}
 
 	a.logger.Info("usage 推送",

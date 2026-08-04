@@ -15,6 +15,8 @@ export interface UsageInfo {
   cache_hit_ratio: number
   context_window: number
   usage_ratio: number
+  detail_is_estimate?: boolean
+  overhead_tokens?: number
   detail: {
     system: number
     user: number
@@ -60,14 +62,6 @@ function computeCosts(usage: UsageInfo, prices: PriceConfig, selectedModel?: str
   const outCost = out * prices.priceOutput / 1_000_000
   const totalCost = hitCost + missCost + outCost
 
-  // 分角色金额
-  const rt = usage.running_tokens || {}
-  const roleSum = (rt.system || 0) + (rt.user || 0) + (rt.assistant || 0) + (rt.tool || 0)
-  const roleCost: Record<string, number> = {}
-  for (const role of ['system', 'user', 'assistant', 'tool']) {
-    roleCost[role] = roleSum > 0 ? totalCost * (rt[role] || 0) / roleSum : 0
-  }
-
   // 按模型拆分
   const modelCosts: Record<string, { hit: number; miss: number; comp: number; hitCost: number; missCost: number; compCost: number; total: number }> = {}
   if (usage.per_model) {
@@ -85,7 +79,7 @@ function computeCosts(usage: UsageInfo, prices: PriceConfig, selectedModel?: str
     }
   }
 
-  return { hitCost, missCost, outCost, totalCost, roleCost, modelCosts }
+  return { hitCost, missCost, outCost, totalCost, modelCosts }
 }
 
 function ringColor(ratio: number): string {
@@ -242,7 +236,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                 className="flex justify-between items-center text-xs w-full text-left"
                 onClick={() => setShowRoles(!showRoles)}
               >
-                <span className="text-muted-foreground">分角色金额</span>
+                <span className="text-muted-foreground">分角色 token {usage.detail_is_estimate ? '(估算)' : ''}</span>
                 <span className="text-muted-foreground/60">{showRoles ? '▲' : '▼'}</span>
               </button>
               {showRoles && (
@@ -250,9 +244,18 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                   {Object.entries(DETAIL_LABELS).map(([key, label]) => (
                     <div key={key} className="flex justify-between">
                       <span className="text-muted-foreground">{label}</span>
-                      <span className="tabular-nums">{formatTokens((usage.detail as any)[key] || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.roleCost[key] || 0)}</span></span>
+                      <span className="tabular-nums">{formatTokens((usage.detail as any)[key] || 0)}</span>
                     </div>
                   ))}
+                  {usage.overhead_tokens ? (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">格式开销</span>
+                      <span className="tabular-nums">{formatTokens(usage.overhead_tokens)}</span>
+                    </div>
+                  ) : null}
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    系统为固定前缀精确值；其余为本地估算。成本按缓存/未命中/输出计，不按角色分摊。
+                  </div>
                 </div>
               )}
             </div>
