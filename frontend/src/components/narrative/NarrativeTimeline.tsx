@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import { useApp } from '@/hooks/useApp'
 import { useOutlineCache } from './useOutlineCache'
-import type { ParsedOutline } from './OutlineParser'
-import { parseOutline } from './OutlineParser'
 import DetailTabs from './DetailTabs'
 import type { app } from '@/lib/wailsjs/go/models'
 
@@ -59,7 +58,7 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
   const app = useApp()
   const { loadOutlines, invalidateCache } = useOutlineCache()
   const [ctx, setCtx] = useState<app.WritingContext | null>(null)
-  const [outlines, setOutlines] = useState<Record<number, ParsedOutline>>({})
+const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
   const [layout, setLayout] = useState<CardPos[]>(loadLayout)
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [showToolbar, setShowToolbar] = useState(false)
@@ -173,9 +172,12 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
       setCtx(w)
       const chapters = [-1, 0, 1].map(i => ch + i).filter(n => n > 0)
       const results = await Promise.all(chapters.map(n => loadOutlines(novelId, n)))
-      const parsed: Record<number, ParsedOutline> = {}
-      results.forEach((content, i) => { if (content) parsed[chapters[i]] = parseOutline(content, chapters[i]) })
-      setOutlines(parsed)
+      const raw: Record<number, string> = {}
+      results.forEach((content, i) => {
+        const cn = chapters[i]
+        if (content) raw[cn] = content
+      })
+      setRawOutlines(raw)
       // 章节状态：已写（有正文）/ 待写（仅大纲或空）
       try {
         const chs = await app.GetChapters(novelId)
@@ -298,8 +300,17 @@ export default memo(function NarrativeTimeline({ activeChapterNum, novelId, widt
               })}
               </>}
               {card.id === 'future' && <>
-                {Object.keys(outlines).map(Number).sort((a, b) => b - a).map(n => { const o = outlines[n]; return <div key={n} className="card-item"><div className="card-item-name">第{n}章 · {o.title || '未命名'}</div>{o.tone && <span className="card-item-tag">🎵 {o.tone}</span>}{o.keyEvents.length > 0 && <><div className="card-sec-title">📌 关键事件</div>{o.keyEvents.slice(0, 2).map((e, i) => <div key={i} className="card-item-events">• {e.replace(/\*\*/g, '')}</div>)}</>}{o.endingHook?.content && <div className="card-item-hook"><span className="card-item-tag">🎣 章末钩子</span>{o.endingHook.type && `${o.endingHook.type}——`}{o.endingHook.content}</div>}</div> })}
-                {Object.keys(outlines).length === 0 && <div className="card-item" style={{ color: 'var(--muted-foreground)' }}>暂无章纲</div>}
+                {Object.keys(rawOutlines).map(Number).sort((a, b) => b - a).map(n => {
+                  const raw = rawOutlines[n]
+                  const title = raw?.split('\n')[0]?.replace(/^#\s+/, '')?.trim() || `第${n}章`
+                  return <div key={n} className="card-item" style={{ marginBottom: 8 }}>
+                    <div className="card-item-name" style={{ marginBottom: 4, fontSize: '0.85rem' }}>第{n}章 · {title}</div>
+                    <div className="outline-markdown" style={{ fontSize: '0.78rem', lineHeight: 1.6, color: 'var(--muted-foreground)' }}>
+                      <ReactMarkdown>{raw}</ReactMarkdown>
+                    </div>
+                  </div>
+                })}
+                {Object.keys(rawOutlines).length === 0 && <div className="card-item" style={{ color: 'var(--muted-foreground)' }}>暂无章纲</div>}
               </>}
               {card.id === 'arcs' && (ctx?.active_arcs ?? []).map((a: any) => { const p = a.nodes_total > 0 ? Math.round(a.nodes_done / a.nodes_total * 100) : 0; return <div key={a.id}><div className="card-item"><span className="card-item-name">{a.name}</span><span className="card-item-tag">{a.type_zh}</span><span className="card-item-tag">{a.nodes_done}/{a.nodes_total}</span><div className="arc-progress-bar-container"><div className={`arc-progress-bar ${p >= 75 ? 'high' : p >= 40 ? 'medium' : 'low'}`} style={{ width: `${p}%` }} /></div></div>{(a.nodes || []).map((n: any) => { const isNext = n.status !== 'completed' && (n.target_chapter > 0 && n.target_chapter <= currentChapter.num); const isCurrent = isNext && !(a.nodes || []).some((nn: any) => nn.status !== 'completed' && nn.target_chapter > n.target_chapter && nn.target_chapter <= currentChapter.num); return <div key={n.id} className="card-item" style={{ marginLeft: '0.5rem', borderLeft: isCurrent ? '3px solid var(--primary)' : '2px solid var(--primary)', padding: '0.25rem 0.4rem', background: isCurrent ? 'color-mix(in oklab, var(--primary) 8%, transparent)' : undefined }}><div className="card-item-name">{n.title}{isCurrent && ' ← 当前'}</div>{n.description && <div className="card-item-desc">{n.description}</div>}<div className="card-item-tags"><span className="card-item-tag">{n.status === 'completed' ? '✅' : '⏳'}</span>{n.target_chapter > 0 && <span className="card-item-tag">目标第{n.target_chapter}章</span>}{n.actual_chapter > 0 && <span className="card-item-tag">实际第{n.actual_chapter}章</span>}</div></div>})}</div> })}
               {card.id === 'foreshadow' && <>
