@@ -440,7 +440,7 @@ frontend/src/
 mobile/
 ├── index.html          # 主页面（SPA，模板 id="tpl-chat-msg" 等）
 ├── app.js              # 核心逻辑（对话 + 工具调用渲染 + IndexedDB 缓存）
-├── style.css           # 样式（CSS 变量主题 + 太虚剑宗/木艺书阁主题）
+├── style.css           # 样式（CSS 变量主题，HSL 自定义）
 ├── sw.js               # Service Worker（离线缓存静态资源）
 ├── idb-keyval.min.js   # IndexedDB 封装（离线数据持久化）
 ├── marked.min.js       # Markdown 渲染

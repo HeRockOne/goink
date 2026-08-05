@@ -31,7 +31,7 @@ prepare → outline → write → review → maintain → (prepare/done)
 | 11 | 新伏笔/悬念 | create_timeline_entry | title, category, target_chapter, importance |
 | 12 | 回收伏笔 | update_timeline_entry | **resolved_chapter_id** |
 | 13 | 更新读者认知 | create/update_reader_perspective_entry | type, content, planted_chapter |
-| 14 | 更新故事状态 | edit(goink.md) | - |
+| 14 | 记录章节指纹 | edit(goink.md)(append) | - |
 | 15 | 阶段切换 | set_phase | - |
 
 ### 1.3 init-phase.md 开书创建顺序依赖链

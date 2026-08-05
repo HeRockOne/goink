@@ -10,7 +10,7 @@
 
 本报告对 Goink 的上下文管理、压缩机制、缓存架构做了全面审计，并与 Anthropic/LangChain/文枢(WenShape)/Novel-creator-skill 等行业成熟方案交叉比对。
 
-**核心判断**：Goink 的架构设计**已经非常先进**——"结构化外脑(DB) + 阶段门禁 + maintain 清单 + 跨对话快照(goink.md) + 稳定前缀缓存"这套组合与行业最佳实践高度一致，部分机制（阶段门禁硬拦截、代码级质量闭环）甚至优于多数竞品。**不建议做伤筋动骨的改动。**
+**核心判断**：Goink 的架构设计**已经非常先进**——"结构化外脑(DB) + 阶段门禁 + maintain 清单 + 跨对话快照(DB writing_snapshot) + 稳定前缀缓存"这套组合与行业最佳实践高度一致，部分机制（阶段门禁硬拦截、代码级质量闭环）甚至优于多数竞品。**不建议做伤筋动骨的改动。**
 
 > 2026-08-04 更新注记：goink.md 已收敛为章节指纹账本（仅 append 追加指纹），"跨对话快照"职责移交 DB（writing_snapshots/characters/timeline/lore/preference），见 `design/goink-fingerprint-ledger.md`。本报告主体结论（DB 外脑 + 门禁 + 缓存）不受影响。
 

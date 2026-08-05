@@ -17,10 +17,10 @@ prepare(get_writing_context) → outline(edit outlines/)
 | 阶段 | 读什么 | 写什么 | 闭环 |
 |------|--------|--------|------|
 | prepare | get_writing_context (DB 最新状态) | 无 | → outline 知道当前状态 |
-| outline | read(goink.md) + read(skills/) | edit(outlines/NNN.md) | → write 有章纲 |
+| outline | read(goink.md) 指纹 + read(skills/) | edit(outlines/NNN.md) | → write 有章纲 |
 | write | read(outlines/NNN.md) | edit(chapters/NNN.md) | → review 有全文 |
 | review | read(chapters/NNN.md) + get_* | run_subagent 报告 | → maintain 知道要修什么 |
-| maintain | get_writing_context + get_* | update_*/create_* + edit(goink.md) + update_chapter_plan + update_writing_snapshot + update_chapter_meta + set_phase | → 下轮 prepare 读到最新状态 |
+| maintain | get_writing_context + get_* | update_*/create_* + edit(goink.md)(append) + update_chapter_plan + update_writing_snapshot + update_chapter_meta + set_phase | → 下轮 prepare 读到最新状态 |
 
 无断层。maintain 写回 DB → 下轮 get_writing_context 读到最新数据 → 闭环。
 
@@ -161,3 +161,4 @@ prepare(get_writing_context) → outline(edit outlines/)
 | 六大模块管理指南（角色/时间线/弧线/地点/读者/偏好） | 工具 Description 已有 | ~700 |
 | 操作准则 + 输出规范 + 系统架构 | 多处重复 | ~300 |
 | 跨领域协同 | 空泛建议 | ~80 |
+

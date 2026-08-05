@@ -31,7 +31,7 @@
 | # | 问题 | 文件 | 修复内容 |
 |---|------|------|---------|
 | P2-11 | 弧线缺少当前节点高亮 | `NarrativeTimeline.tsx:180` | 当前节点增加 `← 当前` 标记和高亮背景 |
-| P2-12 | 章纲解析覆盖率 85% | `OutlineParser.ts` | 支持多种格式变体 |
+| P2-12 | 章纲解析覆盖率 85% | `OutlineParser.ts` | 支持多种格式变体（注：后续改为 react-markdown 直接渲染原始大纲，不再依赖语义解析） |
 
 ---
 
@@ -112,7 +112,7 @@ return <div ... style={{
 
 #### 2.3.2 章纲解析覆盖率提升
 
-**OutlineParser.ts 改进**：
+**OutlineParser.ts 改进（已过时，未来卡片改用 react-markdown 渲染原始大纲）**：
 1. `splitByHeaders`: 支持 `**字段名**：格式（无 ## 标题的情况）
 2. `extractScenes`: 支持 `1. **标题**（情绪功能：描述）` 格式
 3. `extractListItems`: 支持更多列表前缀格式

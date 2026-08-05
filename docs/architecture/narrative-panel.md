@@ -190,17 +190,14 @@ WritingContext JSON  ← 一次 IPC 调用
 
 **作用**：后续走向——接下来章节的大纲。
 
-**数据来源**：`GetContent(novelId, "outlines/NNN.md")` 读取章纲文件 → `OutlineParser.parseOutline()` 正则解析。
+**数据来源**：`get_writing_context` 返回的 `outline_chapters[]` 字段（当前章 -1 ～ +2，共 4 章）。使用 `react-markdown` 直接渲染原始大纲 Markdown，不再依赖 `OutlineParser` 语义解析。
 
 | 展示项 | 来源字段 | 说明 |
 |--------|----------|------|
-| 章节标题 | `## 章节标题` | 从大纲的 `#` 或 `## 标题` 行提取 |
-| 🎵 情绪基调 | `## 基调与字数` → `基调：` | 正则提取 |
-| 📌 关键事件 | `## 关键事件` | 无序列表项，取前 2 条 |
-| 🎣 章末钩子 | `## 章末钩子` | 提取类型和内容 |
+| 章节标题 | `outline_chapters[].title` | 从大纲 `## 章节标题` 提取 |
+| 内容 | `outline_chapters[].content` | 原始 Markdown，react-markdown 渲染 |
+| 章节号 | `outline_chapters[].num` | 用于排序和筛选 |
 
-**章纲文件路径**：`outlines/{chapterNum}.md`（padStart 3 位）
-**解析范围**：当前章-1 ～ 当前章+2（共 4 章），只加载有文件的
 **排序**：按章节号降序（最新章在前）
 
 ### 3.4 弧线卡片（cardId: arcs）
@@ -282,7 +279,7 @@ EventsOn('chat:session_created', () => refresh())
 - `React.memo` 包裹整个组件
 - `useCallback` 包裹所有事件处理函数
 - 事件监听在 `useEffect` cleanup 中解绑
-- 章纲解析在 `loadOutlines` hook 中缓存（避免重复解析）
+- 章纲内容在 `loadOutlines` hook 中缓存（避免重复请求）
 
 ---
 
@@ -313,22 +310,22 @@ EventsOn('chat:session_created', () => refresh())
 
 ### 6.1 支持的 section 标题
 
-| 标题 | 解析结果字段 | 是否必选 |
-|------|-------------|---------|
-| `## 章节标题` | `title` | 可选 |
-| `## 基调与字数` | `tone`, `wordCount` | 可选 |
-| `## 开篇策略` | `openingStrategy` | 可选 |
-| `## 场景设计` | `scenes[]` | 可选 |
-| `## 关键事件` | `keyEvents[]` | 可选 |
-| `## 重点角色` | `characters[]` | 可选 |
-| `## 伏笔操作` | `foreshadowing{bury,advance,resolve}` | 可选 |
-| `## 情绪设计` | `emotionalDesign{anchor,accessory,rhythm}` | 可选 |
-| `## 章末钩子` | `endingHook{type,content}` | 可选 |
-| `## 金手指状态` | `goldenFinger` | 可选 |
+| 标题 | 说明 | 是否必选 |
+|------|------|---------|
+| `## 章节标题` | 章节标题 | 可选 |
+| `## 基调与字数` | 情绪基调、字数 | 可选 |
+| `## 开篇策略` | 开局方式 | 可选 |
+| `## 场景设计` | 场景列表 | 可选 |
+| `## 关键事件` | 核心事件 | 可选 |
+| `## 重点角色` | 出场角色 | 可选 |
+| `## 伏笔操作` | 伏笔埋/推/收 | 可选 |
+| `## 情绪设计` | 情绪节奏 | 可选 |
+| `## 章末钩子` | 结尾悬念 | 可选 |
+| `## 金手指状态` | 金手指进展 | 可选 |
 
-### 6.2 解析规则
+### 6.2 渲染方式
 
-按 `/^##\s+(.+)\n([\s\S]*?)(?=\n##\s+|$)/gm` 正则分割各 section，覆盖率约 85%。
+未来卡片（Section 3.3）使用 `react-markdown` 直接渲染原始 Markdown，不再依赖 `OutlineParser` 语义解析。`OutlineParser` 保留用于其他需要结构化字段的场景。
 
 ---
 

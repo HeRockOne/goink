@@ -2,7 +2,7 @@
 
 ## 概述
 
-每部小说一个 Git 仓库，章节正文以 Markdown 文件存储在 `chapters/` 目录下，故事状态文档 `goink.md` 放在小说根目录。调用系统 Git CLI 执行所有版本控制操作，文件 I/O 走标准库 `os` 包。
+每部小说一个 Git 仓库，章节正文以 Markdown 文件存储在 `chapters/` 目录下，章节指纹账本 `goink.md` 放在小说根目录。调用系统 Git CLI 执行所有版本控制操作，文件 I/O 走标准库 `os` 包。
 
 正文的版本历史、差异对比、回退走标准 Git 操作。章节元数据（标题、编号、字数等）存 SQLite，不在此包职责范围。
 
@@ -22,7 +22,7 @@
 
 ```
 {config.DataDir}/novels/{novel_id}/
-    goink.md              ← 故事状态文档（自由文本）
+    goink.md              ← 章节指纹账本（append only）
     chapters/
         001.md
         002.md

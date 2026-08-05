@@ -6,7 +6,7 @@
 - [x] 5 阶段门禁系统
 - [x] 23 个 HTTP API 端点
 - [x] 移动端 Web 前端
-- [x] 自定义主题系统（51 CSS 变量）
+- [x] 自定义主题系统（56+ CSS 变量，HSL 色相体系）
 - [x] WebDAV 服务器
 - [x] 双层 required 约束
 - [x] MCP 工具 jsonschema required 审计
