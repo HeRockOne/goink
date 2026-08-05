@@ -1,35 +1,39 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useTheme } from '@/hooks/useTheme'
+import { MAX_PARTICLES } from '@/lib/themeEffects'
 
-// 主题特效层：读取当前主题的 effects 配置渲染氛围光与粒子层。
+// 主题特效层：遍历当前主题 effects.layers 渲染各类型特效。
+// 类型注册表：ambient（氛围光）/ particles（Canvas 粒子）/ streak（流光）/ glow（呼吸光晕）。
 // 设计约束：
 // - 颜色吃主题 CSS 变量（--primary/--accent），换主题自动联动
-// - 只做 transform/opacity 动画（GPU 合成）；粒子 Canvas 独立图层 + DPR 降采样
+// - 只做 transform/opacity 动画（GPU 合成）；多粒子层合并进同一 Canvas（总粒子上限）
 // - pointer-events-none 不挡交互；prefers-reduced-motion 下全部静止
 // - 窗口失焦（visibilitychange）暂停粒子，避免后台空转烧 GPU
 
-const MAX_PARTICLES = 150
 const DPR_CAP = 1.5
+const TOTAL_PARTICLE_CAP = 200 // 所有粒子层的合并上限（性能红线）
 
 export default function AmbientEffectLayer() {
   const { activeTheme, activeEffects, customThemes } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const eff = activeEffects
+  const layers = activeEffects.layers
 
-  // ── 氛围光（CSS 光斑，强度 0 时隐藏） ──
-  const ambientOn = eff.ambient && eff.ambientIntensity > 0
+  // 稳定引用：避免每次 render 生成新数组导致粒子 effect 反复重建
+  const particleLayers = useMemo(() => layers.filter(l => l.type === 'particles'), [layers])
+  const showParticles = particleLayers.length > 0
 
-  // ── 粒子层（Canvas 2D + rAF） ──
+  // ── 粒子层（多层合并到同一 Canvas，总粒子数封顶） ──
   useEffect(() => {
-    if (!eff.particles) return
+    if (particleLayers.length === 0) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP)
-    const count = Math.max(8, Math.min(MAX_PARTICLES, Math.round(eff.particleCount)))
-    const speed = eff.particleSpeed
+    // 合并所有粒子层的粒子：数量按层求和但封顶，速度/透明度取层参数
+    const total = Math.min(TOTAL_PARTICLE_CAP, particleLayers.reduce((s, l) => s + (l.count ?? 60), 0))
+    const layersCfg = particleLayers
     let w = 0, h = 0
     let raf = 0
     let running = true
@@ -47,22 +51,29 @@ export default function AmbientEffectLayer() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
 
-    // 主题色：从计算样式读 --primary（换主题时 effect 依赖 customThemes 触发重读）
     const readColors = () => {
       const cs = getComputedStyle(document.documentElement)
       return { primary: cs.getPropertyValue('--primary').trim() || '#888888', accent: cs.getPropertyValue('--accent').trim() || '#888888' }
     }
 
+    // 按层权重分配粒子，让每一层的 count/speed 生效
     const init = () => {
       resize()
-      parts = Array.from({ length: count }, () => ({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        r: 0.6 + Math.random() * 1.8,
-        vx: (Math.random() - 0.5) * 0.25 * speed,
-        vy: (Math.random() - 0.5) * 0.25 * speed,
-        a: 0.15 + Math.random() * 0.5,
-      }))
+      parts = []
+      for (const l of layersCfg) {
+        const n = Math.max(4, Math.min(MAX_PARTICLES, l.count ?? 60))
+        const speed = Math.max(0.1, Math.min(2, l.speed ?? 1))
+        for (let i = 0; i < n && parts.length < total; i++) {
+          parts.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: 0.6 + Math.random() * 1.8,
+            vx: (Math.random() - 0.5) * 0.25 * speed,
+            vy: (Math.random() - 0.5) * 0.25 * speed,
+            a: (0.15 + Math.random() * 0.5) * Math.max(0, Math.min(1, l.intensity)) * 1.4,
+          })
+        }
+      }
     }
 
     let colors = readColors()
@@ -79,7 +90,7 @@ export default function AmbientEffectLayer() {
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
         ctx.fillStyle = Math.random() > 0.75 ? colors.accent : colors.primary
-        ctx.globalAlpha = p.a * 0.5
+        ctx.globalAlpha = p.a
         ctx.fill()
       }
       ctx.globalAlpha = 1
@@ -107,32 +118,40 @@ export default function AmbientEffectLayer() {
       window.removeEventListener('resize', resize)
       document.removeEventListener('visibilitychange', onVis)
     }
-    // customThemes 变化（新增/删除主题）时重读主题色；eff 参数变化时重建
-  }, [eff.particles, eff.particleCount, eff.particleSpeed, eff.ambientIntensity, activeTheme, customThemes])
+  }, [showParticles, activeTheme, customThemes, particleLayers])
 
-  const showParticles = eff.particles
+  // ── 各类型渲染 ──
+  const ambientLayers = layers.filter(l => l.type === 'ambient' && l.intensity > 0)
+  const glowLayers = layers.filter(l => l.type === 'glow' && l.intensity > 0)
+  const streakLayers = layers.filter(l => l.type === 'streak' && l.intensity > 0)
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[5] overflow-hidden" aria-hidden="true">
-      {ambientOn && (
-        <>
-          <div
-            className="ambient-blob ambient-blob-1"
-            style={{ opacity: eff.ambientIntensity * 0.5 }}
-          />
-          <div
-            className="ambient-blob ambient-blob-2"
-            style={{ opacity: eff.ambientIntensity * 0.4 }}
-          />
-          <div
-            className="ambient-blob ambient-blob-3"
-            style={{ opacity: eff.ambientIntensity * 0.3 }}
-          />
-        </>
-      )}
-      {showParticles && (
-        <canvas ref={canvasRef} className="fixed inset-0" />
-      )}
+      {/* 氛围光：每层一组光斑（最多 2 层，性能保护） */}
+      {ambientLayers.slice(0, 2).map((l, i) => (
+        <div key={`ambient-${i}`} style={{ opacity: l.intensity * 0.5 }}>
+          <div className="ambient-blob ambient-blob-1" />
+          <div className="ambient-blob ambient-blob-2" />
+          <div className="ambient-blob ambient-blob-3" />
+        </div>
+      ))}
+      {/* 呼吸光晕：每层一个（最多 2 层） */}
+      {glowLayers.slice(0, 2).map((l, i) => (
+        <div
+          key={`glow-${i}`}
+          className="fx-glow"
+          style={{ opacity: l.intensity * 0.5, animationDuration: `${Math.max(4, 10 / (l.speed ?? 1))}s` }}
+        />
+      ))}
+      {/* 流光：每层一组光带（最多 2 层） */}
+      {streakLayers.slice(0, 2).map((l, i) => (
+        <div
+          key={`streak-${i}`}
+          className="fx-streak"
+          style={{ opacity: l.intensity * 0.6, animationDuration: `${Math.max(8, 22 / (l.speed ?? 1))}s` }}
+        />
+      ))}
+      {showParticles && <canvas ref={canvasRef} className="fixed inset-0" />}
     </div>
   )
 }

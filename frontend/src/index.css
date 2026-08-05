@@ -294,6 +294,50 @@ body {
   .ambient-blob { animation: none; }
 }
 
+/* ── 呼吸光晕（glow）：中心光晕 opacity 呼吸 ─────────────── */
+
+.fx-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80vmax;
+  height: 80vmax;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--primary) 0%, transparent 55%);
+  animation: fx-glow-breathe 10s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@keyframes fx-glow-breathe {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* ── 流光（streak）：斜向柔光带缓慢扫过 ─────────────────── */
+
+.fx-streak {
+  position: absolute;
+  top: -20%;
+  left: -30%;
+  width: 40vmax;
+  height: 140vmax;
+  transform: rotate(18deg);
+  background: linear-gradient(90deg, transparent 0%, var(--primary) 45%, var(--accent) 55%, transparent 100%);
+  animation: fx-streak-sweep 22s linear infinite;
+  will-change: transform;
+}
+
+@keyframes fx-streak-sweep {
+  from { transform: rotate(18deg) translateX(-60vmax); }
+  to   { transform: rotate(18deg) translateX(160vmax); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-glow { animation: none; }
+  .fx-streak { animation: none; }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif;

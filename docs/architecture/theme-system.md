@@ -390,25 +390,58 @@
 
 ## 八、特效系统（随主题保存）
 
-主题 JSON 的 `effects` 字段控制界面特效，与 colors 平级、随主题持久化。**内置主题无特效；自定义主题未写 effects 时默认全关**（向后兼容）。
+主题 JSON 的 `effects` 字段控制界面特效，与 colors 平级、随主题持久化。**内置主题无特效；自定义主题未写 effects 时默认全关**（向后兼容，旧格式 ambient/particles 布尔自动迁移）。
 
-### 支持的字段
+### 层结构（可自由组合）
+
+```json
+"effects": {
+  "layers": [
+    { "type": "ambient", "intensity": 0.35 },
+    { "type": "particles", "intensity": 0.5, "count": 60, "speed": 0.8 },
+    { "type": "streak", "intensity": 0.3, "speed": 1 },
+    { "type": "glow", "intensity": 0.2, "speed": 1.5 }
+  ]
+}
+```
+
+特效 = 层（layer）的数组，可自由组合叠加、同类型多实例（如双色粒子层）、任意顺序。每层：
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
-| `ambient` | boolean | false | 背景氛围光：2-3 个主题色渐变光斑缓慢漂移（CSS transform 动画，GPU 合成） |
-| `ambientIntensity` | number 0-1 | 0.35 | 氛围光强度（透明度） |
-| `particles` | boolean | false | 漂浮粒子层（Canvas 2D） |
-| `particleCount` | number 8-150 | 60 | 粒子数量（上限 150，性能保护） |
-| `particleSpeed` | number 0.1-2 | 1 | 粒子漂移速度倍率 |
+| `type` | string | 必填 | 特效类型：`ambient` / `particles` / `streak` / `glow` |
+| `intensity` | number 0-1 | 0.3 | 强度（透明度/密度） |
+| `count` | number 8-150 | 60 | 仅 particles：粒子数（上限 150/层，全部层合并上限 200） |
+| `speed` | number 0.1-2 | 1 | particles/streak/glow：速度倍率 |
+
+### 类型注册表
+
+| 类型 | 渲染 | 性能 |
+|------|------|------|
+| `ambient` | 氛围光：3 个主题色渐变光斑缓慢漂移（CSS transform 动画） | GPU 合成层 |
+| `particles` | 漂浮粒子（Canvas 2D，多层合并到同一 canvas） | 独立图层，DPR ≤ 1.5，总粒子 ≤ 200 |
+| `streak` | 流光：斜向柔光带缓慢扫过（CSS transform 动画，无 blur） | GPU 合成层 |
+| `glow` | 呼吸光晕：中心光晕 opacity 脉动（CSS 动画） | 只动 opacity |
+
+新增类型 = 渲染层加分支 + `lib/themeEffects.ts` 注册，配置端自动可用。
+
+### 预设 5 套
+
+| 预设 | 层组合 |
+|------|--------|
+| 静谧氛围 | ambient 0.3 |
+| 星夜漫步 | ambient 0.35 + particles 60 @ 0.8 |
+| 极光呼吸 | ambient 0.4 + glow 0.3 |
+| 流光掠影 | streak 0.35 + ambient 0.15 |
+| 萤火夏夜 | particles 100 @ 1.2 + glow 0.2 |
 
 ### 设计约束（性能红线）
 
 - **颜色吃主题 CSS 变量**（`--primary`/`--accent`）：换主题特效自动联动，无需单独配色
-- 光斑只做 transform 动画；粒子 Canvas 独立图层 + DPR ≤ 1.5 + 数量封顶
-- 窗口隐藏自动暂停 rAF；`prefers-reduced-motion` 下光斑静止、粒子不启动
+- 光斑/流光/呼吸只动 transform/opacity；粒子 Canvas 独立图层 + DPR ≤ 1.5 + 数量封顶
+- 窗口隐藏自动暂停 rAF；`prefers-reduced-motion` 下光斑/流光/呼吸静止、粒子不启动
 - `pointer-events-none`，不挡任何交互；特效层 z-index 5，位于内容之下
-- 零依赖（无 three.js/particles.js）
+- 每类层渲染上限 2 个实例（防呆），零依赖（无 three.js/particles.js）
 
 ### 特效开关
 
@@ -454,11 +487,10 @@
     "--contribution-2": "#2a5a3a", "--contribution-3": "#3a7a4a", "--contribution-4": "#4a9a5a"
   },
   "effects": {
-    "ambient": true,
-    "ambientIntensity": 0.45,
-    "particles": true,
-    "particleCount": 80,
-    "particleSpeed": 0.8
+    "layers": [
+      { "type": "ambient", "intensity": 0.45 },
+      { "type": "particles", "intensity": 0.5, "count": 80, "speed": 0.8 }
+    ]
   }
 }
 ```
