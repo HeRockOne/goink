@@ -64,6 +64,8 @@ export default function ThemeConfigTab() {
   const [genMode, setGenMode] = useState<'light' | 'dark'>('dark')
   const [genBg, setGenBg] = useState('#0f1a14')
   const [genPrimary, setGenPrimary] = useState('#5a9a6a')
+  const [genFg, setGenFg] = useState('')
+  const [genVibrancy, setGenVibrancy] = useState(1)
 
   function isActive(name: string) { return theme === `custom:${name}` }
 
@@ -103,11 +105,14 @@ export default function ThemeConfigTab() {
     setError('')
   }
 
-  // 一键生成：主色 → 全套 56 变量（对比度已保证 AA）
+  // 一键生成：主色 → 全套 71 变量（对比度已保证 AA）
   function handleGenerate() {
     setError('')
     setWarnings([])
-    const colors = generateTheme({ name: genName, mode: genMode, background: genBg, primary: genPrimary })
+    const colors = generateTheme({
+      name: genName, mode: genMode, background: genBg, primary: genPrimary,
+      foreground: genFg || undefined, vibrancy: genVibrancy,
+    })
     const data: CustomThemeData = { name: genName, type: genMode, colors }
     const key = `${data.name}__${data.type}`
     const existing = customThemes.find(t => `${t.name}__${t.type}` === key)
@@ -165,6 +170,27 @@ export default function ThemeConfigTab() {
                 className="h-7 w-10 rounded border border-border bg-transparent cursor-pointer" />
               <input value={genPrimary} onChange={e => setGenPrimary(e.target.value)}
                 className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" spellCheck={false} />
+            </div>
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            文字色（可选，留空自动）
+            <div className="flex items-center gap-2">
+              <input type="color" value={genFg || '#000000'} onChange={e => setGenFg(e.target.value)}
+                className="h-7 w-10 rounded border border-border bg-transparent cursor-pointer" />
+              <input value={genFg} onChange={e => setGenFg(e.target.value)} placeholder="自动"
+                className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" spellCheck={false} />
+              {genFg && (
+                <button onClick={() => setGenFg('')} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground">清除</button>
+              )}
+            </div>
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            鲜艳度
+            <div className="flex items-center gap-2">
+              <input type="range" min={0.5} max={1.5} step={0.05} value={genVibrancy}
+                onChange={e => setGenVibrancy(Number(e.target.value))}
+                className="flex-1 accent-[var(--primary)] cursor-pointer" />
+              <span className="w-9 shrink-0 text-right text-xs font-mono text-foreground">{genVibrancy.toFixed(2)}×</span>
             </div>
           </label>
         </div>

@@ -7,6 +7,8 @@ export interface ThemeGenInput {
   mode: 'light' | 'dark'
   background: string // hex
   primary: string // hex
+  foreground?: string // 可选：自定义文字色，留空自动对比色；与背景对比度不足时自动回退
+  vibrancy?: number // 鲜艳度 0.5-1.5，默认 1.0，缩放派生色的饱和度
 }
 
 interface HSL { h: number; s: number; l: number }
@@ -173,15 +175,23 @@ export function checkThemeContrast(colors: Record<string, string>): { bg: string
   return bad
 }
 
-// 一键生成全套主题变量（56 键）。所有 bg/fg 对在生成时修正到 AA。
+// 一键生成全套主题变量（71 键）。所有 bg/fg 对在生成时修正到 AA。
 export function generateTheme(input: ThemeGenInput): Record<string, string> {
-  const { mode, background, primary } = input
+  const { mode, background, primary, foreground, vibrancy = 1 } = input
   const priHsl = hexHsl(primary) ?? { h: 30, s: 50, l: 40 }
   const dark = mode === 'dark'
+  const vib = Math.max(0.3, Math.min(2, vibrancy))
+  // 饱和度缩放（鲜艳度）：面板色保持低饱和，彩色系按比例缩放
+  const sat = (s: number) => Math.max(0, Math.min(100, s * vib))
 
   const bg = background
   const modeStr: 'light' | 'dark' = dark ? 'dark' : 'light'
-  const fg = readableText(bg, modeStr)
+  // 文字色：用户指定且对比度达标则使用，否则自动对比色
+  let fg = readableText(bg, modeStr)
+  if (foreground && foreground.trim() !== '') {
+    const ratio = contrastRatio(foreground, bg)
+    if (ratio !== null && ratio >= 4.5) fg = foreground.trim()
+  }
   const card = surfaceFrom(bg, modeStr, dark ? 4 : 3)
   const popover = surfaceFrom(bg, modeStr, dark ? 7 : 6)
   const secondary = surfaceFrom(bg, modeStr, dark ? 5 : 4)
@@ -195,25 +205,25 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
   const successH = priHsl.h + 90
   const warnH = priHsl.h + 25
   const dangerH = priHsl.h + 155
-  const success = hslHex(successH, dark ? 30 : 45, dark ? 18 : 93)
-  const successFg = hslHex(successH, dark ? 45 : 60, dark ? 75 : 27)
-  const statusWarning = hslHex(warnH, dark ? 55 : 70, dark ? 68 : 38)
-  const statusOk = hslHex(successH, dark ? 45 : 60, dark ? 70 : 34)
-  const destructive = hslHex(dangerH, dark ? 40 : 55, dark ? 40 : 55)
-  const dangerBg = hslHex(dangerH, dark ? 30 : 30, dark ? 12 : 94)
-  const dangerBorder = hslHex(dangerH, dark ? 35 : 45, dark ? 28 : 82)
+  const success = hslHex(successH, sat(dark ? 30 : 45), dark ? 18 : 93)
+  const successFg = hslHex(successH, sat(dark ? 45 : 60), dark ? 75 : 27)
+  const statusWarning = hslHex(warnH, sat(dark ? 55 : 70), dark ? 68 : 38)
+  const statusOk = hslHex(successH, sat(dark ? 45 : 60), dark ? 70 : 34)
+  const destructive = hslHex(dangerH, sat(dark ? 40 : 55), dark ? 40 : 55)
+  const dangerBg = hslHex(dangerH, sat(dark ? 30 : 30), dark ? 12 : 94)
+  const dangerBorder = hslHex(dangerH, sat(dark ? 35 : 45), dark ? 28 : 82)
 
   // tag/tool 六色系：主色相 + 固定偏移，背景淡/深 + 文字对比
   const tags: Record<string, string> = {}
   const tagNames = ['blue', 'green', 'amber', 'rose', 'teal', 'purple']
   for (const name of tagNames) {
     const h = priHsl.h + HUE_OFFSETS[name]
-    const tagBg = hslHex(h, dark ? 35 : 30, dark ? 18 : 93)
+    const tagBg = hslHex(h, sat(dark ? 35 : 30), dark ? 18 : 93)
     const tagFg = readableText(tagBg, modeStr)
     tags[`--tag-${name}`] = tagBg
     tags[`--tag-${name}-foreground`] = tagFg
-    const toolBg = hslHex(h, dark ? 30 : 25, dark ? 17 : 94)
-    const toolBorder = hslHex(h, dark ? 45 : 55, dark ? 52 : 52)
+    const toolBg = hslHex(h, sat(dark ? 30 : 25), dark ? 17 : 94)
+    const toolBorder = hslHex(h, sat(dark ? 45 : 55), dark ? 52 : 52)
     tags[`--tool-${name}`] = toolBg
     tags[`--tool-${name}-border`] = toolBorder
   }
@@ -223,7 +233,7 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
   const contrib: Record<string, string> = {}
   const contribL = dark ? [16, 26, 38, 52, 66] : [74, 62, 50, 38, 28]
   contribL.forEach((l, i) => {
-    contrib[`--contribution-${i}`] = hslHex(contribH, dark ? 40 : 50, l)
+    contrib[`--contribution-${i}`] = hslHex(contribH, sat(dark ? 40 : 50), l)
   })
 
   return {

@@ -66,6 +66,25 @@ describe('themeColors', () => {
     expect(Object.keys(c).length).toBe(71)
   })
 
+  it('自定义文字色：对比度达标时采用', () => {
+    const c = generateTheme({ name: 't', mode: 'dark', background: '#0f1a14', primary: '#5a9a6a', foreground: '#e8f0e8' })
+    expect(c['--foreground']).toBe('#e8f0e8')
+  })
+
+  it('自定义文字色：对比度不足时回退自动色', () => {
+    const c = generateTheme({ name: 't', mode: 'dark', background: '#0f1a14', primary: '#5a9a6a', foreground: '#1a2a1a' })
+    expect(c['--foreground']).not.toBe('#1a2a1a')
+    const ratio = contrastRatio(c['--foreground'], '#0f1a14')
+    expect(ratio !== null && ratio >= 4.5).toBe(true)
+  })
+
+  it('鲜艳度缩放饱和度且不破坏对比度', () => {
+    const c = generateTheme({ name: 't', mode: 'dark', background: '#0f1a14', primary: '#5a9a6a', vibrancy: 1.5 })
+    assertAllPairsAA(c)
+    const muted = generateTheme({ name: 't', mode: 'dark', background: '#0f1a14', primary: '#5a9a6a', vibrancy: 0.5 })
+    assertAllPairsAA(muted)
+  })
+
   it('校验函数能识别不达标对', () => {
     const bad = checkThemeContrast({ '--background': '#ffffff', '--foreground': '#eeeeee' })
     expect(bad.length).toBe(1)
