@@ -46,7 +46,7 @@ export default function ActivityBar({ activeId, onSelect }: Props) {
   }, [collapsed])
 
   return (
-    <nav className={`flex flex-col py-2 border-r bg-sidebar select-none cursor-default transition-all duration-200 ${collapsed ? 'w-12 items-center' : 'w-auto min-w-fit px-2'}`}>
+    <nav className={`flex flex-col py-2 border-r bg-sidebar backdrop-blur-md select-none cursor-default transition-all duration-200 ${collapsed ? 'w-12 items-center' : 'w-auto min-w-fit px-2'}`}>
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center justify-center w-full h-8 text-muted-foreground hover:text-foreground mb-1"

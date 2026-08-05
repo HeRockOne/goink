@@ -64,7 +64,7 @@ export default function NovelList({
             key={n.id}
             onClick={() => onSelectNovel(n)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors relative
-              ${n.id === novelId ? 'bg-primary/10 text-foreground' : ''}`}
+              ${n.id === novelId ? 'bg-primary/10 text-foreground glow-primary' : ''}`}
           >
             {n.id === novelId && (
               <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />

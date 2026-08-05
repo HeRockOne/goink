@@ -164,7 +164,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
       <button
         onClick={onSelectGoink}
         className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50
-          ${target?.path === 'goink.md' ? 'bg-primary/10 font-medium' : ''}`}
+          ${target?.path === 'goink.md' ? 'bg-primary/10 font-medium glow-primary' : ''}`}
       >
         {target?.path === 'goink.md' && (
           <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
@@ -176,7 +176,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
       <button
         onClick={onSelectBookOutline}
         className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50
-          ${target?.path === 'book-outline.md' ? 'bg-primary/10 font-medium' : ''}`}
+          ${target?.path === 'book-outline.md' ? 'bg-primary/10 font-medium glow-primary' : ''}`}
       >
         {target?.path === 'book-outline.md' && (
           <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
@@ -231,7 +231,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                         <button
                           onClick={() => onSelectChapter(ch)}
                           className={`flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0
-                            ${target?.path === ch.file_path ? 'bg-primary/10 font-medium' : ''}`}
+                            ${target?.path === ch.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
                         >
                           {target?.path === ch.file_path && (
                             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />

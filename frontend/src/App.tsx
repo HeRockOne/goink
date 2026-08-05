@@ -39,7 +39,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen text-foreground">
+      {/* 太虚背景层：渐变 + 纹理 + 山峦（在内容之下） */}
+      <div className="bg-layer" aria-hidden="true" />
       <Toaster position="top-center" richColors toastOptions={{ actionButtonStyle: { backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none', padding: '2px 10px', borderRadius: '4px', fontSize: '12px' } }} />
       <AmbientEffectLayer />
       {view === 'init' && (

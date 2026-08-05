@@ -337,14 +337,14 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const closeBtn = 'w-12 h-full flex items-center justify-center cursor-pointer text-foreground/80 hover:text-destructive-foreground hover:bg-destructive transition-colors'
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden relative z-[2]">
       <header
-        className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default relative"
+        className="h-11 flex items-center border-b bg-sidebar backdrop-blur-md shrink-0 select-none cursor-default relative"
         style={{ '--wails-draggable': 'drag', zIndex: 60 } as React.CSSProperties}
         onDoubleClick={() => { WindowToggleMaximise(); setIsMaximised(prev => !prev) }}
       >
         <Logo className="h-7 w-7 ml-3" />
-        <span className="text-sm font-medium pl-2 flex-1">
+        <span className="text-sm font-medium pl-2 flex-1 glow-primary">
           {activeNovel?.title ?? 'Goink'}
           {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">📖 动态叙事已展开</span>}
         </span>

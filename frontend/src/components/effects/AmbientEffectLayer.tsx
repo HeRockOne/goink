@@ -38,7 +38,7 @@ export default function AmbientEffectLayer() {
     let raf = 0
     let running = true
 
-    type P = { x: number; y: number; r: number; vx: number; vy: number; a: number }
+    type P = { x: number; y: number; r: number; vx: number; vy: number; a: number; isLine: boolean }
     let parts: P[] = []
 
     const resize = () => {
@@ -53,7 +53,11 @@ export default function AmbientEffectLayer() {
 
     const readColors = () => {
       const cs = getComputedStyle(document.documentElement)
-      return { primary: cs.getPropertyValue('--primary').trim() || '#888888', accent: cs.getPropertyValue('--accent').trim() || '#888888' }
+      return {
+        primary: cs.getPropertyValue('--particle-color').trim() || 'rgba(161,196,214,0.5)',
+        glow: cs.getPropertyValue('--particle-glow').trim() || 'rgba(161,196,214,0.16)',
+        line: cs.getPropertyValue('--particle-line').trim() || 'rgba(161,196,214,0.18)',
+      }
     }
 
     // 按层权重分配粒子，让每一层的 count/speed 生效
@@ -68,9 +72,11 @@ export default function AmbientEffectLayer() {
             x: Math.random() * w,
             y: Math.random() * h,
             r: 0.6 + Math.random() * 1.8,
-            vx: (Math.random() - 0.5) * 0.25 * speed,
-            vy: (Math.random() - 0.5) * 0.25 * speed,
+            // 上升漂移：垂直速度偏向负（向上升），水平微漂移
+            vx: (Math.random() - 0.5) * 0.18 * speed,
+            vy: -((0.1 + Math.random() * 0.25) * speed),
             a: (0.15 + Math.random() * 0.5) * Math.max(0, Math.min(1, l.intensity)) * 1.4,
+            isLine: Math.random() > 0.55, // 剑形线段形态
           })
         }
       }
@@ -83,15 +89,51 @@ export default function AmbientEffectLayer() {
       for (const p of parts) {
         p.x += p.vx
         p.y += p.vy
-        if (p.x < -4) p.x = w + 4
-        if (p.x > w + 4) p.x = -4
-        if (p.y < -4) p.y = h + 4
-        if (p.y > h + 4) p.y = -4
+        if (p.y < -20) { p.y = h + 20; p.x = Math.random() * w }
+        if (p.x < -20) p.x = w + 20
+        if (p.x > w + 20) p.x = -20
+        // 发光：先画大半径低透明度光晕，再画实心（比 shadowBlur 便宜）
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2)
+        ctx.fillStyle = colors.glow
+        ctx.globalAlpha = p.a * 0.5
+        ctx.fill()
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = Math.random() > 0.75 ? colors.accent : colors.primary
+        ctx.fillStyle = colors.primary
         ctx.globalAlpha = p.a
         ctx.fill()
+        // 剑形线段：沿速度方向画的短线
+        if (p.isLine) {
+          const ang = Math.atan2(p.vy, p.vx)
+          const len = p.r * 4
+          ctx.strokeStyle = colors.line
+          ctx.lineWidth = 0.7
+          ctx.globalAlpha = p.a * 0.8
+          ctx.beginPath()
+          ctx.moveTo(p.x - Math.cos(ang) * len, p.y - Math.sin(ang) * len)
+          ctx.lineTo(p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len)
+          ctx.stroke()
+        }
+      }
+      ctx.globalAlpha = 1
+      // 粒子间连接线：距离 < 120 连线，透明度随距离衰减
+      const LINE_DIST = 120
+      for (let i = 0; i < parts.length; i++) {
+        for (let j = i + 1; j < parts.length; j++) {
+          const dx = parts[i].x - parts[j].x
+          const dy = parts[i].y - parts[j].y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < LINE_DIST) {
+            ctx.globalAlpha = (1 - dist / LINE_DIST) * 0.06
+            ctx.strokeStyle = colors.line
+            ctx.lineWidth = 0.4
+            ctx.beginPath()
+            ctx.moveTo(parts[i].x, parts[i].y)
+            ctx.lineTo(parts[j].x, parts[j].y)
+            ctx.stroke()
+          }
+        }
       }
       ctx.globalAlpha = 1
       raf = requestAnimationFrame(frame)
