@@ -209,8 +209,12 @@ func (c *Client) buildPayload(
 	return payload
 }
 
-// streamIdleTimeout 流式响应无新数据判定为半开连接的阈值。
-const streamIdleTimeout = 60 * time.Second
+// streamIdleTimeout 流中无新数据判定为半开连接的阈值。
+// 注意：本地 Ollama 长上下文推理首 token 可能耗时 1-2 分钟，首行宽限用 streamFirstLineTimeout。
+const (
+	streamIdleTimeout      = 120 * time.Second
+	streamFirstLineTimeout = 300 * time.Second
+)
 
 // errStreamIdle 流式响应停滞错误（读取超时）。
 var errStreamIdle = fmt.Errorf("stream idle timeout")
@@ -224,7 +228,7 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		err  error
 	}, 1)
 
-	idleTimer := time.NewTimer(streamIdleTimeout)
+	idleTimer := time.NewTimer(streamFirstLineTimeout)
 	defer idleTimer.Stop()
 
 	// readLine 每次启动一个读 goroutine（阻塞在 ReadBytes 上），
@@ -253,14 +257,19 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	}
 	accumulated := make([]accToolCall, 0, 4)
 	hasContent := false // 追踪是否产出了有效事件
+	streamStarted := false
 
 	for {
 		line, err := readLine()
 		if err != nil {
 			if err == errStreamIdle {
+				timeoutSec := int(streamIdleTimeout.Seconds())
+				if !streamStarted {
+					timeoutSec = int(streamFirstLineTimeout.Seconds())
+				}
 				ch <- StreamEvent{Type: EventError, Error: &APIError{
 					StatusCode: 0,
-					Message:    "流式响应停滞（60s 无数据），连接可能半开",
+					Message:    fmt.Sprintf("流式响应停滞（%ds 无数据），连接可能半开", timeoutSec),
 					Retryable:  true,
 				}}
 			} else if err != io.EOF {
@@ -272,7 +281,9 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 			}
 			break
 		}
+		// 每次成功读行都重置 idle 计时；首行宽限期（streamFirstLineTimeout）过后统一收窄到流中阈值
 		idleTimer.Reset(streamIdleTimeout)
+		streamStarted = true
 
 		lineStr := strings.TrimSpace(string(line))
 		if lineStr == "" {

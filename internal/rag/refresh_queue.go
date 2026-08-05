@@ -276,6 +276,8 @@ func (q *RefreshQueue) cleanupAfterRebuildFail(ctx context.Context, novelID int6
 }
 
 // RebuildAll 遍历全部小说，对尚无向量索引的小说执行首次全量重建。
+// 存量检测：向量表有数据但 FTS5 表缺失/为空（老库升级到 FTS5 前索引的章节）时也触发重建，
+// 否则老章节永远进不了全文索引，关键词检索对存量数据形同虚设。
 func (q *RefreshQueue) RebuildAll(ctx context.Context) error {
 	var novels []novel.Novel
 	if err := q.novelStore.DB.WithContext(ctx).Find(&novels).Error; err != nil {
@@ -288,16 +290,28 @@ func (q *RefreshQueue) RebuildAll(ctx context.Context) error {
 			q.logger.Warn("检查向量行数失败，跳过", "novel_id", n.ID, "err", err)
 			continue
 		}
-		if count > 0 {
-			q.logger.Info("向量已存在，跳过重建", "novel_id", n.ID, "count", count)
+		if count == 0 {
+			q.logger.Info("开始首次向量索引", "novel_id", n.ID, "title", n.Title)
+			if err := q.RebuildNovel(ctx, n.ID); err != nil {
+				q.logger.Error("小说向量重建失败", "novel_id", n.ID, "err", err)
+				continue
+			}
 			continue
 		}
-
-		q.logger.Info("开始首次向量索引", "novel_id", n.ID, "title", n.Title)
-		if err := q.RebuildNovel(ctx, n.ID); err != nil {
-			q.logger.Error("小说向量重建失败", "novel_id", n.ID, "err", err)
+		// 向量已有但 FTS5 缺失/为空：老库升级，重建补齐全文索引
+		ftsCount, err := q.vs.FtsCount(ctx, n.ID)
+		if err != nil {
+			q.logger.Warn("检查 FTS 行数失败，跳过", "novel_id", n.ID, "err", err)
 			continue
+		}
+		if ftsCount == 0 {
+			q.logger.Info("检测到 FTS5 全文索引缺失，重建补齐", "novel_id", n.ID, "title", n.Title)
+			if err := q.RebuildNovel(ctx, n.ID); err != nil {
+				q.logger.Error("小说向量重建失败", "novel_id", n.ID, "err", err)
+				continue
+			}
 		}
 	}
+
 	return nil
 }
