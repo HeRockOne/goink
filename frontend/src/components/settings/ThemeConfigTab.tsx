@@ -175,7 +175,7 @@ export default function ThemeConfigTab() {
       </div>
 
       {customThemes.length > 0 && (
-        <div className="mb-3 space-y-1">
+        <div className="mb-3 space-y-1 max-h-[168px] overflow-y-auto pr-1 shrink-0">
           <div className="text-xs font-medium text-muted-foreground">已保存的主题</div>
           {customThemes.map(ct => (
             <div key={`${ct.name}__${ct.type}`}

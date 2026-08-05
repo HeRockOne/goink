@@ -54,8 +54,8 @@ export default function SettingsDialog({ open, onClose, onSaved, initialTab = 'm
           ))}
         </nav>
 
-        {/* 右侧内容区 */}
-        <div className="flex-1 p-5 flex flex-col min-w-0">
+        {/* 右侧内容区：min-h-0 + overflow-y-auto 保证子项内容超出时在弹窗内滚动，不溢出 */}
+        <div className="flex-1 p-5 flex flex-col min-w-0 min-h-0 overflow-y-auto">
           {/* 关闭按钮 */}
           <button
             onClick={onClose}
