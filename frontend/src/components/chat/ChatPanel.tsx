@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Loader2, History, Plus, ArrowDown } from 'lucide-react'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
@@ -15,7 +15,6 @@ import WebSearchCard from './WebSearchCard'
 import WebFetchCard from './WebFetchCard'
 import SubagentCard from './SubagentCard'
 import CompressionBlock from './CompressionBlock'
-import PhaseGateBar from './PhaseGateBar'
 import RetryNotification from './RetryNotification'
 import type { UsageInfo } from './ContextRing'
 import SettingsDialog from '@/components/settings/SettingsDialog'
@@ -33,6 +32,7 @@ interface Props {
   chatPanelWidth: number
   onChatPanelResize: (w: number) => void
   onPhaseGate?: (s: import('./types').PhaseStatus) => void
+  onUsage?: (u: UsageInfo | null) => void
 }
 const EVENT_REORDER_TIMEOUT = 120
 
@@ -47,7 +47,11 @@ interface ChatStartedEvent {
   turn_id: number
 }
 
-export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate }: Props) {
+export interface ChatPanelHandle {
+  compress: () => void
+}
+
+export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage }: Props, ref) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -70,8 +74,6 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   const [reasoningEffort, setReasoningEffort] = useState('')
   const [approvalMode, setApprovalMode] = useState<'manual' | 'auto'>('manual')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
-  const [lastUsage, setLastUsage] = useState<UsageInfo | null>(null)
-  const [isCompressing, setIsCompressing] = useState(false)
   const compressingRef = useRef(false)
   const activeCountRef = useRef(0)
   const [showSettings, setShowSettings] = useState(false)
@@ -86,8 +88,6 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   const [historyLoadError, setHistoryLoadError] = useState(false)
   const [historyLoadRetry, setHistoryLoadRetry] = useState(0)
   const [slashCommands, setSlashCommands] = useState<app.SlashCommand[]>([])
-  const [phaseGateStatus, setPhaseGateStatus] = useState<import('./types').PhaseStatus | null>(null)
-  const [phaseGateError, setPhaseGateError] = useState<string>('')
   const [retryInfo, setRetryInfo] = useState<{ count: number; max: number; wait: number } | null>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -407,19 +407,17 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       if (detail) {
         setSessionTitle(detail.title || '')
         if (detail.usage) {
-          setLastUsage(detail.usage as unknown as UsageInfo)
-        } else {
-          setLastUsage(null)
+          onUsage?.(detail.usage as unknown as UsageInfo)
         }
       }
-    }).catch(() => setLastUsage(null))
-  }, [app])
+    }).catch(() => {})
+  }, [app, onUsage])
 
   const handleNewChat = useCallback(() => {
     setActiveSessionId(null)
     setTurns([])
     setSessionId('')
-    setLastUsage(null)
+    onUsage?.(null)
     app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
       if (r) { setSessions(r.items); setSessionsTotal(r.total) }
     }).catch((err) => {
@@ -455,7 +453,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     switch (event.type) {
       case AgentEventType.Usage: {
         if (event.usage) {
-          setLastUsage(event.usage as unknown as UsageInfo)
+          onUsage?.(event.usage as unknown as UsageInfo)
         }
         return
       }
@@ -541,8 +539,6 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       }
       case AgentEventType.PhaseGate: {
         if (event.phase_gate) {
-          setPhaseGateStatus(event.phase_gate)
-          setPhaseGateError(event.error || '')
           onPhaseGate?.(event.phase_gate)
         }
         return
@@ -926,7 +922,6 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     if (!providerName || !modelID) return
 
     compressingRef.current = true
-    setIsCompressing(true)
     // 创建压缩中 turn（用于动画展示）
     const compTurnId = `comp_${++counterRef.current}`
     const compressingTurn: Turn = {
@@ -964,10 +959,13 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       // 压缩失败，移除 compressing turn
       setTurns(prev => prev.filter(t => t.id !== compTurnId))
     } finally {
-      setIsCompressing(false)
       compressingRef.current = false
     }
   }, [sessionId, selectedKey, app])
+
+  useImperativeHandle(ref, () => ({
+    compress: () => { void handleCompress() },
+  }), [handleCompress])
 
   const handleSend = useCallback(async (content: string) => {
     if (!selectedKey) return
@@ -1138,10 +1136,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         />
       </div>
 
-      <PhaseGateBar status={phaseGateStatus} error={phaseGateError} />
-
-      {retryInfo && (
-        <RetryNotification
+      {retryInfo && (        <RetryNotification
           retryCount={retryInfo.count}
           retryMax={retryInfo.max}
           retryWait={retryInfo.wait}
@@ -1387,10 +1382,6 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         approvalMode={approvalMode}
         onToggleApproval={handleToggleApproval}
         onConfigModel={handleConfigModel}
-        usage={lastUsage}
-        onCompress={handleCompress}
-        isTurnRunning={isLoading}
-        isCompressing={isCompressing}
       />
 
       {isDragging && (
@@ -1417,4 +1408,4 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       />
     </aside>
   )
-}
+})

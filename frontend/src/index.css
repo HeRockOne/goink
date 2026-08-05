@@ -117,6 +117,8 @@
   --editor-statusbar: #f7fafd;
   --bubble-ai: rgba(238, 243, 248, 0.9);
   --bubble-ai-border: rgba(107, 143, 173, 0.3);
+  --editor-shadow: 0 20px 60px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
+  --panel-shadow: 0 4px 20px rgba(13, 26, 38, 0.06);
 }
 
 /* ── 深色主题：太虚夜色（深蓝黑 + 剑宗青） ────────────────── */
@@ -218,6 +220,8 @@
   --editor-statusbar: #0e1522;
   --bubble-ai: rgba(161, 196, 214, 0.08);
   --bubble-ai-border: rgba(161, 196, 214, 0.28);
+  --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 8px 40px rgba(0, 0, 0, 0.35);
+  --panel-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 }
 
 /* ── 自定义主题兜底派生（永不撞色） ────────────────────── */
@@ -333,6 +337,7 @@ h1, h2, h3, .font-display {
 .side-panel,
 .chat-panel {
   position: relative;
+  box-shadow: var(--panel-shadow);
 }
 .side-panel::before,
 .chat-panel::before {
@@ -346,6 +351,11 @@ h1, h2, h3, .font-display {
   opacity: 0.55;
   pointer-events: none;
   z-index: 5;
+}
+
+/* 编辑器纸面：浮起的投影层次（浅色明显/深色微） */
+.content-panel {
+  box-shadow: var(--editor-shadow);
 }
 
 /* ActivityBar：激活项发光圆 + 发光指示条 */
@@ -434,7 +444,7 @@ h1, h2, h3, .font-display {
 
 /* 激活/选中态发光（配合 --glow token） */
 .glow-primary {
-  text-shadow: 0 0 20px var(--glow), 0 0 40px var(--glow);
+  text-shadow: 0 0 6px var(--glow-strong), 0 0 20px var(--glow), 0 0 40px var(--glow);
 }
 .glow-border {
   border-color: var(--ring) !important;

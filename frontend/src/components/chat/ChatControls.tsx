@@ -2,8 +2,6 @@ import type { llm } from '@/hooks/useApp'
 import { useTranslation } from 'react-i18next'
 import { Brain } from 'lucide-react'
 import PopSelect from './PopSelect'
-import ContextRing from './ContextRing'
-import type { UsageInfo } from './ContextRing'
 
 interface Props {
   models: llm.AvailableModel[]
@@ -17,10 +15,6 @@ interface Props {
   approvalMode: 'manual' | 'auto'
   onToggleApproval: () => void
   onConfigModel: () => void
-  usage: UsageInfo | null
-  onCompress?: () => void
-  isTurnRunning?: boolean
-  isCompressing?: boolean
 }
 
 export default function ChatControls({
@@ -35,18 +29,10 @@ export default function ChatControls({
   approvalMode,
   onToggleApproval,
   onConfigModel,
-  usage,
-  onCompress,
-  isTurnRunning,
-  isCompressing,
 }: Props) {
   const { t } = useTranslation()
   const selected = models.find(m => m.Key === selectedKey)
   const supportsThinking = selected?.SupportsThinking ?? false
-  const splitModelKey = (key: string): string => {
-    const idx = key.indexOf('/')
-    return idx >= 0 ? key.substring(idx + 1) : key
-  }
 
   const modelOptions = models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName }))
   const levels = selected?.ReasoningLevels?.length
@@ -109,8 +95,6 @@ export default function ChatControls({
       >
         {t('chat.auto')}
       </button>
-
-      <ContextRing usage={usage} selectedModel={splitModelKey(selectedKey)} onCompress={onCompress} isTurnRunning={isTurnRunning} isCompressing={isCompressing} />
     </div>
   )
 }

@@ -104,9 +104,10 @@ interface Props {
   onCompress?: () => void
   isTurnRunning?: boolean
   isCompressing?: boolean
+  bar?: boolean // 条状统计条（状态栏模式），默认圆环
 }
 
-export default function ContextRing({ usage, selectedModel, onCompress, isTurnRunning, isCompressing }: Props) {
+export default function ContextRing({ usage, selectedModel, onCompress, isTurnRunning, isCompressing, bar }: Props) {
   const { t } = useTranslation()
   const [showPopover, setShowPopover] = useState(false)
   const [threshold, setThreshold] = useState(70)
@@ -158,26 +159,42 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
 
   return (
     <span
-      className="relative inline-flex items-center justify-center cursor-pointer shrink-0 select-none"
+      className={`relative inline-flex items-center justify-center cursor-pointer shrink-0 select-none ${bar ? 'gap-1.5' : ''}`}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
     >
-      <svg width={44} height={44} viewBox="0 0 44 44">
-        <circle cx={22} cy={22} r={r} fill="none" stroke="rgb(0 0 0 / 0.12)" strokeWidth={3} />
-        <circle
-          cx={22} cy={22} r={r} fill="none"
-          stroke={color}
-          strokeWidth={3}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 22 22)"
-          style={{ transition: 'stroke-dashoffset 0.4s ease, stroke 0.4s ease' }}
-        />
-      </svg>
-      <span className="absolute text-[11px] font-semibold tabular-nums pointer-events-none" style={{ color }}>
-        {ratio.toFixed(0)}%
-      </span>
+      {bar ? (
+        <>
+          <span className="w-28 h-1.5 rounded-sm bg-muted overflow-hidden">
+            <span
+              className="h-full rounded-sm block transition-all duration-400"
+              style={{ width: `${ratio}%`, backgroundColor: color }}
+            />
+          </span>
+          <span className="text-[10px] font-semibold tabular-nums" style={{ color }}>
+            {ratio.toFixed(0)}%
+          </span>
+        </>
+      ) : (
+        <>
+          <svg width={44} height={44} viewBox="0 0 44 44">
+            <circle cx={22} cy={22} r={r} fill="none" stroke="rgb(0 0 0 / 0.12)" strokeWidth={3} />
+            <circle
+              cx={22} cy={22} r={r} fill="none"
+              stroke={color}
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              transform="rotate(-90 22 22)"
+              style={{ transition: 'stroke-dashoffset 0.4s ease, stroke 0.4s ease' }}
+            />
+          </svg>
+          <span className="absolute text-[11px] font-semibold tabular-nums pointer-events-none" style={{ color }}>
+            {ratio.toFixed(0)}%
+          </span>
+        </>
+      )}
 
       {showPopover && (
         <div className="absolute bottom-full right-0 mb-2 z-50 flex flex-col gap-2.5 bg-background text-foreground rounded-xl p-3 min-w-[280px] shadow-lg border">

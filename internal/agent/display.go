@@ -311,7 +311,15 @@ func (a *Agent) lookupChapterBrief(novelID int64, chapterNumber int) string {
 	if err != nil || row.Title == "" {
 		return fmt.Sprintf("第%d章", chapterNumber)
 	}
-	return fmt.Sprintf("第%d章 %s", chapterNumber, row.Title)
+	// 标题常自带"第N章"前缀（DB 里存的就是完整标题），去掉避免与格式串重复声明
+	title := row.Title
+	prefix := fmt.Sprintf("第%d章", chapterNumber)
+	title = strings.TrimPrefix(title, prefix)
+	title = strings.TrimSpace(strings.TrimPrefix(title, "　"))
+	if title == "" {
+		return fmt.Sprintf("第%d章", chapterNumber)
+	}
+	return fmt.Sprintf("第%d章 %s", chapterNumber, title)
 }
 
 func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {

@@ -38,6 +38,7 @@ import { CheckUpdate } from '@/lib/wailsjs/go/app/App'
 import { Settings, User, HelpCircle, Moon, Sun } from 'lucide-react'
 import { WindowMinimise, WindowToggleMaximise, Quit } from '@/lib/wailsjs/runtime/runtime'
 import Logo from '@/components/Logo'
+import HeaderSlogan from '@/components/shell/HeaderSlogan'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useLayoutState } from '@/hooks/useLayoutState'
 import { useWindowState } from '@/hooks/useWindowState'
@@ -91,6 +92,19 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [activeChapterNum, setActiveChapterNum] = useState(0)
   // 门禁状态（左下角阶段条）
   const [gateStatus, setGateStatus] = useState<import('@/components/chat/types').PhaseStatus | null>(null)
+  // token 用量（状态栏条状统计）
+  const [tokenUsage, setTokenUsage] = useState<import('@/components/chat/ContextRing').UsageInfo | null>(null)
+  const chatPanelRef = useRef<import('@/components/chat/ChatPanel').ChatPanelHandle | null>(null)
+  // 当前卷名（顶部栏"小说名 · 卷名"）
+  const [currentVolume, setCurrentVolume] = useState('')
+  useEffect(() => {
+    if (!activeNovelId) return
+    let cancelled = false
+    app.GetWritingContext(activeNovelId, activeChapterNum || 0).then(ctx => {
+      if (!cancelled) setCurrentVolume(ctx?.volume?.name ?? '')
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [app, activeNovelId, activeChapterNum])
 
   // ── 更新检查 ────────────────────────────────────────────
   const [showUpdate, setShowUpdate] = useState(false)
@@ -348,11 +362,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         <Logo className="h-7 w-7 ml-3" />
         <span className="text-sm font-medium pl-2 glow-primary flex-1" style={{ letterSpacing: '0.15em' }}>
           {activeNovel?.title ?? 'Goink'}
+          {currentVolume && <span className="text-xs text-muted-foreground/80 font-normal" style={{ letterSpacing: '0.1em' }}> · {currentVolume}</span>}
           {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">📖 动态叙事已展开</span>}
         </span>
 
-        {/* v2 装饰标语 */}
-        <span className="header-slogan mr-3">⚔ 万剑归宗 · 剑气极盛</span>
+        {/* v2 装饰标语（双击可自定义） */}
+        <HeaderSlogan />
 
         <div className="flex items-center h-full" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
           <button
@@ -537,12 +552,13 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           </div>
         )}
 
-        {activePanel !== 'profile' && (
-          <ChatPanel novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} />
-        )}
+        {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
+        <div className={activePanel === 'profile' ? 'hidden shrink-0' : 'shrink-0'} style={{ width: activePanel === 'profile' ? undefined : chatPanelWidth }}>
+          <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} />
+        </div>
       </div>
 
-      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} />
+      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} onCompress={() => chatPanelRef.current?.compress()} />
 
       <SettingsDialog
         open={showSettings}

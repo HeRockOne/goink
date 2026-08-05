@@ -43,7 +43,7 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
         <div
   className={`rounded-xl px-3.5 py-3 break-words ${
     role === 'user'
-      ? 'bg-bubble-user text-bubble-user-foreground rounded-br-sm'
+      ? 'bubble-ai rounded-br-sm'
       : 'bubble-ai rounded-bl-sm shadow-xs'
   }`}
         >

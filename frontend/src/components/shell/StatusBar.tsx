@@ -1,11 +1,14 @@
 import { useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PhaseStatus } from '@/components/chat/types'
+import ContextRing, { type UsageInfo } from '@/components/chat/ContextRing'
 
 interface Props {
   content: string
   isDirty?: boolean
   gateStatus?: PhaseStatus | null
+  usage?: UsageInfo | null
+  onCompress?: () => void
 }
 
 // v2 左下角门禁阶段序列
@@ -65,7 +68,7 @@ function computeStats(text: string): DetailedStats {
   }
 }
 
-export default function StatusBar({ content, isDirty, gateStatus }: Props) {
+export default function StatusBar({ content, isDirty, gateStatus, usage, onCompress }: Props) {
   const { t } = useTranslation()
   const stats = useMemo(() => computeStats(content), [content])
   const [showDetail, setShowDetail] = useState(false)
@@ -84,20 +87,8 @@ export default function StatusBar({ content, isDirty, gateStatus }: Props) {
 
   return (
     <div className="relative h-7 flex items-center justify-between px-4 border-t bg-sidebar backdrop-blur-md text-xs text-muted-foreground select-none">
-      <div className="flex items-center gap-4 min-w-0">
-        {/* v2 门禁阶段条（左下角） */}
-        {gateStatus?.phase && (
-          <span className="gate-steps">
-            {GATE_STEPS.map((p, i) => (
-              <span key={p} className="flex items-center gap-0.3">
-                {i > 0 && <span className="gate-step-sep">·</span>}
-                <span className={`gate-step ${i < currentIdx ? 'past' : i === currentIdx ? 'current' : ''}`}>
-                  {GATE_LABELS[p] || p}
-                </span>
-              </span>
-            ))}
-          </span>
-        )}
+      {/* 左区：字数 / 行数 */}
+      <div className="flex items-center gap-4 min-w-0 shrink-0">
         <span
           className="cursor-default"
           onMouseEnter={handleMouseEnter}
@@ -106,6 +97,22 @@ export default function StatusBar({ content, isDirty, gateStatus }: Props) {
           {t('shell.wordCount')} {stats.wordCount}
         </span>
         <span>{t('shell.lineCount')} {stats.lineCount}</span>
+      </div>
+
+      {/* 中区：门禁阶段条（v2 居中） */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
+        {gateStatus?.phase && (
+          <span className="gate-steps">
+            {GATE_STEPS.map((p, i) => (
+              <span key={p} className="flex items-center">
+                {i > 0 && <span className="gate-step-sep">·</span>}
+                <span className={`gate-step ${i < currentIdx ? 'past' : i === currentIdx ? 'current' : ''}`}>
+                  {GATE_LABELS[p] || p}
+                </span>
+              </span>
+            ))}
+          </span>
+        )}
       </div>
 
       {showDetail && (
@@ -148,9 +155,13 @@ export default function StatusBar({ content, isDirty, gateStatus }: Props) {
         </div>
       )}
 
-      <span className="flex items-center gap-1">
-        <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
-        {isDirty ? t('shell.unsaved') : t('shell.saved')}
+      <span className="flex items-center gap-2 shrink-0">
+        <span className="flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
+          {isDirty ? t('shell.unsaved') : t('shell.saved')}
+        </span>
+        {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
+        <ContextRing usage={usage ?? null} onCompress={onCompress} bar />
       </span>
     </div>
   )
