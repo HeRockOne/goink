@@ -92,7 +92,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	// 时间线
 	if tl, err := s.tlStore.SearchByNovel(ctx, novelID, query, EntityLimit); err == nil {
 		for _, e := range tl {
-			results = append(results, Result{Type: "timeline", ID: e.ID, Title: e.Title, Subtitle: e.Category, ChapterNum: e.TargetChapter, PanelID: "timeline"})
+			results = append(results, Result{Type: "timeline", ID: e.ID, Title: e.Title, Subtitle: timelineCategoryLabel(e.Category), ChapterNum: e.TargetChapter, PanelID: "timeline"})
 		}
 	}
 	// 弧线
@@ -131,6 +131,27 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 	return results
 }
 
+// timelineCategoryLabel 时间线分类的中文显示名。
+func timelineCategoryLabel(category string) string {
+	switch category {
+	case "foreshadowing":
+		return "伏笔"
+	case "user_directive":
+		return "用户指令"
+	}
+	return category
+}
+
+// buildContext 以 matchRunePos 为中心截取上下文窗口，返回 (prefix, hit, suffix)。
+// 窗口半径 ContextRadius 字符；命中在开头/结尾时不补省略号（由前端自行处理）。
+func buildContext(content string, matchRunePos int, query string) (prefix, hit, suffix string) {
+	runes := []rune(content)
+	hit = query
+	prefix = runeSlice(runes, matchRunePos-ContextRadius, ContextRadius)
+	suffix = runeSlice(runes, matchRunePos+len([]rune(query)), ContextRadius)
+	return prefix, hit, suffix
+}
+
 // searchCache 在写入缓存中做关键词匹配（向量未就绪时的降级源）。
 func (s *Service) searchCache(novelID int64, query string) []Result {
 	s.mu.RLock()
@@ -143,7 +164,6 @@ func (s *Service) searchCache(novelID int64, query string) []Result {
 	var out []Result
 	for num, content := range chaps {
 		bytePos := 0
-		runes := []rune(content)
 		for {
 			idx := strings.Index(content[bytePos:], query)
 			if idx < 0 {
@@ -151,14 +171,13 @@ func (s *Service) searchCache(novelID int64, query string) []Result {
 			}
 			absByte := bytePos + idx
 			pos := utf8.RuneCountInString(content[:absByte])
-			prefix := runeSlice(runes, pos-ContextRadius, ContextRadius)
-			suffix := runeSlice(runes, pos+len(qRunes), ContextRadius)
+			prefix, hit, suffix := buildContext(content, pos, query)
 			out = append(out, Result{
 				Type:          "content",
 				Title:         fmt.Sprintf("第 %d 章", num),
 				ChapterNum:    num,
 				MatchPrefix:   prefix,
-				MatchHit:      query,
+				MatchHit:      hit,
 				MatchSuffix:   suffix,
 				MatchPosition: pos,
 				MatchLen:      len(qRunes),

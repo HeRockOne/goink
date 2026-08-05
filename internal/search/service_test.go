@@ -15,7 +15,9 @@ import (
 
 	"novel/internal/chapter"
 	"novel/internal/character"
+	"novel/internal/item"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
@@ -39,6 +41,8 @@ func openSearchDB(t *testing.T) *gorm.DB {
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},
 		&chapter.Chapter{},
+		&item.Item{},
+		&lore.LoreEntry{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -55,6 +59,8 @@ func newTestService(db *gorm.DB) *Service {
 		logger,
 		character.NewStore(db, logger),
 		location.NewStore(db, logger),
+		lore.NewStore(db, logger),
+		item.NewStore(db, logger),
 		timeline.NewStore(db, logger),
 		storyarc.NewStore(db, logger),
 		chapter.NewStore(db, logger),
@@ -237,7 +243,7 @@ func TestSearchRAG_NilVectorStore(t *testing.T) {
 	svc := newTestService(db)
 	ctx := context.Background()
 
-	results := svc.searchRAG(ctx, 1, "测试")
+	results := svc.searchContent(ctx, 1, "测试")
 	if results != nil {
 		t.Errorf("expected nil results when vectorStore is nil, got %d", len(results))
 	}
@@ -489,8 +495,8 @@ func TestSearchRAG_EmptyResults(t *testing.T) {
 	svc := newTestService(db)
 	ctx := context.Background()
 
-	// vectorStore 为 nil 时返回 nil
-	results := svc.searchRAG(ctx, 999, "查询")
+	// vectorStore 为 nil 且无缓存内容时返回空
+	results := svc.searchContent(ctx, 999, "查询")
 	if results != nil {
 		t.Errorf("expected nil, got %d results", len(results))
 	}

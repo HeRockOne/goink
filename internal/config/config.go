@@ -106,3 +106,23 @@ func Load() (*AppConfig, error) {
 func Save(dataDir string) error {
 	return nil
 }
+
+// expandTilde 将路径开头的 ~ 展开为用户主目录。
+// 空字符串与 "~" 等价于主目录本身。
+func expandTilde(p string) string {
+	if p == "" || p == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p
+		}
+		return home
+	}
+	if p[0] == '~' && (len(p) == 1 || p[1] == '/' || p[1] == '\\') {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p
+		}
+		return home + p[1:]
+	}
+	return p
+}

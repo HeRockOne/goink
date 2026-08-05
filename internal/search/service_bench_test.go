@@ -16,7 +16,9 @@ import (
 
 	"novel/internal/chapter"
 	"novel/internal/character"
+	"novel/internal/item"
 	"novel/internal/location"
+	"novel/internal/lore"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
 )
@@ -40,6 +42,8 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 	svc := NewService(logger,
 		character.NewStore(db, logger),
 		location.NewStore(db, logger),
+		lore.NewStore(db, logger),
+		item.NewStore(db, logger),
 		timeline.NewStore(db, logger),
 		storyarc.NewStore(db, logger),
 		chapter.NewStore(db, logger),
