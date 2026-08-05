@@ -41,6 +41,7 @@ function activityBadge(kind: string | undefined, t: TFunction): string {
     case 'memory': return t('chat.retrieving')
     case 'review': return t('chat.reviewing')
     case 'plan': return t('chat.planning')
+    case 'phase': return t('chat.phaseSwitching')
     default: return t('chat.processing')
   }
 }
