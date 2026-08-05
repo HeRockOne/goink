@@ -1,224 +1,208 @@
-# 主题系统（Theme System）
+# 主题系统
 
-> 日期：2026-08-04
 > 对应代码：`frontend/src/hooks/useTheme.ts`、`frontend/src/components/settings/ThemeConfigTab.tsx`
+> 最后更新：2026-08-04
 
 ---
 
-## 一、架构概览
+## 一、颜色格式说明
 
-Goink 的主题系统基于 **CSS 变量 + `data-theme` 属性** 驱动，不依赖 CSS-in-JS 或预处理器。
+主题支持以下颜色值格式，CSS 变量值写为字符串即可：
 
-```
-用户选择主题
-    ↓
-useTheme.ts（localStorage 持久化）
-    ↓
-document.documentElement.setAttribute('data-theme', 'light' | 'dark' | 'custom:名称')
-    ↓
-CSS 选择器 [data-theme="..."] 控制各变量值
-    ↓
-全局样式使用 var(--xxx) 引用变量
-```
+| 格式 | 示例 | 适用场景 |
+|------|------|---------|
+| HEX | `"#ff6600"` | 纯色，不透明 |
+| RGB | `"rgb(255,102,0)"` | 纯色，不透明 |
+| RGBA | `"rgba(0,0,0,0.06)"` | 半透明（边框、叠加层） |
+| HSL | `"hsl(24,100%,50%)"` | 色相调色 |
+| OKLCH | `"oklch(0.6 0.15 30)"` | 感知均匀色彩空间 |
 
-### 1.1 主题层级
-
-| 层级 | 来源 | 说明 |
-|------|------|------|
-| 内置浅色 | `index.css` `:root` | 默认浅色，白底深字 |
-| 内置深色 | `index.css` `[data-theme="dark"]` | 深色模式 |
-| 自定义主题 | 用户 JSON → `localStorage` → `<style>` 注入 | 用户通过设置面板编辑 |
-
-### 1.2 变量优先级
-
-CSS 变量通过 `color-mix(in oklab, ...)` 派生，形成层级链：
-
-```
---color-primary ──→ --primary ──→ --narrative-current-bg (color-mix)
-                                    --narrative-current-border
-                                    --narrative-hook-type
-```
-
-用户只需设置 `--color-primary`，所有派生变量自动跟随。
+<!-- 格式说明：HEX 6 位，RGBA 用于透明度，OKLCH 用于 color-mix 计算 -->
 
 ---
 
-## 二、完整变量清单
+## 二、变量总表
 
-### 2.1 核心颜色（语义层）
+共 56 个变量，按用途分组。每组内的 `--*-foreground` 变量是该组背景色上使用的文字色。
 
-设置面板的示例主题 JSON 中定义 `--color-xxx` 形式，CSS 内部引用 `--xxx`（无前缀）。两者值相同，`--color-` 前缀仅用于标识。
+### 2.1 核心层（18 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
+这组变量控制页面最基础的视觉层级。`--background` 是最底层，`--card`/`--popover` 依次浮起，`--border` 是分隔线。
+
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
 | `--background` | 页面背景 | `#ffffff` | `#0f172a` |
 | `--foreground` | 主文字色 | `#1d1d1f` | `#e2e8f0` |
 | `--card` | 卡片背景 | `#ffffff` | `#1e293b` |
 | `--card-foreground` | 卡片文字 | `#1d1d1f` | `#e2e8f0` |
-| `--popover` | 弹窗背景 | `#ffffff` | `#1e293b` |
+| `--popover` | 弹窗/下拉背景 | `#ffffff` | `#1e293b` |
 | `--popover-foreground` | 弹窗文字 | `#1d1d1f` | `#e2e8f0` |
-| `--primary` | 强调色 | `#2563eb` | `#60a5fa` |
+| `--primary` | 强调色（按钮/链接/选中） | `#2563eb` | `#60a5fa` |
 | `--primary-foreground` | 强调色上的文字 | `#ffffff` | `#0f172a` |
 | `--secondary` | 次要背景 | `#f2f3f7` | `#1e293b` |
 | `--secondary-foreground` | 次要文字 | `#1d1d1f` | `#e2e8f0` |
-| `--muted` | 弱化背景 | `#f2f3f7` | `#1e293b` |
-| `--muted-foreground` | 弱化文字 | `#86868b` | `#94a3b8` |
-| `--accent` | 强调背景 | `#f2f3f7` | `#1e293b` |
-| `--accent-foreground` | 强调文字 | `#1d1d1f` | `#e2e8f0` |
-| `--destructive` | 危险/错误 | `#e74c3c` | `#ef4444` |
-| `--destructive-foreground` | 危险文字 | `#ffffff` | `#ffffff` |
-| `--border` | 边框 | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` |
+| `--muted` | 弱化背景（灰色块） | `#f2f3f7` | `#1e293b` |
+| `--muted-foreground` | 弱化文字（辅助信息） | `#86868b` | `#94a3b8` |
+| `--accent` | 悬浮/高亮背景 | `#f2f3f7` | `#1e293b` |
+| `--accent-foreground` | 悬浮文字 | `#1d1d1f` | `#e2e8f0` |
+| `--destructive` | 危险/删除 | `#e74c3c` | `#ef4444` |
+| `--destructive-foreground` | 危险上的文字 | `#ffffff` | `#ffffff` |
+| `--border` | 边框/分隔线 | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` |
 | `--input` | 输入框背景 | `#f2f3f7` | `#1e293b` |
-| `--ring` | 焦点环 | `#2563eb` | `#60a5fa` |
+| `--ring` | 焦点环（键盘导航） | `#2563eb` | `#60a5fa` |
 
-### 2.2 侧边栏
+### 2.2 侧边栏层（8 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
 | `--sidebar` | 侧边栏背景 | `#f8f9fa` | `#1a1f2e` |
 | `--sidebar-foreground` | 侧边栏文字 | `#1d1d1f` | `#e2e8f0` |
-| `--sidebar-primary` | 侧边栏强调色 | `#2563eb` | `#60a5fa` |
-| `--sidebar-primary-foreground` | 侧边栏强调文字 | `#ffffff` | `#0f172a` |
-| `--sidebar-accent` | 侧边栏项悬浮背景 | `#e8ecf0` | `#1e293b` |
-| `--sidebar-accent-foreground` | 侧边栏悬浮文字 | `#1d1d1f` | `#e2e8f0` |
-| `--sidebar-border` | 侧边栏边框 | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` |
-| `--sidebar-ring` | 侧边栏焦点环 | `#2563eb` | `#60a5fa` |
+| `--sidebar-primary` | 侧栏选中标记 | `#2563eb` | `#60a5fa` |
+| `--sidebar-primary-foreground` | 选中标记上的文字 | `#ffffff` | `#0f172a` |
+| `--sidebar-accent` | 侧栏项悬浮背景 | `#e8ecf0` | `#1e293b` |
+| `--sidebar-accent-foreground` | 悬浮文字 | `#1d1d1f` | `#e2e8f0` |
+| `--sidebar-border` | 侧栏分隔线 | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` |
+| `--sidebar-ring` | 侧栏焦点环 | `#2563eb` | `#60a5fa` |
 
-### 2.3 标签颜色
+### 2.3 标签色（6 色 × 2 = 12 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
-| `--tag-blue` | 蓝色标签背景 | `#e8f0fe` | `#1a2a30` |
-| `--tag-blue-foreground` | 蓝色标签文字 | `#1967d2` | `#6a9aaa` |
-| `--tag-green` | 绿色标签背景 | `#e6f4ea` | `#1a2a1e` |
-| `--tag-green-foreground` | 绿色标签文字 | `#1e7e34` | `#5a8a5a` |
-| `--tag-amber` | 琥珀标签背景 | `#fef7e0` | `#2a2818` |
-| `--tag-amber-foreground` | 琥珀标签文字 | `#b06000` | `#9a8a3a` |
-| `--tag-rose` | 玫红标签背景 | `#fce8e6` | `#2a1818` |
-| `--tag-rose-foreground` | 玫红标签文字 | `#c5221f` | `#9a5a5a` |
-| `--tag-teal` | 青色标签背景 | `#e0f2f1` | `#182a28` |
-| `--tag-teal-foreground` | 青色标签文字 | `#00796b` | `#5a8a8a` |
-| `--tag-purple` | 紫色标签背景 | `#f3e8ff` | `#2a1e30` |
-| `--tag-purple-foreground` | 紫色标签文字 | `#7c3aed` | `#8a6a9a` |
+每色含背景（`--tag-{color}`）和文字（`--tag-{color}-foreground`）。
 
-### 2.4 气泡 & 操作
+| 变量 | 浅色背景 | 浅色文字 | 深色背景 | 深色文字 |
+|------|---------|---------|---------|---------|
+| `--tag-blue` | `#e8f0fe` | `#1967d2` | `#1a2a30` | `#6a9aaa` |
+| `--tag-green` | `#e6f4ea` | `#1e7e34` | `#1a2a1e` | `#5a8a5a` |
+| `--tag-amber` | `#fef7e0` | `#b06000` | `#2a2818` | `#9a8a3a` |
+| `--tag-rose` | `#fce8e6` | `#c5221f` | `#2a1818` | `#9a5a5a` |
+| `--tag-teal` | `#e0f2f1` | `#00796b` | `#182a28` | `#5a8a8a` |
+| `--tag-purple` | `#f3e8ff` | `#7c3aed` | `#2a1e30` | `#8a6a9a` |
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
+### 2.4 消息气泡（2 个）
+
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
 | `--bubble-user` | 用户消息气泡背景 | `#2563eb` | `#60a5fa` |
-| `--bubble-user-foreground` | 用户消息气泡文字 | `#ffffff` | `#0f172a` |
-| `--action-extract` | 提取操作按钮 | `#6b7280` | `#6a7a5a` |
-| `--action-extract-foreground` | 提取操作文字 | `#ffffff` | `#faf4e4` |
-| `--action-save` | 保存操作按钮 | `#2563eb` | `#4a7a4a` |
-| `--action-save-foreground` | 保存操作文字 | `#ffffff` | `#faf4e4` |
+| `--bubble-user-foreground` | 气泡内文字 | `#ffffff` | `#0f172a` |
 
-### 2.5 状态色
+### 2.5 操作按钮（4 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
+| `--action-extract` | 提取按钮背景 | `#6b7280` | `#6a7a5a` |
+| `--action-extract-foreground` | 提取按钮文字 | `#ffffff` | `#faf4e4` |
+| `--action-save` | 保存按钮背景 | `#2563eb` | `#4a7a4a` |
+| `--action-save-foreground` | 保存按钮文字 | `#ffffff` | `#faf4e4` |
+
+### 2.6 状态色（7 个）
+
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
 | `--success` | 成功背景 | `#e6f4ea` | `#1a2a1e` |
-| `--success-foreground` | 成功文字 | `#1e7e34` | `#5a8a5a` |
+| `--success-foreground` | 成功文字/图标 | `#1e7e34` | `#5a8a5a` |
 | `--success-border` | 成功边框 | `#a8d8b0` | `#2a4a3a` |
 | `--danger-bg` | 危险背景 | `#fce8e6` | `#2a1a18` |
 | `--danger-border` | 危险边框 | `#e8a098` | `#4a2a20` |
 | `--status-warning` | 警告文字/图标 | `#c49a50` | `#d5b060` |
 | `--status-ok` | 正常文字/图标 | `#2e7d32` | `#4a8a5a` |
 
-### 2.6 工具调用颜色
+### 2.7 工具调用色（4 色 × 2 = 8 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
-| `--tool-blue` | 读操作背景 | `#e8f0fe` | `#1a2a38` |
-| `--tool-blue-border` | 读操作边框 | `#a8c7fa` | `#4a7a9a` |
-| `--tool-amber` | 写操作背景 | `#fef7e0` | `#2a2818` |
-| `--tool-amber-border` | 写操作边框 | `#f9d7a0` | `#9a8030` |
-| `--tool-green` | 创建操作背景 | `#e6f4ea` | `#1a2820` |
-| `--tool-green-border` | 创建操作边框 | `#a8d8b0` | `#4a7a4a` |
-| `--tool-red` | 删除操作背景 | `#fce8e6` | `#2a1a18` |
-| `--tool-red-border` | 删除操作边框 | `#e8a098` | `#9a4a3a` |
+每色含背景（`--tool-{color}`）和边框（`--tool-{color}-border`）。
 
-### 2.7 贡献图
+| 变量 | 用途 | 浅色背景 | 浅色边框 | 深色背景 | 深色边框 |
+|------|------|---------|---------|---------|---------|
+| `--tool-blue` | 读操作 | `#e8f0fe` | `#a8c7fa` | `#1a2a38` | `#4a7a9a` |
+| `--tool-amber` | 写操作 | `#fef7e0` | `#f9d7a0` | `#2a2818` | `#9a8030` |
+| `--tool-green` | 创建操作 | `#e6f4ea` | `#a8d8b0` | `#1a2820` | `#4a7a4a` |
+| `--tool-red` | 删除操作 | `#fce8e6` | `#e8a098` | `#2a1a18` | `#9a4a3a` |
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
+### 2.8 贡献图（5 个）
+
+| 变量 | 含义 | 浅色 | 深色 |
+|------|------|------|------|
 | `--contribution-0` | 无贡献 | `#ebedf0` | `#16241e` |
-| `--contribution-1` | 低贡献 | `#9be9a8` | `#1a3a28` |
-| `--contribution-2` | 中贡献 | `#40c463` | `#2a5a3a` |
-| `--contribution-3` | 高贡献 | `#30a14e` | `#3a7a4a` |
-| `--contribution-4` | 最高贡献 | `#216e39` | `#4a9a5a` |
+| `--contribution-1` | 低 | `#9be9a8` | `#1a3a28` |
+| `--contribution-2` | 中 | `#40c463` | `#2a5a3a` |
+| `--contribution-3` | 高 | `#30a14e` | `#3a7a4a` |
+| `--contribution-4` | 最高 | `#216e39` | `#4a9a5a` |
 
-### 2.8 阅读器
+### 2.9 阅读器（2 个）
 
-| 变量 | 用途 | 浅色默认值 | 深色默认值 |
-|------|------|-----------|-----------|
-| `--reader-bg` | 阅读器背景 | `#faf8f4` | `#0f1a14` |
+| 变量 | 用途 | 浅色 | 深色 |
+|------|------|------|------|
+| `--reader-bg` | 阅读器整体背景 | `#faf8f4` | `#0f1a14` |
 | `--reader-paper` | 阅读器纸面 | `#ffffff` | `#1a2a20` |
 
 ---
 
-## 三、Narrative 面板变量（派生关系）
+## 三、派生变量
 
-narrative 面板的 14 个 CSS 变量通过 `color-mix()` 从核心颜色派生，含义如下：
+### 3.1 来源关系
 
-| 变量 | 派生公式 | 来源变量 |
-|------|---------|---------|
-| `--narrative-current-bg` | `color-mix(in oklab, var(--primary) 8%, var(--sidebar))` | primary, sidebar |
-| `--narrative-current-border` | `var(--primary)` | primary |
-| `--narrative-overdue-bg` | `color-mix(in oklab, var(--destructive) 12%, var(--sidebar))` | destructive, sidebar |
-| `--narrative-overdue-text` | `var(--destructive)` | destructive |
-| `--narrative-resolved-text` | `var(--success-foreground)` | success-foreground |
-| `--narrative-resolved-bg` | `color-mix(in oklab, var(--success-foreground) 10%, var(--sidebar))` | success-foreground, sidebar |
-| `--narrative-pending-text` | `var(--tag-blue-foreground)` | tag-blue-foreground |
-| `--narrative-pending-bg` | `var(--tag-blue)` | tag-blue |
-| `--narrative-arc-inactive` | `color-mix(in oklab, var(--muted-foreground) 20%, transparent)` | muted-foreground |
-| `--narrative-future-card-bg` | `var(--card)` | card |
-| `--narrative-future-card-border` | `var(--border)` | border |
-| `--narrative-hook-type` | `var(--primary)` | primary |
-| `--narrative-tab-active` | `var(--primary)` | primary |
-| `--narrative-divider` | `var(--border)` | border |
+以下变量从核心变量自动派生，自定义主题中不需要设置它们：
 
-> 用户只需设置核心颜色变量（如 `--primary`、`--sidebar`），narrative 面板的派生变量自动跟随。
+```
+--border           ← 建议从 --foreground 调透明度派生，非硬编码
+--sidebar-border   ← 同 --border（分开控制时可独立设）
+--sidebar-ring     ← 同 --ring
+--narrative-*      ← 从 --primary/--sidebar/--destructive/--success-foreground 等派生
+```
+
+### 3.2 Narrative 面板派生公式
+
+| 变量 | 公式 |
+|------|------|
+| `--narrative-current-bg` | `color-mix(in oklab, var(--primary) 8%, var(--sidebar))` |
+| `--narrative-current-border` | `var(--primary)` |
+| `--narrative-overdue-bg` | `color-mix(in oklab, var(--destructive) 12%, var(--sidebar))` |
+| `--narrative-overdue-text` | `var(--destructive)` |
+| `--narrative-resolved-text` | `var(--success-foreground)` |
+| `--narrative-resolved-bg` | `color-mix(in oklab, var(--success-foreground) 10%, var(--sidebar))` |
+| `--narrative-pending-text` | `var(--tag-blue-foreground)` |
+| `--narrative-pending-bg` | `var(--tag-blue)` |
+| `--narrative-arc-inactive` | `color-mix(in oklab, var(--muted-foreground) 20%, transparent)` |
+| `--narrative-future-card-bg` | `var(--card)` |
+| `--narrative-future-card-border` | `var(--border)` |
+| `--narrative-hook-type` | `var(--primary)` |
+| `--narrative-tab-active` | `var(--primary)` |
+| `--narrative-divider` | `var(--border)` |
 
 ---
 
 ## 四、自定义主题
 
-### 4.1 创建步骤
-
-1. 打开设置 → 自定义主题
-2. 在 JSON 编辑器中粘贴主题 JSON
-3. 单击「应用」即生效并保存
-4. 已保存的主题出现在列表中，单击即可切换
-
-### 4.2 JSON 格式
+### 4.1 JSON 格式
 
 ```json
 {
   "name": "主题名称",
   "type": "dark",
   "colors": {
-    "--background": "#...",
-    "--foreground": "#...",
-    ...
+    "--background": "#ffffff",
+    "--foreground": "#1d1d1f",
+    "--primary": "#2563eb"
   }
 }
 ```
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `name` | 是 | 主题显示名称，去重键为 `name__type` |
-| `type` | 否（默认 `dark`） | `light` 或 `dark`，影响 `color-mix()` 的透明度感知 |
-| `colors` | 是 | 所有 CSS 变量键值对，不需要全部覆盖，缺失的变量使用内置默认值 |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 显示名称。去重键为 `name__type` |
+| `type` | `"light"` 或 `"dark"` | 否，默认 `dark` | 仅标记，不影响 CSS 变量值 |
+| `colors` | object | 是 | 键为变量名，值为颜色字符串 |
 
-### 4.3 应用规则
+### 4.2 应用规则
 
-- 同名同类型覆盖：`墨绿书斋__dark` 第二次应用会覆盖第一次
-- 单击即应用：列表中的主题单击后立即生效，无需确认
-- 持久化：保存在 `localStorage('goink_custom_themes')`，重启后保留
+- 同名同类型覆盖：`"墨绿书斋__dark"` 第二次应用覆盖第一次
+- 单击列表中的主题即应用，无需确认
+- 持久化到 `localStorage("goink_custom_themes")`，重启保留
+- 缺失的变量使用内置默认值，不需要覆盖全部
 
 ---
 
-## 五、示例主题：Apple 白
+## 五、示例主题
+
+### Apple 白（浅色）
 
 ```json
 {
@@ -296,13 +280,163 @@ narrative 面板的 14 个 CSS 变量通过 `color-mix()` 从核心颜色派生�
 }
 ```
 
-> 设计说明：Apple 白主题以 `#ffffff` 纯白背景 + `#0071e3` 苹果蓝为基调，`#f5f5f7` 浅灰作为次要背景和输入框底色，`#e8e8ed` 浅灰作为悬浮/边框。整体风格干净、高对比度，与 Apple 设计语言一致。
+### ClickHouse 暗黑（深色）
+
+```json
+{
+  "name": "ClickHouse 暗黑",
+  "type": "dark",
+  "colors": {
+    "--background": "#000000",
+    "--foreground": "#ffffff",
+    "--card": "#141414",
+    "--card-foreground": "#ffffff",
+    "--popover": "#141414",
+    "--popover-foreground": "#ffffff",
+    "--primary": "#faff69",
+    "--primary-foreground": "#000000",
+    "--secondary": "#141414",
+    "--secondary-foreground": "#ffffff",
+    "--muted": "#141414",
+    "--muted-foreground": "#a0a0a0",
+    "--accent": "#3a3a3a",
+    "--accent-foreground": "#ffffff",
+    "--destructive": "#e74c3c",
+    "--destructive-foreground": "#ffffff",
+    "--border": "rgba(65,65,65,0.8)",
+    "--input": "#141414",
+    "--ring": "#faff69",
+    "--sidebar": "#0a0a0a",
+    "--sidebar-foreground": "#ffffff",
+    "--sidebar-primary": "#faff69",
+    "--sidebar-primary-foreground": "#000000",
+    "--sidebar-accent": "#3a3a3a",
+    "--sidebar-accent-foreground": "#ffffff",
+    "--sidebar-border": "rgba(65,65,65,0.8)",
+    "--sidebar-ring": "#faff69",
+    "--tag-blue": "#1a2a30",
+    "--tag-blue-foreground": "#6a9aaa",
+    "--tag-green": "#166534",
+    "--tag-green-foreground": "#ffffff",
+    "--tag-amber": "#2a2818",
+    "--tag-amber-foreground": "#faff69",
+    "--tag-rose": "#2a1818",
+    "--tag-rose-foreground": "#e74c3c",
+    "--tag-teal": "#182a28",
+    "--tag-teal-foreground": "#5a8a8a",
+    "--tag-purple": "#2a1e30",
+    "--tag-purple-foreground": "#8a6a9a",
+    "--reader-bg": "#000000",
+    "--reader-paper": "#141414",
+    "--bubble-user": "#faff69",
+    "--bubble-user-foreground": "#000000",
+    "--action-extract": "#414141",
+    "--action-extract-foreground": "#ffffff",
+    "--action-save": "#166534",
+    "--action-save-foreground": "#ffffff",
+    "--success": "#166534",
+    "--success-foreground": "#5a8a5a",
+    "--success-border": "#2a4a3a",
+    "--danger-bg": "#2a1a18",
+    "--danger-border": "#4a2a20",
+    "--status-warning": "#faff69",
+    "--status-ok": "#5a8a5a",
+    "--tool-blue": "#1a2a38",
+    "--tool-blue-border": "#4a7a9a",
+    "--tool-amber": "#2a2818",
+    "--tool-amber-border": "#faff69",
+    "--tool-green": "#166534",
+    "--tool-green-border": "#2a4a3a",
+    "--tool-red": "#2a1a18",
+    "--tool-red-border": "#4a2a20",
+    "--contribution-0": "#141414",
+    "--contribution-1": "#2a4a3a",
+    "--contribution-2": "#166534",
+    "--contribution-3": "#3a7a4a",
+    "--contribution-4": "#5a8a5a"
+  }
+}
+```
 
 ---
 
-## 六、注意事项
+## 六、AI 生成主题提示词
 
-1. **`--narrative-resolved-text`** 已用 `--success-foreground` 派生，自定义主题设置 `--success-foreground` 即可控制
-2. 所有 `color-mix()` 百分比已调好，不建议修改百分比值
-3. `--border` 使用 `rgba` 而非纯色，确保在不同背景色上融合自然
-4. 自定义主题不需要覆盖所有变量，缺失的变量会使用内置默认值
+将以下提示词发给 AI，即可生成完整的主题 JSON。
+
+```
+你是一个专业的 UI 设计师。请为小说写作软件「Goink」生成一个自定义主题 JSON。
+
+## 设计要求
+
+不同 UI 区域用不同色系区分，不要靠同一色系的灰度深浅排版。
+用户长时间写小说，纯灰度层级费眼睛。
+
+- 页面背景：暖白/米色/纸色（阅读友好）
+- 卡片/面板：比背景更暖/更亮，同一色系
+- 侧边栏：微暖偏暗，与主区域在色相上自然区分
+- 边框：用卡片变深 15% 的方式派生，柔和不刺眼
+- 强调色：与背景色系有明显色相差的颜色（蓝/琥珀/绿等）
+
+## 输出格式
+
+纯 JSON，无 markdown 包裹，无额外说明：
+
+{
+  "name": "主题名称",
+  "type": "light",
+  "colors": {
+    "--background": "#ffffff",
+    "--foreground": "#1d1d1f",
+    ...
+  }
+}
+
+## 变量清单
+
+必须包含以下全部 56 个变量，每个给一个合理的颜色值（HEX 或 RGBA）：
+
+核心层（19）：
+--background, --foreground, --card, --card-foreground, --popover, --popover-foreground,
+--primary, --primary-foreground, --secondary, --secondary-foreground,
+--muted, --muted-foreground, --accent, --accent-foreground,
+--destructive, --destructive-foreground, --border, --input, --ring
+
+侧边栏（8）：
+--sidebar, --sidebar-foreground, --sidebar-primary, --sidebar-primary-foreground,
+--sidebar-accent, --sidebar-accent-foreground, --sidebar-border, --sidebar-ring
+
+标签（6 色 × 2 字段）：
+--tag-blue, --tag-blue-foreground, --tag-green, --tag-green-foreground,
+--tag-amber, --tag-amber-foreground, --tag-rose, --tag-rose-foreground,
+--tag-teal, --tag-teal-foreground, --tag-purple, --tag-purple-foreground
+
+气泡（2）：
+--bubble-user, --bubble-user-foreground
+
+操作按钮（4）：
+--action-extract, --action-extract-foreground, --action-save, --action-save-foreground
+
+状态色（7）：
+--success, --success-foreground, --success-border,
+--danger-bg, --danger-border, --status-warning, --status-ok
+
+工具调用（4 色 × 2 字段）：
+--tool-blue, --tool-blue-border, --tool-amber, --tool-amber-border,
+--tool-green, --tool-green-border, --tool-red, --tool-red-border
+
+贡献图（5）：
+--contribution-0, --contribution-1, --contribution-2, --contribution-3, --contribution-4
+
+阅读器（2）：
+--reader-bg, --reader-paper
+```
+
+---
+
+## 七、注意事项
+
+- `--border` 建议用 RGBA 透明度而非纯色，确保在不同背景色上融合自然
+- 自定义主题不需要覆盖全部变量，缺失的变量使用内置默认值
+- 所有 `color-mix()` 百分比已调好，不建议修改
+- 同名同类型主题会覆盖，命名注意区分
