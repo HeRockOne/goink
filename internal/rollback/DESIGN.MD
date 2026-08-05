@@ -109,6 +109,7 @@ ORDER BY id DESC
 | PatchAndSave PK 防御 | 隐式假设 Input 不含 ID | 未来可能踩坑 | P2：反射重置 PK |
 | 索引列顺序 | (turn_id, session_id) 应为 (session_id, turn_id) | 性能可忽略 | P3：调换顺序 |
 | omitempty 清空字段 | PATCH 语义固有限制 | 无法清空 string/int 为零值 | P3：独立追踪 |
+| FK 级联删除（2026-08-05 新增，仅新库） | SQLite 级联删除不经 GORM 回调，operation_log 不记录子行 | 删除小说/章节时 scenes(chapter_id 置 NULL)/item_occurrences/chapter_arcs 等子行不产生回滚记录；回滚父行后子行不恢复。删除工具均有预检查护栏（有子记录先拒绝），实际级联多发生在删小说（本就不可回滚）与删章节场景，影响可控 | 如需要章节级回滚恢复子行，改代码层显式删除（走回调） |
 
 ### 性能
 

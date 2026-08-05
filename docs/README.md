@@ -30,6 +30,7 @@
 > 2026-08-04：outline-on-demand-fix.md 已实施（book-outline.md 总纲落点 + get_writing_context 注入总纲摘要/进度锚点 + kernel/init-phase/门禁示例更新 + 侧边栏总纲入口）。
 > 2026-08-04：goink.md 定位收敛为「章节指纹账本」（仅 append 模式追加，DB 承载全部状态/悬念/设定/偏好）；edit 工具新增 change_type=append；NovelState 注入 goink.md 尾部最近 1500 字符。
 > 2026-08-05：文档更新——narrative-panel.md 未来卡片改为 react-markdown 渲染原始大纲；SNAPSHOT_DESIGN.md/git/DESIGN.md 更新 goink.md 指纹账本角色；ROADMAP/README/architecture.md 修复主题系统旧引用；audit-repair-summary.md 标注 OutlineParser 已过时；mcp-tools/mcp-schema audit 更新 goink.md 操作描述。
+> 2026-08-05：全量审计修复同步文档——phase-gate.md 更新（默认 seed/visited 持久化/loop 生效/故障排查）；agent/DESIGN.md 加过时声明（MaxTurns=100、压缩已实现含工具定义 token、全量 tools、重试上限）；rollback/DESIGN.MD 补 FK 级联已知限制；narrative-panel.md 补顶层字段与 characters.status；architecture.md 更新 search 描述；AGENTS.md 修正 CGO 编译说明；build.ps1 CGO_CFLAGS 动态化。
 
 ## tools/ — 验证工具（可运行）
 

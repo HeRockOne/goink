@@ -62,6 +62,9 @@ WritingContext JSON  ← 一次 IPC 调用
 | `timeline` | `WritingTimeline` | 伏笔分类（pending/resolved/overdue） |
 | `reader` | `WritingReader` | 读者视角计数+条目详情 |
 | `writing_snapshot` | `*WritingSnapshotBrief` | 当前写作快照 |
+| `scenes` | `[]WritingSceneBrief` | 当前章场景列表 |
+| `volume` | `*WritingVolume` | 当前卷纲（arc_type=volume 且 status=active） |
+| `volume_entities` | `*WritingVolumeEntities` | 卷范围内实体 ID 聚合（省 token） |
 
 **WritingChapter：**
 
@@ -88,6 +91,7 @@ WritingContext JSON  ← 一次 IPC 调用
 |------|------|------|------|
 | `id` | int64 | `characters` 表 | 角色 ID |
 | `name` | string | `name` | 角色名 |
+| `status` | string | `status` | alive/dead/missing/unknown（dead=已死亡，不得让其出场） |
 | `desc` | string | `description` | 角色完整描述 |
 | `location` | `*WritingLocationBrief` | `location_id` → `locations` 表 | 角色所在地（名称） |
 | `item_count` | int64 | `items` 表 count | 持有物品数 |

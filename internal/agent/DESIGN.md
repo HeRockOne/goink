@@ -1,5 +1,12 @@
 # Agent Loop 设计文档
 
+> **过时声明（2026-08-05 更新）**：本文是 Go 化迁移期的历史设计文档，以下实现细节已与代码不一致，以代码为准：
+> - `MaxTurns` 默认值：文档写 50，实际为 **100**（agent.go）
+> - Token 预算/压缩：文档标注"暂占位"，实际已完整实现（compress.go）：按 `CompressionThreshold × ContextWindow` 触发，**压缩判定已计入全量工具定义 token**（约 20-30K，避免中小窗口模型触发偏晚撞 context overflow）
+> - 工具注入：文档写 `registry.OpenAI(opts.AllowedTools)`，实际为**全量 tools + allowed_tools 限制**（ADR-0001 前缀缓存设计）
+> - 重试：429/可重试错误最多重试 **10 次**（原设计无限重试）
+> - 门禁：五阶段硬拦截（phase_gate.go），状态跨 turn 持久化含 visited 访问记录；配置出厂自动 seed（app/default_phase_gate_config.go）
+
 ## 概述
 
 Agent Loop 是对话系统的编排核心——接收消息列表，调用 LLM 流式接口，解析 tool_calls 并执行工具，将结果追加回消息列表，循环直到 LLM 不再调用工具或达到上限。

@@ -62,7 +62,7 @@ init → prepare → [outline → write] × N 章循环 → review → maintain 
 
 ## 工具白名单
 
-> 下表为简化示意。**精确白名单以数据库配置为准**（`门禁配置示例.md` 或设置面板中的 phase_gate_config）。
+> 下表为简化示意。**精确白名单以数据库配置为准**（出厂时自动写入默认配置，也可在设置面板修改 phase_gate_config，或参考 `门禁配置示例.md`）。
 
 | 阶段 | 允许的工具（简化） | 阻止的工具（简化） |
 |------|-------------------|-------------------|
@@ -93,9 +93,9 @@ init → prepare → [outline → write] × N 章循环 → review → maintain 
 
 门禁状态保存在 `sessions` 表：
 - `current_phase`：当前阶段名
-- `called_tools`：已调用工具的 JSON 计数
+- `called_tools`：已调用工具的 JSON 计数（含 visited 访问记录，新格式 `{"tools":{...},"visited":[...]}`，兼容旧格式）
 
-每次 `agent.Run()` 结束时自动保存，下次对话时自动恢复。
+每次 `agent.Run()` 结束时自动保存，下次对话时自动恢复。visited 随状态持久化，保证断点续作后仍可回退到已访问过的阶段。
 
 ## 配置格式
 
@@ -117,7 +117,9 @@ main-cmd-next: outline
 | require | 是 | 必须调用过的工具列表 |
 | main-cmd-next | 是 | require 满足后可进入的下一阶段 |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
-| loop | 否 | "true" 表示 batch 模式下可循环 |
+| loop | 否 | "true" 表示 batch 模式下可循环（write 阶段可回退到上一阶段 outline，连续多章写作） |
+
+> 批量模式循环：默认配置中 batch 的 write 阶段带 `loop: true`，配合 visited 回退机制实现「outline ⇄ write × N 章」。
 
 ## 故障排查
 
@@ -127,8 +129,8 @@ main-cmd-next: outline
 | 阶段不推进 | require 未满足，或未调 set_phase | 先调用 require 列表中的工具，再主动 `set_phase` 切换 |
 | 切换被拒 | 目标阶段不在 main-cmd-next 链，也不在本轮 visited | 只能推进到 main-cmd-next 或回退到本轮已访问过的阶段 |
 | 第二轮可任意跳转（旧 bug） | visited 永久累积 | 已修复：回到 prepare 时重置访问记录 |
-| 批量模式不循环 | write 阶段没有 `loop: true` | 检查 main-core-writing-kernel.md 配置 |
-| 门禁未激活 | session 的 current_phase 为空 | 每次对话自动激活，检查 DB |
+| 批量模式不循环 | write 阶段没有 `loop: true` | 默认配置已带；自定义配置需在 batch 的 write 阶段加 `loop: true` |
+| 门禁未激活 | phase_gate_config 为空 | 出厂首次启动自动 seed 默认配置（single + batch）；已配置过则不会被覆盖 |
 
 ## 设置开关
 
@@ -150,6 +152,6 @@ main-cmd-next: outline
 
 ## 示例门禁配置
 
-完整配置见 [`门禁配置示例.md`](../../门禁配置示例.md)，可直接复制到设置中使用。
+完整配置见 [`门禁配置示例.md`](../../门禁配置示例.md)。**首次启动时系统自动将默认配置（与示例一致）写入数据库并启用，无需手动配置**；用户可在设置面板修改或清空（清空后下次启动恢复默认）。
 
 > 注意：旧版文档中曾使用 `main-cmd-next` 字段名，现已统一为 `next`。如果使用旧配置，请将 `main-cmd-next` 改为 `next`。

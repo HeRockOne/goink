@@ -39,7 +39,7 @@ goink-master/
 │   ├── rag/                # RAG 向量检索（ONNX Embedder + sqlite-vec）
 │   ├── reader/             # 读者认知 Store（已知/悬念/误知）
 │   ├── scene/              # 章节内场景 Store
-│   ├── search/             # 统一搜索服务（实体+正文+RAG 三路合并）
+│   ├── search/             # 统一搜索服务（实体 LIKE + 写入缓存关键词 + 向量/FTS5 RRF 融合）
 │   ├── session/            # 对话会话 + 消息 Store
 │   ├── skill/              # 技能系统（内置/用户/小说三层）
 │   ├── stats/              # 统计聚合
