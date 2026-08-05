@@ -14,8 +14,10 @@
 | HEX | `"#ff6600"` | 纯色，不透明 |
 | RGB | `"rgb(255,102,0)"` | 纯色，不透明 |
 | RGBA | `"rgba(0,0,0,0.06)"` | 半透明（边框、叠加层） |
-| HSL | `"hsl(24,100%,50%)"` | 色相调色 |
+| HSL | `"hsl(210,100%,45%)"` | **色相调色（推荐）** |
 | OKLCH | `"oklch(0.6 0.15 30)"` | 感知均匀色彩空间 |
+
+> **推荐使用 HSL 格式**。HSL 的三个维度（色相 H / 饱和度 S / 明度 L）直接对应人类视觉感知，通过固定色相 H 并调整 S/L 即可派生出一整套协调配色。例如定 H=40°（暖黄）为基底色，全组颜色自动在同一色系内，改 H 值即可快速切换风格。
 
 <!-- 格式说明：HEX 6 位，RGBA 用于透明度，OKLCH 用于 color-mix 计算 -->
 
@@ -357,6 +359,88 @@
   }
 }
 ```
+
+---
+
+### Apple 官网（浅色，HSL）
+
+```json
+{
+  "name": "Apple 官网",
+  "type": "light",
+  "colors": {
+    "--background": "hsl(0,0%,100%)",
+    "--foreground": "hsl(0,0%,12%)",
+    "--card": "hsl(0,0%,100%)",
+    "--card-foreground": "hsl(0,0%,12%)",
+    "--popover": "hsl(0,0%,100%)",
+    "--popover-foreground": "hsl(0,0%,12%)",
+    "--primary": "hsl(210,100%,45%)",
+    "--primary-foreground": "hsl(0,0%,100%)",
+    "--secondary": "hsl(0,0%,96%)",
+    "--secondary-foreground": "hsl(0,0%,12%)",
+    "--muted": "hsl(0,0%,96%)",
+    "--muted-foreground": "hsl(240,2%,54%)",
+    "--accent": "hsl(0,0%,92%)",
+    "--accent-foreground": "hsl(0,0%,12%)",
+    "--destructive": "hsl(4,80%,55%)",
+    "--destructive-foreground": "hsl(0,0%,100%)",
+    "--border": "rgba(0,0,0,0.08)",
+    "--input": "hsl(0,0%,96%)",
+    "--ring": "hsl(210,100%,45%)",
+    "--sidebar": "hsl(0,0%,97%)",
+    "--sidebar-foreground": "hsl(0,0%,12%)",
+    "--sidebar-primary": "hsl(210,100%,45%)",
+    "--sidebar-primary-foreground": "hsl(0,0%,100%)",
+    "--sidebar-accent": "hsl(0,0%,92%)",
+    "--sidebar-accent-foreground": "hsl(0,0%,12%)",
+    "--sidebar-border": "rgba(0,0,0,0.06)",
+    "--sidebar-ring": "hsl(210,100%,45%)",
+    "--tag-blue": "hsl(210,60%,95%)",
+    "--tag-blue-foreground": "hsl(210,100%,40%)",
+    "--tag-green": "hsl(140,50%,95%)",
+    "--tag-green-foreground": "hsl(140,60%,40%)",
+    "--tag-amber": "hsl(35,100%,92%)",
+    "--tag-amber-foreground": "hsl(35,100%,40%)",
+    "--tag-rose": "hsl(350,60%,95%)",
+    "--tag-rose-foreground": "hsl(350,70%,45%)",
+    "--tag-teal": "hsl(180,50%,95%)",
+    "--tag-teal-foreground": "hsl(180,60%,35%)",
+    "--tag-purple": "hsl(270,50%,95%)",
+    "--tag-purple-foreground": "hsl(270,60%,45%)",
+    "--reader-bg": "hsl(40,20%,97%)",
+    "--reader-paper": "hsl(0,0%,100%)",
+    "--bubble-user": "hsl(210,100%,45%)",
+    "--bubble-user-foreground": "hsl(0,0%,100%)",
+    "--action-extract": "hsl(0,0%,55%)",
+    "--action-extract-foreground": "hsl(0,0%,100%)",
+    "--action-save": "hsl(210,100%,45%)",
+    "--action-save-foreground": "hsl(0,0%,100%)",
+    "--success": "hsl(140,50%,95%)",
+    "--success-foreground": "hsl(140,60%,40%)",
+    "--success-border": "hsl(140,40%,85%)",
+    "--danger-bg": "hsl(4,60%,95%)",
+    "--danger-border": "hsl(4,60%,85%)",
+    "--status-warning": "hsl(35,100%,45%)",
+    "--status-ok": "hsl(140,60%,40%)",
+    "--tool-blue": "hsl(210,60%,95%)",
+    "--tool-blue-border": "hsl(210,50%,80%)",
+    "--tool-amber": "hsl(35,100%,92%)",
+    "--tool-amber-border": "hsl(35,80%,80%)",
+    "--tool-green": "hsl(140,50%,95%)",
+    "--tool-green-border": "hsl(140,40%,85%)",
+    "--tool-red": "hsl(350,60%,95%)",
+    "--tool-red-border": "hsl(350,50%,85%)",
+    "--contribution-0": "hsl(0,0%,92%)",
+    "--contribution-1": "hsl(140,60%,85%)",
+    "--contribution-2": "hsl(140,60%,65%)",
+    "--contribution-3": "hsl(140,60%,50%)",
+    "--contribution-4": "hsl(140,60%,35%)"
+  }
+}
+```
+
+> 设计说明：**色相体系**——中性色全部使用 `hsl(0,0%,…)`（纯灰度），强调色使用 `hsl(210,100%,45%)`（苹果蓝），标签色使用独立色相区分（蓝 210° / 绿 140° / 琥珀 35° / 玫红 350° / 青 180° / 紫 270°）。阅读器背景使用 `hsl(40,20%,97%)` 暖白护眼。想换风格只需改 `primary` 的色相角度：`hsl(160,100%,45%)` 变 teal 风，`hsl(350,100%,45%)` 变玫红风，其余中性色和标签色不受影响。
 
 ---
 
