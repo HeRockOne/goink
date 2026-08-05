@@ -89,7 +89,7 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 ### 代码
 - 计费有关的缓存字段：优先 `prompt_tokens_details.cached_tokens`，fallback `prompt_cache_hit_tokens`。详见 `docs/archive/billing-panel.md`
 - `updateUsage` 在 `tokens.go`，每次 EventUsage 触发。改这里要小心 `perModel` 和全局累计值的一致性
-- CGO：ONNX/sqlite-vec 用 `//go:build cgo`，Windows 上 cgo 编译报错是预期行为
+- CGO：ONNX/sqlite-vec 用 `//go:build cgo`。Windows 编译必须带 CGO 环境：`build.ps1` 已设置（PATH 含 MSYS2 mingw64、`CGO_ENABLED=1`、`CGO_CFLAGS=-I$(go env GOMODCACHE)/github.com/mattn/go-sqlite3@版本`——sqlite-vec 的 C 代码 include "sqlite3.h"，头文件由 mattn 包自带）。直接用 `go build ./...` 不带这些环境变量报 `sqlite3.h: No such file or directory` 是缺 include 路径，不是"Windows 不能编译"。验证统一用：`go build ./...` + `go test ./internal/... ./app/...`（e2e 需真实 git/ONNX 环境，可跳过）
 - 不改 `frontend/src/lib/wailsjs/go/models.ts`（Wails 自动生成）
 
 ---

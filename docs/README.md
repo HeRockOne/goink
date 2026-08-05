@@ -67,7 +67,7 @@
 | audit-repair-summary.md | 审计修复总结 |
 | data-integrity-audit.md | 数据完整性 + 看板审计 |
 | feature-audit.md | 功能新增审计 |
-| audit-repair-2026-08-05.md | 全量代码审计与修复记录（P0-P3：门禁 seed/死角色拦截/RAG 原子性/FTS5 检索/外键等） |
+| audit-repair-2026-08-05.md | 全量代码审计与修复记录（P0-P3：门禁 seed/死角色拦截/RAG 原子性/FTS5 检索/外键等，含真机验证） |
 
 ---
 

@@ -40,10 +40,20 @@ update_item 自动写流转记录（owner 变更需 chapter_id）+ 终态不可�
 - 向量索引升级 IVF/HNSW（sqlite-vec v0.1.6 不支持，需升级依赖）
 - embedding 模型 int8 → fp16（需模型文件）
 - 连接池 MaxOpenConns 提为 >1（RAG 与业务共享单连接的读写竞争需先拆分）
-- batch 门禁"循环 N 章"仍依赖 visited 回退（代码层已允许，模型纪律靠提示词）
+- 存量数据库外键迁移（SQLite 不支持 ALTER 加 FK，已有库的表无约束，需整表重建迁移；新库已自动带 FK）
+- trigram tokenizer 的中文全文检索效果需真机建书实测（不可用时回退 unicode61 整词匹配）
 
-## 验证
+## 验证（2026-08-05 补充，真机通过）
 
-- gofmt/gofmt -e：全部改动文件通过
-- go vet：internal/llm 等非 cgo 依赖包通过；cgo 依赖链（storage/rag/search/app）在 Windows 无 sqlite3.h，编译失败为预期（AGENTS.md 已注明）
-- 前端 tsc -b 通过；vitest 36/36 通过（ContentPanel.test.tsx 的 Monaco mock 加载失败为存量问题）；i18n 硬编码检查失败为存量 112 处，本次未新增
+- 使用 build.ps1 的 CGO 环境（PATH 含 MSYS2 mingw64 + `CGO_CFLAGS=-I<GOMODCACHE>/mattn/go-sqlite3@v1.14.44`）：
+  - `go build ./...` 全量编译通过（EXIT 0）
+  - `go test ./internal/... ./app/...` 全部通过（含 agent/rag/search/llm/mcp_tools/app/config）
+- 真机验证期间修复的存量测试损坏（fork 时就存在，非本次引入）：
+  - search 测试引用已不存在的 `searchRAG`/`buildContext`/旧 NewService 签名 → 补 `buildContext`、修签名与调用
+  - config 测试引用不存在的 `expandTilde` → 补实现
+  - 搜索面板 timeline 分类显示英文（user_directive）→ 改为中文标签（伏笔/用户指令）
+- 补充修复（真机验证暴露）：
+  - FTS5 全文索引对存量章节缺失：RebuildAll 检测"向量有、FTS 空"触发重建（否则老书升级后关键词检索形同虚设）
+  - 流式 idle 超时误杀慢速本地模型：首 token 宽限 300s，流中 120s，每行重置计时
+- build.ps1：CGO_CFLAGS 由硬编码路径/版本改为从 go.mod 动态解析 mattn 版本 + `go env GOMODCACHE`，升级后不失效
+- AGENTS.md：修正"CGO 编译报错是预期行为"的错误表述，写明完整编译环境
