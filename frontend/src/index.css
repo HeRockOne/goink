@@ -174,6 +174,54 @@
   --reader-paper: #2a1e16;
 }
 
+/* ── 自定义主题兜底派生（永不撞色） ────────────────────── */
+/* 自定义主题只覆盖用户填写的变量；未填的变量在此自动派生：
+   - 文字：contrast-color() 自动选黑/白中对比度更高的（浏览器计算）
+   - 面板：从背景向对比色方向混色，自动形成明度阶梯（浅色模式变浅、深色模式变深）
+   - 边框：跟随前景色透明度，任何背景上可见
+   用户注入的 style 在 head 末尾且选择器特异性相同，填写的值覆盖本块；未填的走派生。 */
+[data-theme^="custom:"] {
+  /* 文字自动对比色 */
+  --foreground: contrast-color(var(--background));
+  --card-foreground: contrast-color(var(--card));
+  --popover-foreground: contrast-color(var(--popover));
+  --primary-foreground: contrast-color(var(--primary));
+  --secondary-foreground: contrast-color(var(--secondary));
+  --muted-foreground: contrast-color(var(--muted));
+  --accent-foreground: contrast-color(var(--accent));
+  --destructive-foreground: contrast-color(var(--destructive));
+  --sidebar-foreground: contrast-color(var(--sidebar));
+  --sidebar-primary-foreground: contrast-color(var(--sidebar-primary));
+  --sidebar-accent-foreground: contrast-color(var(--sidebar-accent));
+  --bubble-user-foreground: contrast-color(var(--bubble-user));
+  --action-extract-foreground: contrast-color(var(--action-extract));
+  --action-save-foreground: contrast-color(var(--action-save));
+  --tag-blue-foreground: contrast-color(var(--tag-blue));
+  --tag-green-foreground: contrast-color(var(--tag-green));
+  --tag-amber-foreground: contrast-color(var(--tag-amber));
+  --tag-rose-foreground: contrast-color(var(--tag-rose));
+  --tag-teal-foreground: contrast-color(var(--tag-teal));
+  --tag-purple-foreground: contrast-color(var(--tag-purple));
+  --success-foreground: contrast-color(var(--success));
+
+  /* 面板明度阶梯：背景向对比色方向混 4%-20% */
+  --card: color-mix(in oklch, var(--background) 94%, contrast-color(var(--background)));
+  --popover: color-mix(in oklch, var(--background) 90%, contrast-color(var(--background)));
+  --sidebar: color-mix(in oklch, var(--background) 96%, contrast-color(var(--background)));
+  --secondary: color-mix(in oklch, var(--background) 88%, contrast-color(var(--background)));
+  --muted: color-mix(in oklch, var(--background) 86%, contrast-color(var(--background)));
+  --accent: color-mix(in oklch, var(--background) 82%, contrast-color(var(--background)));
+  --input: var(--secondary);
+  --sidebar-accent: var(--accent);
+
+  /* 边框/焦点环：跟随前景色，任何背景上可见 */
+  --border: color-mix(in oklch, var(--foreground) 18%, transparent);
+  --sidebar-border: var(--border);
+  --ring: var(--primary);
+  --sidebar-ring: var(--primary);
+  --sidebar-primary: var(--primary);
+}
+
 * {
   border-color: var(--border);
 }
