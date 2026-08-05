@@ -126,7 +126,7 @@ export default function AmbientEffectLayer() {
   const streakLayers = layers.filter(l => l.type === 'streak' && l.intensity > 0)
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[5] overflow-hidden" aria-hidden="true">
+    <div className="pointer-events-none fixed inset-0 z-[10] overflow-hidden" aria-hidden="true">
       {/* 氛围光：每层一组光斑（最多 2 层，性能保护） */}
       {ambientLayers.slice(0, 2).map((l, i) => (
         <div key={`ambient-${i}`} style={{ opacity: l.intensity * 0.5 }}>

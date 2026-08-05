@@ -508,13 +508,15 @@ body {
   opacity: 0.4;
 }
 
-/* 悬浮浮层：固定在上层，右边界对齐对话面板左边框 */
+/* 悬浮浮层：固定在上层，右边界对齐对话面板左边框。
+   z-8：高于工作区内容（auto）但低于特效层（z-10），
+   保证叙事面板打开时主题特效（氛围光/粒子/流光）不被遮挡。 */
 .narrative-overlay {
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
-  z-index: 50;
+  z-index: 8;
   display: flex;
   border-right: 1px solid var(--border);
   box-shadow: 2px 0 8px rgba(0,0,0,0.1);
