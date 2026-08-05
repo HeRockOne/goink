@@ -1,0 +1,293 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 660" font-family="KaiTi, STKaiti, 'Microsoft YaHei', sans-serif">
+  <defs>
+    <linearGradient id="canvasGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1420"/>
+      <stop offset="0.7" stop-color="#0a0e17"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <radialGradient id="canvasGlow" cx="0.35" cy="0.25" r="0.7">
+      <stop offset="0" stop-color="#6b8fad" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#6b8fad" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cardTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a1c4d6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#a1c4d6" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#a1c4d6" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bladeGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a1c4d6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#a1c4d6" stop-opacity="0.6"/>
+      <stop offset="0.85" stop-color="#e8f4ff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="glowFilter" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="cardShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feOffset dx="0" dy="6" in="b"/>
+      <feColorMatrix in="b" type="matrix" values="0 0 0 0 0 0 0 0 0 0.02 0 0 0 0 0.06 0 0 0 0.5 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="bladePath" d="M -80,320 C 200,260 500,380 860,300" fill="none"/>
+  </defs>
+
+  <!-- ═══ 画布背景：半透明深蓝黑 + 点阵网格 + 山峦 ═══ -->
+  <rect width="800" height="660" fill="url(#canvasGrad)"/>
+  <rect width="800" height="660" fill="url(#canvasGlow)"/>
+
+  <!-- 点阵网格（画布感，8px 吸附的可视化） -->
+  <g fill="#a1c4d6" opacity="0.05">
+    <circle cx="16" cy="16" r="1"/><circle cx="48" cy="16" r="1"/><circle cx="80" cy="16" r="1"/><circle cx="112" cy="16" r="1"/>
+    <circle cx="144" cy="16" r="1"/><circle cx="176" cy="16" r="1"/><circle cx="208" cy="16" r="1"/><circle cx="240" cy="16" r="1"/>
+    <circle cx="272" cy="16" r="1"/><circle cx="304" cy="16" r="1"/><circle cx="336" cy="16" r="1"/><circle cx="368" cy="16" r="1"/>
+    <circle cx="400" cy="16" r="1"/><circle cx="432" cy="16" r="1"/><circle cx="464" cy="16" r="1"/><circle cx="496" cy="16" r="1"/>
+    <circle cx="528" cy="16" r="1"/><circle cx="560" cy="16" r="1"/><circle cx="592" cy="16" r="1"/><circle cx="624" cy="16" r="1"/>
+    <circle cx="656" cy="16" r="1"/><circle cx="688" cy="16" r="1"/><circle cx="720" cy="16" r="1"/><circle cx="752" cy="16" r="1"/>
+    <circle cx="784" cy="16" r="1"/>
+  </g>
+  <g fill="#a1c4d6" opacity="0.035">
+    <circle cx="16" cy="48" r="1"/><circle cx="48" cy="48" r="1"/><circle cx="80" cy="48" r="1"/><circle cx="112" cy="48" r="1"/>
+    <circle cx="144" cy="48" r="1"/><circle cx="176" cy="48" r="1"/><circle cx="208" cy="48" r="1"/><circle cx="240" cy="48" r="1"/>
+    <circle cx="272" cy="48" r="1"/><circle cx="304" cy="48" r="1"/><circle cx="336" cy="48" r="1"/><circle cx="368" cy="48" r="1"/>
+    <circle cx="400" cy="48" r="1"/><circle cx="432" cy="48" r="1"/><circle cx="464" cy="48" r="1"/><circle cx="496" cy="48" r="1"/>
+    <circle cx="528" cy="48" r="1"/><circle cx="560" cy="48" r="1"/><circle cx="592" cy="48" r="1"/><circle cx="624" cy="48" r="1"/>
+    <circle cx="656" cy="48" r="1"/><circle cx="688" cy="48" r="1"/><circle cx="720" cy="48" r="1"/><circle cx="752" cy="48" r="1"/>
+    <circle cx="784" cy="48" r="1"/>
+  </g>
+  <g fill="#a1c4d6" opacity="0.02">
+    <circle cx="16" cy="80" r="1"/><circle cx="48" cy="80" r="1"/><circle cx="80" cy="80" r="1"/><circle cx="112" cy="80" r="1"/>
+    <circle cx="144" cy="80" r="1"/><circle cx="176" cy="80" r="1"/><circle cx="208" cy="80" r="1"/><circle cx="240" cy="80" r="1"/>
+    <circle cx="272" cy="80" r="1"/><circle cx="304" cy="80" r="1"/><circle cx="336" cy="80" r="1"/><circle cx="368" cy="80" r="1"/>
+    <circle cx="400" cy="80" r="1"/><circle cx="432" cy="80" r="1"/><circle cx="464" cy="80" r="1"/><circle cx="496" cy="80" r="1"/>
+    <circle cx="528" cy="80" r="1"/><circle cx="560" cy="80" r="1"/><circle cx="592" cy="80" r="1"/><circle cx="624" cy="80" r="1"/>
+    <circle cx="656" cy="80" r="1"/><circle cx="688" cy="80" r="1"/><circle cx="720" cy="80" r="1"/><circle cx="752" cy="80" r="1"/>
+    <circle cx="784" cy="80" r="1"/>
+  </g>
+
+  <!-- 山峦隐约（画布底部透出） -->
+  <path d="M0,660 L0,610 Q100,580 220,605 Q340,560 460,600 Q580,555 700,595 Q800,570 800,600 L800,660 Z" fill="#0d1522" opacity="0.55"/>
+  <path d="M0,660 L0,635 Q200,610 420,630 Q640,605 800,628 L800,660 Z" fill="#0a0e17" opacity="0.6"/>
+
+  <!-- 剑气：低空横贯画布 -->
+  <g>
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;0.75;0.75;0;0" keyTimes="0;0.55;0.64;0.9;0.96;1" dur="10s" repeatCount="indefinite"/>
+      <path d="M -80,320 C 200,260 500,380 860,300" fill="none" stroke="url(#bladeGrad)" stroke-width="2.5" filter="url(#soft)" opacity="0.5">
+        <animate attributeName="stroke-dasharray" values="0 1600;1400 1600" dur="2.4s" repeatCount="indefinite"/>
+      </path>
+      <g filter="url(#glowFilter)">
+        <animateMotion dur="2.4s" repeatCount="indefinite" rotate="auto"><mpath href="#bladePath"/></animateMotion>
+        <path d="M -30,0 L 30,0 L 35,2.5 L 30,5 L -30,5 Z" fill="url(#bladeGrad)"/>
+        <circle cx="36" cy="2.5" r="3.2" fill="#ffffff"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- 粒子流（右上角上升） -->
+  <g>
+    <circle r="1.8" fill="#a1c4d6" filter="url(#glowFilter)">
+      <animateMotion dur="6s" repeatCount="indefinite" begin="0s" path="M 700,640 C 730,480 740,360 770,40"/>
+      <animate attributeName="opacity" values="0;0.8;0" dur="6s" repeatCount="indefinite" begin="0s"/>
+    </circle>
+    <circle r="1.3" fill="#6b8fad" filter="url(#glowFilter)">
+      <animateMotion dur="7.5s" repeatCount="indefinite" begin="2.4s" path="M 740,650 C 760,500 770,380 790,60"/>
+      <animate attributeName="opacity" values="0;0.7;0" dur="7.5s" repeatCount="indefinite" begin="2.4s"/>
+    </circle>
+    <circle r="1.5" fill="#a1c4d6" filter="url(#glowFilter)">
+      <animateMotion dur="8s" repeatCount="indefinite" begin="4.1s" path="M 660,640 C 700,500 720,340 750,30"/>
+      <animate attributeName="opacity" values="0;0.8;0" dur="8s" repeatCount="indefinite" begin="4.1s"/>
+    </circle>
+  </g>
+
+  <!-- ═══ 画布顶部工具栏 ═══ -->
+  <rect x="0" y="0" width="800" height="52" fill="#0b0f18" opacity="0.6"/>
+  <line x1="0" y1="52" x2="800" y2="52" stroke="#a1c4d6" stroke-opacity="0.2"/>
+  <text x="18" y="33" font-size="14" fill="#e8eef2" letter-spacing="3" filter="url(#glowFilter)">✦ 动态叙事画布</text>
+  <text x="190" y="33" font-size="11" fill="#8aa8c0">第 001 章 · 剑起青冥</text>
+  <rect x="470" y="14" width="58" height="24" rx="5" fill="#a1c4d6" fill-opacity="0.1" stroke="#a1c4d6" stroke-opacity="0.3"/>
+  <text x="484" y="31" font-size="11" fill="#a1c4d6">＋ 卡片</text>
+  <rect x="536" y="14" width="90" height="24" rx="5" fill="#a1c4d6" fill-opacity="0.08" stroke="#a1c4d6" stroke-opacity="0.22"/>
+  <text x="550" y="31" font-size="11" fill="#8aa8c0">重置布局</text>
+  <text x="660" y="31" font-size="11" fill="#8aa8c0" opacity="0.7">拖动移动 · 右下角缩放</text>
+
+  <!-- ═══ 卡片渲染（默认布局坐标，绝对定位，视觉重设计） ═══ -->
+
+  <!-- 通用卡片视觉：半透明毛玻璃 + 1px 细边框 + 顶部渐变线 + 发光标题 + 拖拽柄 + 缩放角 -->
+
+  <!-- current 当前章（z 置顶，发光边框演示） -->
+  <g transform="translate(12, 64)">
+    <rect width="260" height="280" rx="8" fill="#0f1826" opacity="0.55" filter="url(#cardShadow)"/>
+    <rect width="260" height="280" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.3" filter="url(#glowFilter)"/>
+    <rect width="260" height="2" fill="url(#cardTop)"/>
+    <rect y="12" width="260" height="30" rx="4" fill="#a1c4d6" fill-opacity="0.05"/>
+    <g stroke="#8aa8c0" stroke-opacity="0.5" stroke-width="1.2">
+      <line x1="16" y1="21" x2="28" y2="21"/><line x1="16" y1="27" x2="28" y2="27"/><line x1="16" y1="33" x2="28" y2="33"/>
+    </g>
+    <text x="36" y="32" font-size="12" fill="#a1c4d6" letter-spacing="2" filter="url(#glowFilter)">◈ 当前章</text>
+    <text x="220" y="32" font-size="11" fill="#8aa8c0">· · ·</text>
+    <text x="18" y="66" font-size="11.5" fill="#e8eef2" letter-spacing="1">第一章 · 剑起青冥</text>
+    <line x1="18" y1="76" x2="118" y2="76" stroke="#a1c4d6" stroke-opacity="0.4"/>
+    <text x="18" y="98" font-size="10.5" fill="#8aa8c0">场景 · 剑冢入口，残剑异动</text>
+    <text x="18" y="116" font-size="10.5" fill="#8aa8c0">关键事件 · 拜入剑宗 / 得残剑</text>
+    <text x="18" y="134" font-size="10.5" fill="#8aa8c0">伏笔 · 残剑认主（第 6 章回收）</text>
+    <text x="18" y="152" font-size="10.5" fill="#8aa8c0">情绪 · 敬畏 → 战栗 → 决意</text>
+    <text x="18" y="176" font-size="10.5" fill="#a1c4d6">章末钩子 · 剑冢深处，一声低吟</text>
+    <rect x="18" y="236" width="224" height="28" rx="6" fill="#a1c4d6" fill-opacity="0.08" stroke="#a1c4d6" stroke-opacity="0.25"/>
+    <text x="28" y="254" font-size="10.5" fill="#c8d8e8">进度 3,214 / 3,500 字 · 待审读</text>
+    <path d="M 248,268 L 248,276 L 256,276 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- past 过去章节流 -->
+  <g transform="translate(278, 64)">
+    <rect width="260" height="280" rx="8" fill="#0f1826" opacity="0.55" filter="url(#cardShadow)"/>
+    <rect width="260" height="280" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.16"/>
+    <rect width="260" height="2" fill="url(#cardTop)"/>
+    <rect y="12" width="260" height="30" rx="4" fill="#a1c4d6" fill-opacity="0.04"/>
+    <g stroke="#8aa8c0" stroke-opacity="0.5" stroke-width="1.2">
+      <line x1="16" y1="21" x2="28" y2="21"/><line x1="16" y1="27" x2="28" y2="27"/><line x1="16" y1="33" x2="28" y2="33"/>
+    </g>
+    <text x="36" y="32" font-size="12" fill="#a1c4d6" letter-spacing="2">◈ 过往章节</text>
+    <text x="220" y="32" font-size="11" fill="#8aa8c0">· · ·</text>
+    <!-- 事件时间线 -->
+    <g font-size="10.5">
+      <circle cx="20" cy="58" r="3" fill="#a1c4d6" opacity="0.7"/>
+      <text x="32" y="62" fill="#c8d8e8">拜入剑宗，灵根显化</text>
+      <line x1="20" y1="70" x2="20" y2="92" stroke="#a1c4d6" stroke-opacity="0.2"/>
+      <circle cx="20" cy="96" r="3" fill="#a1c4d6" opacity="0.7"/>
+      <text x="32" y="100" fill="#c8d8e8">藏经阁初见剑意残卷</text>
+      <line x1="20" y1="108" x2="20" y2="130" stroke="#a1c4d6" stroke-opacity="0.2"/>
+      <circle cx="20" cy="134" r="3" fill="#a1c4d6" opacity="0.7"/>
+      <text x="32" y="138" fill="#c8d8e8">剑冢试炼 · 残剑认主</text>
+      <line x1="20" y1="146" x2="20" y2="168" stroke="#a1c4d6" stroke-opacity="0.2"/>
+      <circle cx="20" cy="172" r="3" fill="#6b8fad"/>
+      <text x="32" y="176" fill="#a1c4d6">剑意初醒 · 剑气灌体（伏笔）</text>
+      <line x1="20" y1="184" x2="20" y2="206" stroke="#a1c4d6" stroke-opacity="0.2"/>
+      <circle cx="20" cy="210" r="3" fill="#8aa8c0" opacity="0.5"/>
+      <text x="32" y="214" fill="#8aa8c0">夜枭现身，剑冢深处异动</text>
+    </g>
+    <path d="M 248,268 L 248,276 L 256,276 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- future 未来规划（hover 发光演示） -->
+  <g transform="translate(548, 64)">
+    <rect width="210" height="280" rx="8" fill="#0f1826" opacity="0.6" filter="url(#cardShadow)"/>
+    <rect width="210" height="280" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.4" filter="url(#glowFilter)">
+      <animate attributeName="stroke-opacity" values="0.25;0.5;0.25" dur="3.5s" repeatCount="indefinite"/>
+    </rect>
+    <rect width="210" height="2" fill="url(#cardTop)"/>
+    <rect y="12" width="210" height="30" rx="4" fill="#a1c4d6" fill-opacity="0.06"/>
+    <g stroke="#8aa8c0" stroke-opacity="0.5" stroke-width="1.2">
+      <line x1="16" y1="21" x2="26" y2="21"/><line x1="16" y1="27" x2="26" y2="27"/><line x1="16" y1="33" x2="26" y2="33"/>
+    </g>
+    <text x="34" y="32" font-size="12" fill="#a1c4d6" letter-spacing="2" filter="url(#glowFilter)">◈ 未来规划</text>
+    <text x="176" y="32" font-size="11" fill="#8aa8c0">· · ·</text>
+    <text x="16" y="62" font-size="11" fill="#c8d8e8">第 002 章 · 万剑归宗</text>
+    <text x="16" y="84" font-size="10" fill="#8aa8c0">剑冢试炼 · 剑气灌体</text>
+    <text x="16" y="100" font-size="10" fill="#8aa8c0">回收伏笔 · 残剑来历</text>
+    <line x1="16" y1="116" x2="194" y2="116" stroke="#a1c4d6" stroke-opacity="0.14"/>
+    <text x="16" y="136" font-size="11" fill="#c8d8e8">第 003 章 · 太虚剑意</text>
+    <text x="16" y="158" font-size="10" fill="#8aa8c0">夜枭身份初现</text>
+    <line x1="16" y1="174" x2="194" y2="174" stroke="#a1c4d6" stroke-opacity="0.14"/>
+    <text x="16" y="194" font-size="11" fill="#c8d8e8">第 004 章 · 剑气纵横</text>
+    <text x="16" y="216" font-size="10" fill="#8aa8c0">下山历练 · 首战立威</text>
+    <text x="16" y="248" font-size="10" fill="#a1c4d6" opacity="0.9">爽点节奏 · 三章一小高潮</text>
+    <path d="M 198,268 L 198,276 L 206,276 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- arcs 弧线进度 -->
+  <g transform="translate(12, 352)">
+    <rect width="200" height="140" rx="8" fill="#0f1826" opacity="0.55" filter="url(#cardShadow)"/>
+    <rect width="200" height="140" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.16"/>
+    <rect width="200" height="2" fill="url(#cardTop)"/>
+    <rect y="10" width="200" height="26" rx="4" fill="#a1c4d6" fill-opacity="0.04"/>
+    <text x="14" y="28" font-size="11.5" fill="#a1c4d6" letter-spacing="2">◈ 弧线</text>
+    <text x="166" y="28" font-size="11" fill="#8aa8c0">· · ·</text>
+    <g font-size="10">
+      <text x="16" y="56" fill="#8aa8c0">主线 · 复仇之路</text>
+      <rect x="16" y="64" width="168" height="4" rx="2" fill="#a1c4d6" fill-opacity="0.12"/>
+      <rect x="16" y="64" width="76" height="4" rx="2" fill="#a1c4d6" filter="url(#glowFilter)"/>
+      <text x="16" y="92" fill="#8aa8c0">支线 · 残剑之谜</text>
+      <rect x="16" y="100" width="168" height="4" rx="2" fill="#a1c4d6" fill-opacity="0.12"/>
+      <rect x="16" y="100" width="52" height="4" rx="2" fill="#6b8fad"/>
+      <text x="16" y="128" fill="#8aa8c0">角色弧 · 剑心初成</text>
+      <rect x="16" y="136" width="168" height="4" rx="2" fill="#a1c4d6" fill-opacity="0.12"/>
+      <rect x="16" y="136" width="30" height="4" rx="2" fill="#4a6a80"/>
+    </g>
+    <path d="M 188,128 L 188,136 L 196,136 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- foreshadow 伏笔（超期红色发光警示） -->
+  <g transform="translate(222, 352)">
+    <rect width="340" height="140" rx="8" fill="#0f1826" opacity="0.55" filter="url(#cardShadow)"/>
+    <rect width="340" height="140" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.16"/>
+    <rect width="340" height="2" fill="url(#cardTop)"/>
+    <rect y="10" width="340" height="26" rx="4" fill="#a1c4d6" fill-opacity="0.04"/>
+    <text x="14" y="28" font-size="11.5" fill="#a1c4d6" letter-spacing="2">◈ 伏笔</text>
+    <text x="306" y="28" font-size="11" fill="#8aa8c0">· · ·</text>
+    <rect x="14" y="42" width="312" height="26" rx="5" fill="#d45a6a" fill-opacity="0.14" stroke="#d45a6a" stroke-opacity="0.45" filter="url(#glowFilter)"/>
+    <text x="24" y="60" font-size="10.5" fill="#d08090">⚠ 残剑来历 · 已超期 3 章</text>
+    <text x="190" y="60" font-size="10" fill="#d08090" opacity="0.8">★★★★★ 必收</text>
+    <text x="24" y="88" font-size="10.5" fill="#c8d8e8">✦ 剑冢封印 · 第 6 章回收</text>
+    <text x="180" y="88" font-size="10" fill="#8aa8c0">★★★★ 重要</text>
+    <text x="24" y="108" font-size="10.5" fill="#8aa8c0">✦ 夜枭身份 · 第 8 章</text>
+    <text x="180" y="108" font-size="10" fill="#8aa8c0">★★★ 一般</text>
+    <text x="24" y="128" font-size="10.5" fill="#8aa8c0">✦ 玄尘子旧事 · 未定</text>
+    <text x="180" y="128" font-size="10" fill="#8aa8c0">★★</text>
+    <path d="M 328,128 L 328,136 L 336,136 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- reader 读者认知 -->
+  <g transform="translate(572, 352)">
+    <rect width="190" height="140" rx="8" fill="#0f1826" opacity="0.55" filter="url(#cardShadow)"/>
+    <rect width="190" height="140" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.16"/>
+    <rect width="190" height="2" fill="url(#cardTop)"/>
+    <rect y="10" width="190" height="26" rx="4" fill="#a1c4d6" fill-opacity="0.04"/>
+    <text x="14" y="28" font-size="11.5" fill="#a1c4d6" letter-spacing="2">◈ 读者认知</text>
+    <text x="156" y="28" font-size="11" fill="#8aa8c0">· · ·</text>
+    <g font-size="10.5">
+      <text x="16" y="56" fill="#6ac09a">✓ 已知</text>
+      <text x="60" y="56" fill="#8aa8c0">林晚舟是遗孤，残剑认主</text>
+      <text x="16" y="80" fill="#a1c4d6">✦ 悬念</text>
+      <text x="60" y="80" fill="#8aa8c0">残剑为何认主 · 夜枭身份</text>
+      <text x="16" y="104" fill="#d08090">✗ 误知</text>
+      <text x="60" y="104" fill="#8aa8c0">读者以为玄尘子只是引路人</text>
+    </g>
+    <path d="M 178,128 L 178,136 L 186,136 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- detailtabs 详情标签（底部宽卡） -->
+  <g transform="translate(12, 500)">
+    <rect width="750" height="130" rx="8" fill="#0f1826" opacity="0.6" filter="url(#cardShadow)"/>
+    <rect width="750" height="130" rx="8" fill="none" stroke="#a1c4d6" stroke-opacity="0.16"/>
+    <rect width="750" height="2" fill="url(#cardTop)"/>
+    <rect y="12" width="750" height="30" rx="4" fill="#a1c4d6" fill-opacity="0.04"/>
+    <g stroke="#8aa8c0" stroke-opacity="0.5" stroke-width="1.2">
+      <line x1="16" y1="21" x2="28" y2="21"/><line x1="16" y1="27" x2="28" y2="27"/><line x1="16" y1="33" x2="28" y2="33"/>
+    </g>
+    <text x="36" y="32" font-size="12" fill="#a1c4d6" letter-spacing="2">◈ 章节详情</text>
+    <!-- tab 行 -->
+    <rect x="60" y="52" width="72" height="20" rx="5" fill="#a1c4d6" fill-opacity="0.12"/>
+    <text x="76" y="66" font-size="10.5" fill="#a1c4d6">当前章</text>
+    <rect x="138" y="52" width="72" height="20" rx="5" fill="#a1c4d6" fill-opacity="0.05"/>
+    <text x="154" y="66" font-size="10.5" fill="#8aa8c0">大纲</text>
+    <rect x="216" y="52" width="72" height="20" rx="5" fill="#a1c4d6" fill-opacity="0.05"/>
+    <text x="232" y="66" font-size="10.5" fill="#8aa8c0">卷纲</text>
+    <rect x="294" y="52" width="72" height="20" rx="5" fill="#a1c4d6" fill-opacity="0.05"/>
+    <text x="310" y="66" font-size="10.5" fill="#8aa8c0">全书总纲</text>
+    <!-- 内容 -->
+    <text x="16" y="100" font-size="10.5" fill="#c8d8e8">场景设计 · 剑冢入口，残月当空，山门钟声三响</text>
+    <text x="16" y="118" font-size="10.5" fill="#8aa8c0">关键事件 · ① 拜入剑宗 ② 藏经阁惊鸿一瞥 ③ 残剑认主</text>
+    <path d="M 738,118 L 738,126 L 746,126 Z" fill="#a1c4d6" opacity="0.5"/>
+  </g>
+
+  <!-- 画布滚动条（暗示可滚动） -->
+  <rect x="790" y="52" width="6" height="578" rx="3" fill="#a1c4d6" opacity="0.08"/>
+  <rect x="790" y="52" width="6" height="180" rx="3" fill="#a1c4d6" opacity="0.25"/>
+  <rect x="12" y="640" width="772" height="6" rx="3" fill="#a1c4d6" opacity="0.08"/>
+  <rect x="12" y="640" width="560" height="6" rx="3" fill="#a1c4d6" opacity="0.25"/>
+</svg>

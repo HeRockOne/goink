@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { EFFECT_PRESETS, MAX_PARTICLES, normalizeEffects, presetByName } from './themeEffects'
 
 describe('themeEffects', () => {
-  it('预设 5 套', () => {
-    expect(EFFECT_PRESETS.length).toBe(5)
+  it('预设 6 套', () => {
+    expect(EFFECT_PRESETS.length).toBe(6)
     for (const p of EFFECT_PRESETS) {
       expect(p.name.length).toBeGreaterThan(0)
       expect(p.effects.layers.length).toBeGreaterThan(0)

@@ -20,11 +20,12 @@ export default function AmbientEffectLayer() {
 
   // 稳定引用：避免每次 render 生成新数组导致粒子 effect 反复重建
   const particleLayers = useMemo(() => layers.filter(l => l.type === 'particles'), [layers])
-  const showParticles = particleLayers.length > 0
+  const swordLayers = useMemo(() => layers.filter(l => l.type === 'sword' && l.intensity > 0), [layers])
+  const showParticles = particleLayers.length > 0 || swordLayers.length > 0
 
-  // ── 粒子层（多层合并到同一 Canvas，总粒子数封顶） ──
+  // ── 统一 Canvas 循环：粒子层（合并，总数封顶）+ 剑气层（横贯/低掠/弧光） ──
   useEffect(() => {
-    if (particleLayers.length === 0) return
+    if (particleLayers.length === 0 && swordLayers.length === 0) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -86,6 +87,7 @@ export default function AmbientEffectLayer() {
     const frame = () => {
       if (!running) return
       ctx.clearRect(0, 0, w, h)
+      const now = performance.now()
       for (const p of parts) {
         p.x += p.vx
         p.y += p.vy
@@ -136,7 +138,91 @@ export default function AmbientEffectLayer() {
         }
       }
       ctx.globalAlpha = 1
+      // ── 剑气层：横贯长空 + 低空掠过 + 挥剑弧光（周期触发，克制） ──
+      if (swordLayers.length > 0) {
+        const sInten = Math.max(0.1, Math.min(1, swordLayers[0].intensity))
+        drawSwords(ctx, now, w, h, sInten, colors)
+      }
       raf = requestAnimationFrame(frame)
+    }
+
+    // 剑气绘制：二次贝塞尔轨迹 + 渐变拖尾 + 白亮剑尖
+    const bezier = (t: number, p0: number, c: number, p1: number) =>
+      (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * c + t * t * p1
+
+    const drawBlade = (t: number, p0x: number, p0y: number, cx: number, cy: number, p1x: number, p1y: number, width: number, colors: ReturnType<typeof readColors>, alpha: number) => {
+      const x = bezier(t, p0x, cx, p1x)
+      const y = bezier(t, p0y, cy, p1y)
+      // 切线方向
+      const tx = 2 * (1 - t) * (cx - p0x) + 2 * t * (p1x - cx)
+      const ty = 2 * (1 - t) * (cy - p0y) + 2 * t * (p1y - cy)
+      const len = Math.sqrt(tx * tx + ty * ty) || 1
+      const ux = tx / len, uy = ty / len
+      const tail = width * 7
+      // 拖尾光带（从尾到尖渐变）
+      const g = ctx.createLinearGradient(x - ux * tail, y - uy * tail, x + ux * tail, y + uy * tail)
+      g.addColorStop(0, 'rgba(0,0,0,0)')
+      g.addColorStop(0.55, colors.glow)
+      g.addColorStop(0.92, colors.line)
+      g.addColorStop(1, '#ffffff')
+      ctx.globalAlpha = alpha
+      ctx.strokeStyle = g
+      ctx.lineWidth = 3
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(x - ux * tail, y - uy * tail)
+      ctx.lineTo(x + ux * tail * 0.9, y + uy * tail * 0.9)
+      ctx.stroke()
+      // 剑尖光点 + 光晕
+      ctx.beginPath()
+      ctx.arc(x, y, 7, 0, Math.PI * 2)
+      ctx.fillStyle = colors.glow
+      ctx.globalAlpha = alpha * 0.6
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(x, y, 2.6, 0, Math.PI * 2)
+      ctx.fillStyle = '#ffffff'
+      ctx.globalAlpha = alpha
+      ctx.fill()
+      ctx.globalAlpha = 1
+    }
+
+    const drawSwords = (ctx: CanvasRenderingContext2D, now: number, w: number, h: number, inten: number, colors: ReturnType<typeof readColors>) => {
+      const cyc = (period: number) => (now % (period * 1000)) / (period * 1000)
+      const windowed = (t: number, w0: number, w1: number): number | null => {
+        if (t < w0 || t > w1) return null
+        return (t - w0) / (w1 - w0)
+      }
+      const alpha = 0.9 * inten
+      // 剑气一：横贯长空（8s 周期，1.4s 划过）
+      const t1 = windowed(cyc(8), 0.14, 0.31)
+      if (t1 !== null) drawBlade(t1, -120, h * 0.2, w * 0.42, h * 0.1, w + 120, h * 0.32, 44, colors, alpha)
+      // 剑气二：低空掠过（11s 周期，2.2s 划过）
+      const t2 = windowed(cyc(11), 0.6, 0.82)
+      if (t2 !== null) drawBlade(t2, -120, h * 0.78, w * 0.5, h * 0.72, w + 120, h * 0.74, 34, colors, alpha * 0.75)
+      // 剑气三：挥剑弧光（3.6s 周期，弧线划出残影）
+      const t3 = windowed(cyc(3.6), 0, 0.35)
+      if (t3 !== null) {
+        const ax = bezier(t3, w * 0.3, w * 0.26, w * 0.36)
+        const ay = bezier(t3, h * 0.26, h * 0.56, h * 0.7)
+        ctx.globalAlpha = alpha * 0.8
+        ctx.strokeStyle = colors.line
+        ctx.lineWidth = 2
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        for (let i = 0; i <= t3; i += 0.02) {
+          const x = bezier(i, w * 0.3, w * 0.26, w * 0.36)
+          const y = bezier(i, h * 0.26, h * 0.56, h * 0.7)
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(ax, ay, 3, 0, Math.PI * 2)
+        ctx.fillStyle = '#e8f4ff'
+        ctx.globalAlpha = alpha
+        ctx.fill()
+        ctx.globalAlpha = 1
+      }
     }
 
     const onVis = () => {
@@ -160,7 +246,7 @@ export default function AmbientEffectLayer() {
       window.removeEventListener('resize', resize)
       document.removeEventListener('visibilitychange', onVis)
     }
-  }, [showParticles, activeTheme, customThemes, particleLayers])
+  }, [showParticles, activeTheme, customThemes, particleLayers, swordLayers])
 
   // ── 各类型渲染 ──
   const ambientLayers = layers.filter(l => l.type === 'ambient' && l.intensity > 0)

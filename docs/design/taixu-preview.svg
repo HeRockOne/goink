@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="KaiTi, STKaiti, serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a0e17"/>
+      <stop offset="0.45" stop-color="#0e1522"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0.3" cy="0.2" r="0.6">
+      <stop offset="0" stop-color="#6b8fad" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#6b8fad" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.7" cy="0.85" r="0.5">
+      <stop offset="0" stop-color="#a1c4d6" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#a1c4d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panelTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a1c4d6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#a1c4d6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#a1c4d6" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="glowFilter" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- ═══ 背景层 ═══ -->
+  <rect width="1200" height="720" fill="url(#bgGrad)"/>
+  <rect width="1200" height="720" fill="url(#glow1)"/>
+  <rect width="1200" height="720" fill="url(#glow2)"/>
+
+  <!-- 斜线纹理 -->
+  <g stroke="#a1c4d6" stroke-opacity="0.03" stroke-width="1">
+    <line x1="-50" y1="250" x2="150" y2="50"/><line x1="100" y1="250" x2="300" y2="50"/>
+    <line x1="250" y1="250" x2="450" y2="50"/><line x1="400" y1="250" x2="600" y2="50"/>
+    <line x1="550" y1="250" x2="750" y2="50"/><line x1="700" y1="250" x2="900" y2="50"/>
+    <line x1="850" y1="250" x2="1050" y2="50"/><line x1="1000" y1="250" x2="1200" y2="50"/>
+    <line x1="200" y1="600" x2="400" y2="400"/><line x1="350" y1="600" x2="550" y2="400"/>
+    <line x1="500" y1="600" x2="700" y2="400"/><line x1="650" y1="600" x2="850" y2="400"/>
+    <line x1="800" y1="600" x2="1000" y2="400"/><line x1="950" y1="600" x2="1150" y2="400"/>
+  </g>
+
+  <!-- 山峦剪影（四层，透明度递进） -->
+  <path d="M0,720 L0,640 Q100,600 220,635 Q340,580 460,625 Q580,560 700,615 Q820,575 940,625 Q1060,590 1200,630 L1200,720 Z" fill="#0d1420" opacity="0.9"/>
+  <path d="M0,720 L0,660 Q140,620 300,655 Q460,605 620,650 Q780,610 940,655 Q1080,625 1200,655 L1200,720 Z" fill="#0a0e17" opacity="0.75"/>
+  <path d="M0,720 L0,680 Q200,650 420,675 Q640,645 860,675 Q1040,655 1200,675 L1200,720 Z" fill="#0d1522" opacity="0.9"/>
+
+  <!-- 剑形粒子（点 + 线段 + 光晕） -->
+  <g>
+    <circle cx="180" cy="180" r="6" fill="#a1c4d6" opacity="0.12"/><circle cx="180" cy="180" r="1.8" fill="#a1c4d6" opacity="0.6"/>
+    <circle cx="420" cy="90" r="5" fill="#a1c4d6" opacity="0.1"/><circle cx="420" cy="90" r="1.4" fill="#a1c4d6" opacity="0.5"/>
+    <circle cx="660" cy="200" r="7" fill="#a1c4d6" opacity="0.12"/><circle cx="660" cy="200" r="2" fill="#a1c4d6" opacity="0.55"/>
+    <circle cx="900" cy="120" r="5" fill="#a1c4d6" opacity="0.1"/><circle cx="900" cy="120" r="1.5" fill="#a1c4d6" opacity="0.5"/>
+    <circle cx="1100" cy="300" r="6" fill="#a1c4d6" opacity="0.1"/><circle cx="1100" cy="300" r="1.7" fill="#a1c4d6" opacity="0.5"/>
+    <circle cx="280" cy="480" r="5" fill="#a1c4d6" opacity="0.1"/><circle cx="280" cy="480" r="1.4" fill="#a1c4d6" opacity="0.45"/>
+    <!-- 剑形短线 -->
+    <g stroke="#a1c4d6" stroke-opacity="0.35" stroke-width="0.8">
+      <line x1="230" y1="150" x2="243" y2="147"/><line x1="500" y1="250" x2="514" y2="248"/>
+      <line x1="750" y1="130" x2="764" y2="133"/><line x1="960" y1="400" x2="974" y2="396"/>
+      <line x1="340" y1="560" x2="353" y2="557"/><line x1="60" y1="420" x2="74" y2="418"/>
+    </g>
+    <!-- 粒子连线 -->
+    <g stroke="#a1c4d6" stroke-opacity="0.08" stroke-width="0.5">
+      <line x1="180" y1="180" x2="420" y2="90"/><line x1="420" y1="90" x2="660" y2="200"/>
+      <line x1="660" y1="200" x2="900" y2="120"/><line x1="900" y1="120" x2="1100" y2="300"/>
+      <line x1="180" y1="180" x2="660" y2="200"/><line x1="420" y1="90" x2="900" y2="120"/>
+    </g>
+  </g>
+
+  <!-- ═══ 顶部标题栏（半透明浮层） ═══ -->
+  <rect x="0" y="0" width="1200" height="46" fill="#0b0f18" opacity="0.55"/>
+  <line x1="0" y1="46" x2="1200" y2="46" stroke="#a1c4d6" stroke-opacity="0.18"/>
+  <text x="20" y="30" font-size="15" fill="#e8eef2" font-weight="bold" letter-spacing="3">太虚剑宗 · 第一卷</text>
+  <text x="400" y="30" font-size="12" fill="#a1c4d6" opacity="0.75" letter-spacing="2">⚔ 万剑归宗 · 剑气极盛</text>
+
+  <!-- ═══ ActivityBar（半透明窄条，激活项发光） ═══ -->
+  <rect x="0" y="46" width="56" height="648" fill="#0b0f18" opacity="0.5"/>
+  <line x1="56" y1="46" x2="56" y2="694" stroke="#a1c4d6" stroke-opacity="0.14"/>
+  <!-- 图标 -->
+  <g text-anchor="middle">
+    <circle cx="28" cy="88" r="16" fill="#a1c4d6" fill-opacity="0.14" filter="url(#glowFilter)"/>
+    <rect x="20" y="80" width="16" height="16" rx="3" fill="none" stroke="#a1c4d6" stroke-width="1.4"/>
+    <text x="28" y="142" font-size="13" fill="#8aa8c0">卷</text>
+    <text x="28" y="196" font-size="13" fill="#8aa8c0">角</text>
+    <text x="28" y="250" font-size="13" fill="#8aa8c0">色</text>
+    <text x="28" y="304" font-size="13" fill="#8aa8c0">界</text>
+    <text x="28" y="358" font-size="13" fill="#8aa8c0">物</text>
+    <text x="28" y="412" font-size="13" fill="#8aa8c0">线</text>
+    <text x="28" y="466" font-size="13" fill="#8aa8c0">笔</text>
+    <text x="28" y="520" font-size="13" fill="#8aa8c0">忆</text>
+  </g>
+  <!-- 激活指示发光条 -->
+  <rect x="52" y="72" width="4" height="32" rx="2" fill="#a1c4d6" filter="url(#glowFilter)"/>
+
+  <!-- ═══ 侧栏（半透明毛玻璃，激活行发光） ═══ -->
+  <rect x="56" y="46" width="250" height="648" fill="#0d1420" opacity="0.45"/>
+  <line x1="306" y1="46" x2="306" y2="694" stroke="#a1c4d6" stroke-opacity="0.14"/>
+  <!-- 顶部渐变发光线 -->
+  <rect x="56" y="46" width="250" height="2" fill="url(#panelTop)"/>
+  <!-- 搜索框 -->
+  <rect x="72" y="60" width="218" height="28" rx="6" fill="#a1c4d6" fill-opacity="0.07" stroke="#a1c4d6" stroke-opacity="0.22"/>
+  <text x="84" y="79" font-size="12" fill="#8aa8c0">⌕ 搜索章节 / 角色 / 设定…</text>
+  <!-- 章节列表 -->
+  <g font-size="12.5">
+    <text x="72" y="118" fill="#8aa8c0" letter-spacing="2">第一卷 · 初入剑宗</text>
+    <!-- 激活行：发光 + 青蓝文字 + 左侧光条 -->
+    <rect x="66" y="132" width="230" height="30" rx="6" fill="#a1c4d6" fill-opacity="0.1"/>
+    <rect x="66" y="132" width="3" height="30" rx="1.5" fill="#a1c4d6" filter="url(#glowFilter)"/>
+    <text x="76" y="151" fill="#a1c4d6" font-weight="bold">第 001 章 · 剑起青冥</text>
+    <text x="76" y="183" fill="#e8eef2" opacity="0.8">第 002 章 · 万剑归宗</text>
+    <text x="76" y="215" fill="#e8eef2" opacity="0.8">第 003 章 · 太虚剑意</text>
+    <text x="76" y="247" fill="#e8eef2" opacity="0.8">第 004 章 · 剑气纵横</text>
+    <text x="76" y="279" fill="#e8eef2" opacity="0.8">第 005 章 · 剑冢试炼</text>
+    <text x="76" y="311" fill="#e8eef2" opacity="0.55">第 006 章 · 峰回路转</text>
+    <text x="76" y="343" fill="#e8eef2" opacity="0.55">第 007 章 · 心剑合一</text>
+  </g>
+  <!-- 侧栏底部：设定摘要卡 -->
+  <rect x="66" y="620" width="230" height="58" rx="8" fill="#a1c4d6" fill-opacity="0.06" stroke="#a1c4d6" stroke-opacity="0.18"/>
+  <text x="76" y="640" font-size="11" fill="#a1c4d6" opacity="0.8" letter-spacing="2">✦ 世界观 · 太虚剑宗</text>
+  <text x="76" y="660" font-size="10.5" fill="#8aa8c0">剑气灵气 · 三境九重天 · 剑冢禁地</text>
+
+  <!-- ═══ 编辑器（实底纸面，唯一实体） ═══ -->
+  <rect x="306" y="46" width="578" height="648" fill="#111827" opacity="0.97"/>
+  <line x1="884" y1="46" x2="884" y2="694" stroke="#a1c4d6" stroke-opacity="0.12"/>
+  <!-- tab 栏 -->
+  <rect x="306" y="46" width="578" height="36" fill="#0e1522" opacity="0.9"/>
+  <rect x="320" y="56" width="120" height="22" rx="5" fill="#a1c4d6" fill-opacity="0.12"/>
+  <text x="332" y="71" font-size="11.5" fill="#a1c4d6">第 001 章 · 剑起青冥</text>
+  <text x="460" y="71" font-size="11.5" fill="#8aa8c0">book-outline.md</text>
+  <text x="580" y="71" font-size="11.5" fill="#8aa8c0">goink.md</text>
+  <!-- 标题（发光） -->
+  <text x="330" y="116" font-size="24" fill="#e8eef2" font-weight="bold" letter-spacing="4" filter="url(#glowFilter)">第一章 · 剑起青冥</text>
+  <line x1="330" y1="128" x2="430" y2="128" stroke="#a1c4d6" stroke-opacity="0.5"/>
+  <!-- 正文线条（模拟文字） -->
+  <g stroke="#a1c4d6" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round">
+    <line x1="330" y1="160" x2="820" y2="160"/><line x1="330" y1="184" x2="780" y2="184"/>
+    <line x1="330" y1="208" x2="840" y2="208"/><line x1="330" y1="232" x2="790" y2="232"/>
+    <line x1="330" y1="256" x2="830" y2="256"/><line x1="330" y1="280" x2="760" y2="280"/>
+    <line x1="330" y1="304" x2="820" y2="304"/><line x1="330" y1="328" x2="800" y2="328"/>
+    <line x1="330" y1="352" x2="840" y2="352"/>
+  </g>
+  <!-- 关键句高亮 -->
+  <text x="330" y="412" font-size="12.5" fill="#a1c4d6" letter-spacing="1">「剑气纵横三万里，一剑光寒十九州。」</text>
+  <g stroke="#a1c4d6" stroke-opacity="0.16" stroke-width="2" stroke-linecap="round">
+    <line x1="330" y1="446" x2="810" y2="446"/><line x1="330" y1="470" x2="790" y2="470"/>
+    <line x1="330" y1="494" x2="830" y2="494"/><line x1="330" y1="518" x2="800" y2="518"/>
+  </g>
+  <!-- 状态栏 -->
+  <rect x="306" y="670" width="578" height="24" fill="#0e1522" opacity="0.9"/>
+  <text x="318" y="686" font-size="10.5" fill="#8aa8c0">3,214 字 · 已保存 ✓</text>
+  <text x="560" y="686" font-size="10.5" fill="#8aa8c0">楷体 · 1.8 行距</text>
+
+  <!-- ═══ 聊天面板（半透明，气泡） ═══ -->
+  <rect x="884" y="46" width="316" height="648" fill="#0d1420" opacity="0.5"/>
+  <rect x="884" y="46" width="316" height="2" fill="url(#panelTop)"/>
+  <!-- AI 气泡（半透明 + 青蓝边框） -->
+  <rect x="900" y="64" width="200" height="52" rx="8" fill="#a1c4d6" fill-opacity="0.08" stroke="#a1c4d6" stroke-opacity="0.28"/>
+  <text x="912" y="84" font-size="11" fill="#a1c4d6" opacity="0.9">✦ 已读取第一卷设定</text>
+  <text x="912" y="102" font-size="10.5" fill="#c8d8e8">章节衔接：第 001 章 → 第 002 章 ✓</text>
+  <!-- 工具调用卡（发光边框） -->
+  <rect x="900" y="128" width="284" height="36" rx="6" fill="#a1c4d6" fill-opacity="0.06" stroke="#a1c4d6" stroke-opacity="0.2"/>
+  <text x="912" y="150" font-size="11" fill="#c8d8e8">⚔ 检索世界观设定 · 完成</text>
+  <!-- 用户气泡（实底青蓝） -->
+  <rect x="1016" y="176" width="168" height="30" rx="8" fill="#a1c4d6"/>
+  <text x="1028" y="195" font-size="11" fill="#0a0e17">继续写第二章</text>
+  <!-- AI 回复流式 -->
+  <rect x="900" y="222" width="240" height="60" rx="8" fill="#a1c4d6" fill-opacity="0.08" stroke="#a1c4d6" stroke-opacity="0.28"/>
+  <text x="912" y="242" font-size="11" fill="#c8d8e8">第二章将展开太虚剑意的试炼，</text>
+  <text x="912" y="260" font-size="11" fill="#c8d8e8">主角在剑冢偶得残剑……</text>
+  <!-- 输入框（底部） -->
+  <rect x="900" y="630" width="284" height="44" rx="8" fill="#a1c4d6" fill-opacity="0.07" stroke="#a1c4d6" stroke-opacity="0.25"/>
+  <text x="914" y="657" font-size="12" fill="#8aa8c0">输入指令，或 / 唤起技能…</text>
+
+  <!-- ═══ 底部状态栏 ═══ -->
+  <rect x="0" y="694" width="1200" height="26" fill="#0b0f18" opacity="0.55"/>
+  <line x1="0" y1="694" x2="1200" y2="694" stroke="#a1c4d6" stroke-opacity="0.14"/>
+  <text x="20" y="711" font-size="10.5" fill="#8aa8c0">准备 · 大纲 · 正文 · 审读 · 维护</text>
+  <text x="520" y="711" font-size="10.5" fill="#6b8fad">✦ 太虚剑宗 · 剑气极盛</text>
+  <text x="900" y="711" font-size="10.5" fill="#8aa8c0">24,861 字 · 今日 3,214 字</text>
+
+  <!-- 面板描边光（强调浮层） -->
+  <rect x="56" y="46" width="250" height="648" fill="none" stroke="#a1c4d6" stroke-opacity="0.08"/>
+  <rect x="884" y="46" width="316" height="648" fill="none" stroke="#a1c4d6" stroke-opacity="0.08"/>
+</svg>

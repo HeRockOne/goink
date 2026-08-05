@@ -89,9 +89,12 @@ export function useTheme() {
   const themeMode: Theme = isBuiltin(theme) ? theme : (loadCustomThemes().find(t => `custom:${t.name}` === theme)?.type || 'dark')
 
   // 当前激活主题的特效配置：内置主题无特效；自定义主题缺失/旧格式时迁移到 layers
+  // 内置深色主题默认提供太虚剑气 + 低密度粒子（与太虚视觉一致）；内置浅色保持克制无特效
   const activeEffects: ThemeEffects = isCustom(theme)
     ? normalizeEffects(loadCustomThemes().find(t => `custom:${t.name}` === theme)?.effects)
-    : EMPTY_EFFECTS
+    : theme === 'dark'
+      ? { layers: [{ type: 'sword', intensity: 0.55 }, { type: 'particles', intensity: 0.28, count: 40, speed: 0.8 }] }
+      : EMPTY_EFFECTS
 
   const setTheme = useCallback((t: ActiveTheme) => {
     applyTheme(t)

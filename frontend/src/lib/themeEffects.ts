@@ -2,7 +2,7 @@
 // 层结构允许自由组合（氛围光+粒子+流光同开、同类型多实例），
 // 新特效类型 = 在渲染层加分支 + 在此注册，配置端自动可用。
 
-export type EffectType = 'ambient' | 'particles' | 'streak' | 'glow'
+export type EffectType = 'ambient' | 'particles' | 'streak' | 'glow' | 'sword'
 
 export interface EffectLayer {
   type: EffectType
@@ -61,6 +61,15 @@ export const EFFECT_PRESETS: { name: string; effects: ThemeEffects }[] = [
       ],
     },
   },
+  {
+    name: '剑气纵横',
+    effects: {
+      layers: [
+        { type: 'sword', intensity: 0.6 },
+        { type: 'particles', intensity: 0.35, count: 50, speed: 0.9 },
+      ],
+    },
+  },
 ]
 
 export function presetByName(name: string): ThemeEffects | null {
@@ -73,7 +82,7 @@ export function normalizeEffects(raw: unknown): ThemeEffects {
   if (raw && typeof raw === 'object' && Array.isArray((raw as ThemeEffects).layers)) {
     // 过滤非法层，参数兜底
     const layers = (raw as ThemeEffects).layers
-      .filter(l => l && typeof l.type === 'string' && ['ambient', 'particles', 'streak', 'glow'].includes(l.type))
+      .filter(l => l && typeof l.type === 'string' && ['ambient', 'particles', 'streak', 'glow', 'sword'].includes(l.type))
       .map(l => ({
         type: l.type as EffectType,
         intensity: clamp01(typeof l.intensity === 'number' ? l.intensity : 0.3),
