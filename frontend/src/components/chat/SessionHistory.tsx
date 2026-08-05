@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageSquare, Loader2, History, Trash2, CheckSquare, Square, CheckCheck, ArrowUpDown } from 'lucide-react'
+import { MessageSquare, Loader2, History, Trash2, CheckSquare, Square, CheckCheck, ArrowUpDown, Download } from 'lucide-react'
+import { toast } from 'sonner'
 import type { app } from '@/hooks/useApp'
 import { useApp } from '@/hooks/useApp'
 
@@ -157,6 +158,22 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     loadPageRef.current?.(1)
   }, [selectedIds, app, t])
 
+  // 导出单个会话为 Markdown
+  const [exportingId, setExportingId] = useState<string | null>(null)
+  const handleExport = useCallback(async (sid: string) => {
+    setExportingId(sid)
+    try {
+      const path = await app.ExportSession(sid)
+      if (path) {
+        toast.success(t('chat.exported', '会话已导出：{path}').replace('{path}', path), { duration: 4000 })
+      }
+    } catch (e) {
+      toast.error(t('chat.exportFailed', '导出失败') + (e instanceof Error ? `：${e.message}` : ''))
+    } finally {
+      setExportingId(null)
+    }
+  }, [app, t])
+
   if (!mounted) return null
 
   const hasSelection = selectedIds.size > 0
@@ -259,6 +276,18 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
                     <div className={`text-xs truncate ${isSelected ? 'text-primary' : ''}`}>{s.title || t('chat.newChat')}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(s.updated_at)}</div>
                   </div>
+                </button>
+                {/* 导出会话为 Markdown */}
+                <button
+                  onClick={e => { e.stopPropagation(); handleExport(s.session_id) }}
+                  disabled={exportingId === s.session_id}
+                  className="shrink-0 p-1.5 mr-1 rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer disabled:opacity-40"
+                  title={t('chat.exportSession', '导出会话（Markdown）')}
+                >
+                  {exportingId === s.session_id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Download className="w-3.5 h-3.5" />
+                  }
                 </button>
               </div>
             )})}
