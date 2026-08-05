@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Palette, Trash2, Wand2 } from 'lucide-react'
+import { Palette, Trash2, Wand2, Sparkles } from 'lucide-react'
 import { useTheme, type CustomThemeData } from '@/hooks/useTheme'
 import { checkThemeContrast, generateTheme } from '@/lib/themeColors'
 
@@ -66,6 +66,12 @@ export default function ThemeConfigTab() {
   const [genPrimary, setGenPrimary] = useState('#5a9a6a')
   const [genFg, setGenFg] = useState('')
   const [genVibrancy, setGenVibrancy] = useState(1)
+  // 特效
+  const [genAmbient, setGenAmbient] = useState(false)
+  const [genAmbientIntensity, setGenAmbientIntensity] = useState(0.35)
+  const [genParticles, setGenParticles] = useState(false)
+  const [genParticleCount, setGenParticleCount] = useState(60)
+  const [genParticleSpeed, setGenParticleSpeed] = useState(1)
 
   function isActive(name: string) { return theme === `custom:${name}` }
 
@@ -113,7 +119,16 @@ export default function ThemeConfigTab() {
       name: genName, mode: genMode, background: genBg, primary: genPrimary,
       foreground: genFg || undefined, vibrancy: genVibrancy,
     })
-    const data: CustomThemeData = { name: genName, type: genMode, colors }
+    const data: CustomThemeData = {
+      name: genName, type: genMode, colors,
+      effects: {
+        ambient: genAmbient,
+        ambientIntensity: genAmbientIntensity,
+        particles: genParticles,
+        particleCount: genParticleCount,
+        particleSpeed: genParticleSpeed,
+      },
+    }
     const key = `${data.name}__${data.type}`
     const existing = customThemes.find(t => `${t.name}__${t.type}` === key)
     if (existing) deleteCustomTheme(existing.name)
@@ -193,6 +208,60 @@ export default function ThemeConfigTab() {
               <span className="w-9 shrink-0 text-right text-xs font-mono text-foreground">{genVibrancy.toFixed(2)}×</span>
             </div>
           </label>
+        </div>
+
+        {/* 特效配置（随主题保存） */}
+        <div className="mt-3 pt-2 border-t border-border">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-medium text-foreground">特效（随主题保存）</span>
+            <span className="text-[10px] text-muted-foreground">颜色自动跟随主色，写作时可在「写作界面 → 特效开关」随时关</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex items-center gap-2 text-xs text-foreground">
+              <input type="checkbox" checked={genAmbient} onChange={e => setGenAmbient(e.target.checked)}
+                className="accent-[var(--primary)]" />
+              背景氛围光
+            </label>
+            {genAmbient && (
+              <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                强度
+                <div className="flex items-center gap-2">
+                  <input type="range" min={0.05} max={1} step={0.05} value={genAmbientIntensity}
+                    onChange={e => setGenAmbientIntensity(Number(e.target.value))}
+                    className="flex-1 accent-[var(--primary)] cursor-pointer" />
+                  <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{Math.round(genAmbientIntensity * 100)}%</span>
+                </div>
+              </label>
+            )}
+            <label className="flex items-center gap-2 text-xs text-foreground">
+              <input type="checkbox" checked={genParticles} onChange={e => setGenParticles(e.target.checked)}
+                className="accent-[var(--primary)]" />
+              漂浮粒子
+            </label>
+            {genParticles && (
+              <>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  数量（上限 150，保护性能）
+                  <div className="flex items-center gap-2">
+                    <input type="range" min={8} max={150} step={2} value={genParticleCount}
+                      onChange={e => setGenParticleCount(Number(e.target.value))}
+                      className="flex-1 accent-[var(--primary)] cursor-pointer" />
+                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{genParticleCount}</span>
+                  </div>
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  速度
+                  <div className="flex items-center gap-2">
+                    <input type="range" min={0.1} max={2} step={0.1} value={genParticleSpeed}
+                      onChange={e => setGenParticleSpeed(Number(e.target.value))}
+                      className="flex-1 accent-[var(--primary)] cursor-pointer" />
+                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{genParticleSpeed.toFixed(1)}×</span>
+                  </div>
+                </label>
+              </>
+            )}
+          </div>
         </div>
         <button onClick={handleGenerate} disabled={!genName.trim()}
           className="mt-2 w-full px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity">

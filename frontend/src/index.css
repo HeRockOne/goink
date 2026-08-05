@@ -240,6 +240,60 @@ body {
   flex-direction: column;
 }
 
+/* ── 主题特效：氛围光光斑 ──────────────────────────────── */
+/* 光斑颜色吃主题变量（--primary/--accent），换主题自动联动；
+   只做 transform 动画（GPU 合成层），prefers-reduced-motion 下静止。 */
+
+.ambient-blob {
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--primary) 0%, transparent 65%);
+  will-change: transform;
+}
+
+.ambient-blob-1 {
+  top: -18vmax;
+  left: -12vmax;
+  animation: ambient-drift-1 70s ease-in-out infinite alternate;
+}
+
+.ambient-blob-2 {
+  bottom: -20vmax;
+  right: -10vmax;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 65%);
+  animation: ambient-drift-2 90s ease-in-out infinite alternate;
+}
+
+.ambient-blob-3 {
+  top: 30%;
+  left: 45%;
+  width: 40vmax;
+  height: 40vmax;
+  background: radial-gradient(circle, var(--primary) 0%, transparent 60%);
+  animation: ambient-drift-3 110s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-drift-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(12vmax, 8vmax) scale(1.15); }
+}
+
+@keyframes ambient-drift-2 {
+  from { transform: translate(0, 0) scale(1.1); }
+  to   { transform: translate(-10vmax, -6vmax) scale(0.95); }
+}
+
+@keyframes ambient-drift-3 {
+  from { transform: translate(-6vmax, -4vmax) scale(0.9); }
+  to   { transform: translate(8vmax, 6vmax) scale(1.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob { animation: none; }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'WenQuanYi Micro Hei', sans-serif;

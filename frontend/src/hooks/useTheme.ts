@@ -6,10 +6,27 @@ const BUILTIN_THEMES = ['light', 'dark'] as const
 export type Theme = (typeof BUILTIN_THEMES)[number]
 type ActiveTheme = Theme | `custom:${string}`
 
+export interface ThemeEffects {
+  ambient: boolean          // 背景氛围光（CSS 光斑漂移）
+  ambientIntensity: number  // 0-1
+  particles: boolean        // Canvas 粒子层
+  particleCount: number     // 8-150
+  particleSpeed: number     // 0.1-2
+}
+
 export interface CustomThemeData {
   name: string
   type: 'light' | 'dark'
   colors: Record<string, string>
+  effects?: ThemeEffects
+}
+
+export const DEFAULT_EFFECTS: ThemeEffects = {
+  ambient: false,
+  ambientIntensity: 0.35,
+  particles: false,
+  particleCount: 60,
+  particleSpeed: 1,
 }
 
 const STYLE_ID = 'custom-theme-style'
@@ -86,6 +103,11 @@ export function useTheme() {
 
   const themeMode: Theme = isBuiltin(theme) ? theme : (loadCustomThemes().find(t => `custom:${t.name}` === theme)?.type || 'dark')
 
+  // 当前激活主题的特效配置：内置主题无特效；自定义主题缺失时用默认（全关）
+  const activeEffects: ThemeEffects = isCustom(theme)
+    ? { ...DEFAULT_EFFECTS, ...(loadCustomThemes().find(t => `custom:${t.name}` === theme)?.effects || {}) }
+    : DEFAULT_EFFECTS
+
   const setTheme = useCallback((t: ActiveTheme) => {
     applyTheme(t)
     localStorage.setItem('theme', t)
@@ -115,5 +137,5 @@ export function useTheme() {
 
   const getAllCustomThemes = useCallback(() => loadCustomThemes(), [])
 
-  return { theme: themeMode, activeTheme: theme as ActiveTheme, setTheme, toggle, addCustomTheme, deleteCustomTheme, customThemes, getAllCustomThemes } as const
+  return { theme: themeMode, activeTheme: theme as ActiveTheme, activeEffects, setTheme, toggle, addCustomTheme, deleteCustomTheme, customThemes, getAllCustomThemes } as const
 }
