@@ -369,7 +369,7 @@
   "name": "Apple 官网",
   "type": "light",
   "colors": {
-    "--background": "hsl(0,0%,100%)",
+    "--background": "hsl(40,20%,97%)",
     "--foreground": "hsl(0,0%,12%)",
     "--card": "hsl(0,0%,100%)",
     "--card-foreground": "hsl(0,0%,12%)",
@@ -379,22 +379,22 @@
     "--primary-foreground": "hsl(0,0%,100%)",
     "--secondary": "hsl(0,0%,96%)",
     "--secondary-foreground": "hsl(0,0%,12%)",
-    "--muted": "hsl(0,0%,96%)",
-    "--muted-foreground": "hsl(240,2%,54%)",
+    "--muted": "hsl(0,0%,94%)",
+    "--muted-foreground": "hsl(0,0%,50%)",
     "--accent": "hsl(0,0%,92%)",
     "--accent-foreground": "hsl(0,0%,12%)",
     "--destructive": "hsl(4,80%,55%)",
     "--destructive-foreground": "hsl(0,0%,100%)",
-    "--border": "rgba(0,0,0,0.08)",
+    "--border": "rgba(0,0,0,0.12)",
     "--input": "hsl(0,0%,96%)",
     "--ring": "hsl(210,100%,45%)",
-    "--sidebar": "hsl(0,0%,97%)",
+    "--sidebar": "hsl(0,0%,93%)",
     "--sidebar-foreground": "hsl(0,0%,12%)",
     "--sidebar-primary": "hsl(210,100%,45%)",
     "--sidebar-primary-foreground": "hsl(0,0%,100%)",
-    "--sidebar-accent": "hsl(0,0%,92%)",
+    "--sidebar-accent": "hsl(0,0%,88%)",
     "--sidebar-accent-foreground": "hsl(0,0%,12%)",
-    "--sidebar-border": "rgba(0,0,0,0.06)",
+    "--sidebar-border": "rgba(0,0,0,0.10)",
     "--sidebar-ring": "hsl(210,100%,45%)",
     "--tag-blue": "hsl(210,60%,95%)",
     "--tag-blue-foreground": "hsl(210,100%,40%)",
@@ -440,85 +440,14 @@
 }
 ```
 
-> 设计说明：**色相体系**——中性色全部使用 `hsl(0,0%,…)`（纯灰度），强调色使用 `hsl(210,100%,45%)`（苹果蓝），标签色使用独立色相区分（蓝 210° / 绿 140° / 琥珀 35° / 玫红 350° / 青 180° / 紫 270°）。阅读器背景使用 `hsl(40,20%,97%)` 暖白护眼。想换风格只需改 `primary` 的色相角度：`hsl(160,100%,45%)` 变 teal 风，`hsl(350,100%,45%)` 变玫红风，其余中性色和标签色不受影响。
+> 设计说明：**色相体系**——背景使用 `hsl(40,20%,97%)` 暖白护眼，与卡片 `hsl(0,0%,100%)` 纯白在色相上区分（暖白 vs 冷白），视觉分层清晰。强调色 `hsl(210,100%,45%)` 苹果蓝，标签色使用独立色相区分（蓝 210° / 绿 140° / 琥珀 35° / 玫红 350° / 青 180° / 紫 270°）。`--border` 透明度从 0.08 提升到 0.12，边框可见。`--sidebar` 从 97% 加深到 93%，与背景明显区分。
 
 ---
 
-## 六、AI 生成主题提示词
-
-将以下提示词发给 AI，即可生成完整的主题 JSON。
-
-```
-你是一个专业的 UI 设计师。请为小说写作软件「Goink」生成一个自定义主题 JSON。
-
-## 设计要求
-
-不同 UI 区域用不同色系区分，不要靠同一色系的灰度深浅排版。
-用户长时间写小说，纯灰度层级费眼睛。
-
-- 页面背景：暖白/米色/纸色（阅读友好）
-- 卡片/面板：比背景更暖/更亮，同一色系
-- 侧边栏：微暖偏暗，与主区域在色相上自然区分
-- 边框：用卡片变深 15% 的方式派生，柔和不刺眼
-- 强调色：与背景色系有明显色相差的颜色（蓝/琥珀/绿等）
-
-## 输出格式
-
-纯 JSON，无 markdown 包裹，无额外说明：
-
-{
-  "name": "主题名称",
-  "type": "light",
-  "colors": {
-    "--background": "#ffffff",
-    "--foreground": "#1d1d1f",
-    ...
-  }
-}
-
-## 变量清单
-
-必须包含以下全部 56 个变量，每个给一个合理的颜色值（HEX 或 RGBA）：
-
-核心层（19）：
---background, --foreground, --card, --card-foreground, --popover, --popover-foreground,
---primary, --primary-foreground, --secondary, --secondary-foreground,
---muted, --muted-foreground, --accent, --accent-foreground,
---destructive, --destructive-foreground, --border, --input, --ring
-
-侧边栏（8）：
---sidebar, --sidebar-foreground, --sidebar-primary, --sidebar-primary-foreground,
---sidebar-accent, --sidebar-accent-foreground, --sidebar-border, --sidebar-ring
-
-标签（6 色 × 2 字段）：
---tag-blue, --tag-blue-foreground, --tag-green, --tag-green-foreground,
---tag-amber, --tag-amber-foreground, --tag-rose, --tag-rose-foreground,
---tag-teal, --tag-teal-foreground, --tag-purple, --tag-purple-foreground
-
-气泡（2）：
---bubble-user, --bubble-user-foreground
-
-操作按钮（4）：
---action-extract, --action-extract-foreground, --action-save, --action-save-foreground
-
-状态色（7）：
---success, --success-foreground, --success-border,
---danger-bg, --danger-border, --status-warning, --status-ok
-
-工具调用（4 色 × 2 字段）：
---tool-blue, --tool-blue-border, --tool-amber, --tool-amber-border,
---tool-green, --tool-green-border, --tool-red, --tool-red-border
-
-贡献图（5）：
---contribution-0, --contribution-1, --contribution-2, --contribution-3, --contribution-4
-
-阅读器（2）：
---reader-bg, --reader-paper
-```
 
 ---
 
-## 七、注意事项
+## 六、注意事项
 
 - `--border` 建议用 RGBA 透明度而非纯色，确保在不同背景色上融合自然
 - 自定义主题不需要覆盖全部变量，缺失的变量使用内置默认值
