@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Palette, Trash2, Wand2, Sparkles } from 'lucide-react'
 import { useTheme, type CustomThemeData } from '@/hooks/useTheme'
 import { checkThemeContrast, generateTheme } from '@/lib/themeColors'
@@ -53,25 +53,51 @@ const INITIAL_THEME_JSON = `{
   }
 }`
 
+// ── 生成器表单状态（持久化到 localStorage，下次打开记住） ──
+
+interface GenForm {
+  name: string
+  mode: 'light' | 'dark'
+  bg: string
+  primary: string
+  fg: string
+  vibrancy: number
+  ambient: boolean
+  ambientIntensity: number
+  particles: boolean
+  particleCount: number
+  particleSpeed: number
+}
+
+const GEN_KEY = 'goink_theme_gen'
+const GEN_DEFAULT: GenForm = {
+  name: '我的主题', mode: 'dark', bg: '#0f1a14', primary: '#5a9a6a', fg: '',
+  vibrancy: 1, ambient: false, ambientIntensity: 0.35,
+  particles: false, particleCount: 60, particleSpeed: 1,
+}
+
+function loadGenForm(): GenForm {
+  try {
+    const raw = localStorage.getItem(GEN_KEY)
+    if (!raw) return GEN_DEFAULT
+    return { ...GEN_DEFAULT, ...JSON.parse(raw) }
+  } catch {
+    return GEN_DEFAULT
+  }
+}
+
 export default function ThemeConfigTab() {
   const { activeTheme: theme, setTheme, addCustomTheme, deleteCustomTheme, customThemes } = useTheme()
   const [json, setJson] = useState('')
   const [error, setError] = useState('')
   const [warnings, setWarnings] = useState<string[]>([])
 
-  // 生成器表单
-  const [genName, setGenName] = useState('我的主题')
-  const [genMode, setGenMode] = useState<'light' | 'dark'>('dark')
-  const [genBg, setGenBg] = useState('#0f1a14')
-  const [genPrimary, setGenPrimary] = useState('#5a9a6a')
-  const [genFg, setGenFg] = useState('')
-  const [genVibrancy, setGenVibrancy] = useState(1)
-  // 特效
-  const [genAmbient, setGenAmbient] = useState(false)
-  const [genAmbientIntensity, setGenAmbientIntensity] = useState(0.35)
-  const [genParticles, setGenParticles] = useState(false)
-  const [genParticleCount, setGenParticleCount] = useState(60)
-  const [genParticleSpeed, setGenParticleSpeed] = useState(1)
+  // 生成器表单：每次修改自动持久化
+  const [gen, setGen] = useState<GenForm>(loadGenForm)
+  useEffect(() => {
+    try { localStorage.setItem(GEN_KEY, JSON.stringify(gen)) } catch { /* 忽略存储失败 */ }
+  }, [gen])
+  const set = <K extends keyof GenForm>(k: K, v: GenForm[K]) => setGen(g => ({ ...g, [k]: v }))
 
   function isActive(name: string) { return theme === `custom:${name}` }
 
@@ -116,17 +142,17 @@ export default function ThemeConfigTab() {
     setError('')
     setWarnings([])
     const colors = generateTheme({
-      name: genName, mode: genMode, background: genBg, primary: genPrimary,
-      foreground: genFg || undefined, vibrancy: genVibrancy,
+      name: gen.name, mode: gen.mode, background: gen.bg, primary: gen.primary,
+      foreground: gen.fg || undefined, vibrancy: gen.vibrancy,
     })
     const data: CustomThemeData = {
-      name: genName, type: genMode, colors,
+      name: gen.name, type: gen.mode, colors,
       effects: {
-        ambient: genAmbient,
-        ambientIntensity: genAmbientIntensity,
-        particles: genParticles,
-        particleCount: genParticleCount,
-        particleSpeed: genParticleSpeed,
+        ambient: gen.ambient,
+        ambientIntensity: gen.ambientIntensity,
+        particles: gen.particles,
+        particleCount: gen.particleCount,
+        particleSpeed: gen.particleSpeed,
       },
     }
     const key = `${data.name}__${data.type}`
@@ -140,7 +166,7 @@ export default function ThemeConfigTab() {
     <div className="flex flex-col h-full">
       <h3 className="text-sm font-medium mb-2">自定义主题</h3>
       <p className="text-xs text-muted-foreground mb-3">
-        选背景色 + 主色一键生成全套主题（自动保证文字对比度 ≥ 4.5:1）；或粘贴包含全部 CSS 变量的主题 JSON。未填的变量会自动派生，不会撞色。
+        选背景色 + 主色一键生成全套主题（自动保证文字对比度 ≥ 4.5:1）；或粘贴包含全部 CSS 变量的主题 JSON。未填的变量会自动派生，不会撞色。生成器设置会自动保存，下次打开记得你上次的配置。
       </p>
 
       {/* ── 一键生成器 ── */}
@@ -153,16 +179,16 @@ export default function ThemeConfigTab() {
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             主题名
             <input
-              value={genName}
-              onChange={e => setGenName(e.target.value)}
+              value={gen.name}
+              onChange={e => set('name', e.target.value)}
               className="rounded border bg-background px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </label>
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             模式
             <select
-              value={genMode}
-              onChange={e => setGenMode(e.target.value as 'light' | 'dark')}
+              value={gen.mode}
+              onChange={e => set('mode', e.target.value as 'light' | 'dark')}
               className="rounded border bg-background px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="light">浅色</option>
@@ -172,40 +198,40 @@ export default function ThemeConfigTab() {
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             背景色
             <div className="flex items-center gap-2">
-              <input type="color" value={genBg} onChange={e => setGenBg(e.target.value)}
+              <input type="color" value={gen.bg} onChange={e => set('bg', e.target.value)}
                 className="h-7 w-10 rounded border border-border bg-transparent cursor-pointer" />
-              <input value={genBg} onChange={e => setGenBg(e.target.value)}
+              <input value={gen.bg} onChange={e => set('bg', e.target.value)}
                 className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" spellCheck={false} />
             </div>
           </label>
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             主色
             <div className="flex items-center gap-2">
-              <input type="color" value={genPrimary} onChange={e => setGenPrimary(e.target.value)}
+              <input type="color" value={gen.primary} onChange={e => set('primary', e.target.value)}
                 className="h-7 w-10 rounded border border-border bg-transparent cursor-pointer" />
-              <input value={genPrimary} onChange={e => setGenPrimary(e.target.value)}
+              <input value={gen.primary} onChange={e => set('primary', e.target.value)}
                 className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" spellCheck={false} />
             </div>
           </label>
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             文字色（可选，留空自动）
             <div className="flex items-center gap-2">
-              <input type="color" value={genFg || '#000000'} onChange={e => setGenFg(e.target.value)}
+              <input type="color" value={gen.fg || '#000000'} onChange={e => set('fg', e.target.value)}
                 className="h-7 w-10 rounded border border-border bg-transparent cursor-pointer" />
-              <input value={genFg} onChange={e => setGenFg(e.target.value)} placeholder="自动"
+              <input value={gen.fg} onChange={e => set('fg', e.target.value)} placeholder="自动"
                 className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" spellCheck={false} />
-              {genFg && (
-                <button onClick={() => setGenFg('')} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground">清除</button>
+              {gen.fg && (
+                <button onClick={() => set('fg', '')} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground">清除</button>
               )}
             </div>
           </label>
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             鲜艳度
             <div className="flex items-center gap-2">
-              <input type="range" min={0.5} max={1.5} step={0.05} value={genVibrancy}
-                onChange={e => setGenVibrancy(Number(e.target.value))}
+              <input type="range" min={0.5} max={1.5} step={0.05} value={gen.vibrancy}
+                onChange={e => set('vibrancy', Number(e.target.value))}
                 className="flex-1 accent-[var(--primary)] cursor-pointer" />
-              <span className="w-9 shrink-0 text-right text-xs font-mono text-foreground">{genVibrancy.toFixed(2)}×</span>
+              <span className="w-9 shrink-0 text-right text-xs font-mono text-foreground">{gen.vibrancy.toFixed(2)}×</span>
             </div>
           </label>
         </div>
@@ -219,51 +245,52 @@ export default function ThemeConfigTab() {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex items-center gap-2 text-xs text-foreground">
-              <input type="checkbox" checked={genAmbient} onChange={e => setGenAmbient(e.target.checked)}
+              <input type="checkbox" checked={gen.ambient} onChange={e => set('ambient', e.target.checked)}
                 className="accent-[var(--primary)]" />
               背景氛围光
             </label>
-            {genAmbient && (
+            {gen.ambient && (
               <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                 强度
                 <div className="flex items-center gap-2">
-                  <input type="range" min={0.05} max={1} step={0.05} value={genAmbientIntensity}
-                    onChange={e => setGenAmbientIntensity(Number(e.target.value))}
+                  <input type="range" min={0.05} max={1} step={0.05} value={gen.ambientIntensity}
+                    onChange={e => set('ambientIntensity', Number(e.target.value))}
                     className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                  <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{Math.round(genAmbientIntensity * 100)}%</span>
+                  <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{Math.round(gen.ambientIntensity * 100)}%</span>
                 </div>
               </label>
             )}
             <label className="flex items-center gap-2 text-xs text-foreground">
-              <input type="checkbox" checked={genParticles} onChange={e => setGenParticles(e.target.checked)}
+              <input type="checkbox" checked={gen.particles} onChange={e => set('particles', e.target.checked)}
                 className="accent-[var(--primary)]" />
               漂浮粒子
             </label>
-            {genParticles && (
+            {gen.particles && (
               <>
                 <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                   数量（上限 150，保护性能）
                   <div className="flex items-center gap-2">
-                    <input type="range" min={8} max={150} step={2} value={genParticleCount}
-                      onChange={e => setGenParticleCount(Number(e.target.value))}
+                    <input type="range" min={8} max={150} step={2} value={gen.particleCount}
+                      onChange={e => set('particleCount', Number(e.target.value))}
                       className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{genParticleCount}</span>
+                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{gen.particleCount}</span>
                   </div>
                 </label>
                 <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                   速度
                   <div className="flex items-center gap-2">
-                    <input type="range" min={0.1} max={2} step={0.1} value={genParticleSpeed}
-                      onChange={e => setGenParticleSpeed(Number(e.target.value))}
+                    <input type="range" min={0.1} max={2} step={0.1} value={gen.particleSpeed}
+                      onChange={e => set('particleSpeed', Number(e.target.value))}
                       className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{genParticleSpeed.toFixed(1)}×</span>
+                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{gen.particleSpeed.toFixed(1)}×</span>
                   </div>
                 </label>
               </>
             )}
           </div>
         </div>
-        <button onClick={handleGenerate} disabled={!genName.trim()}
+
+        <button onClick={handleGenerate} disabled={!gen.name.trim()}
           className="mt-2 w-full px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity">
           生成并应用
         </button>
@@ -303,7 +330,7 @@ export default function ThemeConfigTab() {
         <textarea
           value={json}
           onChange={e => { setJson(e.target.value); setError(''); setWarnings([]) }}
-          placeholder='{"name": "我的主题", "type": "dark", "colors": {"--background": "#...", ...}}'
+          placeholder='{"name": "我的主题", "type": "dark", "colors": {"--background": "#...", ...}, "effects": {...}}'
           className="flex-1 min-h-[200px] w-full text-xs font-mono rounded border bg-background p-3 resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           spellCheck={false}
         />

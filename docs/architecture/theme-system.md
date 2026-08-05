@@ -372,20 +372,104 @@
 
 ## 七、一键生成器（设置 → 自定义主题）
 
-输入「主题名 + 模式（浅/深）+ 背景色 + 主色」即可生成全套 71 个变量并应用：
+输入以下配置即可生成全套 71 个变量并应用：
+
+| 配置 | 说明 |
+|------|------|
+| 主题名 | 显示名，去重键 `name__type` |
+| 模式 | 浅色 / 深色（决定面板明度阶梯方向） |
+| 背景色 | 派生全部面板色（card/popover/sidebar/secondary/muted/accent/border 等 21 键） |
+| 主色 | 派生 tag/tool 六色系、气泡、操作按钮、贡献图等 48 键 |
+| 文字色（可选） | 留空自动选对比色；指定时若与背景对比度 < 4.5:1 自动回退 |
+| 鲜艳度（0.5-1.5×） | 缩放派生色的饱和度：低=素雅，高=鲜艳 |
 
 - 派生规则：主色为色相基准，tag/tool 六色系按固定色相偏移（blue+40/green+90/amber+25/rose+155/teal+160/purple+215），保持六色可区分
-- 面板色从背景按明度阶梯派生；贡献图用绿色系 5 档
 - **所有 bg/fg 对在生成时自动修正到 WCAG AA（≥4.5:1）**，黑/白兜底
 - 实现：`frontend/src/lib/themeColors.ts`（`generateTheme`），单测 `themeColors.test.ts`
+- **生成器表单设置持久化到 `localStorage("goink_theme_gen")`**，每次修改自动保存，下次打开设置记住上次配置
 
-## 八、对比度校验（粘贴 JSON 时）
+## 八、特效系统（随主题保存）
 
-粘贴 JSON 应用时，`checkThemeContrast` 会校验 21 对 bg/fg 组合（两个值都可解析的对），不达标（<4.5:1）时显示警告列表。只警告不阻止——大号文字 3:1 也可接受，用户自行判断。支持 hex/rgb 解析，hsl/oklch 格式跳过校验（走 CSS 兜底）。
+主题 JSON 的 `effects` 字段控制界面特效，与 colors 平级、随主题持久化。**内置主题无特效；自定义主题未写 effects 时默认全关**（向后兼容）。
 
-## 注意事项
+### 支持的字段
+
+| 字段 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `ambient` | boolean | false | 背景氛围光：2-3 个主题色渐变光斑缓慢漂移（CSS transform 动画，GPU 合成） |
+| `ambientIntensity` | number 0-1 | 0.35 | 氛围光强度（透明度） |
+| `particles` | boolean | false | 漂浮粒子层（Canvas 2D） |
+| `particleCount` | number 8-150 | 60 | 粒子数量（上限 150，性能保护） |
+| `particleSpeed` | number 0.1-2 | 1 | 粒子漂移速度倍率 |
+
+### 设计约束（性能红线）
+
+- **颜色吃主题 CSS 变量**（`--primary`/`--accent`）：换主题特效自动联动，无需单独配色
+- 光斑只做 transform 动画；粒子 Canvas 独立图层 + DPR ≤ 1.5 + 数量封顶
+- 窗口隐藏自动暂停 rAF；`prefers-reduced-motion` 下光斑静止、粒子不启动
+- `pointer-events-none`，不挡任何交互；特效层 z-index 5，位于内容之下
+- 零依赖（无 three.js/particles.js）
+
+### 特效开关
+
+「写作界面 → 特效开关」可随时关闭当前主题的特效（不修改主题数据，仅本次会话生效）。
+
+## 九、示例主题（含特效）
+
+以下为主题完整 JSON，可直接粘贴到「主题 JSON」应用。也可用生成器复现：深色模式 + 背景 `#0b1020` + 主色 `#7a8ae8`，再开启特效。
+
+```json
+{
+  "name": "星夜·墨",
+  "type": "dark",
+  "colors": {
+    "--background": "#0b1020", "--foreground": "#d8dce8", "--card": "#141a2e",
+    "--card-foreground": "#d8dce8", "--popover": "#161d33", "--popover-foreground": "#d8dce8",
+    "--primary": "#7a8ae8", "--primary-foreground": "#0b1020", "--secondary": "#131930",
+    "--secondary-foreground": "#c0c8e0", "--muted": "#121830", "--muted-foreground": "#8a92b0",
+    "--accent": "#1a2240", "--accent-foreground": "#d8dce8", "--destructive": "#d05a5a",
+    "--destructive-foreground": "#faf4e4", "--border": "#2a3458", "--input": "#131930",
+    "--ring": "#7a8ae8", "--sidebar": "#0e1428", "--sidebar-foreground": "#d8dce8",
+    "--sidebar-primary": "#7a8ae8", "--sidebar-primary-foreground": "#0b1020",
+    "--sidebar-accent": "#161d33", "--sidebar-accent-foreground": "#c0c8e0",
+    "--sidebar-border": "#2a3458", "--sidebar-ring": "#7a8ae8",
+    "--tag-blue": "#1a2240", "--tag-blue-foreground": "#8aa8e8",
+    "--tag-green": "#1a2a26", "--tag-green-foreground": "#6ab8a0",
+    "--tag-amber": "#2a2418", "--tag-amber-foreground": "#c8a860",
+    "--tag-rose": "#2a1a22", "--tag-rose-foreground": "#d08090",
+    "--tag-teal": "#182a2e", "--tag-teal-foreground": "#68b0b8",
+    "--tag-purple": "#241a30", "--tag-purple-foreground": "#a080d0",
+    "--reader-bg": "#0b1020", "--reader-paper": "#141a2e",
+    "--bubble-user": "#7a8ae8", "--bubble-user-foreground": "#0b1020",
+    "--action-extract": "#3a4060", "--action-extract-foreground": "#e0e4f0",
+    "--action-save": "#4a9a6a", "--action-save-foreground": "#0b1020",
+    "--success": "#16281e", "--success-foreground": "#6ac08a", "--success-border": "#244030",
+    "--danger-bg": "#281818", "--danger-border": "#482828",
+    "--status-warning": "#c8a860", "--status-ok": "#6ac08a",
+    "--tool-blue": "#161d33", "--tool-blue-border": "#4a60a0",
+    "--tool-amber": "#282018", "--tool-amber-border": "#9a8030",
+    "--tool-green": "#162420", "--tool-green-border": "#4a8050",
+    "--tool-red": "#281820", "--tool-red-border": "#9a4a5a",
+    "--contribution-0": "#141a2e", "--contribution-1": "#1a3a28",
+    "--contribution-2": "#2a5a3a", "--contribution-3": "#3a7a4a", "--contribution-4": "#4a9a5a"
+  },
+  "effects": {
+    "ambient": true,
+    "ambientIntensity": 0.45,
+    "particles": true,
+    "particleCount": 80,
+    "particleSpeed": 0.8
+  }
+}
+```
+
+## 十、注意事项
 
 - `--border` 建议用 RGBA 透明度而非纯色，确保在不同背景色上融合自然
 - 自定义主题不需要覆盖全部变量，缺失的变量使用内置默认值
 - 所有 `color-mix()` 百分比已调好，不建议修改
 - 同名同类型主题会覆盖，命名注意区分
+
+## 十一、对比度校验（粘贴 JSON 时）
+
+粘贴 JSON 应用时，`checkThemeContrast` 会校验 21 对 bg/fg 组合（两个值都可解析的对），不达标（<4.5:1）时显示警告列表。只警告不阻止——大号文字 3:1 也可接受，用户自行判断。支持 hex/rgb 解析，hsl/oklch 格式跳过校验（走 CSS 兜底）。
