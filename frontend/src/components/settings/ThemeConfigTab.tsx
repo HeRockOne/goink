@@ -1,16 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Palette, Trash2, Wand2, Sparkles, Plus, X } from 'lucide-react'
+import { Palette, Trash2, Wand2 } from 'lucide-react'
 import { useTheme, type CustomThemeData } from '@/hooks/useTheme'
 import { checkThemeContrast, generateTheme } from '@/lib/themeColors'
-import { EFFECT_PRESETS, presetByName, type EffectLayer, type EffectType } from '@/lib/themeEffects'
-
-const EFFECT_TYPES: { value: EffectType | 'none'; label: string }[] = [
-  { value: 'none', label: '无' },
-  { value: 'ambient', label: '氛围光' },
-  { value: 'particles', label: '粒子' },
-  { value: 'streak', label: '流光' },
-  { value: 'glow', label: '呼吸光晕' },
-]
 
 function validateJSON(text: string): { ok: true; data: CustomThemeData } | { ok: false; error: string } {
   try {
@@ -76,14 +67,12 @@ interface GenForm {
   primary: string
   fg: string
   vibrancy: number
-  effectsPreset: string // 'none' | 预设名 | 'custom'
-  effectsLayers: EffectLayer[]
 }
 
 const GEN_KEY = 'goink_theme_gen'
 const GEN_DEFAULT: GenForm = {
   name: '我的主题', mode: 'dark', bg: '#0a0e17', primary: '#a1c4d6', fg: '',
-  vibrancy: 1, effectsPreset: 'none', effectsLayers: [],
+  vibrancy: 1,
 }
 
 function loadGenForm(): GenForm {
@@ -157,7 +146,6 @@ export default function ThemeConfigTab() {
     })
     const data: CustomThemeData = {
       name: gen.name, type: gen.mode, colors,
-      effects: { layers: gen.effectsLayers.filter(l => l.intensity > 0) },
     }
     const key = `${data.name}__${data.type}`
     const existing = customThemes.find(t => `${t.name}__${t.type}` === key)
@@ -238,113 +226,6 @@ export default function ThemeConfigTab() {
               <span className="w-9 shrink-0 text-right text-xs font-mono text-foreground">{gen.vibrancy.toFixed(2)}×</span>
             </div>
           </label>
-        </div>
-
-        {/* 特效配置（随主题保存，可组合） */}
-        <div className="mt-3 pt-2 border-t border-border">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-medium text-foreground">特效（随主题保存）</span>
-            <span className="text-[10px] text-muted-foreground">颜色自动跟随主色；层可自由组合叠加</span>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] text-muted-foreground shrink-0">预设</span>
-            <select
-              value={gen.effectsPreset}
-              onChange={e => {
-                const v = e.target.value
-                set('effectsPreset', v)
-                if (v === 'none') set('effectsLayers', [])
-                else if (v === 'custom') { /* 保持当前层 */ }
-                else {
-                  const fx = presetByName(v)
-                  set('effectsLayers', fx ? fx.layers : [])
-                }
-              }}
-              className="flex-1 min-w-0 rounded border bg-background px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="none">无特效</option>
-              {EFFECT_PRESETS.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-              <option value="custom">自定义…</option>
-            </select>
-            <button
-              onClick={() => set('effectsLayers', [...gen.effectsLayers, { type: 'ambient', intensity: 0.3 }])}
-              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="添加一层"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {gen.effectsPreset === 'custom' && (
-            <div className="space-y-2">
-              {gen.effectsLayers.map((layer, i) => (
-                <div key={i} className="rounded border border-border bg-background/60 p-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={layer.type}
-                      onChange={e => {
-                        const t = e.target.value as EffectType | 'none'
-                        const next = [...gen.effectsLayers]
-                        if (t === 'none') {
-                          next.splice(i, 1)
-                        } else {
-                          next[i] = { type: t, intensity: layer.intensity, count: t === 'particles' ? layer.count ?? 60 : undefined, speed: layer.speed ?? 1 }
-                        }
-                        set('effectsLayers', next)
-                      }}
-                      className="rounded border bg-background px-1.5 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {EFFECT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                    <span className="text-[11px] text-muted-foreground shrink-0">强度</span>
-                    <input type="range" min={0.05} max={1} step={0.05} value={layer.intensity}
-                      onChange={e => {
-                        const next = [...gen.effectsLayers]
-                        next[i] = { ...next[i], intensity: Number(e.target.value) }
-                        set('effectsLayers', next)
-                      }}
-                      className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                    <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{Math.round(layer.intensity * 100)}%</span>
-                    <button
-                      onClick={() => { const next = [...gen.effectsLayers]; next.splice(i, 1); set('effectsLayers', next) }}
-                      className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors" title="删除层"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {layer.type === 'particles' && (
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[11px] text-muted-foreground shrink-0">数量（≤150）</span>
-                      <input type="range" min={8} max={150} step={2} value={layer.count ?? 60}
-                        onChange={e => {
-                          const next = [...gen.effectsLayers]
-                          next[i] = { ...next[i], count: Number(e.target.value) }
-                          set('effectsLayers', next)
-                        }}
-                        className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                      <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{layer.count ?? 60}</span>
-                    </div>
-                  )}
-                  {(layer.type === 'particles' || layer.type === 'streak' || layer.type === 'glow') && (
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[11px] text-muted-foreground shrink-0">速度</span>
-                      <input type="range" min={0.1} max={2} step={0.1} value={layer.speed ?? 1}
-                        onChange={e => {
-                          const next = [...gen.effectsLayers]
-                          next[i] = { ...next[i], speed: Number(e.target.value) }
-                          set('effectsLayers', next)
-                        }}
-                        className="flex-1 accent-[var(--primary)] cursor-pointer" />
-                      <span className="w-8 shrink-0 text-right text-xs font-mono text-foreground">{(layer.speed ?? 1).toFixed(1)}×</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {gen.effectsLayers.length === 0 && (
-                <p className="text-[11px] text-muted-foreground">无特效层，点右侧「+」添加</p>
-              )}
-            </div>
-          )}
         </div>
 
         <button onClick={handleGenerate} disabled={!gen.name.trim()}

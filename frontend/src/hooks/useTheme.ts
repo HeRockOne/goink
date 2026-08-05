@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { EMPTY_EFFECTS, normalizeEffects, type ThemeEffects } from '@/lib/themeEffects'
 
 const ATTR = 'data-theme'
 
@@ -11,7 +10,8 @@ export interface CustomThemeData {
   name: string
   type: 'light' | 'dark'
   colors: Record<string, string>
-  effects?: ThemeEffects
+  // 兼容旧数据：effects 字段（特效模块已移除）读取时忽略
+  effects?: unknown
 }
 
 const STYLE_ID = 'custom-theme-style'
@@ -88,14 +88,6 @@ export function useTheme() {
 
   const themeMode: Theme = isBuiltin(theme) ? theme : (loadCustomThemes().find(t => `custom:${t.name}` === theme)?.type || 'dark')
 
-  // 当前激活主题的特效配置：内置主题无特效；自定义主题缺失/旧格式时迁移到 layers
-  // 内置深色主题默认提供太虚剑气 + 低密度粒子（与太虚视觉一致）；内置浅色保持克制无特效
-  const activeEffects: ThemeEffects = isCustom(theme)
-    ? normalizeEffects(loadCustomThemes().find(t => `custom:${t.name}` === theme)?.effects)
-    : theme === 'dark'
-      ? { layers: [{ type: 'sword', intensity: 0.55 }, { type: 'particles', intensity: 0.28, count: 40, speed: 0.8 }] }
-      : EMPTY_EFFECTS
-
   const setTheme = useCallback((t: ActiveTheme) => {
     applyTheme(t)
     localStorage.setItem('theme', t)
@@ -125,5 +117,5 @@ export function useTheme() {
 
   const getAllCustomThemes = useCallback(() => loadCustomThemes(), [])
 
-  return { theme: themeMode, activeTheme: theme as ActiveTheme, activeEffects, setTheme, toggle, addCustomTheme, deleteCustomTheme, customThemes, getAllCustomThemes } as const
+  return { theme: themeMode, activeTheme: theme as ActiveTheme, setTheme, toggle, addCustomTheme, deleteCustomTheme, customThemes, getAllCustomThemes } as const
 }

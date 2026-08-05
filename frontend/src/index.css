@@ -117,8 +117,9 @@
   --editor-statusbar: #f7fafd;
   --bubble-ai: rgba(238, 243, 248, 0.9);
   --bubble-ai-border: rgba(107, 143, 173, 0.3);
-  --editor-shadow: 0 20px 60px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
-  --panel-shadow: 0 4px 20px rgba(13, 26, 38, 0.06);
+  --editor-shadow: 0 24px 80px rgba(13, 26, 38, 0.16), 0 6px 20px rgba(13, 26, 38, 0.08);
+  --panel-shadow: 0 8px 32px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
+  --panel-edge: inset 1px 0 0 rgba(255, 255, 255, 0.6), -1px 0 8px rgba(13, 26, 38, 0.04);
 }
 
 /* ── 深色主题：太虚夜色（深蓝黑 + 剑宗青） ────────────────── */
@@ -220,8 +221,9 @@
   --editor-statusbar: #0e1522;
   --bubble-ai: rgba(161, 196, 214, 0.08);
   --bubble-ai-border: rgba(161, 196, 214, 0.28);
-  --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 8px 40px rgba(0, 0, 0, 0.35);
-  --panel-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 12px 56px rgba(0, 0, 0, 0.5);
+  --panel-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 6px rgba(0, 0, 0, 0.2);
+  --panel-edge: inset 1px 0 0 rgba(161, 196, 214, 0.08), -1px 0 16px rgba(0, 0, 0, 0.25);
 }
 
 /* ── 自定义主题兜底派生（永不撞色） ────────────────────── */
@@ -337,7 +339,7 @@ h1, h2, h3, .font-display {
 .side-panel,
 .chat-panel {
   position: relative;
-  box-shadow: var(--panel-shadow);
+  box-shadow: var(--panel-shadow), var(--panel-edge);
 }
 .side-panel::before,
 .chat-panel::before {
@@ -463,104 +465,6 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-/* ── 主题特效：氛围光光斑 ──────────────────────────────── */
-/* 光斑颜色吃主题变量（--primary/--accent），换主题自动联动；
-   只做 transform 动画（GPU 合成层），prefers-reduced-motion 下静止。 */
-
-.ambient-blob {
-  position: absolute;
-  width: 55vmax;
-  height: 55vmax;
-  border-radius: 9999px;
-  background: radial-gradient(circle, var(--primary) 0%, transparent 65%);
-  will-change: transform;
-}
-
-.ambient-blob-1 {
-  top: -18vmax;
-  left: -12vmax;
-  animation: ambient-drift-1 70s ease-in-out infinite alternate;
-}
-
-.ambient-blob-2 {
-  bottom: -20vmax;
-  right: -10vmax;
-  background: radial-gradient(circle, var(--accent) 0%, transparent 65%);
-  animation: ambient-drift-2 90s ease-in-out infinite alternate;
-}
-
-.ambient-blob-3 {
-  top: 30%;
-  left: 45%;
-  width: 40vmax;
-  height: 40vmax;
-  background: radial-gradient(circle, var(--primary) 0%, transparent 60%);
-  animation: ambient-drift-3 110s ease-in-out infinite alternate;
-}
-
-@keyframes ambient-drift-1 {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(12vmax, 8vmax) scale(1.15); }
-}
-
-@keyframes ambient-drift-2 {
-  from { transform: translate(0, 0) scale(1.1); }
-  to   { transform: translate(-10vmax, -6vmax) scale(0.95); }
-}
-
-@keyframes ambient-drift-3 {
-  from { transform: translate(-6vmax, -4vmax) scale(0.9); }
-  to   { transform: translate(8vmax, 6vmax) scale(1.2); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ambient-blob { animation: none; }
-}
-
-/* ── 呼吸光晕（glow）：中心光晕 opacity 呼吸 ─────────────── */
-
-.fx-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 80vmax;
-  height: 80vmax;
-  transform: translate(-50%, -50%);
-  border-radius: 9999px;
-  background: radial-gradient(circle, var(--primary) 0%, transparent 55%);
-  animation: fx-glow-breathe 10s ease-in-out infinite;
-  will-change: opacity;
-}
-
-@keyframes fx-glow-breathe {
-  0%, 100% { opacity: 0.35; }
-  50%      { opacity: 1; }
-}
-
-/* ── 流光（streak）：斜向柔光带缓慢扫过 ─────────────────── */
-
-.fx-streak {
-  position: absolute;
-  top: -20%;
-  left: -30%;
-  width: 40vmax;
-  height: 140vmax;
-  transform: rotate(18deg);
-  background: linear-gradient(90deg, transparent 0%, var(--primary) 45%, var(--accent) 55%, transparent 100%);
-  animation: fx-streak-sweep 22s linear infinite;
-  will-change: transform;
-}
-
-@keyframes fx-streak-sweep {
-  from { transform: rotate(18deg) translateX(-60vmax); }
-  to   { transform: rotate(18deg) translateX(160vmax); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fx-glow { animation: none; }
-  .fx-streak { animation: none; }
 }
 
 @theme inline {

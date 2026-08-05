@@ -4,7 +4,6 @@ import { useApp } from '@/hooks/useApp'
 import { Toaster } from 'sonner'
 import InitView from '@/views/InitView'
 import WorkspaceView from '@/views/WorkspaceView'
-import AmbientEffectLayer from '@/components/effects/AmbientEffectLayer'
 
 type View = 'loading' | 'init' | 'workspace'
 
@@ -43,7 +42,6 @@ export default function App() {
       {/* 太虚背景层：渐变 + 纹理 + 山峦（在内容之下） */}
       <div className="bg-layer" aria-hidden="true" />
       <Toaster position="top-center" richColors toastOptions={{ actionButtonStyle: { backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none', padding: '2px 10px', borderRadius: '4px', fontSize: '12px' } }} />
-      <AmbientEffectLayer />
       {view === 'init' && (
         <InitView onInitialized={async () => {
           const settings = await app.GetSettings()

@@ -553,8 +553,10 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         )}
 
         {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
-        <div className={activePanel === 'profile' ? 'hidden shrink-0' : 'shrink-0'} style={{ width: activePanel === 'profile' ? undefined : chatPanelWidth }}>
-          <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} />
+        <div className={`${activePanel === 'profile' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' ? undefined : chatPanelWidth }}>
+          <ErrorBoundary>
+            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} />
+          </ErrorBoundary>
         </div>
       </div>
 

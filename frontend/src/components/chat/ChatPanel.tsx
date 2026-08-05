@@ -1087,7 +1087,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       : t('chat.inputPlaceholder')
 
   return (
-    <aside className="chat-panel shrink-0 flex flex-col bg-sidebar backdrop-blur-md border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
+    <aside className="chat-panel shrink-0 h-full flex flex-col bg-sidebar backdrop-blur-md border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors z-10 select-none"
         style={{ marginLeft: -2 }}
