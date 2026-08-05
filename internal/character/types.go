@@ -5,16 +5,17 @@ import "time"
 // Character 是角色元数据。
 // personality 和 abilities 为 JSON 自由格式，由 LLM 填写和读取，不做结构化约束。
 type Character struct {
-	ID          int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID     int64     `gorm:"column:novel_id;not null;index"    json:"novel_id"`
-	Name        string    `gorm:"column:name;not null;index"        json:"name"`
-	Description string    `gorm:"column:description"                json:"description"`
-	Personality string    `gorm:"column:personality"                json:"personality"`
-	Abilities   string    `gorm:"column:abilities"                  json:"abilities"`
-	LocationID  *int64    `gorm:"column:location_id;index"          json:"location_id"` // FK → locations.id，当前所在地点
-	Status      string    `gorm:"column:status;default:alive"       json:"status"`      // alive | dead | missing | unknown
-	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"`
+	ID                     int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	NovelID                int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE" json:"novel_id"`
+	Name                   string    `gorm:"column:name;not null;index"        json:"name"`
+	Description            string    `gorm:"column:description"                json:"description"`
+	Personality            string    `gorm:"column:personality"                json:"personality"`
+	Abilities              string    `gorm:"column:abilities"                  json:"abilities"`
+	LocationID             *int64    `gorm:"column:location_id;index"          json:"location_id"`              // FK → locations.id，当前所在地点
+	Status                 string    `gorm:"column:status;default:alive"       json:"status"`                   // alive | dead | missing | unknown
+	StatusChangedChapterID *int64    `gorm:"column:status_changed_chapter_id" json:"status_changed_chapter_id"` // 状态变化发生的章节ID（死亡/失踪/复活判定用）
+	CreatedAt              time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
+	UpdatedAt              time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"`
 }
 
 // TableName 指定 GORM 表名。
@@ -48,7 +49,7 @@ func (Character) TableName() string { return "characters" }
 // 后续可实现前端的可视化关系图绘制
 type CharacterRelation struct {
 	ID                int64     `gorm:"column:id;primaryKey;autoIncrement"           json:"id"`
-	NovelID           int64     `gorm:"column:novel_id;not null;index"              json:"novel_id"`
+	NovelID           int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE"              json:"novel_id"`
 	SourceCharacterID int64     `gorm:"column:source_character_id;not null;index"   json:"source_character_id"` // 关系发出方
 	TargetCharacterID int64     `gorm:"column:target_character_id;not null;index"   json:"target_character_id"` // 关系接收方
 	RelationDescribe  string    `gorm:"column:relation_describe;not null"          json:"relation_describe"`    // 自由文本，LLM 自行描述，如 "亦师亦敌"、"朋友、高中同学"，工具描述的时候需要告诉llm详细描述而不是简单的type

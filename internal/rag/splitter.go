@@ -69,6 +69,7 @@ func SplitText(text string, chunkSize, overlap int, t *Tokenizer) ([]string, []i
 				current = ""
 				curLen = 0
 				sentOffset := 0
+				var prevSentence string
 				for _, sentence := range sentences {
 					sentLen := t.TokenCount(sentence)
 					if curLen+sentLen <= chunkSize {
@@ -82,10 +83,19 @@ func SplitText(text string, chunkSize, overlap int, t *Tokenizer) ([]string, []i
 						}
 					} else {
 						flush()
-						current = sentence
-						curLen = sentLen
-						currentStartByte = paraBytePos + sentOffset
+						// 句级切分同样带 overlap，防止句间语义断裂
+						prefix := ""
+						if prevSentence != "" && overlap > 0 {
+							prefix = tailRunes(prevSentence, overlap)
+						}
+						current = prefix + sentence
+						curLen = sentLen + t.TokenCount(prefix)
+						currentStartByte = paraBytePos + sentOffset - len(prefix)
+						if currentStartByte < 0 {
+							currentStartByte = 0
+						}
 					}
+					prevSentence = sentence
 					sentOffset += len(sentence)
 				}
 			}

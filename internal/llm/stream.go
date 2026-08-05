@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Client 是 LLM 流式调用的传输层。
@@ -162,7 +163,8 @@ func (c *Client) buildPayload(
 	if p.Temperature != nil {
 		temperature = *p.Temperature
 	}
-	maxTokens := 4096
+	// 兜底 8192：自定义模型漏配 MaxOutputTokens 时，2500-4000 字正文 + thinking 需要足够输出空间
+	maxTokens := 8192
 	if opts != nil && opts.Temperature != nil {
 		temperature = *opts.Temperature
 	}
@@ -207,10 +209,41 @@ func (c *Client) buildPayload(
 	return payload
 }
 
+// streamIdleTimeout 流式响应无新数据判定为半开连接的阈值。
+const streamIdleTimeout = 60 * time.Second
+
+// errStreamIdle 流式响应停滞错误（读取超时）。
+var errStreamIdle = fmt.Errorf("stream idle timeout")
+
 // parseSSE 解析 SSE 流，产出 StreamEvent。
+// 带 idle 超时：60s 无任何数据则报可重试错误，避免 provider 半开连接时对话永久挂起。
 func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024) // 行最长 2MB
+	reader := bufio.NewReader(body)
+	lineCh := make(chan struct {
+		line []byte
+		err  error
+	}, 1)
+
+	idleTimer := time.NewTimer(streamIdleTimeout)
+	defer idleTimer.Stop()
+
+	// readLine 每次启动一个读 goroutine（阻塞在 ReadBytes 上），
+	// body 关闭后返回错误自动退出，无长期泄漏。
+	readLine := func() ([]byte, error) {
+		go func() {
+			line, err := reader.ReadBytes('\n')
+			lineCh <- struct {
+				line []byte
+				err  error
+			}{line, err}
+		}()
+		select {
+		case res := <-lineCh:
+			return res.line, res.err
+		case <-idleTimer.C:
+			return nil, errStreamIdle
+		}
+	}
 
 	// 工具调用累积缓冲区：按 index 对齐
 	type accToolCall struct {
@@ -221,15 +254,37 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	accumulated := make([]accToolCall, 0, 4)
 	hasContent := false // 追踪是否产出了有效事件
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := readLine()
+		if err != nil {
+			if err == errStreamIdle {
+				ch <- StreamEvent{Type: EventError, Error: &APIError{
+					StatusCode: 0,
+					Message:    "流式响应停滞（60s 无数据），连接可能半开",
+					Retryable:  true,
+				}}
+			} else if err != io.EOF {
+				ch <- StreamEvent{Type: EventError, Error: &APIError{
+					StatusCode: 0,
+					Message:    fmt.Sprintf("SSE stream read error: %s", err),
+					Retryable:  true,
+				}}
+			}
+			break
+		}
+		idleTimer.Reset(streamIdleTimeout)
+
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" {
+			continue
+		}
 
 		// SSE data 行
 		const prefix = "data: "
-		if !strings.HasPrefix(line, prefix) {
+		if !strings.HasPrefix(lineStr, prefix) {
 			continue
 		}
-		data := line[len(prefix):]
+		data := lineStr[len(prefix):]
 
 		// 流结束标记
 		if data == "[DONE]" {
@@ -333,14 +388,6 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 				}
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		ch <- StreamEvent{Type: EventError, Error: &APIError{
-			StatusCode: 0,
-			Message:    fmt.Sprintf("SSE stream read error: %s", err),
-			Retryable:  true,
-		}}
 	}
 
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。

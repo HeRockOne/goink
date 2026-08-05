@@ -582,6 +582,8 @@
     "recovered": "Recovered",
     "abandoned": "Abandoned",
     "all": "All",
+    "overdue": "Overdue by {{by}} ch",
+    "overdueWarning": "{{count}} foreshadowing item(s) overdue, consider resolving soon",
     "loading": "Loading...",
     "loadFailed": "Load failed",
     "chapterPlan": "Chapter Plan",

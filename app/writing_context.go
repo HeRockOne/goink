@@ -75,6 +75,7 @@ type WritingChapterBrief struct {
 type WritingCharacterBrief struct {
 	ID        int64                 `json:"id"`
 	Name      string                `json:"name"`
+	Status    string                `json:"status"`
 	Desc      string                `json:"desc"`
 	Location  *WritingLocationBrief `json:"location,omitempty"`
 	ItemCount int64                 `json:"item_count"`
@@ -213,7 +214,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 	}
 	var charBriefs []WritingCharacterBrief
 	for _, c := range chars {
-		cb := WritingCharacterBrief{ID: c.ID, Name: c.Name, Desc: c.Description}
+		cb := WritingCharacterBrief{ID: c.ID, Name: c.Name, Status: c.Status, Desc: c.Description}
 		if c.LocationID != nil {
 			var l location.Location
 			if a.db.WithContext(ctx).First(&l, *c.LocationID).Error == nil {
@@ -430,9 +431,9 @@ func (a *App) buildVolumeEntities(ctx context.Context, novelID int64, vol storya
 		}
 	}
 
-	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷
+	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷，或 arc_id 为空（全局根基设定，始终可见）
 	var lores []lore.LoreEntry
-	if err := db.Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ?)", novelID, chIDs, vol.ID).
+	if err := db.Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ? OR arc_id IS NULL)", novelID, chIDs, vol.ID).
 		Find(&lores).Error; err == nil {
 		for _, l := range lores {
 			ve.Lore = append(ve.Lore, WritingVolumeEntity{ID: l.ID, Name: l.Title})

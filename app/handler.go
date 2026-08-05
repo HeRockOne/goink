@@ -17,13 +17,13 @@ import (
 
 	"novel/internal/agent"
 	"novel/internal/approval"
-	"novel/internal/logger"
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
 	"novel/internal/item"
 	"novel/internal/llm"
 	"novel/internal/location"
+	"novel/internal/logger"
 	"novel/internal/lore"
 	"novel/internal/mcp_tools"
 	"novel/internal/migrate"
@@ -36,12 +36,12 @@ import (
 	"novel/internal/session"
 	"novel/internal/skill"
 	"novel/internal/stats"
-	"novel/internal/style"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
+	"novel/internal/style"
 	"novel/internal/timeline"
-	"novel/internal/writing"
 	webdavpkg "novel/internal/webdav"
+	"novel/internal/writing"
 	ws "novel/internal/ws"
 )
 
@@ -66,26 +66,26 @@ type App struct {
 	vectorStore   *rag.VectorStore
 	searchService atomic.Pointer[search.Service]
 
-	novel      *novel.Store
-	chapter    *chapter.Store
-	character  *character.Store
-	lore       *lore.Store
-	item       *item.Store
-	scene      *scene.Store
-	stats      *stats.Store
-	session    *session.Store
-	skill      *skill.Store
-	style      *style.Store
-	timeline   *timeline.Store
-	storyarc   *storyarc.Store
-	location   *location.Store
-	reader     *reader.Store
-	turnCommit *rollback.Store
-	writing    *writing.Store
-	webdav     *webdavpkg.Server
-	apiServer  *apiServer
-	wsHub      *ws.Hub
-	logEnabled bool // 文件日志开关
+	novel       *novel.Store
+	chapter     *chapter.Store
+	character   *character.Store
+	lore        *lore.Store
+	item        *item.Store
+	scene       *scene.Store
+	stats       *stats.Store
+	session     *session.Store
+	skill       *skill.Store
+	style       *style.Store
+	timeline    *timeline.Store
+	storyarc    *storyarc.Store
+	location    *location.Store
+	reader      *reader.Store
+	turnCommit  *rollback.Store
+	writing     *writing.Store
+	webdav      *webdavpkg.Server
+	apiServer   *apiServer
+	wsHub       *ws.Hub
+	logEnabled  bool // 文件日志开关
 	apiUseHTTPS bool // HTTPS 开关
 }
 
@@ -260,6 +260,14 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	logger.SetFileEnabled(settings.LogEnabled)
 	a.apiUseHTTPS = settings.APIUseHTTPS
 
+	// 4.1 首次启动写入默认阶段门禁配置（用户改过则跳过）
+	seeded, err := EnsurePhaseGateConfigSeeded(db)
+	if err != nil {
+		a.logger.Error("写入默认门禁配置失败", "err", err)
+	} else {
+		a.settings = seeded
+	}
+
 	// 5. 注册操作日志钩子
 	storage.RegisterOplogHooks(db)
 
@@ -370,11 +378,19 @@ func (a *App) StartWebDAV(port int) error {
 	pass := "1"
 	p := port
 	if a.settings != nil {
-		if a.settings.WebDAVUser != "" { user = a.settings.WebDAVUser }
-		if a.settings.WebDAVPass != "" { pass = a.settings.WebDAVPass }
-		if p == 0 && a.settings.WebDAVPort > 0 { p = a.settings.WebDAVPort }
+		if a.settings.WebDAVUser != "" {
+			user = a.settings.WebDAVUser
+		}
+		if a.settings.WebDAVPass != "" {
+			pass = a.settings.WebDAVPass
+		}
+		if p == 0 && a.settings.WebDAVPort > 0 {
+			p = a.settings.WebDAVPort
+		}
 	}
-	if p == 0 { p = 12345 }
+	if p == 0 {
+		p = 12345
+	}
 
 	// 自动导出所有小说到 outputs 目录
 	a.ExportAllToOutputs()

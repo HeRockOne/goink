@@ -257,17 +257,18 @@ func foreshadowAppearances(ctx context.Context, db *gorm.DB, novelID, entryID in
 
 type CheckStoryConsistencyArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"required,description=当前章节号" validate:"required,min=1"`
-	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\"]。留空=全部"`
+	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\"]。留空=全部"`
 }
 
 type CheckStoryConsistencyTool struct{}
 
 func (t *CheckStoryConsistencyTool) Name() string { return "check_story_consistency" }
 func (t *CheckStoryConsistencyTool) Description() string {
-	return "程序化一致性检查，用 SQL 实证返回三类问题：\n" +
+	return "程序化一致性检查，用 SQL 实证返回四类问题：\n" +
 		"1. foreshadow_overdue：超过目标章仍未回收的伏笔（硬错误）\n" +
 		"2. character_vanished：近30章未出场但有历史戏份的角色（出场断档，疑似被遗忘）\n" +
 		"3. item_conflict：已销毁/丢失的物品在之后章节又出现（硬错误）\n" +
+		"4. dead_appeared：已死亡（status=dead）的角色在死亡章节之后又被写入章节出场列表（硬错误，死者复出）\n" +
 		"review 阶段调用，作为审稿的硬数据支撑。"
 }
 func (t *CheckStoryConsistencyTool) Category() ToolCategory { return CategoryConsistencyCheck }
@@ -281,7 +282,7 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 	a := args.(*CheckStoryConsistencyArgs)
 	db := tc.DB.WithContext(ctx)
 
-	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true}
+	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true}
 	if a.CheckTypes != "" {
 		checkTypes = map[string]bool{}
 		for _, c := range parseJSONStringArray(a.CheckTypes) {
@@ -317,9 +318,16 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 		}
 	}
 
+	if checkTypes["dead_appeared"] {
+		dead := findDeadAppeared(ctx, db, tc.NovelID, a.CurrentChapter)
+		for _, d := range dead {
+			findings = append(findings, fmt.Sprintf("🔴 死者复出：%s 状态为 dead（第%d章死亡），但第%d章出场列表中仍包含该角色", d.Name, d.DeathChapter, d.AppearedChapter))
+		}
+	}
+
 	var content string
 	if len(findings) == 0 && len(warnings) == 0 {
-		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突。"
+		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出。"
 	} else {
 		parts := append([]string{}, findings...)
 		parts = append(parts, warnings...)
@@ -450,6 +458,56 @@ func parseJSONStringArray(raw string) []string {
 		return nil
 	}
 	return arr
+}
+
+// deadAppeared 记录死者复出证据。
+type deadAppeared struct {
+	Name            string
+	DeathChapter    int
+	AppearedChapter int
+}
+
+// findDeadAppeared 查找已死亡角色在死亡章节之后仍被写入章节出场列表（characters_in）的情况。
+// characters_in 是 maintain 阶段每章回写的 JSON 数组（如 [127,128,129]），
+// status=dead 且 status_changed_chapter_id 明确的角色出现在更晚章节的 characters_in 中即为死者复出。
+func findDeadAppeared(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int) []deadAppeared {
+	var deadChars []character.Character
+	db.WithContext(ctx).Where("novel_id = ? AND status = 'dead' AND status_changed_chapter_id IS NOT NULL", novelID).Find(&deadChars)
+	if len(deadChars) == 0 {
+		return nil
+	}
+
+	// 章节 ID → 章节号 映射（用于 characters_in 反查章号）
+	var chs []chapter.Chapter
+	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chs)
+	chNumByID := map[int64]int{}
+	for _, c := range chs {
+		chNumByID[c.ID] = c.ChapterNumber
+	}
+
+	var out []deadAppeared
+	for _, ch := range deadChars {
+		if ch.StatusChangedChapterID == nil {
+			continue
+		}
+		deathChNum := chNumByID[*ch.StatusChangedChapterID]
+		if deathChNum == 0 {
+			continue
+		}
+		// 死亡章之后的章节，characters_in 中含该角色 ID → 死者复出
+		var later []chapter.Chapter
+		db.WithContext(ctx).Where("novel_id = ? AND chapter_number > ?", novelID, deathChNum).
+			Select("id", "chapter_number", "characters_in").Find(&later)
+		for _, lc := range later {
+			for _, id := range parseJSONInt64Array(lc.CharactersIn) {
+				if id == ch.ID {
+					out = append(out, deadAppeared{Name: ch.Name, DeathChapter: deathChNum, AppearedChapter: lc.ChapterNumber})
+					break
+				}
+			}
+		}
+	}
+	return out
 }
 
 // ── 注册 ──────────────────────────────────────────────

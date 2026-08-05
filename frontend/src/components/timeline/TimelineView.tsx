@@ -140,6 +140,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   const afterCount = afterChapters.reduce((s, [, items]) => s + items.length, 0)
   const maxChapter = grouped.length > 0 ? grouped[grouped.length - 1][0] : 0
 
+  // 超期伏笔：pending 且 target_chapter 早于最新章节号
+  const isOverdue = (entry: timeline.TimelineEntry) =>
+    entry.status === 'pending' && entry.target_chapter > 0 && windowCenter > 0 && entry.target_chapter < windowCenter
+  const overdueCount = entries.filter(isOverdue).length
+
   function shiftWindow(delta: number) {
     setWindowCenter(prev => Math.max(ENTRY_WINDOW + 1, Math.min(maxChapter - ENTRY_WINDOW, prev + delta)))
   }
@@ -483,6 +488,16 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
               ))}
             </div>
 
+            {/* 超期伏笔警示条 */}
+            {overdueCount > 0 && (
+              <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg border border-destructive/40 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                <span className="text-xs font-medium text-destructive">
+                  {t('timeline.overdueWarning', { count: overdueCount })}
+                </span>
+              </div>
+            )}
+
             {/* Create form */}
             {editMode?.type === 'create' && (
               <div className="rounded-lg border border-border bg-card p-4 mb-4">
@@ -558,7 +573,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
                         ) : (
                           <div
                             key={entry.id}
-                            className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                            className={`rounded-lg border bg-card hover:shadow-sm transition-shadow group ${
+                              isOverdue(entry)
+                                ? 'border-destructive/60 ring-1 ring-destructive/30'
+                                : 'border-border hover:border-border'
+                            }`}
                           >
                             <div className="flex items-center gap-3 px-4 py-3">
                               <span className={`shrink-0 flex h-7 w-7 items-center justify-center rounded ${c.bg}`}>
@@ -567,6 +586,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium text-foreground truncate">{entry.title}</span>
+                                  {isOverdue(entry) && (
+                                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium bg-destructive/15 text-destructive">
+                                      {t('timeline.overdue', { by: windowCenter - entry.target_chapter })}
+                                    </span>
+                                  )}
                                   <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${s.bg} ${s.text}`}>
                                     {s.label}
                                   </span>

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -243,13 +244,14 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 
 // UpdateCharacterArgs 是 update_character 的参数。
 type UpdateCharacterArgs struct {
-	CharacterID int64  `json:"character_id" jsonschema:"required,description=角色ID"     validate:"required,min=1"`
-	Name        string `json:"name"         jsonschema:"description=新的名称"`
-	Description string `json:"description"  jsonschema:"description=新的自然语言描述（完全替换旧的）"`
-	Personality string `json:"personality" jsonschema:"required,description=新的性格/设定，字符串形式JSON（完全替换旧的）" validate:"required"`
-	Abilities   string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
-	LocationID  *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
-	Status      string `json:"status"       jsonschema:"description=新的角色状态,enum=alive,enum=dead,enum=missing,enum=unknown"`
+	CharacterID            int64  `json:"character_id" jsonschema:"required,description=角色ID"     validate:"required,min=1"`
+	Name                   string `json:"name"         jsonschema:"description=新的名称"`
+	Description            string `json:"description"  jsonschema:"description=新的自然语言描述（完全替换旧的）"`
+	Personality            string `json:"personality" jsonschema:"required,description=新的性格/设定，字符串形式JSON（完全替换旧的）" validate:"required"`
+	Abilities              string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
+	LocationID             *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
+	Status                 string `json:"status"       jsonschema:"description=新的角色状态,enum=alive,enum=dead,enum=missing,enum=unknown。注意：dead（已死亡）是终态，已死亡角色不允许直接改回 alive/missing/unknown，如需复活请人工确认"`
+	StatusChangedChapterID int64  `json:"status_changed_chapter_id" jsonschema:"description=状态变化发生的章节ID（角色死亡/失踪/复活的章节），状态变化时必填"`
 }
 
 // UpdateCharacterTool 更新角色字段。
@@ -281,7 +283,39 @@ func (t *UpdateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 		return nil, fmt.Errorf("query character: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &ch)
+	// 死亡终态守卫：dead 是终态，不允许工具直接复活（避免 300 万字长线死者复出事故）
+	if ch.Status == "dead" && a.Status != "" && a.Status != "dead" {
+		return &ToolResult{Success: false,
+			Error: fmt.Sprintf("角色 [%s] 当前状态为 dead（已死亡），不允许通过 update_character 直接改为 %s。如需复活请在写作上下文中明确交代死而复生的情节依据，或由人工在角色面板确认。", ch.Name, a.Status)}, nil
+	}
+
+	// 状态变化记录章节：设置 status 时必须提供变化章节，用于死后出场检测
+	if a.Status != "" && a.Status != ch.Status && a.StatusChangedChapterID <= 0 {
+		return &ToolResult{Success: false,
+			Error: fmt.Sprintf("角色状态从 %s 变更为 %s 时必须提供 status_changed_chapter_id（状态变化发生的章节ID）", ch.Status, a.Status)}, nil
+	}
+
+	if a.Name != "" {
+		ch.Name = a.Name
+	}
+	if a.Description != "" {
+		ch.Description = a.Description
+	}
+	if a.Personality != "" {
+		ch.Personality = a.Personality
+	}
+	if a.Abilities != "" {
+		ch.Abilities = a.Abilities
+	}
+	if a.LocationID != nil {
+		ch.LocationID = a.LocationID
+	}
+	if a.Status != "" {
+		ch.Status = a.Status
+	}
+	if a.StatusChangedChapterID > 0 {
+		ch.StatusChangedChapterID = &a.StatusChangedChapterID
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&ch).Error; err != nil {
 		return nil, fmt.Errorf("save character: %w", err)
@@ -351,15 +385,37 @@ func (t *UpdateCharacterRelationshipTool) editRelation(ctx context.Context, a *U
 		return &ToolResult{Success: false, Error: fmt.Sprintf("关系 %d 不属于当前小说", a.RelationID)}, nil
 	}
 
-	json.Unmarshal(tc.RawArgs, &rel)
+	// append-only 设计：编辑不改旧行，旧行置 is_current=false，插入新行承载新描述
+	newRel := rel
+	if a.RelationDescribe != "" {
+		newRel.RelationDescribe = a.RelationDescribe
+	}
+	if a.Description != "" {
+		newRel.Description = a.Description
+	}
+	if a.ChapterID > 0 {
+		newRel.ChapterID = a.ChapterID
+	}
+	newRel.ID = 0
+	newRel.IsCurrent = true
+	newRel.CreatedAt = time.Now()
 
-	if err := tc.DB.WithContext(ctx).Save(&rel).Error; err != nil {
-		return nil, fmt.Errorf("save relation: %w", err)
+	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 逐行 Save 以触发操作日志回调
+		if err := tx.Model(&character.CharacterRelation{}).
+			Where("id = ?", a.RelationID).
+			Update("is_current", false).Error; err != nil {
+			return fmt.Errorf("mark old relation: %w", err)
+		}
+		return tx.Create(&newRel).Error
+	})
+	if err != nil {
+		return nil, fmt.Errorf("edit relation: %w", err)
 	}
 
 	return &ToolResult{
 		Success: true,
-		Data:    map[string]any{"id": rel.ID, "action": "edit"},
+		Data:    map[string]any{"id": newRel.ID, "action": "edit_append"},
 	}, nil
 }
 
@@ -379,6 +435,9 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 	}
 	found := make(map[int64]bool, len(chars))
 	for _, ch := range chars {
+		if ch.NovelID != tc.NovelID {
+			continue // 跨小说角色 ID 视为不存在，避免幽灵关系边
+		}
 		found[ch.ID] = true
 	}
 	if !found[a.SourceCharacterID] {

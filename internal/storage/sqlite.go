@@ -44,7 +44,7 @@ func Open(dsn string, log *slog.Logger) (*gorm.DB, error) {
 	return db, nil
 }
 
-// enableWAL 开启 WAL 模式，支持一写多读并发。
+// enableWAL 开启 WAL 模式，支持一写多读并发；并强制启用外键约束。
 func enableWAL(db *sql.DB) error {
 	var journal string
 	if err := db.QueryRow("PRAGMA journal_mode=WAL").Scan(&journal); err != nil {
@@ -52,6 +52,11 @@ func enableWAL(db *sql.DB) error {
 	}
 	if journal != "wal" {
 		return fmt.Errorf("期望 journal_mode=wal，实际为 %s", journal)
+	}
+	// 外键约束：SQLite 默认关闭，每连接需显式开启。
+	// 新库由 GORM AutoMigrate 按 types.go 的 constraint tag 建 FK（删除父行级联清理子行）。
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		return fmt.Errorf("启用外键约束失败: %w", err)
 	}
 	return nil
 }

@@ -1,4 +1,14 @@
-<!-- phase-gate-config
+package app
+
+import (
+	"gorm.io/gorm"
+
+	"novel/internal/config"
+)
+
+// defaultPhaseGateConfig 是出厂默认阶段门禁配置，与项目根目录 门禁配置示例.md 保持同步。
+// 首次启动时写入 app_config，用户可在设置页修改或清空（清空后恢复默认）。
+const defaultPhaseGateConfig = `<!-- phase-gate-config
 mode: single
 phase: init
 tools: create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase
@@ -96,4 +106,21 @@ mode: batch
 phase: done
 tools: read
 next: prepare
--->
+-->`
+
+// EnsurePhaseGateConfigSeeded 首次启动时写入默认门禁配置，返回最新的设置对象。
+// 已存在配置（用户改过）则跳过，避免覆盖用户自定义。
+func EnsurePhaseGateConfigSeeded(db *gorm.DB) (*config.AppSettings, error) {
+	s, err := config.LoadSettings(db)
+	if err != nil {
+		return nil, err
+	}
+	if s.PhaseGateConfig != "" {
+		return s, nil
+	}
+	s.PhaseGateConfig = defaultPhaseGateConfig
+	if err := config.SaveSettings(db, s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}

@@ -67,7 +67,7 @@ mode: always
 
 ### write
 
-1. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing）
+1. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration）
 2. **edit**(chapters/NNN.md)（required）— 写正文
 3. 校验字数（2500-4000）
 4. 记录关键物品出现 → create_item_occurrence
@@ -123,7 +123,7 @@ mode: always
 | **prepare（准备）** | main-tech-common-sense-logic（一致性）, main-tech-genre-templates, main-tech-book-outline（卷纲）, main-tech-brainstorm-composer（卡情节时构思） |
 | **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
 | **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（八条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
-| **write后（自审）** | main-tech-revision-pass（修改润色）, tech-sub-sub-tech-anti-ai-grade（用词级反AI） |
+| **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
 | **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（16项判定） |
 | **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔） |
 | **完结** | main-tech-book-completion（完本清单） |

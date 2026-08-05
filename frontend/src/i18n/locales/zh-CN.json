@@ -559,6 +559,8 @@
     "recovered": "已回收",
     "abandoned": "已废弃",
     "all": "全部",
+    "overdue": "超期{{by}}章",
+    "overdueWarning": "有 {{count}} 条伏笔已超期未回收，建议尽快处理",
     "loading": "加载中...",
     "loadFailed": "加载失败",
     "chapterPlan": "章节计划",

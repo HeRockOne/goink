@@ -22,7 +22,7 @@ const (
 // "谁杀了村长"是悬念，答案作者心里应该有数。
 type ReaderPerspective struct {
 	ID              int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID         int64     `gorm:"column:novel_id;not null;index"      json:"novel_id"`
+	NovelID         int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE"      json:"novel_id"`
 	Type            string    `gorm:"column:type;not null;index"          json:"type"`             // "known" | "suspense" | "misconception"
 	Content         string    `gorm:"column:content;not null"             json:"content"`          // 条目内容：读者知道/想知道/误以为的事情
 	RelatedTruth    string    `gorm:"column:related_truth"                json:"related_truth"`    // 作者视角：真实情况。所有类型可选，不只是 misconception

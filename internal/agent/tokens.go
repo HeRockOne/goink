@@ -116,7 +116,9 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		json.Unmarshal([]byte(d), &details)
 	}
 	if details != nil {
-		if cached, ok := details["cached_tokens"].(float64); ok && cached > 0 {
+		if cached, ok := details["cached_tokens"].(float64); ok {
+			// 键存在即按 OpenAI 语义处理：miss = prompt - cached（含 cached=0 的全未命中场景，
+			// 避免该轮 prompt_tokens 既不进 hit 也不进 miss，导致计费 miss 累计偏低、命中率虚高）
 			hitTokens = cached
 			missTokens = promptTokens - cached
 			if missTokens < 0 {

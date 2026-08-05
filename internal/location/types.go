@@ -44,7 +44,7 @@ import "time"
 //	AI 可查询"当前地点周围有哪些地方"来辅助空间推理。
 type Location struct {
 	ID               int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID          int64     `gorm:"column:novel_id;not null;index"    json:"novel_id"`
+	NovelID          int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE" json:"novel_id"`
 	Name             string    `gorm:"column:name;not null;index"        json:"name"`               // 地点名称，如"迷雾森林""黑铁城堡"
 	LocationType     string    `gorm:"column:location_type;index"        json:"location_type"`      // 自由文本，LLM 自行填写，如"森林""洞穴""城市""战场"
 	Description      string    `gorm:"column:description"                json:"description"`        // 自然语言描述，环境氛围、特色等
@@ -78,7 +78,7 @@ func (Location) TableName() string { return "locations" }
 //   - 与包含树的区别：parent_location_id 表达"属于"，LocationRelation 表达"相邻/连通"
 type LocationRelation struct {
 	ID           int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID      int64     `gorm:"column:novel_id;not null;index"              json:"novel_id"`
+	NovelID      int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE"              json:"novel_id"`
 	LocationA    int64     `gorm:"column:location_a;uniqueIndex:uk_location_pair;not null" json:"location_a_id"` // 总是较小 ID
 	LocationB    int64     `gorm:"column:location_b;uniqueIndex:uk_location_pair;not null" json:"location_b_id"` // 总是较大 ID
 	RelationType string    `gorm:"column:relation_type;not null"              json:"relation_type"`              // 自由文本："相邻""由山路连通""可望见"

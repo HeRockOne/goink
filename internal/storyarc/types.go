@@ -8,7 +8,7 @@ import "time"
 // arc_type 驱动过滤和注入策略，status 驱动活跃窗口筛选，均保持约束枚举。
 type StoryArc struct {
 	ID           int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID      int64     `gorm:"column:novel_id;not null;index"    json:"novel_id"`
+	NovelID      int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE" json:"novel_id"`
 	Name         string    `gorm:"column:name;not null"              json:"name"`          // 弧线名称，如"复仇之路"
 	Description  string    `gorm:"column:description"                json:"description"`   // 弧线整体描述
 	ArcType      string    `gorm:"column:arc_type;not null;index"    json:"arc_type"`      // "main" | "sub" | "character" | "background" | "volume"
@@ -31,8 +31,8 @@ func (StoryArc) TableName() string { return "story_arcs" }
 // actual_chapter 记录实际发生在哪章，0=未发生。
 type ArcNode struct {
 	ID            int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID       int64     `gorm:"column:novel_id;not null;index"         json:"novel_id"`
-	StoryArcID    int64     `gorm:"column:story_arc_id;not null;index"     json:"story_arc_id"`
+	NovelID       int64     `gorm:"column:novel_id;not null;index;constraint:OnDelete:CASCADE" json:"novel_id"`
+	StoryArcID    int64     `gorm:"column:story_arc_id;not null;index;constraint:OnDelete:CASCADE" json:"story_arc_id"`
 	Title         string    `gorm:"column:title;not null"                  json:"title"`          // "发现仇人身份"
 	Description   string    `gorm:"column:description"                     json:"description"`    // 节点详情
 	TargetChapter int       `gorm:"column:target_chapter;default:0"        json:"target_chapter"` // 预计章节，0=未定

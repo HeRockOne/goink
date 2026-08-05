@@ -3,7 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -29,13 +29,13 @@ type PhaseGate struct {
 
 // PhaseConfig 是单个阶段的配置。
 type PhaseConfig struct {
-	Name     string   // 阶段名称
-	Mode     string   // 所属模式："single" | "batch"（空=两种模式都适用）
-	Tools    []string // 允许使用的工具
-	Require  []string // 必须调用过的工具（完成条件）
-	Next     string   // 满足条件后可进入的下一阶段
-	FailNext string   // require 不满足时的回退阶段
-	Loop     bool     // batch 模式下是否循环（write → outline）
+	Name      string   // 阶段名称
+	Mode      string   // 所属模式："single" | "batch"（空=两种模式都适用）
+	Tools     []string // 允许使用的工具
+	Require   []string // 必须调用过的工具（完成条件）
+	Next      string   // 满足条件后可进入的下一阶段
+	FailNext  string   // require 不满足时的回退阶段
+	Loop      bool     // batch 模式下是否循环（write → outline）
 	EditPaths string   // edit 工具的路径范围（如 "outlines/*, goink.md"，"*" = 不限制）
 }
 
@@ -230,6 +230,10 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	// 避免旧 bug：visited 永久累积导致第二轮创作可任意跳转。
 	if current != nil && current.Next != "" && targetPhase != current.Next {
 		allowed := false
+		// Loop 标记：batch 模式允许循环回退到上一阶段（如 write ⇄ outline 连续多章）
+		if g.mode == "batch" && current.Loop && targetPhase == g.prevPhaseName(current.Name) {
+			allowed = true
+		}
 		for _, v := range g.visited {
 			if v == targetPhase {
 				allowed = true
@@ -283,15 +287,22 @@ func (g *PhaseGate) CheckEditPath(filePath string) (bool, string) {
 		if pattern == "" {
 			continue
 		}
-		// 支持 * 通配符匹配
-		matched, _ := filepath.Match(pattern, filePath)
-		if matched {
+		// 精确匹配
+		if pattern == filePath {
 			return true, ""
 		}
-		// 支持目录前缀匹配（如 outlines/* 匹配 outlines/001.md）
+		// 目录前缀匹配（如 outlines/* 匹配 outlines/001.md），用 / 作为统一分隔符，
+		// 避免 Windows 下 filepath.Match 的 \ 分隔符导致 * 跨目录匹配
 		if strings.HasSuffix(pattern, "/*") {
 			dir := strings.TrimSuffix(pattern, "/*")
-			if strings.HasPrefix(filePath, dir+"/") || filePath == dir {
+			if filePath == dir || strings.HasPrefix(filePath, dir+"/") {
+				return true, ""
+			}
+			continue
+		}
+		// 其它 glob 模式：用 path.Match（/ 固定分隔符，* 不跨目录）
+		if strings.Contains(pattern, "*") {
+			if matched, _ := path.Match(pattern, filePath); matched {
 				return true, ""
 			}
 		}
@@ -369,6 +380,16 @@ func (g *PhaseGate) findPhase(name string) *PhaseConfig {
 	return nil
 }
 
+// prevPhaseName 返回 phases 数组中指定阶段的前一个阶段名（用于 Loop 循环回退）。
+func (g *PhaseGate) prevPhaseName(name string) string {
+	for i := range g.phases {
+		if g.phases[i].Name == name && i > 0 {
+			return g.phases[i-1].Name
+		}
+	}
+	return ""
+}
+
 // StatusString 返回当前状态的可读摘要。
 func (g *PhaseGate) StatusString() string {
 	if g == nil || !g.active {
@@ -440,12 +461,19 @@ func (g *PhaseGate) Status() PhaseStatus {
 }
 
 // SaveState 将门禁状态序列化为 JSON，用于持久化到 session。
+// 序列化 successfulTools 与 visited（visited 丢失会导致断点续作后无法回退到已访问阶段）。
 func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 	if g == nil || !g.active {
 		return "", ""
 	}
-	// 保存成功次数（require 只看成功）
-	b, _ := json.Marshal(g.successfulTools)
+	data := struct {
+		Tools   map[string]int `json:"tools"`
+		Visited []string       `json:"visited"`
+	}{
+		Tools:   g.successfulTools,
+		Visited: g.visited,
+	}
+	b, _ := json.Marshal(data)
 	return g.currentPhase, string(b)
 }
 
@@ -458,23 +486,44 @@ func (g *PhaseGate) SaveWordCount() string {
 }
 
 // LoadState 从持久化数据恢复门禁状态。
+// 兼容两种格式：新格式 {"tools":{...},"visited":[...]} 与旧格式 {tool: count}。
 func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	if g == nil || !g.active {
 		return
 	}
 	if currentPhase != "" {
 		g.currentPhase = currentPhase
-		g.visited = []string{currentPhase} // 恢复时从当前阶段开始
 	}
 	if calledToolsJSON != "" {
+		// 先尝试新格式
+		var state struct {
+			Tools   map[string]int `json:"tools"`
+			Visited []string       `json:"visited"`
+		}
+		if json.Unmarshal([]byte(calledToolsJSON), &state) == nil && state.Tools != nil {
+			g.successfulTools = state.Tools
+			for k, v := range state.Tools {
+				g.calledTools[k] = v
+			}
+			if len(state.Visited) > 0 {
+				g.visited = state.Visited
+			} else {
+				g.visited = []string{currentPhase}
+			}
+			return
+		}
+		// 旧格式：直接 tool→count map
 		var tools map[string]int
 		if json.Unmarshal([]byte(calledToolsJSON), &tools) == nil {
 			g.successfulTools = tools
-			// 恢复时也填充 calledTools（向后兼容）
 			for k, v := range tools {
 				g.calledTools[k] = v
 			}
+			g.visited = []string{currentPhase}
 		}
+	}
+	if len(g.visited) == 0 {
+		g.visited = []string{g.currentPhase}
 	}
 }
 

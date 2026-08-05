@@ -325,6 +325,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
         }
 
         if (needRefresh) {
+          // dirty 保护：tab 有未保存的本地编辑时跳过回流，避免服务端旧快照覆盖刚输入的内容
+          if (tab.isDirty) continue
           try {
             const fresh = await app.GetContent(data.novel_id, data.path)
             const patch: Partial<EditorTab> = { [refreshKey]: fresh }

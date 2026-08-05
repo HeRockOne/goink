@@ -40,8 +40,9 @@ func (t *GetWritingContextTool) Description() string {
 		"chapter: 当前章节 {num=章节号, title=标题, word_count=字数}\n" +
 		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数}]\n" +
 		"scenes[]: 本章场景 [{title, summary, word_count, location={name=地点名, type=地点类型}, arc_node={title=节点标题, arc_name=所属弧线名}}]\n" +
-		"characters[]: 出场角色 [{name, location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
+		"characters[]: 出场角色 [{name, status=角色状态(alive/dead/missing/unknown，dead=已死亡不得出场), location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
 		"active_arcs[]: 活跃弧线 [{name, type_zh=类型中文(主线/支线/角色弧/背景), nodes_done=已完成节点数, nodes_total=总节点数, related_lore=[关联设定ID], related_items=[关联物品ID]}]\n" +
+		"global_lore[]: 全局设定索引（arc_id 为空、跨弧线根基设定，如修炼体系/势力格局/天道法则）[{id, name}]——写作用到这些设定时用 get_lore 取详情\n" +
 		"timeline.pending[]: 待回收伏笔 [{title, category=foreshadowing/user_directive, target_chapter=目标回收章节, importance=重要度1-5}]\n" +
 		"timeline.resolved[]: 已回收伏笔 [{title, resolved_chapter=实际回收章节}]\n" +
 		"timeline.overdue[]: 超期未回收伏笔 [{title, target_chapter=原定回收章节, importance, overdue_by=超期了几章(越大越紧急)}]\n" +
@@ -203,6 +204,7 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 			charList = append(charList, map[string]any{
 				"id":         ch.ID,
 				"name":       ch.Name,
+				"status":     ch.Status, // alive/dead/missing/unknown：dead=已死亡（不得让其出场/说话/行动）
 				"location":   locInfo,
 				"items":      items,
 				"item_count": countItemsForChar(itemStore, ctx, nid, ch.ID),
@@ -239,6 +241,16 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		})
 	}
 	result["active_arcs"] = arcList
+
+	// ── 4.5 全局设定索引（arc_id 为 NULL 的跨弧线根基设定，如修炼体系/势力格局/天道法则） ──
+	// 这些设定不绑定任何弧线，仅靠 arc_id 关联的查询永远看不见它们，这里显式注入 ID 列表供 AI 按需 get_lore。
+	var globalLore []lore.LoreEntry
+	db.WithContext(ctx).Select("id", "title").Where("novel_id = ? AND arc_id IS NULL", nid).Find(&globalLore)
+	globalLoreList := make([]map[string]any, 0, len(globalLore))
+	for _, gl := range globalLore {
+		globalLoreList = append(globalLoreList, map[string]any{"id": gl.ID, "name": gl.Title})
+	}
+	result["global_lore"] = globalLoreList
 
 	// ── 5. 时间线 ──
 	tlStore := timeline.NewStore(db, log)
@@ -340,7 +352,7 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		"current_chapter": chapNum,
 		"volume_start":    0,
 		"volume_end":      0,
-		"rule": "只展开当前卷（volume_start~volume_end）范围内的情节；后续卷设定不得提前使用；所有章节事件必须服务于 outline 的核心矛盾与结局方向。",
+		"rule":            "只展开当前卷（volume_start~volume_end）范围内的情节；后续卷设定不得提前使用；所有章节事件必须服务于 outline 的核心矛盾与结局方向。",
 	}
 	if vol.StartChapter > 0 {
 		progress["volume_start"] = vol.StartChapter
@@ -461,10 +473,10 @@ func buildVolumeEntitiesData(ctx context.Context, db *gorm.DB, nid int64, vol st
 		}
 	}
 
-	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷
+	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷，或 arc_id 为空（全局根基设定，始终可见）
 	var lores []lore.LoreEntry
 	if err := db.WithContext(ctx).
-		Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ?)", nid, chIDs, vol.ID).
+		Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ? OR arc_id IS NULL)", nid, chIDs, vol.ID).
 		Find(&lores).Error; err == nil {
 		list := make([]any, 0, len(lores))
 		for _, l := range lores {

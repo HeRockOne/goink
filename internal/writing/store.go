@@ -87,12 +87,13 @@ func (s *Store) GetWritingStats(ctx context.Context, novelCount, chapterCount in
 }
 
 // computeStreaks 计算当前连续天数和最长连续天数。
+// 连续天数只依赖近 2 年的记录，限制扫描范围避免全表拉取。
 func (s *Store) computeStreaks(ctx context.Context) (current, longest int) {
 	var dates []string
 	s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
 		Select("DISTINCT date").
-		Where("word_delta > 0").
+		Where("word_delta > 0 AND date >= ?", time.Now().AddDate(0, 0, -730).Format("2006-01-02")).
 		Order("date ASC").
 		Pluck("date", &dates)
 

@@ -19,7 +19,11 @@ type RefreshTask struct {
 	NovelID       int64
 	ChapterNumber int
 	Content       string
+	Retried       int // 已重试次数（embedding/索引失败时重新入队，最多 maxRefreshRetries 次）
 }
+
+// maxRefreshRetries 单任务最大重试次数，避免 embedding 故障时无限循环。
+const maxRefreshRetries = 2
 
 // RefreshQueue 异步管理向量刷新，支持去重和限速。
 type RefreshQueue struct {
@@ -88,12 +92,12 @@ func (q *RefreshQueue) Stop() {
 	q.wg.Wait()
 }
 
-// Submit 非阻塞提交刷新任务。队列满时丢弃并记警告。
+// Submit 提交异步向量刷新任务。队列满时等待最多 2 秒，仍满才丢弃（避免静默丢任务导致章节搜不到）。
 func (q *RefreshQueue) Submit(task RefreshTask) {
 	select {
 	case q.ch <- task:
-	default:
-		q.logger.Warn("向量刷新队列已满，丢弃任务", "chapter_number", task.ChapterNumber)
+	case <-time.After(2 * time.Second):
+		q.logger.Warn("向量刷新队列持续已满，丢弃任务", "chapter_number", task.ChapterNumber)
 	}
 }
 
@@ -155,16 +159,22 @@ func (q *RefreshQueue) doRefresh(task RefreshTask) {
 	q.doRefreshWithCtx(ctx, task)
 }
 
+// refreshRetry 刷新失败时重新入队（有限次数），保证索引要么是新的、要么是旧的，绝不空。
+func (q *RefreshQueue) refreshRetry(task RefreshTask) {
+	if task.Retried >= maxRefreshRetries {
+		q.logger.Error("向量刷新重试次数耗尽，章节暂无法索引", "novel_id", task.NovelID, "chapter_number", task.ChapterNumber)
+		return
+	}
+	task.Retried++
+	q.Submit(task)
+}
+
 func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 
 	ch, err := q.chStore.GetByNovelAndNumber(ctx, task.NovelID, task.ChapterNumber)
 	if err != nil {
 		q.logger.Warn("查章节失败，跳过向量刷新", "novel_id", task.NovelID, "chapter_number", task.ChapterNumber, "err", err)
 		return
-	}
-
-	if err := q.vs.DeleteChapterChunks(ctx, task.NovelID, task.ChapterNumber); err != nil {
-		q.logger.Warn("删除章节旧向量失败", "chapter_number", task.ChapterNumber, "err", err)
 	}
 
 	params := ChapterChunkParams{
@@ -178,12 +188,23 @@ func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 		return
 	}
 
+	// 原子语义：先写入新向量，成功后才删除旧向量。
+	// IndexChunks 失败时旧向量保留（可能搜到旧设定，但不会出现"章节成空索引"的长期空窗）；
+	// 失败后重新入队重试。
 	if err := q.vs.IndexChunks(ctx, task.NovelID, chunks); err != nil {
-		q.logger.Error("索引章节向量失败", "chapter_number", task.ChapterNumber, "err", err)
+		q.logger.Error("索引章节向量失败，重试入队", "chapter_number", task.ChapterNumber, "err", err)
+		q.refreshRetry(task)
+		return
+	}
+
+	// 新向量写入成功后删除旧向量；删除失败仅 warn（重复块会在下次刷新时被清理）
+	if err := q.vs.DeleteChapterChunks(ctx, task.NovelID, task.ChapterNumber); err != nil {
+		q.logger.Warn("删除章节旧向量失败（新向量已写入，重复块下次刷新清理）", "chapter_number", task.ChapterNumber, "err", err)
 	}
 }
 
 // RebuildNovel 无条件全量重建一部小说的向量索引。
+// 失败时清空已建的部分索引（count 归零），保证 RebuildAll 的 count>0 跳过逻辑不会永久跳过。
 func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 	chapters, err := q.chStore.ListAllByNovel(ctx, novelID)
 	if err != nil {
@@ -218,6 +239,7 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 
 		if len(batch) >= maxBatchSize {
 			if err := q.vs.IndexChunks(ctx, novelID, batch); err != nil {
+				q.cleanupAfterRebuildFail(ctx, novelID)
 				return fmt.Errorf("rag: index batch: %w", err)
 			}
 			totalChunks += len(batch)
@@ -226,6 +248,7 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 			if batchCount%4 == 0 {
 				select {
 				case <-ctx.Done():
+					q.cleanupAfterRebuildFail(ctx, novelID)
 					return ctx.Err()
 				case <-time.After(50 * time.Millisecond):
 				}
@@ -235,6 +258,7 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 
 	if len(batch) > 0 {
 		if err := q.vs.IndexChunks(ctx, novelID, batch); err != nil {
+			q.cleanupAfterRebuildFail(ctx, novelID)
 			return fmt.Errorf("rag: index final batch: %w", err)
 		}
 		totalChunks += len(batch)
@@ -242,6 +266,13 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 
 	q.logger.Info("全量向量重建完成", "novel_id", novelID, "chapters", len(chapters), "chunks", totalChunks)
 	return nil
+}
+
+// cleanupAfterRebuildFail 重建失败时删除部分索引，使 count 归零以便下次重试。
+func (q *RefreshQueue) cleanupAfterRebuildFail(ctx context.Context, novelID int64) {
+	if err := q.vs.DeleteNovel(ctx, novelID); err != nil {
+		q.logger.Warn("重建失败清理部分索引失败（下次重建前 count 判断可能误跳过）", "novel_id", novelID, "err", err)
+	}
 }
 
 // RebuildAll 遍历全部小说，对尚无向量索引的小说执行首次全量重建。

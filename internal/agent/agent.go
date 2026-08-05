@@ -33,6 +33,9 @@ var agentDB *gorm.DB
 
 func getDB() *gorm.DB { return agentDB }
 
+// maxLLMRetries LLM 请求最大重试次数（429/可重试错误），超过后按不可恢复错误返回。
+const maxLLMRetries = 10
+
 // Agent 是对话编排核心，持有运行所需的所有基础设施。
 type Agent struct {
 	llm           *llm.Client
@@ -230,6 +233,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 
+	// 工具定义 token（固定前缀）：压缩触发判定必须计入，否则实际占用被低估 10-20%，
+	// 0.7 阈值触发偏晚，中小窗口模型可能先撞 context overflow（400 不可重试，整轮失败）
+	toolTokens := 0
+	if tb, err := json.Marshal(tools); err == nil {
+		if n, err := llm.CountMessageTokens(map[string]any{"role": "user", "content": string(tb)}); err == nil {
+			toolTokens = n
+		}
+	}
+
 	// 计算前缀哈希，检测缓存稳定性
 	prefixHash := computePrefixHash(opts.Messages, tools)
 	a.prefixHashMu.RLock()
@@ -303,11 +315,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		if threshold <= 0 || threshold >= 1 {
 			threshold = 0.7
 		}
-		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= threshold {
+		usedTokens := sumRunningTokens(runningTokens) + toolTokens
+		if opts.Model.ContextWindow > 0 && float64(usedTokens)/float64(opts.Model.ContextWindow) >= threshold {
 			a.logger.Warn("token budget exceeded, triggering compression",
-				"estimated", sumRunningTokens(runningTokens),
+				"estimated", usedTokens,
 				"context_window", opts.Model.ContextWindow,
-				"ratio", fmt.Sprintf("%.1f%%", float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow)*100),
+				"ratio", fmt.Sprintf("%.1f%%", float64(usedTokens)/float64(opts.Model.ContextWindow)*100),
 				"agent_type", opts.AgentType,
 			)
 			var compressErr error
@@ -565,12 +578,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					a.updateUsage(ctx, event.Usage, runningTokens, opts)
 
 				case llm.EventError:
-					// 检查是否可重试（429限流 + Retryable标记），无限重试直到连接恢复
+					// 检查是否可重试（429限流 + Retryable标记）。最多重试 maxLLMRetries 次，
+					// 防止账号欠费/持续限流时无限重试死循环
 					retryable := false
 					if apiErr, ok := event.Error.(*llm.APIError); ok {
 						retryable = apiErr.StatusCode == 429 || apiErr.Retryable
 					}
-					if retryable {
+					if retryable && retryCount < maxLLMRetries {
 						retryCount++
 						waitTime := time.Duration(retryCount) * 5 * time.Second
 						if waitTime > 60*time.Second {
@@ -579,7 +593,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						a.logger.Warn("LLM 请求失败，自动重试", "retry", retryCount, "wait", waitTime, "err", event.Error)
 						emit(AgentEvent{
 							TurnID: opts.TurnID, Type: EventRetry,
-							RetryCount: retryCount, RetryMax: 0, RetryWait: int(waitTime.Seconds()),
+							RetryCount: retryCount, RetryMax: maxLLMRetries, RetryWait: int(waitTime.Seconds()),
 							Timestamp: time.Now(),
 						})
 						responseBuffer = ""
@@ -590,7 +604,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if ctx.Err() != nil {
 							return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
 						}
-					stream = a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+						stream = a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 						continue streamLoop
 					}
 					// 不可重试或超过重试次数：保存 partial 后返回
