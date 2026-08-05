@@ -469,7 +469,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       case AgentEventType.Retry: {
         setRetryInfo({
           count: event.retry_count || 0,
-          max: event.retry_max || 3,
+          max: event.retry_max ?? 3,
           wait: event.retry_wait || 5,
         })
         return
