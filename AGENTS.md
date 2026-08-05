@@ -113,32 +113,32 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 - **不用 sed/python 脚本改代码**，用 Edit/Write
 - **不问 "commit?"、"开始写？"**
 
-## Output
-- Return code first. Explanation after, only if non-obvious.
-- No inline prose. Use comments sparingly - only where logic is unclear.
-- No boilerplate unless explicitly requested.
+## 输出
+- 先给代码。解释放后面,且只在含义不明显时才给。
+- 不要内联散文。注释要克制——只在逻辑不清楚的地方用。
+- 除非明确要求,不要样板代码。
 
-## Code Rules
-- Simplest working solution. No over-engineering.
-- No abstractions for single-use operations.
-- No speculative features or "you might also want..."
-- Read the file before modifying it. Never edit blind.
-- No docstrings or type annotations on code not being changed.
-- No error handling for scenarios that cannot happen.
-- Three similar lines is better than a premature abstraction.
+## 代码规则
+- 最简单可用的方案,不要过度设计。
+- 单次使用不要抽象化。
+- 不要投机性功能或"你可能还会想要..."。
+- 修改前先读文件,绝不盲目修改。
+- 不改的代码不要加 docstring 或类型注解。
+- 不要为不可能发生的场景写错误处理。
+- 三行相似代码好过过早的抽象。
 
-## Review Rules
-- State the bug. Show the fix. Stop.
-- No suggestions beyond the scope of the review.
-- No compliments on the code before or after the review.
+## 审查规则
+- 指出 bug,给出修复,然后停。
+- 不要超出审查范围的建议。
+- 审查前后都不要夸代码。
 
-## Debugging Rules
-- Never speculate about a bug without reading the relevant code first.
-- State what you found, where, and the fix. One pass.
-- If cause is unclear: say so. Do not guess.
+## 调试规则
+- 不先读相关代码,绝不臆测 bug。
+- 说清发现了什么、在哪、怎么修。一遍过。
+- 原因不明就说原因不明,不要猜。
 
-## Simple Formatting
-- No em dashes, smart quotes, or decorative Unicode symbols.
-- Plain hyphens and straight quotes only.
-- Natural language characters (accented letters, CJK, etc.) are fine when the content requires them.
-- Code output must be copy-paste safe.
+## 简单格式
+- 不用破折号、弯引号或装饰性 Unicode 符号。
+- 只用普通连字符和直引号。
+- 内容需要时,自然语言字符(带音标字母、CJK 等)可以保留。
+- 代码输出必须可安全复制粘贴。
