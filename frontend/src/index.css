@@ -113,6 +113,10 @@
   --narrative-card-bg: rgba(255, 255, 255, 0.6);
   --narrative-card-border: rgba(107, 143, 173, 0.2);
   --narrative-card-line: rgba(107, 143, 173, 0.45);
+  --editor-surface: #ffffff;
+  --editor-statusbar: #f7fafd;
+  --bubble-ai: rgba(238, 243, 248, 0.9);
+  --bubble-ai-border: rgba(107, 143, 173, 0.3);
 }
 
 /* ── 深色主题：太虚夜色（深蓝黑 + 剑宗青） ────────────────── */
@@ -190,7 +194,7 @@
   --contribution-4: #4a9ab0;
   /* 阅读区域 */
   --reader-bg: #0a0e17;
-  --reader-paper: #121a28;
+  --reader-paper: #111827;
 
   /* ── 太虚扩展 token ── */
   --glow: rgba(161, 196, 214, 0.14);
@@ -210,6 +214,10 @@
   --narrative-card-bg: rgba(15, 24, 38, 0.55);
   --narrative-card-border: rgba(161, 196, 214, 0.18);
   --narrative-card-line: rgba(161, 196, 214, 0.5);
+  --editor-surface: #111827;
+  --editor-statusbar: #0e1522;
+  --bubble-ai: rgba(161, 196, 214, 0.08);
+  --bubble-ai-border: rgba(161, 196, 214, 0.28);
 }
 
 /* ── 自定义主题兜底派生（永不撞色） ────────────────────── */
@@ -317,6 +325,111 @@
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
   letter-spacing: 0.06em;
+}
+
+/* ═══ 太虚布局细节（v2 复刻） ═══════════════════════════ */
+
+/* 面板顶部渐变发光线：侧栏/聊天面板 */
+.side-panel,
+.chat-panel {
+  position: relative;
+}
+.side-panel::before,
+.chat-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--ring) 50%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ActivityBar：激活项发光圆 + 发光指示条 */
+.activity-bar .activity-item.active {
+  position: relative;
+  color: var(--ring);
+  text-shadow: 0 0 10px var(--glow-strong), 0 0 20px var(--glow);
+}
+.activity-bar .activity-item.active::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: var(--ring);
+  opacity: 0.12;
+  box-shadow: 0 0 14px var(--glow-strong);
+  pointer-events: none;
+}
+.activity-bar .activity-item.active .activity-bar-indicator {
+  box-shadow: 0 0 8px var(--glow-strong), 0 0 16px var(--glow);
+}
+
+/* 编辑器底部状态条（v2：#0e1522 / 浅色 #f7fafd） */
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 0.8rem;
+  background: var(--editor-statusbar);
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* 门禁阶段条（左下角，v2 文字序列） */
+.gate-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+.gate-step {
+  color: var(--muted-foreground);
+  opacity: 0.55;
+}
+.gate-step.past {
+  opacity: 0.8;
+  color: var(--ring);
+}
+.gate-step.current {
+  color: var(--ring);
+  opacity: 1;
+  font-weight: 600;
+  text-shadow: 0 0 8px var(--glow-strong);
+}
+.gate-step-sep {
+  color: var(--muted-foreground);
+  opacity: 0.3;
+  font-size: 0.65rem;
+}
+
+/* 顶部栏装饰标语 */
+.header-slogan {
+  font-size: 0.72rem;
+  color: var(--ring);
+  opacity: 0.75;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+  text-shadow: 0 0 10px var(--glow);
+}
+
+/* AI 气泡（v2：青蓝 8% 底 + 28% 边框） */
+.bubble-ai {
+  background: var(--bubble-ai);
+  border: 1px solid var(--bubble-ai-border);
+  color: var(--foreground);
 }
 
 /* 激活/选中态发光（配合 --glow token） */

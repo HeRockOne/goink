@@ -32,6 +32,7 @@ interface Props {
   }) => void
   chatPanelWidth: number
   onChatPanelResize: (w: number) => void
+  onPhaseGate?: (s: import('./types').PhaseStatus) => void
 }
 const EVENT_REORDER_TIMEOUT = 120
 
@@ -46,7 +47,7 @@ interface ChatStartedEvent {
   turn_id: number
 }
 
-export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize }: Props) {
+export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate }: Props) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -542,6 +543,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         if (event.phase_gate) {
           setPhaseGateStatus(event.phase_gate)
           setPhaseGateError(event.error || '')
+          onPhaseGate?.(event.phase_gate)
         }
         return
       }
@@ -1087,7 +1089,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       : t('chat.inputPlaceholder')
 
   return (
-    <aside className="shrink-0 flex flex-col bg-sidebar backdrop-blur-md border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
+    <aside className="chat-panel shrink-0 flex flex-col bg-sidebar backdrop-blur-md border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors z-10 select-none"
         style={{ marginLeft: -2 }}

@@ -86,6 +86,18 @@ interface Props {
   onDirtyChange?: (isDirty: boolean) => void
 }
 
+// 字数统计（中文+英文词）
+function wordCountText(text: string): string {
+  if (!text) return '0 字'
+  let chinese = 0
+  for (const ch of text) {
+    const cp = ch.codePointAt(0)!
+    if ((cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x20000 && cp <= 0x2A6DF) || (cp >= 0xF900 && cp <= 0xFAFF)) chinese++
+  }
+  const words = (text.match(/[a-zA-Z]+(?:'[a-zA-Z]+)?/g) || []).length
+  return `${chinese + words} 字`
+}
+
 const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel(
   { novelId, onContentChange, onDirtyChange }, ref
 ) {
@@ -497,7 +509,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
   // 空状态
   if (!activeTab) {
     return (
-      <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
+      <main className="flex-1 bg-editor-surface flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
         <TabBar tabs={tabs} activeTabId={activeTabId} onSelect={setActiveTabId} onClose={closeTab} />
         <div className="flex-1 flex items-center justify-center">
           {tabs.length === 0 ? (
@@ -521,7 +533,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
     const isOutline = activeTab.path?.startsWith('outlines/')
 
     return (
-      <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
+      <main className="flex-1 bg-editor-surface flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
         <TabBar tabs={tabs} activeTabId={activeTabId} onSelect={setActiveTabId} onClose={closeTab} />
         <div className="flex items-center px-4 py-2 border-b shrink-0 select-none">
           <span className="text-sm font-medium truncate">{activeTab.title}</span>
@@ -571,7 +583,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
   // File tab
   const viewMode = activeTab.viewMode || 'content'
   return (
-    <main className="content-panel flex-1 flex flex-col min-w-0 min-h-0 border-r overflow-hidden" style={{ background: 'var(--reader-paper, var(--background))' }}>
+    <main className="content-panel flex-1 flex flex-col min-w-0 min-h-0 border-r overflow-hidden" style={{ background: 'var(--editor-surface)' }}>
       <TabBar tabs={tabs} activeTabId={activeTabId} onSelect={setActiveTabId} onClose={closeTab} />
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 select-none">
         <span className="text-sm font-medium truncate">{activeTab.title}</span>
@@ -640,6 +652,15 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
         ) : (
           <OutlineViewer content={activeTab.outlineContent ?? ''} />
         )}
+      </div>
+
+      {/* v2 编辑器底部状态条：字数 + 保存状态 */}
+      <div className="editor-statusbar">
+        <span>{wordCountText(activeTab.content ?? '')}</span>
+        <span className="flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${activeTab.isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
+          {activeTab.isDirty ? '未保存' : '已保存 ✓'}
+        </span>
       </div>
     </main>
   )

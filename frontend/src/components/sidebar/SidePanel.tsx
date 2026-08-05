@@ -78,7 +78,7 @@ export default function SidePanel({
     document.body.style.userSelect = 'none'
   }, [sidePanelWidth, onWidthChange])
   return (
-    <aside className="shrink-0 flex flex-col bg-sidebar backdrop-blur-md border-r relative" style={{ width: sidePanelWidth }}>
+    <aside className="side-panel shrink-0 flex flex-col bg-sidebar backdrop-blur-md border-r relative" style={{ width: sidePanelWidth }}>
       {activePanel === 'search' ? (
         <SearchPanel
           novelId={novelId}

@@ -41,11 +41,11 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
       >
         {/* 气泡 */}
         <div
-          className={`rounded-xl px-3.5 py-3 break-words ${
-            isUser
-              ? 'bg-bubble-user text-bubble-user-foreground rounded-br-sm'
-              : 'bg-card border border-border/30 text-foreground rounded-bl-sm shadow-xs'
-          }`}
+  className={`rounded-xl px-3.5 py-3 break-words ${
+    role === 'user'
+      ? 'bg-bubble-user text-bubble-user-foreground rounded-br-sm'
+      : 'bubble-ai rounded-bl-sm shadow-xs'
+  }`}
         >
           <Markdown content={content} className={isUser ? 'markdown-user' : undefined} />
           {timestamp && (

@@ -1,9 +1,18 @@
 import { useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { PhaseStatus } from '@/components/chat/types'
 
 interface Props {
   content: string
   isDirty?: boolean
+  gateStatus?: PhaseStatus | null
+}
+
+// v2 左下角门禁阶段序列
+const GATE_STEPS = ['init', 'prepare', 'outline', 'write', 'review', 'maintain']
+const GATE_LABELS: Record<string, string> = {
+  init: '初始化', prepare: '准备', outline: '大纲',
+  write: '正文', review: '审读', maintain: '维护',
 }
 
 interface DetailedStats {
@@ -56,7 +65,7 @@ function computeStats(text: string): DetailedStats {
   }
 }
 
-export default function StatusBar({ content, isDirty }: Props) {
+export default function StatusBar({ content, isDirty, gateStatus }: Props) {
   const { t } = useTranslation()
   const stats = useMemo(() => computeStats(content), [content])
   const [showDetail, setShowDetail] = useState(false)
@@ -71,9 +80,24 @@ export default function StatusBar({ content, isDirty }: Props) {
     setShowDetail(false)
   }
 
+  const currentIdx = gateStatus?.phase ? GATE_STEPS.indexOf(gateStatus.phase) : -1
+
   return (
     <div className="relative h-7 flex items-center justify-between px-4 border-t bg-sidebar backdrop-blur-md text-xs text-muted-foreground select-none">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 min-w-0">
+        {/* v2 门禁阶段条（左下角） */}
+        {gateStatus?.phase && (
+          <span className="gate-steps">
+            {GATE_STEPS.map((p, i) => (
+              <span key={p} className="flex items-center gap-0.3">
+                {i > 0 && <span className="gate-step-sep">·</span>}
+                <span className={`gate-step ${i < currentIdx ? 'past' : i === currentIdx ? 'current' : ''}`}>
+                  {GATE_LABELS[p] || p}
+                </span>
+              </span>
+            ))}
+          </span>
+        )}
         <span
           className="cursor-default"
           onMouseEnter={handleMouseEnter}
