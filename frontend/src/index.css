@@ -96,8 +96,8 @@
   --reader-paper: #ffffff;
 
   /* ── 太虚扩展 token ── */
-  --glow: rgba(107, 143, 173, 0.18);
-  --glow-strong: rgba(107, 143, 173, 0.35);
+  --glow: rgba(107, 143, 173, 0.35);
+  --glow-strong: rgba(107, 143, 173, 0.6);
   --font-display: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif SC', serif;
   --particle-color: rgba(74, 123, 156, 0.4);
   --particle-glow: rgba(74, 123, 156, 0.12);
@@ -200,8 +200,8 @@
   --reader-paper: #111827;
 
   /* ── 太虚扩展 token ── */
-  --glow: rgba(161, 196, 214, 0.14);
-  --glow-strong: rgba(161, 196, 214, 0.3);
+  --glow: rgba(161, 196, 214, 0.3);
+  --glow-strong: rgba(161, 196, 214, 0.55);
   --font-display: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif SC', serif;
   --particle-color: rgba(161, 196, 214, 0.5);
   --particle-glow: rgba(161, 196, 214, 0.16);
@@ -599,7 +599,7 @@ body {
   --narrative-pending-bg: var(--tag-blue);
   --narrative-arc-inactive: color-mix(in oklab, var(--muted-foreground) 20%, transparent);
   --narrative-future-card-bg: var(--card);
-  --narrative-future-card-border: var(--border);
+  --narrative-future-card-border: var(--ring);
   --narrative-hook-type: var(--primary);
   --narrative-tab-active: var(--primary);
   --narrative-divider: var(--border);
@@ -615,7 +615,7 @@ body {
   --narrative-pending-bg: var(--tag-blue);
   --narrative-arc-inactive: color-mix(in oklab, var(--muted-foreground) 15%, transparent);
   --narrative-future-card-bg: var(--card);
-  --narrative-future-card-border: var(--border);
+  --narrative-future-card-border: var(--ring);
   --narrative-hook-type: var(--primary);
   --narrative-tab-active: var(--primary);
   --narrative-divider: var(--border);

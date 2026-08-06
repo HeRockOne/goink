@@ -253,7 +253,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                               className="flex-1 h-6 rounded border bg-background px-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                           ) : (
-                            <span className="flex-1 text-sm truncate" title={ch.title}>{ch.title}</span>
+                            <span className="flex-1 text-sm truncate cursor-text" title="点击编辑" onClick={e => { e.stopPropagation(); startEdit(ch) }}>{ch.title}</span>
                           )}
                           {ch.word_count > 0 && editingId !== ch.id && (
                             <span className="text-[10px] text-muted-foreground/60 shrink-0">

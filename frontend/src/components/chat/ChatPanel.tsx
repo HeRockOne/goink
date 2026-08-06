@@ -99,8 +99,6 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const eventQueuesRef = useRef<Map<number, EventQueue>>(new Map())
   const onApprovalFileEditRef = useRef(onApprovalFileEdit)
   useEffect(() => { onApprovalFileEditRef.current = onApprovalFileEdit }, [onApprovalFileEdit])
-  const lastSessionIdRef = useRef('')
-
   // 加载模型列表并恢复持久化设置
   useEffect(() => {
     setInitLoadError(false)
@@ -137,17 +135,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         setApprovalMode(mode)
       }
 
-      // 暂存上次会话 ID，等 novelId 加载后恢复
-      if (settings?.last_session_id) {
-        lastSessionIdRef.current = settings.last_session_id
-      }
-    }).catch((err) => {
+      }).catch((err) => {
       console.error('Load models/settings failed', err)
       setInitLoadError(true)
     })
   }, [app, initLoadRetry])
 
-  // 加载会话列表
+  // 加载会话列表（不自动选中）
   useEffect(() => {
     if (!novelId) return
     setActiveSessionId(undefined)
@@ -158,32 +152,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       if (r) {
         setSessions(r.items)
         setSessionsTotal(r.total)
-        // 无上次会话时自动选中最新会话
-        const sid = lastSessionIdRef.current
-        if (!sid && r.items.length > 0) {
-          const latest = r.items[0]
-          setActiveSessionId(latest.session_id)
-          setSessionTitle(latest.title || '')
-          app.SetLastSession(latest.session_id).catch(() => {})
-        }
       }
     }).catch((err) => {
       console.error('Load sessions failed', err)
     })
-
-    // 尝试恢复上次活跃会话
-    const sid = lastSessionIdRef.current
-    if (sid && novelId) {
-      lastSessionIdRef.current = ''
-      app.GetSession(sid).then(detail => {
-        if (detail && detail.novel_id === novelId) {
-          setActiveSessionId(sid)
-          setSessionTitle(detail.title || '')
-        }
-      }).catch(() => {
-        app.SetLastSession('').catch(() => {})
-      })
-    }
   }, [app, novelId])
 
   // 监听移动端对话完成事件，自动刷新会话列表
