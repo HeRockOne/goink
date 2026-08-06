@@ -156,10 +156,7 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
       )}
 
       <span className="flex items-center gap-2 shrink-0">
-        <span className="flex items-center gap-1">
-          <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
-          {isDirty ? t('shell.unsaved') : t('shell.saved')}
-        </span>
+        <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
         {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
         <ContextRing usage={usage ?? null} onCompress={onCompress} bar />
       </span>

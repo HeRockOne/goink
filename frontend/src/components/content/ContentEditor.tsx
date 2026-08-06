@@ -12,7 +12,7 @@ interface Props {
 
 const LIGHT_THEME = EditorView.theme({
   '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
-  '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
+  '.cm-content': { fontFamily: 'var(--font-body)', fontSize: 'var(--font-size, 17px)', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-cursor': { borderLeftColor: 'var(--primary)' },
@@ -22,7 +22,7 @@ const LIGHT_THEME = EditorView.theme({
 
 const DARK_THEME = EditorView.theme({
   '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
-  '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
+  '.cm-content': { fontFamily: 'var(--font-body)', fontSize: 'var(--font-size, 17px)', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-cursor': { borderLeftColor: 'var(--primary)' },

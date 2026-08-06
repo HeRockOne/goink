@@ -124,6 +124,21 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     })
   }, [app])
 
+  // ── 启动时加载字体设置 ──────────────────────────────────
+
+  useEffect(() => {
+    app.GetSettings().then(s => {
+      if (s?.display_font) {
+        const val = s.display_font || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif"
+        document.documentElement.style.setProperty('--font-display', val)
+        document.documentElement.style.setProperty('--font-body', val)
+      }
+    }).catch(() => {})
+    // 恢复字号
+    const fs = localStorage.getItem('global_font_size')
+    if (fs) document.documentElement.style.setProperty('--font-size', fs)
+  }, [app])
+
   // ── 首次进入自动弹帮助 ──────────────────────────────────
 
   useEffect(() => {

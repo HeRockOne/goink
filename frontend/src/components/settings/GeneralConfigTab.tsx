@@ -80,12 +80,20 @@ export default function GeneralConfigTab() {
       }
     }).catch(() => {})
 
-    // 读取系统字体
+    // 通用字体列表（系统字体 + 常见中文字体）
+    const commonFonts = [
+      'KaiTi', 'STKaiti', 'SimSun', 'FangSong', 'STSong', 'SimHei', 'Microsoft YaHei',
+      'Microsoft JhengHei', 'Noto Serif SC', 'Noto Sans SC', 'Source Han Serif SC',
+      'Source Han Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei',
+      'Ubuntu', 'serif', 'sans-serif',
+    ]
+    setSystemFonts(commonFonts)
+    // 尝试读取更多系统字体（queryLocalFonts 需用户手势）
     try {
       if ('queryLocalFonts' in navigator) {
         ;(navigator as any).queryLocalFonts().then((fonts: any[]) => {
           const names = [...new Set(fonts.map((f: any) => f.family).filter(Boolean))].sort()
-          setSystemFonts(names)
+          if (names.length > 0) setSystemFonts(names)
         }).catch(() => {})
       }
     } catch (_) {}
@@ -384,6 +392,31 @@ export default function GeneralConfigTab() {
           >
             {fontSaved ? '已保存' : '保存'}
           </button>
+        </div>
+      </div>
+
+      {/* 全局字号 */}
+      <div className="mt-6 space-y-2">
+        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <span className="text-sm">A</span>
+          全局字号
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min="12"
+            max="24"
+            value={parseInt(document.documentElement.style.getPropertyValue('--font-size') || '15')}
+            onChange={e => {
+              const v = e.target.value + 'px'
+              document.documentElement.style.setProperty('--font-size', v)
+              localStorage.setItem('global_font_size', v)
+            }}
+            className="flex-1 h-8"
+          />
+          <span className="text-xs text-muted-foreground w-8 text-right">
+            {document.documentElement.style.getPropertyValue('--font-size') || '15px'}
+          </span>
         </div>
       </div>
 

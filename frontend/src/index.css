@@ -11,7 +11,9 @@
 :root {
   --radius: 0.5rem;
   --font-body: system-ui, -apple-system, "Segoe UI", 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --font-size: 15px;
   font-family: var(--font-body);
+  font-size: var(--font-size);
   color: var(--foreground);
   background: var(--background);
   -webkit-font-smoothing: antialiased;
@@ -309,13 +311,14 @@
 /* 山峦已移除，仅保留渐变与纹理 */
 
 /* ── 太虚字体与光感 ─────────────────────────────────────── */
+/* 编辑器视图模式激活按钮发光 */
+.tab-btn-active {
+  text-shadow: 0 0 8px var(--glow-strong), 0 0 16px var(--glow);
+}
 /* 标题类（面板标题/对话框标题/品牌）使用书法字体 */
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
   letter-spacing: 0.06em;
-}
-h1 {
-  text-shadow: 0 0 12px var(--glow-strong), 0 0 24px var(--glow), 0 0 48px var(--glow);
 }
 
 /* ═══ 太虚布局细节（v2 复刻） ═══════════════════════════ */
