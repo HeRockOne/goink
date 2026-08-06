@@ -149,6 +149,12 @@ func (c *Client) buildPayload(
 	if opts != nil && opts.ToolChoice != nil {
 		payload["tool_choice"] = opts.ToolChoice
 	}
+	// prompt_cache_key：OpenAI 兼容缓存路由粘性（opencode 同款做法，默认对 openai-compatible 发送）。
+	// 相同前缀 + 相同 key 被路由到同一后端节点，避免负载均衡漂移导致偶发全 miss；
+	// 不支持的端点会忽略未知参数
+	if opts != nil && opts.CacheKey != "" {
+		payload["prompt_cache_key"] = opts.CacheKey
+	}
 
 	// 从 ModelInfo 取模型默认值
 	var um *ModelInfo

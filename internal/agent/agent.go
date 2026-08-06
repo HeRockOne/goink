@@ -345,7 +345,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 		}
 
-		callOpts := &llm.CallOptions{}
+		callOpts := &llm.CallOptions{CacheKey: opts.SessionID}
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}

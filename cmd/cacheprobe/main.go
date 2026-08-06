@@ -564,6 +564,45 @@ func compressionSummary() string {
 	return "<system-reminder>\n上下文已压缩，请根据摘要继续。\n已完成：开书设定、第一章、第二章写作与维护。进行中：第三章秘境探索。用户偏好：快节奏、斗法细节。关键设定：异火、玉佩、宗门三系。待办：第五章伏笔回收。\n</system-reminder>"
 }
 
+// simulateSubagent 模拟 run_subagent 内部请求序列，与生产 RunSubAgent 的 fork 协议一致：
+// 请求 = 完整主历史（history + cur，含刚追加的 tool_call） + [身份+NS] + [user 指令]，
+// 然后子 agent 内部工具循环（read 章节、查角色/伏笔/弧线）在尾部增长。
+// 子 agent 消息不落库（ToAPI=false），不影响主历史。
+func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int) [][2]int64 {
+	var results [][2]int64
+
+	// fork 完整主历史（与 RunSubAgent 相同：msgs = parentOpts.Messages + 尾部追加）
+	sub := append(append([]map[string]any{}, history...), cur...)
+	sub = append(sub,
+		map[string]any{"role": "system", "content": "你是审稿人（review agent），基于以下上下文审阅本章。\n\n" + novelState(turn)},
+		map[string]any{"role": "user", "content": "请审阅最新章节：检查结构、逻辑、伏笔回收、AI 味，输出审读报告与修改建议。"},
+	)
+
+	// 子 agent 内部工具调用（读正文 + 查状态），结果量级与真实一致
+	subPlays := []play{
+		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBody[0] + chapterBody[1]},
+		{tool: "read", args: `{"path":"chapters/007.md","start_line":100,"end_line":200}`, result: chapterBody[2] + chapterBody[3]},
+		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"},{"id":2,"name":"林雪","relation":"师姐"}]}`},
+		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
+		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
+	}
+	for i, sp := range subPlays {
+		hit, miss := cache.Step(sub)
+		results = append(results, [2]int64{hit, miss})
+		sub = append(sub,
+			asstToolCall(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, sp.args),
+			toolMsg(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, sp.result),
+		)
+	}
+	// 子 agent 最终回复（审读报告）
+	hit, miss := cache.Step(sub)
+	results = append(results, [2]int64{hit, miss})
+	sub = append(sub, asstText(reviewReport(turn)))
+
+	return results
+}
+
 // buildGate 门禁创作 5 轮。每轮 20 次工具调用 + 1 次最终回复。
 // 两种协议的差异与短问答相同：NS 是否进入历史。
 // NS 在当轮紧跟 user（旧实现注入在 loadAPIMessages 结果之后、工具循环之前），
@@ -609,10 +648,13 @@ func buildGate(mode string, cache *TokenCache) [][2]int64 {
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
 			// 模型产出的 tool_call + 执行结果，进入当轮累积
-			cur = append(cur,
-				asstToolCall(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.args),
-				toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result),
-			)
+			cur = append(cur, asstToolCall(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.args))
+			// run_subagent：模拟子 agent 内部请求序列（与 RunSubAgent fork 完整主历史一致）
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, turn)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
 		}
 		// 最后一轮工具后模型产出最终正文
 		cur = append(cur, asstText(finalAssistant(turn)))

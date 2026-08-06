@@ -52,7 +52,7 @@ func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, 
 	// 与主循环相同的全量工具定义，保证前缀字节一致
 	tools := a.registry.OpenAI(nil)
 	var sb strings.Builder
-	stream := a.llm.ChatStream(ctx, opts.ProviderName, msgs, tools, opts.Model.ID, nil)
+	stream := a.llm.ChatStream(ctx, opts.ProviderName, msgs, tools, opts.Model.ID, &llm.CallOptions{CacheKey: opts.SessionID})
 	for ev := range stream {
 		switch ev.Type {
 		case llm.EventContent:
