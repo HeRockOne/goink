@@ -64,6 +64,17 @@
 - **MemoryAgent 检索效率**：向 memoryAgentTools 添加 `get_writing_context`，一次获取 8 个数据源全景
 - **系统提示词引导**：mainAgentSystem1 prepare 阶段描述引导使用 `get_writing_context`；memoryAgentSystem1 工作流程增加"全景概览"步骤
 
+### 新增
+
+- **字体列表中文名**：GetSystemFonts 手动解析字体 name 表，优先 Windows zh-CN 家族名，支持 .ttc 集合——黑体/仿宋/楷体/宋体/微软雅黑/等线等正确显示中文名（此前 TTC 解析失败回退文件名、中文名缺失）
+- **全局字体持久化**：DB 优先 + localStorage 兜底双写（SaveSettingsInput.DisplayFont 指针化，支持清空回默认）
+- **新 skill main-tech-chapter-title-design**：章节标题设计方法论（7 类型 + 平台适配 + 番茄头条推荐标题 + AI 生成红线），已登记 kernel outline 阶段
+- **skill 命名铁律**：identity.go 规定新 skill 文件名必须等于 frontmatter name，禁止加前缀/复制改名
+- **全 miss 告警日志**：hit=0 且 miss>1 万时 WARN（区分代码问题与厂商缓存失效）
+- **cacheprobe 完整创作流程模拟**：init 开书 + 5 章 × ~86 工具调用 + 子 agent 内部请求序列 + legacy 真实 NS 协议
+- **思考模式合并**：开关 + 深度选择合并为单下拉（关 / low / high / max）
+- **prompt_cache_key 路由粘性**：所有请求携带 prompt_cache_key=sessionID（对齐 opencode PR #22569），相同前缀路由同一后端节点，消除偶发全 miss
+
 ### 修复
 
 - **审稿 Agent 安全边界**：从 reviewAgentTools 移除 `edit`，审稿 Agent 不再能直接修改文件
@@ -71,6 +82,19 @@
 - **叙事面板非空断言隐患**：`ctx!.recent_chapters` 替换为 `ctx?.recent_chapters`，消除依赖 `&&` 短路的安全假象
 - **叙事面板无关伏笔显示**：`pendingByChapter` 分组时跳过 `target_chapter <= 0` 的条目
 - **recent_chapters 锚点错位**：`GetWritingContext` 和 `get_writing_context` 工具的 `recent_chapters` 改为以当前章节为锚点，新增 `chapter.Store.GetRecentBefore()`
+
+### 修复
+
+- **缓存协议五轮迭代**（完整前缀匹配 + 路由粘性）：
+  - NS 落库进消息历史、永不清理（K=3 清理破坏前缀；请求尾临时拼导致完整匹配失效实测 89%）
+  - 子 agent fork 完整主历史（重复 read 的 4-10K/轮 miss 归零；首轮命中主会话缓存条目）
+  - prompt_cache_key 路由粘性（小米 MiMo 直连偶发全 miss 15.5 万/次）
+  - usage_ratio 改本地估算（单调不回跳）；流式 usage 仅请求结束统一处理；压缩请求缓存对齐（全量工具）
+  - 命中率统计全量口径（主/子统一累计，UpdateMessageUsage 按 agent_type 分写）
+- **ONNX 按需加载重载失败**：onnxruntime 环境进程级单例，二次 InitializeEnvironment 报 already initialized 导致卸载后向量刷新全挂——环境改 sync.Once，卸载只销毁 session 释放模型内存
+- **门禁字数校验跨章泄漏**：word_count_ok 布尔未绑定章节，上一章达标放行本章——进入 write 阶段重置，回归测试锁定
+- **main-core-main-core-writing-kernel 双前缀**：恢复正确文件名/frontmatter，删除错误副本
+- **append 污染**：请求尾拼 NS 时直接 append 原地写 opts.Messages 底层数组（Go slice 别名坑）
 
 ### 优化
 
@@ -85,6 +109,15 @@
   - 工具按名称排序，全量工具发送，确保每轮前缀一致
   - 前缀哈希检测（`computePrefixHash`），缓存失效时日志警告
 - **ContextRing detail 修正**：分角色 token 数改为直接显示 `runningTokens` 原始值，移除误导性百分比
+
+### 优化
+
+- **Tab 激活标题发光**：三层 text-shadow 加强
+- **ContextRing**：轨道加边框（深浅模式可见）、压缩阈值滑块进度填充、usage 色按主题区分（去荧光绿）
+- **个人中心 Token 趋势**：单位改 M Token
+- **主题生成器**：语义色固定色相（成功/警告/危险/六 tag 名实相符），边框透明度提升
+- **工具调用详情**：执行中不再显示“处理中”徽章；set_phase（门禁阶段推进）不再显示
+- **写审分离保持**：子 agent 身份/NS/指令在尾部，不污染主会话固定前缀
 
 ---
 
