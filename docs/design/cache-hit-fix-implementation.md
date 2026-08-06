@@ -1,9 +1,9 @@
-# 缓存命中率修复实施记录（NS 动态尾部注入 + 子 agent fork + 全量统计口径）
+# 缓存命中率修复实施记录（NS 落库协议 + 子 agent fork + 全量统计口径）
 
-> 日期：2026-08-06（实施完成）
+> 日期：2026-08-06（实施完成，含 2026-08-06 二次修正）
 > 依据：`docs/design/cache-hit-fix-implementation.md` 原方案（K=3 落库清理）+ 实施中发现的问题
-> 状态：已实施（commit cf49ff6）
-> 说明：本文是原方案（P1 NS 落库协议 + P2 压缩 NS 双份）的**实施修订版**——实际采用"NS 不入历史、请求尾部动态注入"，并扩展了子 agent / 统计口径 / 压缩对齐三块
+> 状态：已实施（commit cf49ff6 / 46a0189 / 后续修正）
+> 说明：本文是原方案（P1 NS 落库协议 + P2 压缩 NS 双份）的实施记录。**最终采用"NS 落库、永不清理"**——经过三轮迭代才收敛：第一轮（NS 不落库+请求尾临时拼）破坏完整前缀匹配导致 89%，第二轮（NS 进内存）只修轮内，第三轮恢复落库才同时满足轮内+跨轮完整匹配
 
 ---
 
@@ -11,61 +11,60 @@
 
 让"上一轮完整请求字节 = 本轮请求前缀"，仅尾部增量 miss。轮次 N+1 请求 = 轮次 N 请求字节 + 新增内容。
 
-## 二、实际方案 vs 原方案
+**关键机制**：MiniMax/DeepSeek 按"请求结束位置落盘 + 完整前缀单元匹配"命中——后续请求必须**完整匹配**某条落盘条目。上一轮请求末尾是什么，本轮请求对应位置必须还是什么；任何"本轮新增内容插到上轮内容之前"（含动态尾部 NS 被新内容越过）都会让上轮条目无法被完整匹配，命中率退化为公共前缀。
 
-| 项 | 原方案（2026-08-04） | 实际实施（2026-08-06） | 原因 |
-|---|---|---|---|
-| NS 落库 | 落 messages 表，K=3 保留、旧快照置 to_api=false | **不落库**：存 `session.extra_metadata.novel_state`，请求时由 `agent.go` 追加到消息末尾 | K 清理导致消息数组变化（删除历史中的 NS 块），从删除位置起后续全部 miss——实测每个 turn 首轮 miss 4-5 万 |
-| 清理逻辑 | keepNovelStateSnapshots=3 | **删除**（无历史副本可清理） | 同上 |
-| 请求尾部 | NS 作为消息在历史中 | 每轮请求临时 append（**必须复制新 slice**，直接 append 会污染 opts.Messages 底层数组，NS 残留混入历史——2026-08-06 曾因此从 96% 跌到 89%） | Go slice append 别名坑（Rob Pike《Arrays, slices and strings》） |
-| computePrefixHash | 哈希所有 system 消息 | **只哈希前导 system**（identity+always+catalog），尾部 NS 不参与，避免每轮误报 | NS 变化是正常现象（动态尾部），不该触发前缀告警；同时输出变化块短哈希定位 |
-| 子 agent | 不受影响（原方案声明） | **复用主会话前缀**（前导 system 原文）+ 身份/NS/指令下沉尾部（Anthropic fork 模式） | 原实现子 agent 用自己的 identity 开头 → 前缀从第一个 system 就与主会话不同 → 每次全 miss（日志 `hit=0 miss=20482`） |
-| 压缩 | 仅去掉 NS 写系统区 | 压缩请求**缓存对齐**：ChatStream 带全量工具，与主循环同一前缀 | 原 GenerateText 不带 tools → 压缩请求前缀与主会话不同 → 全 miss（一次 25 万） |
-| usage 统计 | 未涉及 | 主/子 agent **全量计入**命中率（真实成本口径）；消息级审计按 agent_type 分写避免互相覆盖；usage_ratio 改本地估算单调不回跳；流式 usage 仅请求结束时处理一次 | 子 agent 请求与主会话同模型，不统计是掩耳盗铃（业界口径 sum(cached)/sum(input) 全量） |
-
-## 三、消息排布（实施后）
+## 二、最终协议（NS 落库、永不清理）
 
 ```
-轮次 N   请求: [固定前缀][userN][assistantN][toolN][NS@尾部]
-轮次 N+1 请求: [固定前缀][userN][assistantN][toolN][userN+1][assistantN+1][toolN+1][NS@尾部]
-                           ↑↑↑↑ 轮次 N 请求字节（含尾部 NS）→ 全部命中 ↑↑↑↑
+轮次 N   请求: [固定前缀][userN][NS_N][assistantN][toolN]
+轮次 N+1 请求: [固定前缀][userN][NS_N][assistantN][toolN][userN+1][NS_{N+1}]
+                           ↑↑↑↑ 轮次 N 请求的完整字节 → 全部命中 ↑↑↑↑
 ```
 
-- 固定前缀（identity+always+catalog）只在新 session 写入，全量工具恒定
-- 消息历史**纯 append-only**：只追加，永不删除/编辑（压缩是唯一重建点）
-- NS 每轮变化只 miss NS 本身（几千 token），不伤历史
+- NS 是 `role=system, to_api=true, to_frontend=false` 的普通消息（ExtraMetadata 带 kind 标记），**紧跟 user 消息之后落库**（ID 序 = [user][NS][assistant...]）
+- **永不清理**（不做 to_api=false）：旧 NS 在历史中字节不变 → 可命中；每轮只 miss 最新 NS 本身。历史上尝试过的 K=3 清理会让消息数组变化（删除位置起全部 miss，每 turn 首轮 4-5 万）
+- 上下文膨胀由**压缩兜底**：压缩重建时旧 NS 随摘要清除（retainMessages 跳过 NS），只保留最新一份 NS 落库到新版本末尾
+- 压缩后第一轮请求与压缩前前缀不同属**一次性重建成本**（文档认可），之后恢复完整匹配
 
-## 四、改动清单（实施）
+## 三、迭代记录（为什么改了三次）
 
-1. **`app/chat.go`**：NS 不再 Create 成消息；删 keepNovelStateSnapshots 清理逻辑；最新 NS 写 `session.extra_metadata.novel_state`
-2. **`internal/agent/agent.go`**：
-   - `Run` 开头读最新 NS（`loadNovelState`），每轮请求前 `make` 新 slice 复制 `opts.Messages` 再 append NS（防污染）
-   - `RunSubAgent`：子 agent 请求 = 主会话前导 system 原文 + `[subSystem(身份+NS)][user 指令]`
-   - `computePrefixHash` 只哈希前导 system；prefix-change 日志输出各块短哈希
+| 版本 | 方案 | 结果 |
+|---|---|---|
+| 原方案（08-04） | NS 落库 + K=3 清理 | turn 首轮 miss 4-5 万（清理破坏前缀），累计 96% |
+| 第一轮（08-06） | NS 不落库，请求尾临时拼 | 本轮新内容插到 NS 之前 → 上轮条目无法完整匹配 → 退化为公共前缀，**命中率 89%**（hit 恒定 73-114K 台阶） |
+| 第二轮 | NS 进 opts.Messages 内存（不落库） | 只修轮内（NS 位置对），跨轮仍断（DB 历史无 NS）→ 依旧 89% |
+| **第三轮（最终）** | **NS 落库、永不清理** | 轮内+跨轮完整匹配同时成立 → 恢复单调递增命中 |
+
+失败教训：
+1. **append 污染**（第一轮实现）：`reqMsgs := opts.Messages; append(...)` 原地写底层数组，NS 残留混入历史（Go slice 别名坑）——已修复（强制复制），但并非 89% 主因
+2. **NS 位置**（真正根因）：完整前缀匹配下，NS 必须与"上轮请求末尾"位置一致——只有落库进历史才能保证
+
+## 四、改动清单（最终实施）
+
+1. **`app/chat.go`**：NS 落库进 messages（user 后、kind 标记），**永不清理**；不再写 session.extra_metadata
+2. **`internal/agent/agent.go`**：Run 不再手动 append NS（历史已含）；删除 loadNovelState；`computePrefixHash` 只哈希前导 system + 前缀变化块哈希诊断
 3. **`internal/agent/compress.go`**：
-   - `generateSummary` 改用 `ChatStream` 带全量工具（与主循环同一前缀），只在末尾追加压缩指令 + NS
-   - `persistCompression` 删除 NS 落库；压缩时重建的 NS 写回 `session.extra_metadata`
-4. **`internal/agent/tokens.go`**：
-   - `updateUsage` 主/子统一累计（accHit/accMiss/perModel/cache_hit_ratio），子 agent 不推前端事件
-   - `UpdateMessageUsage` 按 agent_type 分写各自消息
-   - `usage_ratio = (runningTokens + fixedPrefix + toolTokens) / window`（本地估算，单调）
-5. **`internal/session/store.go`**：`UpdateMessageUsage` 加 agentType 参数 + WHERE agent_type
-6. **`internal/agent/phase_gate.go`**：进入 write 阶段重置 wordCountOK（字数校验每章独立，见 phase-gate.md）
+   - `generateSummary` 用 ChatStream 带全量工具（压缩请求 = 主请求 + 压缩指令，前缀命中）
+   - `persistCompression` 恢复 NS 落库（新版本末尾）
+   - `retainMessages` 跳过旧 NS（压缩后只留最新一份）
+4. **`internal/agent/tokens.go`**：主/子统一累计命中率；UpdateMessageUsage 按 agent_type 分写；usage_ratio 本地估算
+5. **`internal/agent/phase_gate.go`**：进入 write 重置 wordCountOK
+6. **`internal/session/store.go`**：UpdateMessageUsage 加 agentType
 
-## 五、验证结果（2026-08-06 实测，MiniMax M2.5）
+## 五、验证结果
 
 ```
-修复前（NS 落库 K=3）:  turn 首轮 miss 4-5 万，累计 96%
-append 污染事故:        每轮命中恒定 72-112K（前缀在残留 NS 处断裂），累计跌至 89%
-修复后预期:             turn 首轮 miss 只余 NS 本身，主会话轮内 99%+，累计 98%+
+NS 落库+K=3（修复前）:  turn 首轮 miss 4-5 万，累计 96%
+NS 尾部临时拼（第一轮）:  hit 恒定 73-114K 台阶，累计 89%（完整匹配失效）
+NS 落库永不清理（最终）:  轮内 99%+，跨轮完整匹配，累计应回 98%+
 ```
 
-判据（同原方案 4.2）：每调用 hit 增量随轮次递增（不再恒定）；长会话命中率随轮次单调上升。
+判据：每调用 hit 增量随轮次递增（不再恒定）；长会话命中率随轮次单调上升。
 
 ## 六、回退方案
 
-- 纯逻辑改动、无 schema 变更：revert 上述 commit 即可；`session.extra_metadata.novel_state` 冗余字段无副作用
-- 历史消息里残留的旧 NS 快照（`kind=novel_state`）已被 to_api=false，不占请求序列，无需清理
+- 纯逻辑改动、无 schema 变更：revert 上述 commit 即可；历史 NS 快照消息保留在消息表（to_api=true，占序列）——回退后不影响正确性
+- 若 NS 膨胀观测不佳：优先调压缩阈值，勿恢复清理（清理必断前缀）
 
 ## 相关文档
 

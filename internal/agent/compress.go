@@ -106,33 +106,10 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 		novelState = ""
 	}
 
-	// 在事务中完成版本递增 + 全部 DB 写入
-	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, summary, retained)
+	// 在事务中完成版本递增 + 全部 DB 写入（NS 作为新版本末尾的消息落库，见 persistCompression）
+	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, novelState, summary, retained)
 	if err != nil {
 		return fmt.Errorf("compress: persist failed: %w", err)
-	}
-
-	// 最新 NS 快照写回 session.extra_metadata（动态尾部注入用，不入消息历史）
-	if novelState != "" {
-		sess, err := a.session.GetSession(ctx, opts.SessionID)
-		if err == nil {
-			var meta map[string]any
-			if sess.ExtraMetadata != "" {
-				if json.Unmarshal([]byte(sess.ExtraMetadata), &meta) != nil {
-					meta = make(map[string]any)
-				}
-			}
-			if meta == nil {
-				meta = make(map[string]any)
-			}
-			meta["novel_state"] = novelState
-			if b, err := json.Marshal(meta); err == nil {
-				if err := a.db.Model(&session.Session{}).Where("session_id = ?", opts.SessionID).
-					Update("extra_metadata", string(b)).Error; err != nil {
-					a.logger.Warn("压缩后保存 NS 快照失败", "err", err)
-				}
-			}
-		}
 	}
 
 	// 从 DB 加载新版本消息，与 Chat() 走同一条路径
@@ -149,15 +126,6 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	newTokens := a.InitRunningTokens(opts.Messages)
 	clear(runningTokens)
 	maps.Copy(runningTokens, newTokens)
-
-	// 压缩后追加最新 NS（与 Run 开头的协议一致：NS 进内存消息末尾，
-	// 使后续 appendMsg 的新内容落在 NS 之后，保持前缀完整匹配）
-	if latestNS := a.loadNovelState(ctx, opts.SessionID); latestNS != "" {
-		opts.Messages = append(opts.Messages, map[string]any{"role": "system", "content": latestNS})
-		if n, err := llm.CountMessageTokens(map[string]any{"role": "system", "content": latestNS}); err == nil {
-			runningTokens["system"] += n
-		}
-	}
 
 	a.emitCompression(ctx, opts.TurnID, "done", summary, "")
 
@@ -245,7 +213,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 }
 
 // persistCompression 在事务中递增 active_version 并写入所有压缩消息。
-func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, summary string, retained []map[string]any) (int, error) {
+func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, novelState, summary string, retained []map[string]any) (int, error) {
 	var newVersion int
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -302,6 +270,24 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 			rm := apiMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
 			if err := tx.Create(rm).Error; err != nil {
 				return fmt.Errorf("写入保留消息失败: %w", err)
+			}
+		}
+		// 最新 NS 快照落库到新版本末尾（缓存协议：NS 作为消息进历史、永不清理；
+		// 压缩后第一轮请求 = [fp][reminder][summary][retained][NS]，与压缩请求
+		// [fp][历史][compressionPrompt] 前缀不同属一次性重建成本，之后恢复完整匹配）
+		if novelState != "" {
+			if err := tx.Create(&session.Message{
+				SessionID:     opts.SessionID,
+				TurnID:        opts.TurnID,
+				Role:          "system",
+				Content:       novelState,
+				Version:       newVersion,
+				ToAPI:         true,
+				ToFrontend:    false,
+				AgentType:     "main",
+				ExtraMetadata: agentcfg.NovelStateKindJSON,
+			}).Error; err != nil {
+				return fmt.Errorf("write NovelState: %w", err)
 			}
 		}
 		// 边界标记

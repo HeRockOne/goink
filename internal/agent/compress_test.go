@@ -54,9 +54,9 @@ func TestPersistCompression_NovelStateAtEnd(t *testing.T) {
 	retained := []map[string]any{
 		{"role": "user", "content": "历史消息"},
 	}
-	// NS 不再作为消息落库（动态尾部注入，见缓存协议），persistCompression 不接收 novelState
+	// 压缩后最新 NS 作为消息落库到新版本末尾（缓存协议：NS 进历史、永不清理）
 	_, err = a.persistCompression(context.Background(), opts,
-		"identity-content", "", "", "摘要内容", retained)
+		"identity-content", "", "", novelState, "摘要内容", retained)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,16 +67,29 @@ func TestPersistCompression_NovelStateAtEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 期望顺序: [identity][reminder][summary][retained(user)][marker]，无 NS 消息
-	if len(msgs) != 5 {
-		t.Fatalf("expected 5 messages, got %d", len(msgs))
+	// 期望顺序: [identity][reminder][summary][retained(user)][NS][marker]
+	if len(msgs) != 6 {
+		t.Fatalf("expected 6 messages, got %d", len(msgs))
 	}
-	for _, m := range msgs {
-		if m.Content == novelState {
-			t.Error("NS snapshot must not be persisted as a message")
-		}
+	ns := msgs[len(msgs)-2]
+	if ns.Role != "system" || ns.Content != novelState {
+		t.Errorf("NS snapshot should be second-to-last, got role=%s content=%q", ns.Role, ns.Content)
+	}
+	if ns.ToFrontend {
+		t.Error("NS snapshot should not be visible to frontend")
+	}
+	if !ns.ToAPI {
+		t.Error("NS snapshot should be sent to API")
 	}
 	if msgs[0].Role != "system" || msgs[0].Content != "identity-content" {
 		t.Errorf("first message should be identity, got role=%s", msgs[0].Role)
+	}
+	for i, m := range msgs {
+		if i == len(msgs)-2 {
+			continue
+		}
+		if m.Content == novelState {
+			t.Errorf("duplicate NS in system area at index %d", i)
+		}
 	}
 }

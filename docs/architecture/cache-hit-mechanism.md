@@ -31,13 +31,15 @@
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
 L2  Always skills   → ~2,088 tokens   always 模式 skill 全量正文
 L3  Skill catalog   →  ~1,150 tokens   auto 模式 skill 的 name+description 目录
-L4  NovelState      → 请求尾部动态注入  小说状态快照（存 session.extra_metadata，请求时追加到消息末尾，不入消息历史）
+L4  NovelState      → 落库进消息历史    小说状态快照（紧跟 user 消息之后，永不清理）
 ```
 
 **固定前缀 = L1 + L2 + L3 + 工具定义（全量 JSON）≈ 20,899 tokens**（2026-08-06 实测 `fixed_prefix_tokens`）
 - `writeSystemMessages` **只在创建新 session（isNew）时执行**（`chat.go`）
 - 固定前缀写入 messages 表后**不再重写**，保证缓存稳定命中
-- `computePrefixHash` 只哈希前导 system 消息 + 工具名（尾部动态 NS 不参与，避免误报）
+- `computePrefixHash` 只哈希前导 system 消息 + 工具名（历史中的 NS 不参与，避免误报）
+
+**NS 落库协议（完整前缀匹配的关键）**：MiniMax/DeepSeek 按"请求结束位置落盘 + 完整前缀单元匹配"命中——上一轮完整请求（含其末尾的 NS_N）必须是本轮请求的前缀。因此 NS 必须作为消息**落库进历史**（紧跟 user 之后、永不清理）：旧 NS 字节不变可命中，每轮只 miss 最新 NS。任何"NS 不落库/请求尾临时拼"都会让本轮新内容插到上轮 NS 之前，上轮条目无法被完整匹配 → 命中率退化为公共前缀（实测 89%）。历史膨胀由压缩兜底。
 
 ---
 

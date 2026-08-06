@@ -77,4 +77,4 @@
 - 一次性的审计报告、测试报告、调研记录、讨论记录 → `archive/`
 - 描述系统当前设计的文档 → `architecture/`
 - 尚未实施或作为参考的方案 → `design/`
-> 2026-08-06：修复 ONNX 按需加载重载失败（onnxruntime 环境进程级单例，二次 InitializeEnvironment 报 already initialized，LazyEmbedder 卸载后所有向量刷新/搜索失效；环境改 sync.Once，卸载只销毁 session 释放模型内存，重载复用环境）+ 缓存命中率根因修正（NS 必须进入 opts.Messages 使工具循环新内容追加在 NS 之后，保持上一轮完整请求=本轮前缀的完整匹配；请求末尾临时拼 NS 会让新内容插在 NS 前，完整匹配失效退化为公共前缀命中，实测 89%）
+> 2026-08-06：缓存协议最终修正（NS 恢复落库进消息历史、永不清理：完整前缀匹配要求上一轮完整请求=本轮前缀，NS 不落库时新内容插到上轮 NS 之前导致匹配失效，命中率 89%——子代理逐函数审计定位，恢复 cacheprobe now 协议；压缩兜底旧 NS 清理；ONNX 环境 sync.Once 修复卸载后重载失败）

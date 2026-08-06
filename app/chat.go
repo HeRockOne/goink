@@ -159,8 +159,10 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		a.logger.Warn("保存阶段门禁状态失败", "err", err)
 	}
 
-	// 6.6 构建 NovelState（缓存协议：NS 不入消息历史，请求时动态追加到请求尾部，
-	// 见 design/cache-hit-fix-implementation.md。避免清理旧 NS 导致消息数组变化、前缀缓存全失效）
+	// 6.6 构建 NovelState（缓存协议：NS 落库进消息历史，跟随 user 消息之后，
+	// 永不清理——上一轮完整请求（含 NS）必须是下一轮请求的前缀，
+	// 否则 MiniMax/DeepSeek 的完整前缀单元匹配失效，命中率退化为公共前缀（实测 89%）。
+	// 历史膨胀由压缩兜底：压缩重建时旧 NS 随摘要清除，只保留最新一份）
 	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
 	if err != nil {
 		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
@@ -201,23 +203,21 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		if err := tx.Create(userMsg).Error; err != nil {
 			return err
 		}
-		// 最新 NS 快照写入 session.extra_metadata（不入消息历史，保持前缀纯 append-only）
+		// NS 快照落库：紧跟 user 消息之后（ID 序 = [user][NS][assistant...]），永不清理。
+		// 旧 NS 在历史中保持字节不变（可命中），每轮只 miss 最新 NS 本身
 		if novelState != "" {
-			var meta map[string]any
-			if sess.ExtraMetadata != "" {
-				if err := json.Unmarshal([]byte(sess.ExtraMetadata), &meta); err != nil {
-					meta = make(map[string]any)
-				}
-			}
-			if meta == nil {
-				meta = make(map[string]any)
-			}
-			meta["novel_state"] = novelState
-			if b, err := json.Marshal(meta); err == nil {
-				if err := tx.Model(&session.Session{}).Where("session_id = ?", sess.SessionID).
-					Update("extra_metadata", string(b)).Error; err != nil {
-					return err
-				}
+			if err := tx.Create(&session.Message{
+				SessionID:     sess.SessionID,
+				TurnID:        turnID,
+				Role:          "system",
+				Content:       novelState,
+				Version:       sess.ActiveVersion,
+				ToAPI:         true,
+				ToFrontend:    false,
+				AgentType:     "main",
+				ExtraMetadata: agentcfg.NovelStateKindJSON,
+			}).Error; err != nil {
+				return err
 			}
 		}
 		return nil

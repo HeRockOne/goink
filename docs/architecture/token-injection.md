@@ -61,7 +61,7 @@ go run ./tokencount
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
 	L2  Always skills   → 2,146 tokens   always 模式 skill 全量正文
 	L3  Skill catalog   → 525+1,152 tokens   auto 模式 skill 的 name+description 目录（skills/ 8 auto + builtin 29 auto）
-L4  NovelState      → 请求尾部动态注入  小说状态快照（存 session.extra_metadata，请求时追加到消息末尾，不入消息历史）
+L4  NovelState      → 落库进消息历史    小说状态快照（紧跟 user 消息之后，永不清理，压缩兜底）
 ```
 
 ### 三种 Mode 的注入策略（`internal/skill/types.go`）
@@ -75,7 +75,7 @@ L4  NovelState      → 请求尾部动态注入  小说状态快照（存 sessi
 ### 关键设计
 
 1. **L1+L2+L3 = 稳定前缀**（约 3.2K tokens）→ 写入 messages 表，保证 Prompt Caching 命中
-2. **L4 NovelState 不入消息历史** → 存 `session.extra_metadata`，请求时由 `internal/agent/agent.go` 追加到消息末尾（动态尾部）。历史保持纯 append-only：NS 每轮变化只 miss NS 本身，且**不做快照清理**（旧实现 K=3 清理会让消息数组变化，从删除位置起全部 miss）
+2. **L4 NovelState 落库进历史（紧跟 user 之后，永不清理）** → 完整前缀匹配的关键：上一轮完整请求（含 NS）必须是本轮前缀；旧 NS 字节不变可命中，每轮只 miss 最新 NS。历史上试过的 K=3 清理（消息数组变化 → 删除位置起全 miss）和"请求尾临时拼"（新内容插到 NS 前 → 完整匹配失效，89%）均不可行
 3. **skill 正文不占常驻 token** → 29 个 auto skill 只注入 ~1,150 tokens 的目录，正文按需加载，这是省 token 的核心策略
 
 ---
