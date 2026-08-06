@@ -38,6 +38,22 @@ type OnnxEmbedder struct {
 
 func (e *OnnxEmbedder) Dim() int { return 512 }
 
+// onnxEnvOnce 保证 ONNX Runtime 环境进程级只初始化一次。
+// onnxruntime_go 的环境是全局单例，二次 InitializeEnvironment 报
+// "The onnxruntime has already been initialized"；LazyEmbedder 卸载（销毁
+// session 释放模型内存）后重新加载必须复用环境，只重建 session。
+var (
+	onnxEnvOnce sync.Once
+	onnxEnvErr  error
+)
+
+func ensureOnnxEnvironment() error {
+	onnxEnvOnce.Do(func() {
+		onnxEnvErr = ort.InitializeEnvironment()
+	})
+	return onnxEnvErr
+}
+
 func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmbedder, error) {
 	modelPath := filepath.Join(modelsDir, "model.onnx")
 
@@ -47,7 +63,7 @@ func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmb
 		return nil, fmt.Errorf("rag: vocab missing [CLS] or [SEP]")
 	}
 
-	if err := ort.InitializeEnvironment(); err != nil {
+	if err := ensureOnnxEnvironment(); err != nil {
 		return nil, fmt.Errorf("rag: init onnx environment: %w", err)
 	}
 

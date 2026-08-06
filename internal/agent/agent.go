@@ -248,9 +248,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 
-	// 最新 NovelState（动态尾部）：从 session.extra_metadata 读取，请求时注入消息末尾。
-	// NS 不入消息历史，历史保持纯 append-only，避免清理旧 NS 破坏前缀缓存
+	// 最新 NovelState 追加到内存消息末尾（不入库，仅本 turn 内有效）。
+	// 关键：NS 必须在 appendMsg 之前进入 opts.Messages，使工具循环追加的新内容
+	// 落在 NS 之后 → 上一轮完整请求字节 = 本轮请求前缀（MiniMax/DeepSeek 按
+	// "请求结束位置落盘 + 完整前缀匹配"命中，请求末尾若为动态 NS 而新内容插在
+	// NS 之前，则上一轮条目无法被完整匹配，命中率退化为公共前缀，实测 89%）
 	latestNovelState := a.loadNovelState(ctx, opts.SessionID)
+	if latestNovelState != "" {
+		opts.Messages = append(opts.Messages, map[string]any{"role": "system", "content": latestNovelState})
+		if n, err := llm.CountMessageTokens(map[string]any{"role": "system", "content": latestNovelState}); err == nil {
+			runningTokens["system"] += n
+		}
+	}
 
 	// 工具定义 token（固定前缀）：压缩触发判定必须计入，否则实际占用被低估 10-20%，
 	// 0.7 阈值触发偏晚，中小窗口模型可能先撞 context overflow（400 不可重试，整轮失败）
@@ -367,15 +376,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 			callOpts.AllowedTools = allowed
 		}
-		// 动态尾部：注入最新 NS（不入历史，仅本次请求携带，NS 变化只 miss NS 本身）。
-		// 必须复制新 slice：直接 append 到 opts.Messages 会原地污染底层数组，
-		// 残留 NS 混入历史导致前缀不稳定、缓存从残留位置起全部失效
-		reqMsgs := make([]map[string]any, 0, len(opts.Messages)+1)
-		reqMsgs = append(reqMsgs, opts.Messages...)
-		if latestNovelState != "" {
-			reqMsgs = append(reqMsgs, map[string]any{"role": "system", "content": latestNovelState})
-		}
-		stream := a.llm.ChatStream(ctx, opts.ProviderName, reqMsgs, tools, opts.Model.ID, callOpts)
+		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 
 		// ---- SSE 流处理 ----
 		var pendingUsage map[string]any

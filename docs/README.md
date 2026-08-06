@@ -77,4 +77,4 @@
 - 一次性的审计报告、测试报告、调研记录、讨论记录 → `archive/`
 - 描述系统当前设计的文档 → `architecture/`
 - 尚未实施或作为参考的方案 → `design/`
-> 2026-08-06：字体链路修复（GetSystemFonts 手动解析 name 表优先 zh-CN 家族名支持 .ttc；全局字体 DB+localStorage 双写；Tab 发光加强）+ 缓存协议重构（NS 动态尾部注入、子 agent 复用主前缀、命中率全量口径）+ UI（usage 轨道边框/阈值进度条/M Token 单位）+ 门禁修复（write 转出重置字数状态）+ append 污染修复
+> 2026-08-06：修复 ONNX 按需加载重载失败（onnxruntime 环境进程级单例，二次 InitializeEnvironment 报 already initialized，LazyEmbedder 卸载后所有向量刷新/搜索失效；环境改 sync.Once，卸载只销毁 session 释放模型内存，重载复用环境）+ 缓存命中率根因修正（NS 必须进入 opts.Messages 使工具循环新内容追加在 NS 之后，保持上一轮完整请求=本轮前缀的完整匹配；请求末尾临时拼 NS 会让新内容插在 NS 前，完整匹配失效退化为公共前缀命中，实测 89%）

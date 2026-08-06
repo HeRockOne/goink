@@ -48,9 +48,6 @@ func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, 
 	msgs := make([]map[string]any, len(opts.Messages)+1)
 	copy(msgs, opts.Messages)
 	msgs[len(opts.Messages)] = map[string]any{"role": "user", "content": compressionPrompt}
-	if ns := a.loadNovelState(ctx, opts.SessionID); ns != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": ns})
-	}
 
 	// 与主循环相同的全量工具定义，保证前缀字节一致
 	tools := a.registry.OpenAI(nil)
@@ -152,6 +149,15 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	newTokens := a.InitRunningTokens(opts.Messages)
 	clear(runningTokens)
 	maps.Copy(runningTokens, newTokens)
+
+	// 压缩后追加最新 NS（与 Run 开头的协议一致：NS 进内存消息末尾，
+	// 使后续 appendMsg 的新内容落在 NS 之后，保持前缀完整匹配）
+	if latestNS := a.loadNovelState(ctx, opts.SessionID); latestNS != "" {
+		opts.Messages = append(opts.Messages, map[string]any{"role": "system", "content": latestNS})
+		if n, err := llm.CountMessageTokens(map[string]any{"role": "system", "content": latestNS}); err == nil {
+			runningTokens["system"] += n
+		}
+	}
 
 	a.emitCompression(ctx, opts.TurnID, "done", summary, "")
 
