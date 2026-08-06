@@ -86,7 +86,7 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
   const currentIdx = gateStatus?.phase ? GATE_STEPS.indexOf(gateStatus.phase) : -1
 
   return (
-    <div className="relative h-7 flex items-center justify-between px-4 border-t bg-sidebar backdrop-blur-md text-xs text-muted-foreground select-none">
+    <div className="relative h-7 flex items-center justify-between px-4 border-t bg-background text-xs text-muted-foreground select-none">
       {/* 左区：字数 / 行数 */}
       <div className="flex items-center gap-4 min-w-0 shrink-0">
         <span

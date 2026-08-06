@@ -138,6 +138,23 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     if (fs) document.documentElement.style.setProperty('--font-size', fs)
   }, [app])
 
+  // ── 首帧布局稳定兜底 ────────────────────────────────────
+  // WebView2/Wails 首帧视口或渲染树可能未稳定（实测：启动后状态栏上方有空隙，
+  // 手动最大化/还原触发 resize 后消失）。挂载后延迟多次强制 reflow + 触发
+  // 编辑器重测（--layout-tick 被 ContentEditor 的 MutationObserver 捕获），
+  // 等效于一次真实的窗口 resize 重排。
+
+  useEffect(() => {
+    const stabilize = () => {
+      void document.body.offsetHeight // 强制 reflow，按当前视口重算 flex 布局
+      document.documentElement.style.setProperty('--layout-tick', String(Math.random()))
+    }
+    const t1 = setTimeout(stabilize, 300)
+    const t2 = setTimeout(stabilize, 800)
+    const t3 = setTimeout(stabilize, 1500)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [])
+
   // ── 首次进入自动弹帮助 ──────────────────────────────────
 
   useEffect(() => {
@@ -369,7 +386,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   return (
     <div className="h-full flex flex-col overflow-hidden relative z-[2]">
       <header
-        className="h-11 flex items-center border-b bg-sidebar backdrop-blur-md shrink-0 select-none cursor-default relative"
+        className="h-11 flex items-center border-b bg-background shrink-0 select-none cursor-default relative"
         style={{ '--wails-draggable': 'drag', zIndex: 60 } as React.CSSProperties}
         onDoubleClick={() => { WindowToggleMaximise(); setIsMaximised(prev => !prev) }}
       >
