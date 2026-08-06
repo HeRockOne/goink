@@ -9,28 +9,24 @@ import (
 	"math"
 	"path/filepath"
 	"sync"
+	"time"
 
 	ort "github.com/yalue/onnxruntime_go"
 )
 
 const (
-	bertMaxLen   = 512 // BERT 模型最大输入 token 数（含特殊 token）
-	maxBatchSize = 64  // 单次 ONNX Run 最大样本数，防 OOM
+	bertMaxLen   = 512
+	maxBatchSize = 16
 )
 
-// BGE 模型查询时需要加指令前缀，文档不加。
 const queryInstruction = "为这个句子生成表示以用于检索相关文章："
 
 var (
-	instance  *OnnxEmbedder
 	tokenizer *Tokenizer
-	initOnce  sync.Once
-	ready     = make(chan struct{})
-	initErr   error
+	tokOnce   sync.Once
+	tokErr    error
 )
 
-// OnnxEmbedder 使用 ONNX Runtime 加载 bge-small-zh-v1.5 (int8) 模型生成 embedding。
-// 全局仅一个实例，通过 InitEmbedder 异步初始化。
 type OnnxEmbedder struct {
 	session   *ort.DynamicAdvancedSession
 	tokenizer *Tokenizer
@@ -40,63 +36,8 @@ type OnnxEmbedder struct {
 	log       *slog.Logger
 }
 
-// InitEmbedder 加载 tokenizer（同步）后异步加载 ONNX 模型，不阻塞调用方。
-// main 启动时尽早调用，模型在后台加载，GUI 可先行渲染。
-// 调用后 GetTokenizer() 即可使用，无需等待模型就绪。
-func InitEmbedder(modelsDir string, log *slog.Logger) {
-	initOnce.Do(func() {
-		t, err := NewTokenizer(filepath.Join(modelsDir, "vocab.txt"))
-		if err != nil {
-			initErr = err
-			close(ready)
-			return
-		}
-		tokenizer = t
-
-		go func() {
-			defer close(ready)
-			e, err := newOnnxEmbedder(modelsDir, t, log)
-			if err != nil {
-				initErr = err
-				return
-			}
-			instance = e
-		}()
-	})
-}
-
-// GetEmbedder 返回全局 embedder 实例。若尚未加载完成则阻塞等待。
-func GetEmbedder() (*OnnxEmbedder, error) {
-	<-ready
-	if initErr != nil {
-		return nil, initErr
-	}
-	return instance, nil
-}
-
-// TryGetEmbedder 非阻塞获取全局 embedder 实例。
-// 若尚未初始化完成则返回 nil，不会阻塞。适用于 shutdown 等不能阻塞的场景。
-func TryGetEmbedder() *OnnxEmbedder {
-	select {
-	case <-ready:
-		if initErr != nil {
-			return nil
-		}
-		return instance
-	default:
-		return nil
-	}
-}
-
-// GetTokenizer 返回全局 tokenizer 实例。InitEmbedder 调用后即可使用，
-// 未调用 InitEmbedder 时返回 nil。
-func GetTokenizer() *Tokenizer {
-	return tokenizer
-}
-
 func (e *OnnxEmbedder) Dim() int { return 512 }
 
-// newOnnxEmbedder 同步初始化 ONNX Runtime 并加载模型。仅由 InitEmbedder 调用。
 func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmbedder, error) {
 	modelPath := filepath.Join(modelsDir, "model.onnx")
 
@@ -127,9 +68,6 @@ func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmb
 	}, nil
 }
 
-// ── 模型适配层 ────────────────────────────────────────────
-
-// prepare 对原始 token 先截断再加 [CLS]/[SEP]，保证总长度 ≤ bertMaxLen。
 func (e *OnnxEmbedder) prepare(text string) []int {
 	raw := e.tokenizer.Tokenize(text)
 	limit := bertMaxLen - 2
@@ -144,10 +82,7 @@ func (e *OnnxEmbedder) prepare(text string) []int {
 	return ids
 }
 
-// ── Embedding ────────────────────────────────────────────
-
 func (e *OnnxEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
-	// 查询加 BGE 指令前缀
 	ids := e.prepare(queryInstruction + text)
 
 	select {
@@ -227,7 +162,6 @@ func (e *OnnxEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 	return results, nil
 }
 
-// embedBatch 执行单次 batch ONNX 推理，调用方保证 len(texts) ≤ maxBatchSize。
 func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	select {
 	case <-ctx.Done():
@@ -235,7 +169,6 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 	default:
 	}
 
-	// 1. Tokenize all texts, find max length.
 	tokenized := make([][]int, len(texts))
 	maxLen := 0
 	for i, text := range texts {
@@ -255,7 +188,6 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 	batchSize := int64(len(texts))
 	seqLen := int64(maxLen)
 
-	// 2. Build padded tensors [N, maxLen].
 	inputIDs := make([]int64, batchSize*seqLen)
 	attentionMask := make([]int64, batchSize*seqLen)
 	tokenTypeIDs := make([]int64, batchSize*seqLen)
@@ -293,7 +225,6 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 	}
 	defer outputTensor.Destroy()
 
-	// 3. Single ONNX Run.
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	err = e.session.Run(
@@ -304,7 +235,6 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 		return nil, fmt.Errorf("rag: batch onnx run: %w", err)
 	}
 
-	// 4. CLS pool each sample.
 	hidden := outputTensor.GetData()
 	results := make([][]float32, batchSize)
 	sampleSize := int(seqLen) * 512
@@ -326,10 +256,113 @@ func (e *OnnxEmbedder) Close() error {
 	return nil
 }
 
-// ── Pooling ──────────────────────────────────────────────
+// ── LazyEmbedder ──────────────────────────────────────────
 
-// clsPool 取 [CLS] token 的 embedding 并做 L2 归一化。
-// BGE 模型使用 CLS 池化 + L2 归一化，优于均值池化。
+type LazyEmbedder struct {
+	modelsDir string
+	log       *slog.Logger
+
+	mu        sync.Mutex
+	inner     *OnnxEmbedder
+	idleTimer *time.Timer
+	stopped   bool
+}
+
+func NewLazyEmbedder(modelsDir string, log *slog.Logger) *LazyEmbedder {
+	return &LazyEmbedder{modelsDir: modelsDir, log: log}
+}
+
+func (l *LazyEmbedder) load() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.inner != nil {
+		return nil
+	}
+	if l.stopped {
+		return fmt.Errorf("rag: lazy embedder is closed")
+	}
+	t := GetTokenizer()
+	if t == nil {
+		return fmt.Errorf("rag: tokenizer not initialized")
+	}
+	e, err := newOnnxEmbedder(l.modelsDir, t, l.log)
+	if err != nil {
+		return err
+	}
+	l.inner = e
+	return nil
+}
+
+func (l *LazyEmbedder) unload() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.inner != nil {
+		l.inner.Close()
+		l.inner = nil
+	}
+}
+
+func (l *LazyEmbedder) resetIdleTimer() {
+	if l.idleTimer != nil {
+		l.idleTimer.Stop()
+	}
+	l.idleTimer = time.AfterFunc(2*time.Minute, l.unload)
+}
+
+func (l *LazyEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	if err := l.load(); err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	l.resetIdleTimer()
+	l.mu.Unlock()
+	return l.inner.Embed(ctx, text)
+}
+
+func (l *LazyEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if err := l.load(); err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	l.resetIdleTimer()
+	l.mu.Unlock()
+	return l.inner.EmbedBatch(ctx, texts)
+}
+
+func (l *LazyEmbedder) Dim() int { return 512 }
+
+func (l *LazyEmbedder) Close() error {
+	l.mu.Lock()
+	l.stopped = true
+	if l.idleTimer != nil {
+		l.idleTimer.Stop()
+	}
+	l.mu.Unlock()
+	l.unload()
+	return nil
+}
+
+// ── Tokenizer ─────────────────────────────────────────────
+
+func InitTokenizer(modelsDir string, log *slog.Logger) {
+	tokOnce.Do(func() {
+		t, err := NewTokenizer(filepath.Join(modelsDir, "vocab.txt"))
+		if err != nil {
+			tokErr = err
+			log.Error("加载 tokenizer 失败", "err", err)
+			return
+		}
+		tokenizer = t
+		log.Info("Tokenizer 已加载")
+	})
+}
+
+func GetTokenizer() *Tokenizer {
+	return tokenizer
+}
+
+// ── Pooling ───────────────────────────────────────────────
+
 func clsPool(hidden []float32, dim int) []float32 {
 	vec := make([]float32, dim)
 	copy(vec, hidden[:dim])

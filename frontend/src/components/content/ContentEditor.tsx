@@ -1,34 +1,64 @@
-import Editor, { type OnMount } from '@monaco-editor/react'
+import { useCallback } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { EditorView } from 'codemirror'
 
 interface Props {
   value: string
-  onChange: (value: string | undefined) => void
-  onMount: OnMount
+  onChange: (value: string) => void
+  onMount?: (view: EditorView) => void
   editorTheme?: string
 }
 
+const LIGHT_THEME = EditorView.theme({
+  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)', height: '100%' },
+  '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
+  '.cm-gutters': { display: 'none' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-cursor': { borderLeftColor: 'var(--primary)' },
+  '.cm-selectionBackground': { backgroundColor: 'var(--accent)' },
+  '&.cm-editor.cm-focused': { outline: 'none' },
+})
+
+const DARK_THEME = EditorView.theme({
+  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)', height: '100%' },
+  '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
+  '.cm-gutters': { display: 'none' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-cursor': { borderLeftColor: 'var(--primary)' },
+  '.cm-selectionBackground': { backgroundColor: 'var(--accent)' },
+  '&.cm-editor.cm-focused': { outline: 'none' },
+})
+
 export default function ContentEditor({ value, onChange, onMount, editorTheme }: Props) {
+  const handleCreate = useCallback((view: EditorView) => {
+    onMount?.(view)
+  }, [onMount])
+
+  const extensions = [
+    markdown({ base: markdownLanguage }),
+    EditorView.lineWrapping,
+    editorTheme?.includes('dark') ? DARK_THEME : LIGHT_THEME,
+  ]
+
   return (
-    <Editor
-      height="100%"
-      language="plaintext"
-      theme={editorTheme ?? 'light'}
+    <CodeMirror
       value={value}
+      height="100%"
+      theme={editorTheme?.includes('dark') ? 'dark' : 'light'}
+      extensions={extensions}
       onChange={onChange}
-      onMount={onMount}
-      options={{
-        minimap: { enabled: false },
-        lineNumbers: 'off',
-        scrollBeyondLastLine: false,
-        fontSize: 17,
-        lineHeight: 30,
-        fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
-        wordWrap: 'on',
-        automaticLayout: true,
-        unicodeHighlight: { nonBasicASCII: false, ambiguousCharacters: false, invisibleCharacters: false },
-        suggestOnTriggerCharacters: false,
-        quickSuggestions: false,
-        wordBasedSuggestions: 'off',
+      onCreateEditor={handleCreate}
+      basicSetup={{
+        lineNumbers: false,
+        foldGutter: false,
+        highlightActiveLine: false,
+        highlightActiveLineGutter: false,
+        bracketMatching: false,
+        closeBrackets: false,
+        autocompletion: false,
+        indentOnInput: false,
+        syntaxHighlighting: true,
       }}
     />
   )

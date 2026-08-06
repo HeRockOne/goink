@@ -44,11 +44,11 @@ vi.mock('@/components/Markdown', () => ({
   default: ({ content }: any) => <div data-testid="markdown">{content}</div>,
 }))
 
-vi.mock('@monaco-editor/react', () => ({
-  DiffEditor: ({ original, modified }: any) => (
+vi.mock('react-diff-viewer-continued', () => ({
+  default: ({ oldValue, newValue }: any) => (
     <div data-testid="diff-editor">
-      <span>{original}</span>
-      <span>{modified}</span>
+      <span>{oldValue}</span>
+      <span>{newValue}</span>
     </div>
   ),
 }))

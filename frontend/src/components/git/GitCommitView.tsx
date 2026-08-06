@@ -1,33 +1,44 @@
-import { DiffEditor } from '@monaco-editor/react'
+import ReactDiffViewer from 'react-diff-viewer-continued'
 import { FileCode, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useTheme, type Theme } from '@/hooks/useTheme'
+import { useTheme } from '@/hooks/useTheme'
 import type { git } from '@/lib/wailsjs/go/models'
 
-const MONACO_THEME: Record<Theme, string> = { light: 'light', dark: 'vs-dark' }
-
-const DIFF_OPTIONS = {
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  fontSize: 15,
-  lineHeight: 26,
+const FONT_STYLE = {
   fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
-  lineNumbers: 'off',
-  wordWrap: 'on',
-  automaticLayout: true,
-  readOnly: true,
-  renderSideBySide: false,
-  renderIndicators: true,
-} as const
+  fontSize: '15px',
+  lineHeight: '26px',
+  wordWrap: 'break-word' as const,
+  whiteSpace: 'pre-wrap' as const,
+}
 
-function getLanguage(path: string): string {
-  if (path.endsWith('.md')) return 'markdown'
-  if (path.endsWith('.json')) return 'json'
-  if (path.endsWith('.yaml') || path.endsWith('.yml')) return 'yaml'
-  if (path.endsWith('.go')) return 'go'
-  if (path.endsWith('.ts') || path.endsWith('.tsx')) return 'typescript'
-  if (path.endsWith('.css')) return 'css'
-  return 'plaintext'
+const DIFF_STYLES = {
+  variables: {
+    light: {
+      diffViewerBackground: 'var(--background)',
+      diffViewerColor: 'var(--foreground)',
+      addedBackground: 'var(--diff-add-bg, #d4e8d4)',
+      removedBackground: 'var(--diff-remove-bg, #f0d4d4)',
+      addedColor: 'var(--foreground)',
+      removedColor: 'var(--foreground)',
+      emptyBlockBackground: 'var(--muted)',
+      gutterBackground: 'var(--muted)',
+      gutterColor: 'var(--foreground)',
+    },
+    dark: {
+      diffViewerBackground: 'var(--background)',
+      diffViewerColor: 'var(--foreground)',
+      addedBackground: 'var(--diff-add-bg-dark, #1a3020)',
+      removedBackground: 'var(--diff-remove-bg-dark, #3a1818)',
+      addedColor: 'var(--foreground)',
+      removedColor: 'var(--foreground)',
+      emptyBlockBackground: 'var(--muted)',
+      gutterBackground: 'var(--muted)',
+      gutterColor: 'var(--foreground)',
+    },
+  },
+  contentText: FONT_STYLE,
+  lineNumber: { ...FONT_STYLE, opacity: 0.6 },
 }
 
 interface Props {
@@ -51,21 +62,18 @@ export default function GitCommitView({ file }: Props) {
 
   return (
     <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
-      {/* 文件路径头 */}
       <div className="flex items-center gap-2 px-4 py-1.5 border-b shrink-0 bg-muted/10">
         <FileText className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground truncate">{file.path}</span>
       </div>
 
-      {/* Diff 编辑器 */}
-      <div className="flex-1 overflow-hidden">
-        <DiffEditor
-          height="100%"
-          language={getLanguage(file.path)}
-          theme={MONACO_THEME[theme]}
-          original={file.original}
-          modified={file.modified}
-          options={DIFF_OPTIONS}
+      <div className="flex-1 overflow-auto">
+        <ReactDiffViewer
+          oldValue={file.original}
+          newValue={file.modified}
+          splitView={false}
+          useDarkTheme={theme === 'dark'}
+          styles={DIFF_STYLES}
         />
       </div>
     </main>

@@ -16,7 +16,11 @@
   "dependencies": {
     "@antv/g6": "^5.1.1",
     "@fontsource-variable/geist": "^5.2.9",
-    "@monaco-editor/react": "^4.7.0",
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@uiw/react-codemirror": "^4.23.10",
+    "codemirror": "^6.0.1",
+    "react-diff-viewer-continued": "^4.0.5",
     "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

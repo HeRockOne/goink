@@ -63,8 +63,9 @@ type App struct {
 	cancelMgr     *agent.CancelManager
 	registry      *mcp_tools.Registry
 	approvals     *approval.Service
-	vectorStore   *rag.VectorStore
-	searchService atomic.Pointer[search.Service]
+	vectorStore    *rag.VectorStore
+	lazyEmbedder   *rag.LazyEmbedder
+	searchService  atomic.Pointer[search.Service]
 
 	novel       *novel.Store
 	chapter     *chapter.Store
@@ -189,9 +190,9 @@ func (a *App) OnShutdown(shutdownCtx context.Context) {
 	if q := rag.GetRefreshQueue(); q != nil {
 		q.Stop()
 	}
-	// 3. 释放 ONNX embedder（非阻塞，避免未初始化时死锁）
-	if emb := rag.TryGetEmbedder(); emb != nil {
-		_ = emb.Close()
+	// 3. 释放 ONNX embedder（按需加载，可能从未加载过）
+	if a.lazyEmbedder != nil {
+		_ = a.lazyEmbedder.Close()
 	}
 
 	// 4. 关闭数据库（放在最后，确保上述清理中的 DB 操作已完成）
@@ -232,8 +233,8 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	modelsDevCacheDir := filepath.Join(config.DataDirPath(), "cache")
 	llm.GetModelsDevClient(modelsDevCacheDir)
 
-	// 1. 异步加载 ONNX 模型（不阻塞 GUI，尽早调用）
-	rag.InitEmbedder(config.ModelsDir(), a.logger)
+	// 1. 加载 tokenizer（轻量常驻，用于分块）
+	rag.InitTokenizer(config.ModelsDir(), a.logger)
 
 	// 2. 打开全局数据库
 	db, err := storage.Open(config.GlobalDBPath(), a.logger)
@@ -318,15 +319,13 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 
 	// 11. 异步初始化向量存储和搜索服务（不阻塞 UI）
 	go func() {
-		emb, err := rag.GetEmbedder()
+		emb := rag.NewLazyEmbedder(config.ModelsDir(), a.logger)
+		a.lazyEmbedder = emb
 		svc := search.NewService(a.logger, a.character, a.location, a.lore, a.item,
 			a.timeline, a.storyarc, a.chapter, nil)
 		a.searchService.Store(svc)
 		a.agent.SetSearchService(svc)
-		if err != nil {
-			a.logger.Error("获取 Embedder 失败，向量检索不可用", "err", err)
-			return
-		}
+
 		sqlDB, err := a.db.DB()
 		if err != nil {
 			a.logger.Error("获取底层 SQL DB 失败，向量检索不可用", "err", err)
@@ -346,7 +345,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 		rag.InitRefreshQueue(a.vectorStore, a.chapter, a.novel, a.logger)
 		rag.GetRefreshQueue().Start()
 
-		// 首次启动全量索引（已有向量则跳过）
+		// 首次启动全量索引（已有向量则跳过），会自动触发 ONNX 按需加载
 		rebuildCtx := context.Background()
 		if err := rag.GetRefreshQueue().RebuildAll(rebuildCtx); err != nil {
 			a.logger.Error("全量向量索引失败", "err", err)

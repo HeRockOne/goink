@@ -1,56 +1,9 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import { type OnMount, DiffEditor, loader } from '@monaco-editor/react'
+import ReactDiffViewer from 'react-diff-viewer-continued'
+import { EditorView } from 'codemirror'
 import { FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toastError } from '@/lib/utils'
-
-// 注册牛皮纸主题 — 从 CSS 变量读取颜色，支持自定义主题
-function readCSS(varName: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback
-}
-
-function defineMonacoThemes(m: typeof import('monaco-editor')) {
-  const L = {
-    bg: readCSS('--background', '#f5edd6'),
-    fg: readCSS('--foreground', '#3d2b1f'),
-    line: readCSS('--muted', '#e8dcc0'),
-    insert: '#d4e8d4',
-    remove: '#f0d4d4',
-    cursor: readCSS('--primary', '#8b5e3c'),
-  }
-  const D = {
-    bg: readCSS('--background', '#2a1e16'),
-    fg: readCSS('--foreground', '#e8dcc8'),
-    line: readCSS('--muted', '#3a2c20'),
-    insert: '#1a3020',
-    remove: '#3a1818',
-    cursor: readCSS('--primary', '#c4956a'),
-  }
-  m.editor.defineTheme('goink-light', {
-    base: 'vs', inherit: true, rules: [],
-    colors: {
-      'editor.background': L.bg,
-      'editor.foreground': L.fg,
-      'editor.lineHighlightBackground': L.line,
-      'diffEditor.insertedTextBackground': L.insert,
-      'diffEditor.removedTextBackground': L.remove,
-      'editorCursor.foreground': L.cursor,
-    }
-  })
-  m.editor.defineTheme('goink-dark', {
-    base: 'vs-dark', inherit: true, rules: [],
-    colors: {
-      'editor.background': D.bg,
-      'editor.foreground': D.fg,
-      'editor.lineHighlightBackground': D.line,
-      'diffEditor.insertedTextBackground': D.insert,
-      'diffEditor.removedTextBackground': D.remove,
-      'editorCursor.foreground': D.cursor,
-    }
-  })
-}
-loader.init().then(m => defineMonacoThemes(m))
 import { useApp } from '@/hooks/useApp'
 import { useEditorTabs } from '@/hooks/useEditorTabs'
 import { useTheme, type Theme } from '@/hooks/useTheme'
@@ -65,7 +18,7 @@ import { outlinePath, isContentPath, isOutlinePath, isSkillPath, skillNameFromPa
 import type { EditorTab } from './types'
 import './ContentPanel.css'
 
-const MONACO_THEME: Record<Theme, string> = { light: 'goink-light', dark: 'goink-dark' }
+const THEME_MAP: Record<Theme, string> = { light: 'light', dark: 'dark' }
 
 export interface ContentPanelHandle {
   openFile: (path: string, title: string, readOnly?: boolean, initialViewMode?: string) => void
@@ -111,16 +64,19 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
 
   const { theme } = useTheme()
 
-  // 主题切换时重新注册 Monaco 主题（自定义主题的 CSS 变量已变化）
+  // 主题切换时更新编辑器 ref（CSS 变量已自动响应）
   useEffect(() => {
-    loader.init().then(mm => defineMonacoThemes(mm))
+    if (editorRef.current) {
+      editorRef.current.dispatch({})
+    }
   }, [theme])
   const [isLoading, setIsLoading] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  const editorRef = useRef<EditorView | null>(null)
+  const codemirrorViewRef = useRef<EditorView | null>(null)
   const savingRef = useRef<{ id: string; path: string; content: string } | null>(null)
   const pendingHighlightRef = useRef<{ matchPos: number; matchLen: number } | null>(null)
-  const didApplyHighlightRef = useRef(false) // handleEditorMount 已应用高亮时跳过清除
+  const didApplyHighlightRef = useRef(false)
   const novelIdRef = useRef(novelId)
   const tabsRef = useRef(tabs)
 
@@ -228,15 +184,14 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
     return () => window.removeEventListener('keydown', handler)
   }, [doSave])
 
-  const handleEditorChange = useCallback((tabId: string, value: string | undefined) => {
-    const content = value ?? ''
-    updateTab(tabId, { content, isDirty: true })
-    onContentChange?.(content)
+  const handleEditorChange = useCallback((tabId: string, value: string) => {
+    updateTab(tabId, { content: value, isDirty: true })
+    onContentChange?.(value)
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     const tab = tabs.find(t => t.id === tabId)
     if (!tab) return
-    savingRef.current = { id: tabId, path: tab.path, content }
+    savingRef.current = { id: tabId, path: tab.path, content: value }
     saveTimerRef.current = setTimeout(() => {
       if (!savingRef.current) return
       const s = savingRef.current
@@ -244,10 +199,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
     }, 500)
   }, [tabs, updateTab, doSave, onContentChange])
 
-  const monacoRef = useRef<any>(null)
-
-  // 将 rune 偏移转为 Monaco 行列号（1-based）
-  function runeOffsetToMonaco(text: string, runeOffset: number): { line: number; col: number } {
+  function runeOffsetToLineCol(text: string, runeOffset: number): { line: number; col: number } {
     let runeCount = 0
     const lines = text.split('\n')
     for (let i = 0; i < lines.length; i++) {
@@ -255,55 +207,35 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
       if (runeCount + lineRunes >= runeOffset) {
         return { line: i + 1, col: (runeOffset - runeCount) + 1 }
       }
-      runeCount += lineRunes + 1 // +1 for \n
+      runeCount += lineRunes + 1
     }
     return { line: lines.length, col: 1 }
   }
 
-  const doHighlight = useCallback((editor: Parameters<OnMount>[0], content: string, matchPos: number, matchLen: number) => {
-    const monaco = monacoRef.current
-    if (!monaco || !editor.getModel()) return
-
-    const totalLines = editor.getModel()!.getLineCount()
-    const { line, col } = runeOffsetToMonaco(content, matchPos)
+  const doHighlight = useCallback((view: EditorView, content: string, matchPos: number, matchLen: number) => {
+    const { line, col } = runeOffsetToLineCol(content, matchPos)
     const clampedEnd = Math.min(matchPos + matchLen, [...content].length)
-    const { line: endLine, col: endCol } = runeOffsetToMonaco(content, clampedEnd)
-    const ctxEnd = Math.min(endLine + 1, totalLines)
+    const { line: endLine, col: endCol } = runeOffsetToLineCol(content, clampedEnd)
 
-    const decorations: any[] = [
-      {
-        range: new monaco.Range(Math.max(1, line - 1), 1, ctxEnd, 1),
-        options: { isWholeLine: true, className: 'search-context-highlight' },
-      },
-      {
-        range: new monaco.Range(line, col, endLine, endCol),
-        options: { className: 'search-keyword-highlight' },
-      },
-    ]
+    const doc = view.state.doc
+    const from = doc.line(line).from + col - 1
+    const to = doc.line(endLine).from + endCol - 1
 
-    const collection = (editor as any)._searchDecorations
-    if (collection) collection.clear()
-    ;(editor as any)._searchDecorations = editor.createDecorationsCollection(decorations)
-
-    editor.revealPositionInCenter({ lineNumber: line, column: col })
-    editor.setPosition({ lineNumber: line, column: col })
+    view.dispatch({
+      selection: { anchor: from, head: to },
+      scrollIntoView: true,
+    })
   }, [])
 
-  const handleEditorMount: OnMount = useCallback((editor, monaco) => {
-    editorRef.current = editor
-    monacoRef.current = monaco
-    editor.onDidBlurEditorText(() => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      const s = savingRef.current
-      if (!s) return
-      doSave(s.id, s.path, s.content)
-    })
-    // 编辑器挂载后检查待处理高亮（直接取 Monaco model 内容，避免 ref 时序问题）。
+  const handleEditorMount = useCallback((view: EditorView) => {
+    editorRef.current = view
+    codemirrorViewRef.current = view
+
     const pending = pendingHighlightRef.current
     if (pending) {
-      const content = editor.getModel()?.getValue()
+      const content = view.state.doc.toString()
       if (content) {
-        doHighlight(editor, content, pending.matchPos, pending.matchLen)
+        doHighlight(view, content, pending.matchPos, pending.matchLen)
         pendingHighlightRef.current = null
         didApplyHighlightRef.current = true
       }
@@ -544,34 +476,32 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
               <Markdown content={activeTab.modified ?? ''} />
             </div>
           ) : (
-            <DiffEditor
-              height="100%"
-              language="markdown"
-              theme={MONACO_THEME[theme]}
-              original={activeTab.original}
-              modified={activeTab.modified}
-              onMount={editor => {
-                setTimeout(() => {
-                  const modified = editor.getModifiedEditor()
-                  const changes = editor.getLineChanges()
-                  if (changes?.length) {
-                    modified.revealLineInCenter(changes[0].modifiedStartLineNumber)
-                    modified.setPosition({ lineNumber: changes[0].modifiedStartLineNumber, column: 1 })
-                  }
-                }, 100)
-              }}
-              options={{
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                fontSize: 15,
-                lineHeight: 26,
-                fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
-                lineNumbers: 'off',
-                wordWrap: 'on',
-                automaticLayout: true,
-                readOnly: true,
-                renderSideBySide: false,
-                renderIndicators: true,
+            <ReactDiffViewer
+              oldValue={activeTab.original ?? ''}
+              newValue={activeTab.modified ?? ''}
+              splitView={false}
+              useDarkTheme={theme === 'dark'}
+              styles={{
+                variables: {
+                  light: {
+                    diffViewerBackground: 'var(--editor-surface)',
+                    diffViewerColor: 'var(--foreground)',
+                    addedBackground: 'var(--diff-add-bg, #d4e8d4)',
+                    removedBackground: 'var(--diff-remove-bg, #f0d4d4)',
+                    addedColor: 'var(--foreground)',
+                    removedColor: 'var(--foreground)',
+                    emptyLineBackground: 'var(--muted)',
+                  },
+                  dark: {
+                    diffViewerBackground: 'var(--editor-surface)',
+                    diffViewerColor: 'var(--foreground)',
+                    addedBackground: 'var(--diff-add-bg-dark, #1a3020)',
+                    removedBackground: 'var(--diff-remove-bg-dark, #3a1818)',
+                    addedColor: 'var(--foreground)',
+                    removedColor: 'var(--foreground)',
+                    emptyLineBackground: 'var(--muted)',
+                  },
+                },
               }}
             />
           )}
@@ -647,7 +577,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
             value={activeTab.content ?? ''}
             onChange={v => handleEditorChange(activeTab.id, v)}
             onMount={handleEditorMount}
-            editorTheme={MONACO_THEME[theme]}
+            editorTheme={THEME_MAP[theme]}
           />
         ) : (
           <OutlineViewer content={activeTab.outlineContent ?? ''} />
