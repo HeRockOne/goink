@@ -218,6 +218,17 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		"accComp", accCompletion,
 		"perModel", fmt.Sprintf("%+v", perModel))
 
+	// 偶发全 miss 告警：上轮命中、本轮 hit=0 且 miss 大 → 厂商侧缓存失效
+	// （MiniMax 被动缓存"根据系统负载自动调整过期时间"，负载驱逐/路由重分配）
+	// 记录便于统计频率，区分代码问题与厂商行为
+	if hitTokens == 0 && missTokens > 10000 && isMain {
+		a.logger.Warn("全量缓存未命中（厂商侧缓存失效或路由变化）",
+			"session", opts.SessionID,
+			"turn", opts.TurnID,
+			"miss_tokens", missTokens,
+			"prompt_tokens", promptTokens)
+	}
+
 	// usage_ratio 用本地估算（runningTokens + 固定前缀 + 工具定义），单调递增不回跳，
 	// 避免 provider 当轮 total（含当轮输出大小波动）导致占用显示忽大忽小
 	if opts.Model.ContextWindow > 0 {
