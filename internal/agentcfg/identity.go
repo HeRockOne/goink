@@ -181,7 +181,7 @@ auto 模式 skill 的 name+description 通过 skill catalog 注入到对话中�
 
 【goink.md 维护】
 
-goink.md 只做一件事：记录章节指纹（追加式，每章一行，用于防重复，对照 anti-repetition）。
+goink.md 只做一件事：记录章节指纹（追加式，每章多段，用于防重复，对照 anti-repetition）。
 
 其他所有内容一律写入数据库，不要写进 goink.md：
 - 当前进展 → get_writing_context / get_writing_snapshot / update_writing_snapshot

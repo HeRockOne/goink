@@ -53,7 +53,7 @@ mode: always
 2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
 3. **edit**(outlines/NNN.md)（required）— 写大纲。
    **格式要求：**
-   - 章节标题用 `# 第N章 标题`（单井号，一行）
+   - 章节标题用 `### 第N章 标题`（三级标题，遵循 Markdown 层级）
    - 各 section 用 `## 标题`（双井号），必须包含以下全部 section，可自由扩展更多：
      - `## 场景设计`：核心场景、环境氛围、时间、地点
      - `## 关键事件`：按叙事节拍编号（1. 2. 3.），标注字数区间和功能
@@ -110,7 +110,7 @@ mode: always
 | 11 | **新伏笔/悬念** | 有新伏笔时 | create_timeline_entry（title + category + target_chapter 全部 required） |
 | 12 | **回收伏笔** | 查询 B 发现有要回收的时 | update_timeline_entry（resolved_chapter_id） |
 | 13 | **更新读者认知** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry |
-| 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹一行：开篇/对话/场景/情感/钩子/感官，对照 anti-repetition；必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
+| 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，对照 anti-repetition；必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
 ## 阶段技能表（33 个内置 skill 全量调度）

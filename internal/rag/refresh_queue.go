@@ -188,18 +188,16 @@ func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 		return
 	}
 
-	// 原子语义：先写入新向量，成功后才删除旧向量。
-	// IndexChunks 失败时旧向量保留（可能搜到旧设定，但不会出现"章节成空索引"的长期空窗）；
-	// 失败后重新入队重试。
+	// 先删除旧索引，再写入新索引。
+	// 删除失败仅 warn（重复块会在下次刷新时被清理）
+	if err := q.vs.DeleteChapterChunks(ctx, task.NovelID, task.ChapterNumber); err != nil {
+		q.logger.Warn("删除章节旧向量失败（重复块下次刷新清理）", "chapter_number", task.ChapterNumber, "err", err)
+	}
+
+	// 写入新索引。失败时该章节搜不到旧内容（已删），但下次刷新会重试补齐。
 	if err := q.vs.IndexChunks(ctx, task.NovelID, chunks); err != nil {
 		q.logger.Error("索引章节向量失败，重试入队", "chapter_number", task.ChapterNumber, "err", err)
 		q.refreshRetry(task)
-		return
-	}
-
-	// 新向量写入成功后删除旧向量；删除失败仅 warn（重复块会在下次刷新时被清理）
-	if err := q.vs.DeleteChapterChunks(ctx, task.NovelID, task.ChapterNumber); err != nil {
-		q.logger.Warn("删除章节旧向量失败（新向量已写入，重复块下次刷新清理）", "chapter_number", task.ChapterNumber, "err", err)
 	}
 }
 
