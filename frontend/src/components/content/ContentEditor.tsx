@@ -42,13 +42,20 @@ export default function ContentEditor({ value, onChange, onMount, editorTheme }:
   // 否则编辑器高度停留在旧字号的计算值，面板底部出现空白（最大化/还原时 resize 才触发重算）
   useEffect(() => {
     const target = document.documentElement
+    let timer: ReturnType<typeof setTimeout> | null = null
     const observer = new MutationObserver(() => {
-      viewRef.current?.requestMeasure()
+      // 多帧重测：CodeMirror 的测量依赖渲染稳定（换行/行高需要字号真正生效后）
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        viewRef.current?.requestMeasure()
+        setTimeout(() => viewRef.current?.requestMeasure(), 50)
+      }, 30)
     })
     observer.observe(target, { attributes: true, attributeFilter: ['style'] })
-    // 兜底：挂载后延迟重测一次，覆盖窗口尺寸恢复/首帧 vh 不稳
-    const t = setTimeout(() => viewRef.current?.requestMeasure(), 600)
-    return () => { observer.disconnect(); clearTimeout(t) }
+    // 兜底：挂载后延迟重测两次，覆盖窗口尺寸恢复/首帧 vh 不稳
+    const t1 = setTimeout(() => viewRef.current?.requestMeasure(), 300)
+    const t2 = setTimeout(() => viewRef.current?.requestMeasure(), 900)
+    return () => { observer.disconnect(); clearTimeout(timer ?? undefined); clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
   const extensions = [
