@@ -11,7 +11,6 @@ interface Props {
   reasoningEffort: string
   onSelectEffort: (effort: string) => void
   thinkingEnabled: boolean
-  onToggleThinking: () => void
   approvalMode: 'manual' | 'auto'
   onToggleApproval: () => void
   onConfigModel: () => void
@@ -25,7 +24,6 @@ export default function ChatControls({
   reasoningEffort,
   onSelectEffort,
   thinkingEnabled,
-  onToggleThinking,
   approvalMode,
   onToggleApproval,
   onConfigModel,
@@ -38,15 +36,6 @@ export default function ChatControls({
   const levels = selected?.ReasoningLevels?.length
     ? selected.ReasoningLevels
     : supportsThinking ? ['low', 'high', 'max'] : []
-  const reasoningOptions = supportsThinking
-    ? [
-        { value: '', label: t('chat.thinkingOff') },
-        ...levels.map(level => ({
-          value: level,
-          label: level === 'low' ? t('chat.lowReasoning') : level === 'high' ? t('chat.highReasoning') : level === 'max' ? t('chat.maxReasoning') : level,
-        })),
-      ]
-    : []
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-2 text-xs shrink-0 select-none">
@@ -59,28 +48,22 @@ export default function ChatControls({
       />
 
       {supportsThinking && (
-        <>
-          <button
-            onClick={onToggleThinking}
-            className={`h-[30px] rounded-lg border px-2 flex items-center gap-1 transition-colors shrink-0 ${
-              thinkingEnabled
-                ? 'bg-primary/10 text-primary border-primary/30'
-                : 'text-muted-foreground'
-            }`}
-            title={thinkingEnabled ? t('chat.thinkingEnabled') : t('chat.thinkingDisabled')}
-          >
-            <Brain className="w-3.5 h-3.5" />
-            <span>{t('chat.thinking')}</span>
-          </button>
-          {thinkingEnabled && (
-            <PopSelect
-              value={reasoningEffort}
-              options={reasoningOptions}
-              onChange={onSelectEffort}
-              minWidth="80px"
-            />
-          )}
-        </>
+        <div className="relative shrink-0">
+          <Brain className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <PopSelect
+            value={thinkingEnabled ? (reasoningEffort || levels[0] || 'high') : ''}
+            options={[
+              { value: '', label: t('chat.thinkingOff') },
+              ...levels.map(level => ({
+                value: level,
+                label: `${t('chat.thinking')} · ${level === 'low' ? t('chat.lowReasoning') : level === 'high' ? t('chat.highReasoning') : level === 'max' ? t('chat.maxReasoning') : level}`,
+              })),
+            ]}
+            onChange={onSelectEffort}
+            minWidth="120px"
+            className="[&>button]:pl-7"
+          />
+        </div>
       )}
 
       <div className="flex-1" />

@@ -31,21 +31,6 @@ function activityIcon(kind?: string) {
   }
 }
 
-function activityBadge(kind: string | undefined, t: TFunction): string {
-  switch (kind) {
-    case 'view': case 'browse': return t('chat.viewing')
-    case 'create': return t('chat.creating')
-    case 'write': return t('chat.writing')
-    case 'edit': return t('chat.editing')
-    case 'delete': return t('chat.deleting')
-    case 'memory': return t('chat.retrieving')
-    case 'review': return t('chat.reviewing')
-    case 'plan': return t('chat.planning')
-    case 'phase': return t('chat.phaseSwitching')
-    default: return t('chat.processing')
-  }
-}
-
 function getTypeLabels(t: TFunction): Record<string, string> {
   return {
     character: t('chat.toolCharacter'), character_relation: t('chat.toolCharacterRelation'),
@@ -197,9 +182,11 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
 
         <span className="tool-label">{displayText}</span>
 
-        <span className={`tool-badge ${isCompleted ? 'tool-badge-done' : isFailed ? 'tool-badge-failed' : ''}`}>
-          {isExecuting ? activityBadge(activityKind, t) : isCompleted ? t('chat.done') : t('chat.failed')}
-        </span>
+        {!isExecuting && (
+          <span className={`tool-badge ${isCompleted ? 'tool-badge-done' : 'tool-badge-failed'}`}>
+            {isCompleted ? t('chat.done') : t('chat.failed')}
+          </span>
+        )}
       </div>
 
       {isFailed && error && (

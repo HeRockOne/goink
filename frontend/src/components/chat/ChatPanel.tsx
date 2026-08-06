@@ -872,20 +872,6 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     app.SetApprovalMode(next).catch(() => {})
   }, [approvalMode, app])
 
-  const handleToggleThinking = useCallback(() => {
-    const next = !thinkingEnabled
-    setThinkingEnabled(next)
-    if (!next) {
-      setReasoningEffort('')
-      app.SetReasoningEffort('').catch(() => {})
-    } else {
-      const m = models.find(x => x.Key === selectedKey)
-      const defaultEffort = m?.ReasoningLevels?.[0] || 'high'
-      setReasoningEffort(defaultEffort)
-      app.SetReasoningEffort(defaultEffort).catch(() => {})
-    }
-  }, [thinkingEnabled, models, selectedKey, app])
-
   const handleSelectEffort = useCallback((effort: string) => {
     setReasoningEffort(effort)
     setThinkingEnabled(effort !== '')
@@ -1354,7 +1340,6 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         reasoningEffort={reasoningEffort}
         onSelectEffort={handleSelectEffort}
         thinkingEnabled={thinkingEnabled}
-        onToggleThinking={handleToggleThinking}
         approvalMode={approvalMode}
         onToggleApproval={handleToggleApproval}
         onConfigModel={handleConfigModel}
