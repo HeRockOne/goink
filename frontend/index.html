@@ -14,6 +14,14 @@
       } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.documentElement.setAttribute('data-theme', 'dark')
       }
+      // 渲染前应用全局字号/字体：避免首帧后 rem 单位重排导致布局错位（状态栏/面板间空白）
+      var fs = localStorage.getItem('global_font_size')
+      if (fs) document.documentElement.style.setProperty('--font-size', fs)
+      var font = localStorage.getItem('global_display_font')
+      if (font) {
+        document.documentElement.style.setProperty('--font-display', font)
+        document.documentElement.style.setProperty('--font-body', font)
+      }
     })()
   </script>
   <body>
