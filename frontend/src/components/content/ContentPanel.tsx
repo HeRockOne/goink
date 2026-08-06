@@ -596,13 +596,10 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
         )}
       </div>
 
-      {/* v2 编辑器底部状态条：字数 + 保存状态 */}
+      {/* v2 编辑器底部状态条 */}
       <div className="editor-statusbar">
         <span>{wordCountText(activeTab.content ?? '')}</span>
-        <span className="flex items-center gap-1">
-          <span className={`w-1.5 h-1.5 rounded-full ${activeTab.isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
-          {activeTab.isDirty ? '未保存' : '已保存 ✓'}
-        </span>
+        <span className={`w-1.5 h-1.5 rounded-full ${activeTab.isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
       </div>
     </main>
   )

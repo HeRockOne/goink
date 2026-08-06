@@ -24,6 +24,7 @@ type SaveSettingsInput struct {
 	PriceOutput          *float64 `json:"price_output,omitempty"`
 	CachePrice           *float64 `json:"cache_price,omitempty"`
 	ExaAPIKey            string   `json:"exa_api_key,omitempty"`
+	DisplayFont          string   `json:"display_font,omitempty"`
 }
 
 // ── 设置 ──────────────────────────────────────────────────
@@ -71,6 +72,9 @@ func (a *App) SaveSettings(input SaveSettingsInput) error {
 	}
 	if input.ExaAPIKey != "" {
 		a.settings.ExaAPIKey = input.ExaAPIKey
+	}
+	if input.DisplayFont != "" {
+		a.settings.DisplayFont = input.DisplayFont
 	}
 	return config.SaveSettings(a.db, a.settings)
 }

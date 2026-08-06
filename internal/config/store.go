@@ -40,6 +40,7 @@ type AppSettings struct {
 	PriceOutput      float64 `gorm:"column:price_output;default:8.1" json:"price_output"`                    // 输出价格（元/百万 token）
 	CachePrice       float64 `gorm:"column:cache_price;default:0.27" json:"cache_price"`                     // 缓存命中价格（元/百万 token）
 	ExaAPIKey        string  `gorm:"column:exa_api_key;default:''" json:"exa_api_key"`                       // Exa 网络搜索 API key（空则用免费 tier）
+	DisplayFont      string  `gorm:"column:display_font;default:''" json:"display_font"`                    // 显示字体，空则用默认楷体
 }
 
 func (AppSettings) TableName() string { return "app_config" }

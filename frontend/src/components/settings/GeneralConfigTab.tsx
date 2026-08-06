@@ -36,6 +36,8 @@ export default function GeneralConfigTab() {
   const [useHTTPS, setUseHTTPS] = useState(true)
   const [exaApiKey, setExaApiKey] = useState('')
   const [exaKeySaved, setExaKeySaved] = useState(false)
+  const [displayFont, setDisplayFont] = useState('')
+  const [fontSaved, setFontSaved] = useState(false)
 
   useEffect(() => {
     app.GetAppConfig().then(cfg => {
@@ -65,6 +67,10 @@ export default function GeneralConfigTab() {
         setUseHTTPS(s.api_use_https as boolean)
       }
       if (s?.exa_api_key) setExaApiKey(s.exa_api_key as string)
+      if (s?.display_font) {
+        setDisplayFont(s.display_font as string)
+        document.documentElement.style.setProperty('--font-display', (s.display_font as string) || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif")
+      }
     }).catch(() => {})
     app.GetLoggingEnabled().then(v => setLoggingEnabled(v)).catch(() => {})
     app.GetAPIUseHTTPS().then(v => setUseHTTPS(v)).catch(() => {})
@@ -324,6 +330,38 @@ export default function GeneralConfigTab() {
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
           >
             {exaKeySaved ? '已保存' : '保存'}
+          </button>
+        </div>
+      </div>
+
+      {/* 显示字体 */}
+      <div className="mt-6 space-y-2">
+        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <span className="text-sm">文</span>
+          显示字体
+        </label>
+        <p className="text-[11px] text-muted-foreground">标题和正文的显示字体。输入系统已安装的字体名称，留空使用默认楷体。</p>
+        <div className="flex items-center gap-2">
+          <input
+            value={displayFont}
+            onChange={e => { setDisplayFont(e.target.value); setFontSaved(false) }}
+            placeholder="KaiTi, Noto Serif SC, serif（留空=默认）"
+            className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none"
+          />
+          <button
+            onClick={async () => {
+              try {
+                await app.SaveSettings({ display_font: displayFont.trim() })
+                document.documentElement.style.setProperty('--font-display', displayFont.trim() || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif")
+                setFontSaved(true)
+                setTimeout(() => setFontSaved(false), 2000)
+              } catch (err) {
+                console.error('Failed to save font:', err)
+              }
+            }}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
+          >
+            {fontSaved ? '已保存' : '保存'}
           </button>
         </div>
       </div>
