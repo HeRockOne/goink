@@ -127,25 +127,19 @@ func (a *Agent) Cancel(sessionID string) {
 }
 
 // RunSubAgent 启动子 Agent 并返回最终报告文本。
-// 缓存协议：复用主会话固定前缀（前导 system 消息原文，字节一致），保证首轮命中主会话缓存条目；
-// 子 agent 身份与 NovelState 作为动态层追加在固定前缀之后（Anthropic fork 模式）。
+// 缓存协议：子 agent 请求 = 完整主会话历史原文 + 尾部追加子 agent 身份/NS/指令
+// （Anthropic fork 模式完整版）。主历史含正文/设定/NS（上一轮主请求的完整字节），
+// 子 agent 首轮即完整命中主会话缓存，miss 只余身份+指令（几 K）；
+// 且子 agent 从历史直接看到正文与设定，无需重复 read（每次重复读 = 重复 miss 4-10K）。
 func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_tools.SubAgentRequest) (string, error) {
 	at := agentTypeFromString(req.AgentType)
 	sysPrompt := agentcfg.AgentIdentity(at)
 	allowed := agentcfg.Allowlist(at)
 
-	msgs := []map[string]any{}
-	// 主会话固定前缀（前导 system：identity + always + catalog），原文复用保证字节一致
-	for _, m := range parentOpts.Messages {
-		if role, _ := m["role"].(string); role == "system" {
-			if content, _ := m["content"].(string); content != "" {
-				msgs = append(msgs, map[string]any{"role": "system", "content": content})
-			}
-		} else {
-			break
-		}
-	}
-	// 子 agent 专用层（固定前缀之后，动态区）：身份 + 最新小说状态
+	// 完整主历史（含 NS、工具结果）原样复用，保证前缀字节与主会话一致
+	msgs := make([]map[string]any, 0, len(parentOpts.Messages)+2)
+	msgs = append(msgs, parentOpts.Messages...)
+	// 子 agent 专用层（历史之后，动态区）：身份 + 最新小说状态
 	subSystem := sysPrompt
 	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
 		subSystem += "\n\n" + novelState
