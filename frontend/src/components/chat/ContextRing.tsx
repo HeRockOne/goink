@@ -168,20 +168,20 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
     >
       {bar ? (
         <>
-          <span className="w-28 h-2.5 rounded-sm bg-muted border border-border overflow-hidden">
+          {hasUsage && usage.cache_hit_ratio > 0 && (
+            <span className="text-xs font-semibold tabular-nums" style={{ color: hitColor }}>
+              命中率 {usage.cache_hit_ratio.toFixed(2)}%
+            </span>
+          )}
+          <span className="w-24 h-2.5 rounded-sm bg-muted border border-border overflow-hidden">
             <span
               className="h-full rounded-sm block transition-all duration-400"
               style={{ width: `${ratio}%`, backgroundColor: color }}
             />
           </span>
-          <span className="text-[10px] font-semibold tabular-nums" style={{ color }} title="上下文占用">
-            {ratio.toFixed(0)}%
+          <span className="text-xs font-semibold tabular-nums" style={{ color }}>
+            上下文 {ratio.toFixed(2)}%
           </span>
-          {hasUsage && usage.cache_hit_ratio > 0 && (
-            <span className="text-[10px] font-semibold tabular-nums" style={{ color: hitColor }} title="缓存命中率">
-              {usage.cache_hit_ratio.toFixed(0)}%
-            </span>
-          )}
         </>
       ) : (
         <>

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { EditorView } from 'codemirror'
@@ -31,9 +31,25 @@ const DARK_THEME = EditorView.theme({
 })
 
 export default function ContentEditor({ value, onChange, onMount, editorTheme }: Props) {
+  const viewRef = useRef<EditorView | null>(null)
+
   const handleCreate = useCallback((view: EditorView) => {
+    viewRef.current = view
     onMount?.(view)
   }, [onMount])
+
+  // 全局字号/字体变化后强制重新测量（行高/换行/视口高度），
+  // 否则编辑器高度停留在旧字号的计算值，面板底部出现空白（最大化/还原时 resize 才触发重算）
+  useEffect(() => {
+    const target = document.documentElement
+    const observer = new MutationObserver(() => {
+      viewRef.current?.requestMeasure()
+    })
+    observer.observe(target, { attributes: true, attributeFilter: ['style'] })
+    // 兜底：挂载后延迟重测一次，覆盖窗口尺寸恢复/首帧 vh 不稳
+    const t = setTimeout(() => viewRef.current?.requestMeasure(), 600)
+    return () => { observer.disconnect(); clearTimeout(t) }
+  }, [])
 
   const extensions = [
     markdown({ base: markdownLanguage }),
