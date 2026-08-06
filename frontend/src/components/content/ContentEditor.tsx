@@ -46,6 +46,7 @@ export default function ContentEditor({ value, onChange, onMount, editorTheme }:
       <CodeMirror
         value={value}
         height="100%"
+        style={{ height: '100%' }}
         theme={editorTheme?.includes('dark') ? 'dark' : 'light'}
         extensions={extensions}
         onChange={onChange}
