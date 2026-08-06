@@ -309,8 +309,20 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
     }
 
     const skReadOnly = readOnly ?? path.startsWith('/builtin/skills/')
-    const initialMode: EditorTab['viewMode'] = initialViewMode as EditorTab['viewMode'] ||
-      (skReadOnly ? 'preview' : (isSkillPath(path) ? 'preview' : 'content'))
+    let initialMode: EditorTab['viewMode'] = initialViewMode as EditorTab['viewMode']
+    if (!initialMode) {
+      if (skReadOnly) {
+        initialMode = 'preview'
+      } else if (path === 'book-outline.md') {
+        initialMode = 'preview'
+      } else if (path === 'goink.md') {
+        initialMode = 'preview'
+      } else if (isSkillPath(path)) {
+        initialMode = 'preview'
+      } else {
+        initialMode = 'content'
+      }
+    }
 
     setIsLoading(true)
     app.GetContent(novelId, path).then(content => {
