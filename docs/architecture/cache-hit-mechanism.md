@@ -94,14 +94,19 @@ DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位�
        → 第1章全部历史命中 ✓，只有新 user + NS miss
 ```
 
-### 4.5 子 agent（review/memory）→ 复用主会话前缀
+### 4.5 子 agent（review/memory）→ fork 完整主历史
 
-子 agent 请求 = 主会话固定前缀原文 + 尾部追加子 agent 身份/NovelState/指令（Anthropic fork 模式）：
-- review 紧跟主对话运行时，**首轮即命中主会话刚写热的前缀**（20K+）
-- 子 agent 内部工具循环前缀稳定，后续轮 99%+
-- 旧实现（子 agent 用自己的 identity 开头）每次全 miss（日志 `hit=0 miss=20482`）
+子 agent 请求 = **完整主会话历史原文** + 尾部追加 `[身份+NS][指令]`（Anthropic fork 模式完整版）：
+- 首轮 = 上一轮主请求的完整字节 → **整个主会话缓存条目命中**（15 万+），miss 只余身份+指令（几 K）
+- 正文/设定已在历史里 → 子 agent 直接从上下文读取，不再重复 read（旧实现每次 review 重复读相同内容，每轮 miss 4-10K）
+- 子 agent 内部工具循环在尾部增长，轮间连续
+- 子 agent 消息不落库（ToAPI=false），不影响主历史
 
-### 4.6 上下文快满：压缩 vs 新窗口
+### 4.6 prompt_cache_key：路由粘性（偶发全 miss 的解法）
+
+OpenAI 兼容多节点负载均衡下，相同前缀的请求可能被路由到不同后端节点，各节点缓存不共享 → 偶发全 miss（实测：23 秒间隔、上轮 99.9% 命中、下轮 hit=0 miss=15.5 万）。opencode 对 openai-compatible 默认发送 `promptCacheKey`（= sessionID，PR #22569），把相同前缀路由到同一节点。Goink 已对齐：所有请求携带 `prompt_cache_key = sessionID`。不支持的端点忽略未知参数。
+
+### 4.7 上下文快满：压缩 vs 新窗口
 
 | 操作 | 缓存影响 |
 |------|---------|

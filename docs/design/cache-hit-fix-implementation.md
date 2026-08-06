@@ -1,9 +1,9 @@
-# 缓存命中率修复实施记录（NS 落库协议 + 子 agent fork + 全量统计口径）
+# 缓存命中率修复实施记录（NS 落库 + 子 agent fork + prompt_cache_key + 全量统计口径）
 
-> 日期：2026-08-06（实施完成，含 2026-08-06 二次修正）
+> 日期：2026-08-06（实施完成，含 08-06/08-07 多次修正）
 > 依据：`docs/design/cache-hit-fix-implementation.md` 原方案（K=3 落库清理）+ 实施中发现的问题
-> 状态：已实施（commit cf49ff6 / 46a0189 / 后续修正）
-> 说明：本文是原方案（P1 NS 落库协议 + P2 压缩 NS 双份）的实施记录。**最终采用"NS 落库、永不清理"**——经过三轮迭代才收敛：第一轮（NS 不落库+请求尾临时拼）破坏完整前缀匹配导致 89%，第二轮（NS 进内存）只修轮内，第三轮恢复落库才同时满足轮内+跨轮完整匹配
+> 状态：已实施（commit cf49ff6 / 46a0189 / 398b5f7 / c4104d2 / 7e6de62）
+> 说明：最终协议 = **NS 落库永不清理 + 子 agent fork 完整主历史 + prompt_cache_key 路由粘性**。NS 经历三轮迭代（89% 教训），子 agent 经历两轮（重复 read miss），路由粘性为 websearch 对照 opencode 后补上
 
 ---
 
@@ -11,9 +11,9 @@
 
 让"上一轮完整请求字节 = 本轮请求前缀"，仅尾部增量 miss。轮次 N+1 请求 = 轮次 N 请求字节 + 新增内容。
 
-**关键机制**：MiniMax/DeepSeek 按"请求结束位置落盘 + 完整前缀单元匹配"命中——后续请求必须**完整匹配**某条落盘条目。上一轮请求末尾是什么，本轮请求对应位置必须还是什么；任何"本轮新增内容插到上轮内容之前"（含动态尾部 NS 被新内容越过）都会让上轮条目无法被完整匹配，命中率退化为公共前缀。
+**关键机制**：按"请求结束位置落盘 + 完整前缀单元匹配"命中——后续请求必须**完整匹配**某条落盘条目。上一轮请求末尾是什么，本轮请求对应位置必须还是什么；任何"本轮新增内容插到上轮内容之前"都会让上轮条目无法被完整匹配，命中率退化为公共前缀（实测 89% 恒定台阶）。
 
-## 二、最终协议（NS 落库、永不清理）
+## 二、最终协议
 
 ```
 轮次 N   请求: [固定前缀][userN][NS_N][assistantN][toolN]
@@ -21,42 +21,50 @@
                            ↑↑↑↑ 轮次 N 请求的完整字节 → 全部命中 ↑↑↑↑
 ```
 
-- NS 是 `role=system, to_api=true, to_frontend=false` 的普通消息（ExtraMetadata 带 kind 标记），**紧跟 user 消息之后落库**（ID 序 = [user][NS][assistant...]）
-- **永不清理**（不做 to_api=false）：旧 NS 在历史中字节不变 → 可命中；每轮只 miss 最新 NS 本身。历史上尝试过的 K=3 清理会让消息数组变化（删除位置起全部 miss，每 turn 首轮 4-5 万）
-- 上下文膨胀由**压缩兜底**：压缩重建时旧 NS 随摘要清除（retainMessages 跳过 NS），只保留最新一份 NS 落库到新版本末尾
-- 压缩后第一轮请求与压缩前前缀不同属**一次性重建成本**（文档认可），之后恢复完整匹配
+- **NS**：`role=system` 消息，紧跟 user 之后**落库**（kind 标记），**永不清理**——旧 NS 字节不变可命中，每轮只 miss 最新 NS；膨胀由压缩兜底
+- **prompt_cache_key**：所有请求携带 `prompt_cache_key = sessionID`（opencode 对 openai-compatible 的默认做法）——相同前缀路由到同一后端节点，消除负载均衡漂移导致的偶发全 miss（小米 MiMo 直连实测：不带 key 时偶发全 miss 15.5 万/次，23 秒间隔；走中转/openrouter 95% 命中）
+- **子 agent**：请求 = **完整主历史原文** + 尾部 `[身份+NS][指令]`（fork 模式完整版）——首轮完整命中主会话缓存，正文/设定直接从历史读取，不再重复 read（旧实现每次 review 重复读相同内容，每轮 miss 4-10K）
 
-## 三、迭代记录（为什么改了三次）
+## 三、迭代记录
 
 | 版本 | 方案 | 结果 |
 |---|---|---|
 | 原方案（08-04） | NS 落库 + K=3 清理 | turn 首轮 miss 4-5 万（清理破坏前缀），累计 96% |
-| 第一轮（08-06） | NS 不落库，请求尾临时拼 | 本轮新内容插到 NS 之前 → 上轮条目无法完整匹配 → 退化为公共前缀，**命中率 89%**（hit 恒定 73-114K 台阶） |
-| 第二轮 | NS 进 opts.Messages 内存（不落库） | 只修轮内（NS 位置对），跨轮仍断（DB 历史无 NS）→ 依旧 89% |
-| **第三轮（最终）** | **NS 落库、永不清理** | 轮内+跨轮完整匹配同时成立 → 恢复单调递增命中 |
+| 第一轮 | NS 不落库，请求尾临时拼 | 新内容插到上轮 NS 之前 → 完整匹配失效 → **89%**（hit 恒定 73-114K 台阶） |
+| 第二轮 | NS 进 opts.Messages 内存 | 只修轮内，跨轮仍断 → 依旧 89% |
+| 第三轮 | **NS 落库、永不清理** | 轮内+跨轮完整匹配成立 → 单调递增（实测轮内 99%+） |
+| 第四轮 | **+ prompt_cache_key 路由粘性** | 消除偶发全 miss（厂商负载均衡漂移） |
+| 第五轮 | **+ 子 agent fork 完整主历史** | 子 agent 从每轮 miss 4-10K（重复 read）→ 首轮几 K + 内部少量 |
 
 失败教训：
-1. **append 污染**（第一轮实现）：`reqMsgs := opts.Messages; append(...)` 原地写底层数组，NS 残留混入历史（Go slice 别名坑）——已修复（强制复制），但并非 89% 主因
-2. **NS 位置**（真正根因）：完整前缀匹配下，NS 必须与"上轮请求末尾"位置一致——只有落库进历史才能保证
+1. **append 污染**：`reqMsgs := opts.Messages; append(...)` 原地写底层数组（Go slice 别名坑）——强制复制修复
+2. **NS 位置**：完整前缀匹配下 NS 必须与上轮请求末尾位置一致——只有落库进历史才能保证
+3. **子 agent 只复用前缀**：20K 前缀命中但主历史不在请求里 → 每次 review 重复 read 相同内容重复付费
+4. **缺 prompt_cache_key**：openai-compatible 多节点负载均衡下路由漂移 → 偶发全 miss（websearch 对照 opencode PR #22569 发现）
 
 ## 四、改动清单（最终实施）
 
-1. **`app/chat.go`**：NS 落库进 messages（user 后、kind 标记），**永不清理**；不再写 session.extra_metadata
-2. **`internal/agent/agent.go`**：Run 不再手动 append NS（历史已含）；删除 loadNovelState；`computePrefixHash` 只哈希前导 system + 前缀变化块哈希诊断
-3. **`internal/agent/compress.go`**：
-   - `generateSummary` 用 ChatStream 带全量工具（压缩请求 = 主请求 + 压缩指令，前缀命中）
-   - `persistCompression` 恢复 NS 落库（新版本末尾）
-   - `retainMessages` 跳过旧 NS（压缩后只留最新一份）
-4. **`internal/agent/tokens.go`**：主/子统一累计命中率；UpdateMessageUsage 按 agent_type 分写；usage_ratio 本地估算
-5. **`internal/agent/phase_gate.go`**：进入 write 重置 wordCountOK
-6. **`internal/session/store.go`**：UpdateMessageUsage 加 agentType
+1. **`app/chat.go`**：NS 落库进 messages（user 后、kind 标记），永不清理
+2. **`internal/agent/agent.go`**：
+   - Run 不再手动 append NS（历史已含）
+   - `RunSubAgent`：完整主历史 fork + 尾部 `[身份+NS][指令]`
+   - `computePrefixHash` 只哈希前导 system + 前缀变化块哈希诊断
+3. **`internal/agent/compress.go`**：generateSummary 缓存对齐（ChatStream 全量工具 + CacheKey）；persistCompression 恢复 NS 落库；retainMessages 跳过旧 NS
+4. **`internal/llm/`**：`CallOptions.CacheKey` → `buildPayload` 发 `prompt_cache_key`
+5. **`internal/agent/tokens.go`**：主/子统一累计命中率；UpdateMessageUsage 按 agent_type 分写；usage_ratio 本地估算；全 miss 告警日志（hit=0 且 miss>1 万）
+6. **`internal/agent/phase_gate.go`**：进入 write 重置 wordCountOK
+7. **`internal/session/store.go`**：UpdateMessageUsage 加 agentType
+8. **`cmd/cacheprobe`**：完整创作流程模拟（init + 5 章 × ~86 工具调用 + 子 agent 内部序列 + legacy 真实 NS 协议）
 
 ## 五、验证结果
 
 ```
-NS 落库+K=3（修复前）:  turn 首轮 miss 4-5 万，累计 96%
-NS 尾部临时拼（第一轮）:  hit 恒定 73-114K 台阶，累计 89%（完整匹配失效）
-NS 落库永不清理（最终）:  轮内 99%+，跨轮完整匹配，累计应回 98%+
+NS 落库+K=3（修复前）:      turn 首轮 miss 4-5 万，累计 96%
+NS 尾部临时拼（第一轮）:    hit 恒定 73-114K 台阶，累计 89%
+NS 落库永不清理:            轮内 99%+，hit 单调递增（实测 134K→167K）
+子 agent fork 完整主历史:   子 agent 首轮命中主历史全部（15 万+）
+prompt_cache_key:           消除偶发全 miss
+cacheprobe 模拟（完整流程）: now 99.5% vs legacy 99.3%，miss 降 28.1%
 ```
 
 判据：每调用 hit 增量随轮次递增（不再恒定）；长会话命中率随轮次单调上升。

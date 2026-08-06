@@ -77,4 +77,4 @@
 - 一次性的审计报告、测试报告、调研记录、讨论记录 → `archive/`
 - 描述系统当前设计的文档 → `architecture/`
 - 尚未实施或作为参考的方案 → `design/`
-> 2026-08-06：缓存协议最终修正（NS 恢复落库进消息历史、永不清理：完整前缀匹配要求上一轮完整请求=本轮前缀，NS 不落库时新内容插到上轮 NS 之前导致匹配失效，命中率 89%——子代理逐函数审计定位，恢复 cacheprobe now 协议；压缩兜底旧 NS 清理；ONNX 环境 sync.Once 修复卸载后重载失败）
+> 2026-08-07：缓存链路补全（prompt_cache_key=sessionID 路由粘性，对齐 opencode PR #22569，消除小米 MiMo 直连偶发全 miss；子 agent fork 完整主历史，重复 read 的 4-10K/轮 miss 归零；cacheprobe 补子 agent 内部序列模拟，now 99.5% vs legacy 99.3%；全 miss 告警日志；UI：思考开关+深度合并下拉、工具执行中去掉处理中徽章）
