@@ -11,7 +11,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose }: Props) 
   if (tabs.length === 0) return null
 
   return (
-    <div className="flex items-center bg-muted/30 border-b shrink-0 overflow-x-auto">
+    <div className="flex items-center bg-[var(--editor-statusbar)] border-b shrink-0 overflow-x-auto">
       {tabs.map(tab => (
         <div
           key={tab.id}

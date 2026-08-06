@@ -45,11 +45,11 @@
   --chart-3: #c4956a;
   --chart-4: #7a9ab5;
   --chart-5: #b57a8a;
-  --sidebar: #e2e9f2;
+  --sidebar: rgba(255, 255, 255, 0.68);
   --sidebar-foreground: #0e1a26;
   --sidebar-primary: #6b8fad;
   --sidebar-primary-foreground: #f0f4f8;
-  --sidebar-accent: #d8e0ec;
+  --sidebar-accent: rgba(220, 228, 237, 0.6);
   --sidebar-accent-foreground: #1f3345;
   --sidebar-border: rgba(14, 26, 38, 0.1);
   --sidebar-ring: #6b8fad;
@@ -117,7 +117,7 @@
   --editor-statusbar: #f7fafd;
   --bubble-ai: rgba(238, 243, 248, 0.9);
   --bubble-ai-border: rgba(107, 143, 173, 0.3);
-  --editor-shadow: 0 24px 80px rgba(13, 26, 38, 0.16), 0 6px 20px rgba(13, 26, 38, 0.08);
+  --editor-shadow: 0 24px 80px rgba(13, 26, 38, 0.2), 0 8px 28px rgba(13, 26, 38, 0.12), 0 2px 8px rgba(13, 26, 38, 0.06);
   --panel-shadow: 0 8px 32px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
   --panel-edge: inset 1px 0 0 rgba(255, 255, 255, 0.6), -1px 0 8px rgba(13, 26, 38, 0.04);
 }
@@ -149,11 +149,11 @@
   --chart-3: #d4a870;
   --chart-4: #7a9ab5;
   --chart-5: #c0808a;
-  --sidebar: #0e1522;
+  --sidebar: rgba(13, 20, 32, 0.5);
   --sidebar-foreground: #e8eef2;
   --sidebar-primary: #a1c4d6;
   --sidebar-primary-foreground: #0a0e17;
-  --sidebar-accent: #162436;
+  --sidebar-accent: rgba(17, 27, 43, 0.6);
   --sidebar-accent-foreground: #d8e4ee;
   --sidebar-border: rgba(161, 196, 214, 0.12);
   --sidebar-ring: #a1c4d6;
@@ -221,7 +221,7 @@
   --editor-statusbar: #0e1522;
   --bubble-ai: rgba(161, 196, 214, 0.08);
   --bubble-ai-border: rgba(161, 196, 214, 0.28);
-  --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 12px 56px rgba(0, 0, 0, 0.5);
+  --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 16px 64px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.3);
   --panel-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 6px rgba(0, 0, 0, 0.2);
   --panel-edge: inset 1px 0 0 rgba(161, 196, 214, 0.08), -1px 0 16px rgba(0, 0, 0, 0.25);
 }
@@ -305,26 +305,7 @@
   opacity: 0.5;
 }
 
-.bg-layer::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 45%;
-  background:
-    radial-gradient(ellipse at 10% 100%, var(--mountain1) 0%, transparent 50%),
-    radial-gradient(ellipse at 30% 100%, var(--mountain2) 0%, transparent 40%),
-    radial-gradient(ellipse at 55% 100%, var(--mountain3) 0%, transparent 45%),
-    radial-gradient(ellipse at 75% 100%, var(--mountain4) 0%, transparent 35%),
-    radial-gradient(ellipse at 92% 100%, var(--mountain5) 0%, transparent 50%);
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 200'%3E%3Cpath d='M0,200 L0,120 Q80,60 180,110 Q280,30 380,90 Q480,20 580,80 Q680,10 780,70 Q880,0 980,60 Q1080,20 1200,80 L1200,200 Z' fill='black'/%3E%3C/svg%3E");
-  mask-size: 100% 100%;
-  mask-repeat: no-repeat;
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 200'%3E%3Cpath d='M0,200 L0,120 Q80,60 180,110 Q280,30 380,90 Q480,20 580,80 Q680,10 780,70 Q880,0 980,60 Q1080,20 1200,80 L1200,200 Z' fill='black'/%3E%3C/svg%3E");
-  -webkit-mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-}
+/* 山峦已移除，仅保留渐变与纹理 */
 
 /* ── 太虚字体与光感 ─────────────────────────────────────── */
 /* 标题类（面板标题/对话框标题/品牌）使用书法字体 */
