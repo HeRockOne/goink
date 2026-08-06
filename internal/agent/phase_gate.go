@@ -200,6 +200,12 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		return true, ""
 	}
 
+	// 进入 write 阶段时重置字数校验状态：上一章的字数检查结果（word_count_ok）
+	// 不能带到本章，write 转出必须用本章 get_chapter_list 的结果
+	if targetPhase == "write" {
+		g.wordCountOK = nil
+	}
+
 	// 检查当前阶段的 require 是否满足（不满足则阻塞）
 	current := g.findPhase(g.currentPhase)
 	if current != nil && len(current.Require) > 0 {

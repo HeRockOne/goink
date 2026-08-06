@@ -251,10 +251,10 @@ export default function ProfileView() {
               const totalCost = data.reduce((s, d) => s + d.cost, 0)
               return <>
                 <div className="grid grid-cols-4 gap-3 mb-4">
-                  <StatCard icon={TrendingUp} label={t('profile.monthTotal')} value={((totalHit + totalMiss + totalComp) / 1000).toFixed(0) + 'K'} />
+                  <StatCard icon={TrendingUp} label={t('profile.monthTotal')} value={((totalHit + totalMiss + totalComp) / 1_000_000).toFixed(2) + 'M Token'} />
                   <StatCard icon={TrendingUp} label={t('profile.monthCost')} value={'¥' + totalCost.toFixed(2)} />
                   <StatCard icon={TrendingUp} label={t('profile.cacheHitRate')} value={totalHit + totalMiss > 0 ? (totalHit / (totalHit + totalMiss) * 100).toFixed(1) + '%' : '0%'} />
-                  <StatCard icon={TrendingUp} label={t('profile.cacheRead')} value={(totalHit / 1000).toFixed(0) + 'K'} />
+                  <StatCard icon={TrendingUp} label={t('profile.cacheRead')} value={(totalHit / 1_000_000).toFixed(2) + 'M Token'} />
                 </div>
                 <div className="flex justify-center py-4">
                   <svg width="160" height="160" viewBox="0 0 160 160">
@@ -292,9 +292,9 @@ export default function ProfileView() {
                   </svg>
                 </div>
                 <div className="flex justify-center gap-6 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-1, #52c41a)' }} /> 缓存命中 {(totalHit / 1000).toFixed(0)}K</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-2, #f59e0b)' }} /> 未命中 {(totalMiss / 1000).toFixed(0)}K</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-3, #ef4444)' }} /> 输出 {(totalComp / 1000).toFixed(0)}K</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-1, #52c41a)' }} /> 缓存命中 {(totalHit / 1_000_000).toFixed(2)}M</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-2, #f59e0b)' }} /> 未命中 {(totalMiss / 1_000_000).toFixed(2)}M</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--chart-3, #ef4444)' }} /> 输出 {(totalComp / 1_000_000).toFixed(2)}M</span>
                 </div>
               </>
             })()}

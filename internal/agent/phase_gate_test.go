@@ -315,6 +315,47 @@ func TestPhaseGateInCycleFallbackStillWorks(t *testing.T) {
 	}
 }
 
+// 进入 write 阶段重置字数校验：上一章的字数结果不能带到本章（回归测试）
+func TestPhaseGateEnterWriteResetsWordCount(t *testing.T) {
+	gate := fullFlowGate(t)
+	gate.OnToolCall("get_characters", true)
+	gate.OnToolCall("edit", true)
+	ok, _ := gate.SetPhase("outline")
+	if !ok {
+		t.Fatal("prepare->outline should succeed")
+	}
+	gate.OnToolCall("edit", true)
+	ok, _ = gate.SetPhase("write")
+	if !ok {
+		t.Fatal("outline->write should succeed")
+	}
+
+	// 进入 write 后字数状态必须重置为未检查：上一章检查的 true 不能放行本章
+	if gate.WordCountCheck() != nil {
+		t.Fatal("wordCountOK should reset to nil after entering write")
+	}
+
+	// 未重新检查字数时，write 转出必须被阻塞
+	ok, msg := gate.SetPhase("review")
+	if ok {
+		t.Fatal("write->review should be blocked when word count not re-checked: " + msg)
+	}
+
+	// 重新检查本章字数（不达标）仍然阻塞
+	gate.SetWordCountOK(false)
+	ok, _ = gate.SetPhase("review")
+	if ok {
+		t.Fatal("write->review should be blocked when word count below minimum")
+	}
+
+	// 达标后放行
+	gate.SetWordCountOK(true)
+	ok, _ = gate.SetPhase("review")
+	if !ok {
+		t.Fatal("write->review should succeed when word count ok")
+	}
+}
+
 // 单轮内回退到更早的已访问阶段仍允许（write 回 prepare 重新准备）
 func TestPhaseGateInCycleFallbackToStartAllowed(t *testing.T) {
 	gate := fullFlowGate(t)

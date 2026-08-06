@@ -134,11 +134,15 @@ func (s *Store) UpdateSessionUsage(ctx context.Context, sessionID, usageJSON str
 	return nil
 }
 
-// UpdateMessageUsage 将 API 返回的精确 token 用量保存到最后一条 assistant 消息的 ExtraMetadata。
-func (s *Store) UpdateMessageUsage(ctx context.Context, sessionID string, turnID int, usage map[string]any) error {
+// UpdateMessageUsage 将 API 返回的精确 token 用量保存到指定 agent 的最后一条 assistant 消息的 ExtraMetadata。
+// agentType 区分主 agent 与子 agent，避免同 turn 内互相覆盖导致统计口径漂移。
+func (s *Store) UpdateMessageUsage(ctx context.Context, sessionID string, turnID int, agentType string, usage map[string]any) error {
+	if agentType == "" {
+		agentType = "main"
+	}
 	var msg Message
 	if err := s.DB.WithContext(ctx).
-		Where("session_id = ? AND turn_id = ? AND role = 'assistant'", sessionID, turnID).
+		Where("session_id = ? AND turn_id = ? AND role = 'assistant' AND agent_type = ?", sessionID, turnID, agentType).
 		Order("id DESC").Limit(1).First(&msg).Error; err != nil {
 		return fmt.Errorf("session store: find message: %w", err)
 	}

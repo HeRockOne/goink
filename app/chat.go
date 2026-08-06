@@ -159,14 +159,15 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		a.logger.Warn("保存阶段门禁状态失败", "err", err)
 	}
 
-	// 6.6 构建 NovelState（本轮落库用，缓存协议：NS 快照放轮次末尾，见 design/cache-hit-fix-implementation.md）
+	// 6.6 构建 NovelState（缓存协议：NS 不入消息历史，请求时动态追加到请求尾部，
+	// 见 design/cache-hit-fix-implementation.md。避免清理旧 NS 导致消息数组变化、前缀缓存全失效）
 	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
 	if err != nil {
 		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
 		novelState = ""
 	}
 
-	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息 + NS 快照原子写入）
+	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息原子写入）
 	userMsg := &session.Message{
 		SessionID:  sess.SessionID,
 		TurnID:     turnID,
@@ -178,23 +179,6 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		AgentType:  "main",
 	}
 	if err := a.session.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 只保留最近 keepNovelStateSnapshots-1 份 to_api=true 的 NS 快照，其余置 false
-		var keepIDs []int64
-		if err := tx.Model(&session.Message{}).
-			Where("session_id = ? AND version = ? AND to_api = ? AND extra_metadata LIKE ?",
-				sess.SessionID, sess.ActiveVersion, true, agentcfg.NovelStateKindLike).
-			Order("id DESC").Limit(agentcfg.KeepNovelStateSnapshots - 1).
-			Pluck("id", &keepIDs).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&session.Message{}).
-			Where("session_id = ? AND version = ? AND extra_metadata LIKE ?",
-				sess.SessionID, sess.ActiveVersion, agentcfg.NovelStateKindLike).
-			Where("id NOT IN ?", keepIDs).
-			Update("to_api", false).Error; err != nil {
-			return err
-		}
-
 		if isNew {
 			if err := a.writeSystemMessages(tx, sess.SessionID, input.NovelID, turnID); err != nil {
 				return err
@@ -217,20 +201,23 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		if err := tx.Create(userMsg).Error; err != nil {
 			return err
 		}
-		// NS 快照紧跟 user 消息之后写入（ID 序 = [user][NS][assistant...]，保证跨轮字节连续）
+		// 最新 NS 快照写入 session.extra_metadata（不入消息历史，保持前缀纯 append-only）
 		if novelState != "" {
-			if err := tx.Create(&session.Message{
-				SessionID:     sess.SessionID,
-				TurnID:        turnID,
-				Role:          "system",
-				Content:       novelState,
-				Version:       sess.ActiveVersion,
-				ToAPI:         true,
-				ToFrontend:    false,
-				AgentType:     "main",
-				ExtraMetadata: agentcfg.NovelStateKindJSON,
-			}).Error; err != nil {
-				return err
+			var meta map[string]any
+			if sess.ExtraMetadata != "" {
+				if err := json.Unmarshal([]byte(sess.ExtraMetadata), &meta); err != nil {
+					meta = make(map[string]any)
+				}
+			}
+			if meta == nil {
+				meta = make(map[string]any)
+			}
+			meta["novel_state"] = novelState
+			if b, err := json.Marshal(meta); err == nil {
+				if err := tx.Model(&session.Session{}).Where("session_id = ?", sess.SessionID).
+					Update("extra_metadata", string(b)).Error; err != nil {
+					return err
+				}
 			}
 		}
 		return nil

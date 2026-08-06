@@ -18,7 +18,6 @@ require (
 	github.com/wspulse/hub v0.12.1
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/yuin/goldmark v1.8.2
-	golang.org/x/image v0.40.0
 	golang.org/x/net v0.57.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1

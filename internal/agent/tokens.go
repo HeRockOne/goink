@@ -30,8 +30,18 @@ func (a *Agent) InitRunningTokens(messages []map[string]any) map[string]int {
 
 // updateUsage 计算 usage_ratio + 分角色 detail → 持久化到 session + 推送前端。
 // 缓存命中 token 做 session 级累计，每次请求累加到历史值上。
-func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runningTokens map[string]int, opts RunOptions) {
+// usage_ratio 用本地估算（runningTokens + 固定前缀 + 工具定义），单调递增不回跳，
+// 避免 provider 当轮 total（含当轮输出大小波动）导致占用显示忽大忽小。
+// 主/子 agent 的请求都计入命中率统计（同一模型、真实成本口径），消息级审计按 agent_type 分开写，
+// 避免同 turn 内互相覆盖。前端事件只由主 agent 推送（子 agent 运行期间占用显示保持主会话值）。
+func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runningTokens map[string]int, toolTokens int, opts RunOptions) {
 	apiTotal, _ := apiUsage["total_tokens"].(float64)
+
+	agentType := opts.AgentType
+	if agentType == "" {
+		agentType = "main"
+	}
+	isMain := agentType == "main"
 
 	// 分角色 detail：
 	// - system 用固定前缀的精确值（首轮写入 session.extra_metadata.fixed_prefix_tokens），
@@ -143,7 +153,7 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		accCompletion += comp
 	}
 
-	// 更新按模型累计
+	// 模型 ID（计费表 + 消息审计共用）
 	modelID := ""
 	if opts.Model != nil {
 		modelID = opts.Model.ID
@@ -151,13 +161,8 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 	if modelID == "" {
 		modelID = "unknown"
 	}
-	m := perModel[modelID]
-	if m == nil {
-		m = map[string]float64{"hit": 0, "miss": 0, "comp": 0}
-		perModel[modelID] = m
-	}
 
-	// 持久化模型级 token 到专用表（传增量值）
+	// 持久化模型级 token 到专用表（传增量值，主/子 agent 都计入计费）
 	deltaComp := float64(0)
 	if v, _ := apiUsage["completion_tokens"].(float64); v > 0 {
 		deltaComp = v
@@ -166,26 +171,28 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		a.logger.Warn("保存模型 usage 失败", "model", modelID, "err", err)
 	}
 
-	// 更新 per_model 累计
+	// 更新 per_model 累计（主/子 agent 统一累计，真实成本口径）
+	m := perModel[modelID]
+	if m == nil {
+		m = map[string]float64{"hit": 0, "miss": 0, "comp": 0}
+		perModel[modelID] = m
+	}
 	m["hit"] += hitTokens
 	m["miss"] += missTokens
 	if deltaComp > 0 {
 		m["comp"] += deltaComp
 	}
 
-	// 保存 API 返回的精确 usage 到当前 assistant 消息（持久化审计）
-	msgModel := modelID
-	if msgModel == "" {
-		msgModel = "unknown"
-	}
-	if err := a.session.UpdateMessageUsage(ctx, opts.SessionID, opts.TurnID, map[string]any{
+	// 保存 API 返回的精确 usage 到各自 agent 的 assistant 消息（持久化审计 + 趋势面板口径）。
+	// 按 agent_type 分开定位，主/子 agent 互不覆盖
+	if err := a.session.UpdateMessageUsage(ctx, opts.SessionID, opts.TurnID, agentType, map[string]any{
 		"prompt_tokens":     apiUsage["prompt_tokens"],
 		"completion_tokens": apiUsage["completion_tokens"],
 		"total_tokens":      apiUsage["total_tokens"],
 		"cached_tokens":     hitTokens,
-		"model":             msgModel,
+		"model":             modelID,
 	}); err != nil {
-		a.logger.Warn("保存消息 usage 失败", "err", err)
+		a.logger.Debug("保存消息 usage 失败（该 agent 无 assistant 消息）", "err", err)
 	}
 
 	usage := map[string]any{
@@ -206,20 +213,31 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 	a.logger.Info("usage 推送",
 		"session", opts.SessionID,
 		"turn", opts.TurnID,
+		"agent_type", agentType,
 		"model", modelID,
 		"accComp", accCompletion,
 		"perModel", fmt.Sprintf("%+v", perModel))
+
+	// usage_ratio 用本地估算（runningTokens + 固定前缀 + 工具定义），单调递增不回跳，
+	// 避免 provider 当轮 total（含当轮输出大小波动）导致占用显示忽大忽小
 	if opts.Model.ContextWindow > 0 {
-		usage["usage_ratio"] = float64(int(apiTotal)) / float64(opts.Model.ContextWindow) * 100
+		usedTokens := sumRunningTokens(runningTokens) + fixedPrefix + toolTokens
+		usage["usage_ratio"] = float64(usedTokens) / float64(opts.Model.ContextWindow) * 100
 	}
 	if accHit+accMiss > 0 {
 		usage["cache_hit_ratio"] = accHit / (accHit + accMiss) * 100
 	}
 
+	// 持久化 session.Usage（主/子 agent 统一累计，重启后显示一致）
 	if b, err := json.Marshal(usage); err == nil {
 		if err := a.session.UpdateSessionUsage(ctx, opts.SessionID, string(b)); err != nil {
 			a.logger.Warn("持久化 usage 失败", "err", err)
 		}
+	}
+
+	// 前端事件只由主 agent 推送：子 agent 运行期间占用显示保持主会话值，避免跳动
+	if !isMain {
+		return
 	}
 
 	wails.EventsEmit(ctx, "agent:"+strconv.Itoa(opts.TurnID), AgentEvent{

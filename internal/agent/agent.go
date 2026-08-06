@@ -127,18 +127,33 @@ func (a *Agent) Cancel(sessionID string) {
 }
 
 // RunSubAgent 启动子 Agent 并返回最终报告文本。
+// 缓存协议：复用主会话固定前缀（前导 system 消息原文，字节一致），保证首轮命中主会话缓存条目；
+// 子 agent 身份与 NovelState 作为动态层追加在固定前缀之后（Anthropic fork 模式）。
 func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_tools.SubAgentRequest) (string, error) {
 	at := agentTypeFromString(req.AgentType)
 	sysPrompt := agentcfg.AgentIdentity(at)
 	allowed := agentcfg.Allowlist(at)
 
-	msgs := []map[string]any{
-		{"role": "system", "content": sysPrompt},
+	msgs := []map[string]any{}
+	// 主会话固定前缀（前导 system：identity + always + catalog），原文复用保证字节一致
+	for _, m := range parentOpts.Messages {
+		if role, _ := m["role"].(string); role == "system" {
+			if content, _ := m["content"].(string); content != "" {
+				msgs = append(msgs, map[string]any{"role": "system", "content": content})
+			}
+		} else {
+			break
+		}
 	}
+	// 子 agent 专用层（固定前缀之后，动态区）：身份 + 最新小说状态
+	subSystem := sysPrompt
 	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
+		subSystem += "\n\n" + novelState
 	}
-	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
+	msgs = append(msgs,
+		map[string]any{"role": "system", "content": subSystem},
+		map[string]any{"role": "user", "content": req.Instruction},
+	)
 
 	// 保存主 agent 的阶段门禁状态，子 agent 运行期间不会被清空
 	savedPhaseGate := a.getPG()
@@ -233,6 +248,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 
+	// 最新 NovelState（动态尾部）：从 session.extra_metadata 读取，请求时注入消息末尾。
+	// NS 不入消息历史，历史保持纯 append-only，避免清理旧 NS 破坏前缀缓存
+	latestNovelState := a.loadNovelState(ctx, opts.SessionID)
+
 	// 工具定义 token（固定前缀）：压缩触发判定必须计入，否则实际占用被低估 10-20%，
 	// 0.7 阈值触发偏晚，中小窗口模型可能先撞 context overflow（400 不可重试，整轮失败）
 	toolTokens := 0
@@ -251,7 +270,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		a.logger.Warn("前缀变化，缓存可能失效",
 			"session_id", opts.SessionID,
 			"last_hash", lastHash,
-			"current_hash", prefixHash)
+			"current_hash", prefixHash,
+			"system_blocks", fmt.Sprintf("%+v", computeSystemBlockHashes(opts.Messages)),
+			"tool_count", len(tools))
 	}
 	a.prefixHashMu.Lock()
 	a.prefixHash[opts.SessionID] = prefixHash
@@ -346,9 +367,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 			callOpts.AllowedTools = allowed
 		}
-		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+		// 动态尾部：注入最新 NS（不入历史，仅本次请求携带，NS 变化只 miss NS 本身）。
+		// 必须复制新 slice：直接 append 到 opts.Messages 会原地污染底层数组，
+		// 残留 NS 混入历史导致前缀不稳定、缓存从残留位置起全部失效
+		reqMsgs := make([]map[string]any, 0, len(opts.Messages)+1)
+		reqMsgs = append(reqMsgs, opts.Messages...)
+		if latestNovelState != "" {
+			reqMsgs = append(reqMsgs, map[string]any{"role": "system", "content": latestNovelState})
+		}
+		stream := a.llm.ChatStream(ctx, opts.ProviderName, reqMsgs, tools, opts.Model.ID, callOpts)
 
 		// ---- SSE 流处理 ----
+		var pendingUsage map[string]any
 	streamLoop:
 		for {
 			select {
@@ -575,7 +605,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: result, displayText: display.DisplayText, activityKind: display.ActivityKind})
 
 				case llm.EventUsage:
-					a.updateUsage(ctx, event.Usage, runningTokens, opts)
+					// 流式中途可能多次推送 usage（部分值），只保留请求结束时的最终值，
+					// 避免中途值导致显示回跳和累计重复
+					pendingUsage = event.Usage
 
 				case llm.EventError:
 					// 检查是否可重试（429限流 + Retryable标记）。最多重试 maxLLMRetries 次，
@@ -633,6 +665,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
 			break
+		}
+
+		// 请求结束：统一处理最终 usage（过滤流式中途的部分值，避免显示回跳与重复累计）
+		if pendingUsage != nil {
+			a.updateUsage(ctx, pendingUsage, runningTokens, toolTokens, opts)
+			pendingUsage = nil
 		}
 
 		// 1. assistant + tool_calls + tool_displays
@@ -818,18 +856,57 @@ func parsePhaseGateFromMessages(messages []map[string]any, mode string) *PhaseGa
 	return nil
 }
 
+// loadNovelState 从 session.extra_metadata 读取最新 NovelState（动态尾部注入用）。
+func (a *Agent) loadNovelState(ctx context.Context, sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	sess, err := a.session.GetSession(ctx, sessionID)
+	if err != nil || sess.ExtraMetadata == "" {
+		return ""
+	}
+	var meta map[string]any
+	if json.Unmarshal([]byte(sess.ExtraMetadata), &meta) != nil {
+		return ""
+	}
+	if v, ok := meta["novel_state"].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// computeSystemBlockHashes 计算前导 system 消息各自的短哈希（诊断用，定位哪个块变化）。
+func computeSystemBlockHashes(messages []map[string]any) []string {
+	var hashes []string
+	for _, m := range messages {
+		if role, _ := m["role"].(string); role == "system" {
+			if content, _ := m["content"].(string); content != "" {
+				sum := sha256.Sum256([]byte(content))
+				hashes = append(hashes, fmt.Sprintf("%x", sum[:4]))
+			}
+		} else {
+			break
+		}
+	}
+	return hashes
+}
+
 // computePrefixHash 计算前缀哈希，用于检测缓存稳定性。
-// 前缀 = 系统消息 + 工具定义（按顺序）。
+// 前缀 = 前导系统消息（identity + always + catalog）+ 工具定义（按顺序）。
+// 只哈希前导 system（到第一条非 system 消息为止），尾部动态 system（NS）不参与，
+// 避免 NS 每轮变化触发误报。
 func computePrefixHash(messages []map[string]any, tools []map[string]any) uint64 {
 	h := sha256.New()
 
-	// 哈希系统消息（role=system）
+	// 哈希前导系统消息（role=system，遇第一条非 system 停止）
 	for _, m := range messages {
 		if role, _ := m["role"].(string); role == "system" {
 			if content, _ := m["content"].(string); content != "" {
 				h.Write([]byte(content))
 				h.Write([]byte{0}) // 分隔符
 			}
+		} else {
+			break
 		}
 	}
 

@@ -127,14 +127,16 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   // ── 启动时加载字体设置（localStorage 持久化） ────────────
 
   useEffect(() => {
-    const font = localStorage.getItem('global_display_font')
-    if (font) {
-      document.documentElement.style.setProperty('--font-display', font)
-      document.documentElement.style.setProperty('--font-body', font)
-    }
+    app.GetSettings().then(s => {
+      const font = s?.display_font || localStorage.getItem('global_display_font')
+      if (font) {
+        document.documentElement.style.setProperty('--font-display', font)
+        document.documentElement.style.setProperty('--font-body', font)
+      }
+    }).catch(() => {})
     const fs = localStorage.getItem('global_font_size')
     if (fs) document.documentElement.style.setProperty('--font-size', fs)
-  }, [])
+  }, [app])
 
   // ── 首次进入自动弹帮助 ──────────────────────────────────
 

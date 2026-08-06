@@ -1,5 +1,5 @@
 ---
-name: main-core-main-core-writing-kernel
+name: main-core-writing-kernel
 description: 小说核心写作调度。按阶段工作，禁止跳过。阶段步骤用 set_phase 推进。
 category: 核心系统
 mode: always
@@ -50,7 +50,7 @@ mode: always
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
-2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
+2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks, main-tech-chapter-title-design；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
 3. **edit**(outlines/NNN.md)（required）— 写大纲。
    **格式要求：**
    - 章节标题用 `# 第N章 标题`（单井号，一行）
@@ -101,7 +101,7 @@ mode: always
 | 2 | **更新写作快照** | 每章必做 | update_writing_snapshot（summary required） |
 | 3 | **搜索设定防遗忘** | 每章必做 | search_lore |
 | 4 | **搜索物品防断裂** | 每章必做 | search_items |
-| 5 | **更新章节计划** | 每章必做 | update_chapter_plan（main-cmd-main-cmd-next/near/far） |
+| 5 | **更新章节计划** | 每章必做 | update_chapter_plan（main-cmd-next 触发） |
 | 6 | **创建场景条目** | 查询 E 发现有变化时 | create_scene（title + summary required） |
 | 7 | **记录物品流转** | 查询 F 发现有变化时 | create_item_occurrence（item_id + chapter_id + action 全部 required） |
 | 8 | **更新角色状态** | 查询 A 发现有变化时 | update_character |
@@ -113,7 +113,7 @@ mode: always
 | 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹，格式见 anti-repetition skill：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行。必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
-## 阶段技能表（33 个内置 skill 全量调度）
+## 阶段技能表（34 个内置 skill 全量调度）
 
 > 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review）由用户 `/` 触发，不在此表。
 
@@ -121,7 +121,7 @@ mode: always
 |------|------|
 | **init（开书）** | main-core-init-phase（开书流程）, main-tech-genre-templates（12类型）, main-tech-book-outline（总纲）, main-tech-character-design（角色设计）, main-tech-world-building-system（世界观） |
 | **prepare（准备）** | main-tech-common-sense-logic（一致性）, main-tech-genre-templates, main-tech-book-outline（卷纲）, main-tech-brainstorm-composer（卡情节时构思） |
-| **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
+| **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-chapter-title-design（章节标题设计）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
 | **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（八条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
 | **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
 | **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（16项判定） |

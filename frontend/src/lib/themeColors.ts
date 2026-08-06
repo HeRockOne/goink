@@ -60,12 +60,6 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
   return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 }
 }
 
-function hexHsl(hex: string): HSL | null {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return null
-  return rgbToHsl(rgb.r, rgb.g, rgb.b)
-}
-
 function hslHex(h: number, s: number, l: number): string {
   const { r, g, b } = hslToRgb(h, s, l)
   return rgbToHex(r, g, b)
@@ -127,16 +121,16 @@ function surfaceFrom(bg: string, mode: 'light' | 'dark', step: number): string {
   return hslHex(hsl.h, Math.max(4, Math.min(12, hsl.s)), l)
 }
 
-// 边框：前景色的低透明度版本
-function borderFrom(fg: string): string {
+// 边框：前景色的低透明度版本。透明度按模式区分，确保元素边界清晰
+function borderFrom(fg: string, dark: boolean): string {
   const rgb = parseColor(fg)
-  if (!rgb) return 'rgba(128,128,128,0.25)'
-  return `rgba(${rgb.r},${rgb.g},${rgb.b},0.18)`
+  if (!rgb) return dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)'
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${dark ? 0.4 : 0.32})`
 }
 
-// tag/tool 六色系：以主色相为基准的固定偏移（保持六色可区分）
+// tag/tool 六色系：固定绝对色相（与主色无关），保证颜色名实相符、六色互相可区分
 const HUE_OFFSETS: Record<string, number> = {
-  blue: 40, green: 90, amber: 25, rose: 155, teal: 160, purple: 215,
+  blue: 215, green: 145, amber: 42, rose: 348, teal: 175, purple: 272,
 }
 
 // 对比度不足的 bg/fg 对（只校验两个值都可解析的对）
@@ -178,7 +172,6 @@ export function checkThemeContrast(colors: Record<string, string>): { bg: string
 // 一键生成全套主题变量（71 键）。所有 bg/fg 对在生成时修正到 AA。
 export function generateTheme(input: ThemeGenInput): Record<string, string> {
   const { mode, background, primary, foreground, vibrancy = 1 } = input
-  const priHsl = hexHsl(primary) ?? { h: 30, s: 50, l: 40 }
   const dark = mode === 'dark'
   const vib = Math.max(0.3, Math.min(2, vibrancy))
   // 饱和度缩放（鲜艳度）：面板色保持低饱和，彩色系按比例缩放
@@ -198,13 +191,13 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
   const muted = surfaceFrom(bg, modeStr, dark ? 5 : 4)
   const accent = surfaceFrom(bg, modeStr, dark ? 9 : 8)
   const sidebar = surfaceFrom(bg, modeStr, dark ? 2 : 2)
-  const border = borderFrom(fg)
+  const border = borderFrom(fg, dark)
 
-  // 主色系
+  // 语义色：固定色相（成功绿/警告琥珀/危险红），不随主色漂移
   const primaryFg = readableText(primary, modeStr)
-  const successH = priHsl.h + 90
-  const warnH = priHsl.h + 25
-  const dangerH = priHsl.h + 155
+  const successH = 145
+  const warnH = 42
+  const dangerH = 4
   const success = hslHex(successH, sat(dark ? 30 : 45), dark ? 18 : 93)
   const successFg = hslHex(successH, sat(dark ? 45 : 60), dark ? 75 : 27)
   const statusWarning = hslHex(warnH, sat(dark ? 55 : 70), dark ? 68 : 38)
@@ -217,7 +210,7 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
   const tags: Record<string, string> = {}
   const tagNames = ['blue', 'green', 'amber', 'rose', 'teal', 'purple']
   for (const name of tagNames) {
-    const h = priHsl.h + HUE_OFFSETS[name]
+    const h = HUE_OFFSETS[name]
     const tagBg = hslHex(h, sat(dark ? 35 : 30), dark ? 18 : 93)
     const tagFg = readableText(tagBg, modeStr)
     tags[`--tag-${name}`] = tagBg
@@ -262,7 +255,7 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
     '--sidebar-primary-foreground': primaryFg,
     '--sidebar-accent': accent,
     '--sidebar-accent-foreground': readableText(accent, modeStr),
-    '--sidebar-border': border,
+    '--sidebar-border': borderFrom(fg, dark),
     '--sidebar-ring': primary,
     ...tags,
     '--success': success,

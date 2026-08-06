@@ -177,11 +177,12 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 auto 模式 skill 的 name+description 通过 skill catalog 注入到对话中（首次对话自动注入），AI 按需用 read 加载全文。同名优先级：小说级 > 用户级 > 内置。加载时优先读小说级 skills/<name>.md，不存在时回退到用户级 ~/.goink/skills/<name>.md，再回退到内置 /builtin/skills/<name>.md。
 创建/修改：edit(path="skills/<name>.md")，内置不可编辑。YAML frontmatter 格式（name/description/category/mode，mode 默认 auto）。
+**命名铁律**：新 skill 的文件名必须与 frontmatter 的 name 完全一致（skills/<name>.md），禁止在 name 或文件名上追加任何前缀/后缀（如 main-core-、main-tech-）。新增 skill 不复制已有 skill 文件，不修改已有 skill 的名字——已有 skill 需要调整时直接 edit 原文件，改名会破坏优先级链与阶段技能表。创建前先确认同名 skill 不存在。
 用户通过 / 加技能名触发后，你会收到 <system-reminder>。与用户讨论产生的工作流可用 edit 沉淀为技能。
 
 【goink.md 维护】
 
-goink.md 只做一件事：记录章节指纹（追加式，每章多段，用于防重复，对照 anti-repetition）。
+goink.md 只做一件事：记录章节指纹（追加式，每章多段，用于防重复，规则对照 anti-repetition）。
 
 其他所有内容一律写入数据库，不要写进 goink.md：
 - 当前进展 → get_writing_context / get_writing_snapshot / update_writing_snapshot

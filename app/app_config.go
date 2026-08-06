@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,25 +11,130 @@ import (
 
 	"novel/internal/config"
 	"novel/internal/storage"
-
-	"golang.org/x/image/font/sfnt"
 )
 
+// fontFamilyFromFile 读取字体文件元数据中的家族名（NameID=1），
+// 优先 Windows 简体中文（zh-CN）名称，其次繁体/英文，支持 .ttc 集合。
+// 解析失败返回空串。
 func fontFamilyFromFile(path string) string {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
-	font, err := sfnt.Parse(f)
-	if err != nil {
+	if len(data) < 4 {
 		return ""
 	}
-	name, err := font.Name(nil, sfnt.NameIDFamily)
-	if err != nil {
+	if string(data[:4]) == "ttcf" {
+		if len(data) < 16 {
+			return ""
+		}
+		numFonts := int(binary.BigEndian.Uint32(data[8:]))
+		for i := 0; i < numFonts; i++ {
+			off := int(binary.BigEndian.Uint32(data[12+i*4:]))
+			if f := familyNameAt(data, off); f != "" {
+				return f
+			}
+		}
 		return ""
 	}
-	return name
+	return familyNameAt(data, 0)
+}
+
+// familyNameAt 解析 sfnt 偏移处的字体的 name 表，取最佳家族名。
+func familyNameAt(data []byte, off int) string {
+	if off+12 > len(data) {
+		return ""
+	}
+	numTables := int(binary.BigEndian.Uint16(data[off+4:]))
+	var nameOff int
+	for i := 0; i < numTables; i++ {
+		rec := off + 12 + i*16
+		if rec+16 > len(data) {
+			return ""
+		}
+		if string(data[rec:rec+4]) == "name" {
+			nameOff = int(binary.BigEndian.Uint32(data[rec+8:]))
+			break
+		}
+	}
+	if nameOff == 0 || nameOff+6 > len(data) {
+		return ""
+	}
+	count := int(binary.BigEndian.Uint16(data[nameOff+2:]))
+	strOff := nameOff + int(binary.BigEndian.Uint16(data[nameOff+4:]))
+	var zhTW, enUS, other string
+	for i := 0; i < count; i++ {
+		e := nameOff + 6 + i*12
+		if e+12 > len(data) {
+			break
+		}
+		platform := binary.BigEndian.Uint16(data[e:])
+		encoding := binary.BigEndian.Uint16(data[e+2:])
+		lang := binary.BigEndian.Uint16(data[e+4:])
+		if binary.BigEndian.Uint16(data[e+6:]) != 1 { // 仅家族名
+			continue
+		}
+		length := int(binary.BigEndian.Uint16(data[e+8:]))
+		offset := int(binary.BigEndian.Uint16(data[e+10:]))
+		start, end := strOff+offset, strOff+offset+length
+		if start < 0 || end > len(data) {
+			continue
+		}
+		var val string
+		switch platform {
+		case 3: // Windows: UCS-2 / UTF-16BE
+			if encoding > 10 {
+				continue
+			}
+			val = decodeUCS2(data[start:end])
+		case 1: // Macintosh: 仅全 ASCII 时可用
+			if isASCII(data[start:end]) {
+				val = string(data[start:end])
+			}
+		default:
+			continue
+		}
+		if val == "" {
+			continue
+		}
+		if platform == 3 && lang == 0x0804 { // 简体中文优先
+			return val
+		}
+		if platform == 3 && lang == 0x0404 && zhTW == "" {
+			zhTW = val
+		} else if platform == 3 && lang == 0x0409 && enUS == "" {
+			enUS = val
+		} else if platform == 3 && other == "" {
+			other = val
+		}
+	}
+	if zhTW != "" {
+		return zhTW
+	}
+	if enUS != "" {
+		return enUS
+	}
+	return other
+}
+
+func decodeUCS2(b []byte) string {
+	if len(b)&1 != 0 {
+		return ""
+	}
+	r := make([]rune, len(b)/2)
+	for i := range r {
+		r[i] = rune(binary.BigEndian.Uint16(b[i*2:]))
+	}
+	return string(r)
+}
+
+func isASCII(b []byte) bool {
+	for _, c := range b {
+		if c >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *App) GetAppConfig() map[string]any {

@@ -669,6 +669,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         }
 
         case AgentEventType.ToolCall: {
+          // 门禁阶段推进（set_phase）不在工具调用详情中显示
+          if (event.tool_name === 'set_phase') {
+            return { ...turn, segments }
+          }
           const isSubagent = event.tool_name === 'run_subagent'
           const toolStatus =
             event.phase === 'awaiting_approval' ? 'awaiting_approval' as const

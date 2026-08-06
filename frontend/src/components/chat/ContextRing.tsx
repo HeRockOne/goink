@@ -83,9 +83,9 @@ function computeCosts(usage: UsageInfo, prices: PriceConfig, selectedModel?: str
 }
 
 function ringColor(ratio: number): string {
-  if (ratio >= 90) return '#e74c3c'
-  if (ratio >= 80) return '#f39c12'
-  return '#52c41a'
+  if (ratio >= 90) return 'var(--usage-danger)'
+  if (ratio >= 80) return 'var(--usage-warn)'
+  return 'var(--usage-ok)'
 }
 
 function formatTokens(n: number): string {
@@ -165,7 +165,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
     >
       {bar ? (
         <>
-          <span className="w-28 h-1.5 rounded-sm bg-muted overflow-hidden">
+          <span className="w-28 h-1.5 rounded-sm bg-muted border border-border overflow-hidden">
             <span
               className="h-full rounded-sm block transition-all duration-400"
               style={{ width: `${ratio}%`, backgroundColor: color }}
@@ -207,7 +207,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
           </div>
 
           {/* 进度条 */}
-          <div className="h-1.5 rounded-sm bg-muted overflow-hidden">
+          <div className="h-1.5 rounded-sm bg-muted border border-border overflow-hidden">
             <div
               className="h-full rounded-sm transition-all duration-400"
               style={{ width: `${ratio}%`, backgroundColor: color }}
@@ -383,7 +383,10 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                 SaveSettings({ compression_threshold: v / 100 }).catch(() => {})
               }}
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-              style={{ accentColor: 'var(--primary)' }}
+              style={{
+                background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((threshold - 50) / 45) * 100}%, var(--muted) ${((threshold - 50) / 45) * 100}%, var(--muted) 100%)`,
+                border: '1px solid var(--border)',
+              }}
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
               <span>50%</span>

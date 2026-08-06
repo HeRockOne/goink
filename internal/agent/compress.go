@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"novel/internal/agentcfg"
+	"novel/internal/llm"
 	"novel/internal/session"
 )
 
@@ -41,18 +42,31 @@ const maxUserRetain = 15
 const minConversationTurns = 4
 
 // generateSummary 调用 LLM 生成压缩摘要，返回摘要文本和应保留的历史消息。
+// 缓存对齐：与主循环共享完全相同的 system+tools+历史前缀（fork 模式），
+// 只在末尾追加压缩指令和动态 NS，压缩轮可从主会话缓存命中，而非全量重算。
 func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, []map[string]any, error) {
 	msgs := make([]map[string]any, len(opts.Messages)+1)
 	copy(msgs, opts.Messages)
 	msgs[len(opts.Messages)] = map[string]any{"role": "user", "content": compressionPrompt}
-
-	summary, err := a.llm.GenerateText(ctx, opts.ProviderName, msgs, opts.Model.ID)
-	if err != nil {
-		a.logger.Warn("压缩摘要生成失败，保持原上下文", "err", err)
-		return "", nil, fmt.Errorf("compress: LLM summary failed: %w", err)
+	if ns := a.loadNovelState(ctx, opts.SessionID); ns != "" {
+		msgs = append(msgs, map[string]any{"role": "system", "content": ns})
 	}
 
-	summary = strings.TrimSpace(summary)
+	// 与主循环相同的全量工具定义，保证前缀字节一致
+	tools := a.registry.OpenAI(nil)
+	var sb strings.Builder
+	stream := a.llm.ChatStream(ctx, opts.ProviderName, msgs, tools, opts.Model.ID, nil)
+	for ev := range stream {
+		switch ev.Type {
+		case llm.EventContent:
+			sb.WriteString(ev.Data)
+		case llm.EventError:
+			a.logger.Warn("压缩摘要生成失败", "err", ev.Error)
+			return "", nil, fmt.Errorf("compress: LLM summary failed: %w", ev.Error)
+		}
+	}
+
+	summary := strings.TrimSpace(sb.String())
 	if summary == "" {
 		a.logger.Warn("压缩摘要为空，保持原上下文")
 		return "", nil, fmt.Errorf("compress: empty summary")
@@ -96,9 +110,32 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	}
 
 	// 在事务中完成版本递增 + 全部 DB 写入
-	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, novelState, summary, retained)
+	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, summary, retained)
 	if err != nil {
 		return fmt.Errorf("compress: persist failed: %w", err)
+	}
+
+	// 最新 NS 快照写回 session.extra_metadata（动态尾部注入用，不入消息历史）
+	if novelState != "" {
+		sess, err := a.session.GetSession(ctx, opts.SessionID)
+		if err == nil {
+			var meta map[string]any
+			if sess.ExtraMetadata != "" {
+				if json.Unmarshal([]byte(sess.ExtraMetadata), &meta) != nil {
+					meta = make(map[string]any)
+				}
+			}
+			if meta == nil {
+				meta = make(map[string]any)
+			}
+			meta["novel_state"] = novelState
+			if b, err := json.Marshal(meta); err == nil {
+				if err := a.db.Model(&session.Session{}).Where("session_id = ?", opts.SessionID).
+					Update("extra_metadata", string(b)).Error; err != nil {
+					a.logger.Warn("压缩后保存 NS 快照失败", "err", err)
+				}
+			}
+		}
 	}
 
 	// 从 DB 加载新版本消息，与 Chat() 走同一条路径
@@ -202,7 +239,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 }
 
 // persistCompression 在事务中递增 active_version 并写入所有压缩消息。
-func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, novelState, summary string, retained []map[string]any) (int, error) {
+func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, summary string, retained []map[string]any) (int, error) {
 	var newVersion int
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -259,23 +296,6 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 			rm := apiMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
 			if err := tx.Create(rm).Error; err != nil {
 				return fmt.Errorf("写入保留消息失败: %w", err)
-			}
-		}
-		// NS 快照落库到压缩后末尾（不写系统区，避免双份 NS；带 kind 标记供过期清理）
-		if novelState != "" {
-			if err := tx.Create(&session.Message{
-				SessionID:     opts.SessionID,
-				TurnID:        opts.TurnID,
-				Role:          "system",
-				Content:       novelState,
-				Version:       newVersion,
-				ToAPI:         true,
-				ToFrontend:    false,
-				EventType:     "",
-				AgentType:     "main",
-				ExtraMetadata: agentcfg.NovelStateKindJSON,
-			}).Error; err != nil {
-				return fmt.Errorf("write NovelState: %w", err)
 			}
 		}
 		// 边界标记

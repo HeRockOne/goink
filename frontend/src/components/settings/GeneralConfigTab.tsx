@@ -77,10 +77,15 @@ export default function GeneralConfigTab() {
         setUseHTTPS(s.api_use_https as boolean)
       }
       if (s?.exa_api_key) setExaApiKey(s.exa_api_key as string)
-      const savedFont = localStorage.getItem('global_display_font')
-      if (savedFont) {
-        setDisplayFont(savedFont)
-        applyFont(savedFont)
+      if (s?.display_font) {
+        setDisplayFont(s.display_font as string)
+        applyFont(s.display_font as string)
+      } else {
+        const savedFont = localStorage.getItem('global_display_font')
+        if (savedFont) {
+          setDisplayFont(savedFont)
+          applyFont(savedFont)
+        }
       }
     }).catch(() => {})
 
@@ -369,10 +374,15 @@ export default function GeneralConfigTab() {
             ))}
           </select>
           <button
-            onClick={() => {
+            onClick={async () => {
               const val = displayFont.trim()
               localStorage.setItem('global_display_font', val)
               applyFont(val)
+              try {
+                await app.SaveSettings({ display_font: val })
+              } catch (err) {
+                console.error('Failed to save font:', err)
+              }
               setFontSaved(true)
               setTimeout(() => setFontSaved(false), 2000)
             }}
