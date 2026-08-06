@@ -36,6 +36,8 @@ export default function ChatControls({
   const levels = selected?.ReasoningLevels?.length
     ? selected.ReasoningLevels
     : supportsThinking ? ['low', 'high', 'max'] : []
+  // 深度文本统一显示首字母大写（None/Low/Medium/High/Max），中英文一致不翻译
+  const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-2 text-xs shrink-0 select-none">
@@ -56,7 +58,7 @@ export default function ChatControls({
               { value: '', label: t('chat.thinkingOff') },
               ...levels.map(level => ({
                 value: level,
-                label: `${t('chat.thinking')} · ${level === 'low' ? t('chat.lowReasoning') : level === 'high' ? t('chat.highReasoning') : level === 'max' ? t('chat.maxReasoning') : level}`,
+                label: `${t('chat.thinking')} · ${cap(level)}`,
               })),
             ]}
             onChange={onSelectEffort}
