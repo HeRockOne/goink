@@ -31,12 +31,13 @@
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
 L2  Always skills   → ~2,088 tokens   always 模式 skill 全量正文
 L3  Skill catalog   →  ~1,150 tokens   auto 模式 skill 的 name+description 目录
-L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
+L4  NovelState      → 请求尾部动态注入  小说状态快照（存 session.extra_metadata，请求时追加到消息末尾，不入消息历史）
 ```
 
-**固定前缀 = L1 + L2 + L3 + 工具定义（57 个 JSON）≈ 17,500 tokens**
-- `writeSystemMessages` **只在创建新 session（isNew）时执行**（`chat.go:172`）
+**固定前缀 = L1 + L2 + L3 + 工具定义（全量 JSON）≈ 20,899 tokens**（2026-08-06 实测 `fixed_prefix_tokens`）
+- `writeSystemMessages` **只在创建新 session（isNew）时执行**（`chat.go`）
 - 固定前缀写入 messages 表后**不再重写**，保证缓存稳定命中
+- `computePrefixHash` 只哈希前导 system 消息 + 工具名（尾部动态 NS 不参与，避免误报）
 
 ---
 
@@ -45,16 +46,16 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位置"，**通常覆盖所有历史消息**：
 
 ```
-请求1: [固定前缀][novelstate][user: 写一章][tool: read main-core-writing-kernel]...
-请求2: [固定前缀][novelstate][user: 写一章][tool: read main-core-writing-kernel][assistant: ...][tool: edit]...
+请求1: [固定前缀][历史][user: 写一章][tool: read main-core-writing-kernel][assistant][tool: edit][NS@尾部]
+请求2: [固定前缀][历史][user: 写一章][tool: read ...][assistant][tool: edit][user: 继续][NS@尾部]
          ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
          与请求1逐字节相同 → 全部命中（包括 read 的 skill、写过的正文、设定）
-         [assistant][tool edit] ← 新增 → miss
+         [user: 继续][NS] ← 新增 → miss
 ```
 
 **命中的是"前缀位置"，不是"内容查重"**：
 - 所有"位置靠前、内容未变"的历史消息都命中——读过的 skill、写过的设定、正文、对话
-- miss 的只有"本轮新追加的那一小段"（新 user 输入、新工具结果、新 read 内容）
+- miss 的只有"本轮新追加的那一小段"（新 user 输入、新工具结果、尾部动态 NS）
 
 ---
 
@@ -87,15 +88,22 @@ DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位�
 
 ```
 第1章...maintain→prepare
-第2章: [固定前缀][第1章全部历史][novelstate(新)][user: 写一章]
-       → 第1章全部历史命中 ✓，只有新 novelstate + user miss
+第2章: [固定前缀][第1章全部历史][user: 写一章][NS@请求尾部]
+       → 第1章全部历史命中 ✓，只有新 user + NS miss
 ```
 
-### 4.5 上下文快满：压缩 vs 新窗口
+### 4.5 子 agent（review/memory）→ 复用主会话前缀
+
+子 agent 请求 = 主会话固定前缀原文 + 尾部追加子 agent 身份/NovelState/指令（Anthropic fork 模式）：
+- review 紧跟主对话运行时，**首轮即命中主会话刚写热的前缀**（20K+）
+- 子 agent 内部工具循环前缀稳定，后续轮 99%+
+- 旧实现（子 agent 用自己的 identity 开头）每次全 miss（日志 `hit=0 miss=20482`）
+
+### 4.6 上下文快满：压缩 vs 新窗口
 
 | 操作 | 缓存影响 |
 |------|---------|
-| **压缩** | 重建系统消息 + 摘要（`compress.go:88` 热加载最新 skill）→ **那一次 miss**，之后新版本继续命中 |
+| **压缩** | 重建系统消息 + 摘要（热加载最新 skill）→ 压缩请求已做缓存对齐（与主循环相同 system+tools+历史，只在末尾追加压缩指令），**前缀命中、只 miss 压缩指令**；压缩后新版本首轮有一次性重建成本 |
 | **新开窗口** | 系统前缀用最新 skill → **首轮 miss**，之后恢复命中 |
 
 两者都会在"变更点"有一次缓存重建成本（几厘钱级），之后都正常。
@@ -104,14 +112,15 @@ DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位�
 
 ## 五、实测数据佐证
 
-测试报告（`docs/archive/billing-test-report.md`，商汤 sensenova-6.7-flash-lite）：
+2026-08-06（MiniMax M2.5，`D:\Goink\goink.log`）：
 
 ```
-Turn 1: hit= 20,480  miss= 1,262   → 首轮 94% 命中（同轮内多轮工具调用）
-Turn 4: hit=208,896  miss=25,896   → 89% 命中
+主会话轮内: hit 增量 19-24 万/轮, miss 300-8,000/轮 → 当轮命中 99.3-99.9%
+turn 首轮:  miss 4-5 万（旧实现 NS 清理导致；NS 动态注入后消失）
+子 agent:   旧实现全 miss 2 万/次；fork 模式后命中主前缀
 ```
 
-hit 持续增长，正是**历史消息（读过的 skill、写过的设定、正文）在持续命中**的体现。
+累计命中率 = `Σhit / (Σhit + Σmiss)` 全量口径（主+子 agent 请求都计入，与面板一致）。
 
 ---
 
@@ -121,8 +130,9 @@ hit 持续增长，正是**历史消息（读过的 skill、写过的设定、�
 2. **命中范围覆盖所有历史消息**，不止固定前缀——创作中累积的设定/正文/skill 内容恰是命中主体
 3. **门禁重复读 skill 命中**——第一次读的在缓存里，重复读只有"新追加那次" miss 一次
 4. **当前窗口改 skill 零影响**——热加载服务"下一次读取"，不破坏已固化的缓存前缀
-5. **唯一缓存重建点**：压缩（当前窗口）和新窗口（首轮），都是一次性成本
-6. **当前架构已是最优**：固定前缀 + 动态加载 + 追加式历史，完全匹配 DeepSeek 前缀缓存机制
+5. **消息历史必须纯 append-only**——任何删除/编辑（如旧 NS 快照清理）都会让前缀从删除位置起全部失效；动态状态（NS）走请求尾部注入
+6. **子 agent 复用主会话前缀（fork 模式）**——首轮命中主前缀，不再全 miss
+7. **命中率统计全量计入**（主+子 agent），消息级审计按 agent_type 分写，面板与状态栏口径一致
 
 ---
 

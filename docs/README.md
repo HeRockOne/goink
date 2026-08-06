@@ -77,5 +77,4 @@
 - 一次性的审计报告、测试报告、调研记录、讨论记录 → `archive/`
 - 描述系统当前设计的文档 → `architecture/`
 - 尚未实施或作为参考的方案 → `design/`
-- 已确定的架构决策 → `adr/`（写一次不再改，变更时新建 supersede）
-> 2026-08-06��������·�޸���GetSystemFonts �ֶ����� name ������ zh-CN ������֧�� .ttc��ȫ������ DB+localStorage ˫д��Tab �����ǿ��+ ����Э���ع���NS ��̬β��ע�롢�� agent ������ǰ׺��������ȫ���ھ���+ UI��usage ����߿�/��ֵ������/M Token ��λ��+ �Ž��޸���write ת����������״̬��+ append ��Ⱦ�޸�
+> 2026-08-06：字体链路修复（GetSystemFonts 手动解析 name 表优先 zh-CN 家族名支持 .ttc；全局字体 DB+localStorage 双写；Tab 发光加强）+ 缓存协议重构（NS 动态尾部注入、子 agent 复用主前缀、命中率全量口径）+ UI（usage 轨道边框/阈值进度条/M Token 单位）+ 门禁修复（write 转出重置字数状态）+ append 污染修复

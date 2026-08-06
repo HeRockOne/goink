@@ -61,7 +61,7 @@ go run ./tokencount
 L1  Identity        → 1,340 tokens   人设/流程/规范（agentcfg/identity.go）
 	L2  Always skills   → 2,146 tokens   always 模式 skill 全量正文
 	L3  Skill catalog   → 525+1,152 tokens   auto 模式 skill 的 name+description 目录（skills/ 8 auto + builtin 29 auto）
-L4  NovelState      → 动态注入       小说状态快照（放 user 消息之后，走缓存前缀外）
+L4  NovelState      → 请求尾部动态注入  小说状态快照（存 session.extra_metadata，请求时追加到消息末尾，不入消息历史）
 ```
 
 ### 三种 Mode 的注入策略（`internal/skill/types.go`）
@@ -75,7 +75,7 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 ### 关键设计
 
 1. **L1+L2+L3 = 稳定前缀**（约 3.2K tokens）→ 写入 messages 表，保证 Prompt Caching 命中
-2. **L4 NovelState 刻意排除在稳定前缀外** → 小说状态每轮变化，放后面避免破坏缓存前缀（`app/chat.go` 动态注入 + `internal/agent/agent.go` 的 `computePrefixHash`）
+2. **L4 NovelState 不入消息历史** → 存 `session.extra_metadata`，请求时由 `internal/agent/agent.go` 追加到消息末尾（动态尾部）。历史保持纯 append-only：NS 每轮变化只 miss NS 本身，且**不做快照清理**（旧实现 K=3 清理会让消息数组变化，从删除位置起全部 miss）
 3. **skill 正文不占常驻 token** → 29 个 auto skill 只注入 ~1,150 tokens 的目录，正文按需加载，这是省 token 的核心策略
 
 ---
@@ -84,7 +84,7 @@ L4  NovelState      → 动态注入       小说状态快照（放 user 消息�
 
 - **首轮**：~17,500 tokens 全部按未命中（全额）计费——首轮无缓存可命中
 - **后续轮次**：稳定前缀被复用命中缓存 → 按折扣价计费（DeepSeek 约 10%）
-- **实测命中率**：89-93%（商汤 sensenova-6.7-flash-lite，见 `archive/billing-test-report.md`）
+- **实测命中率**：主会话轮内 99%+；累计命中率受 turn 首轮（NS 更新）、子 agent 首轮（独立小上下文）影响。2026-08-06 起子 agent 复用主会话前缀（fork 模式），命中率统计全量计入（主+子），见 `design/cache-hit-fix-implementation.md`
 
 **结论**：工具定义虽是 80% 的注入大头，但作为稳定前缀，每轮命中缓存享受折扣，成本侧已被 Prompt Caching 抵消大部分。
 

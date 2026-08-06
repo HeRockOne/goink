@@ -36,6 +36,11 @@
 
 **循环重置**：完成一轮完整流程（single 的 maintain→prepare，或 batch 的 maintain→done→prepare）后，访问记录重置——第二轮创作不能利用上一轮的访问历史任意跳转。
 
+**字数校验（write 阶段转出）**：`set_phase("review")` 前强制检查：
+- 必须调用过 `get_chapter_list`（其返回的 `word_count_ok` 写入门禁状态），未检查则阻塞
+- `word_count_ok=false`（低于/高于用户设置的字数范围）则阻塞，AI 需扩写后重新检查
+- **进入 write 阶段时重置字数状态**（2026-08-06 修复）：上一章检查通过的 `word_count_ok` 不会带到本章——每章必须用本章的 `get_chapter_list` 结果（旧实现用布尔值跨章，上一章达标会放行本章未达标）
+
 ## 工作流程
 
 ### 单章模式（mode: single）

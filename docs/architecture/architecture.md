@@ -329,13 +329,13 @@ prepare(get_writing_context) → outline(edit outlines/)
 | main-core-writing-kernel | always | 核心调度（每对话自动注入） |
 | main-core-ai-communication-standard | always | 通信规范（每对话自动注入） |
 
-**41 个内置（`internal/skill/builtin/`，打包进 exe）：**
+**42 个内置（`internal/skill/builtin/`，打包进 exe）：**
 
 | 阶段 | Skill |
 |------|-------|
 | init（开书） | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
 | prepare（准备） | main-tech-common-sense-logic, main-tech-genre-templates, main-tech-book-outline, main-tech-brainstorm-composer（按需） |
-| outline（大纲） | main-tech-book-outline, main-tech-chapter-opening, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-emotional-arc, main-tech-opening-chapter |
+| outline（大纲） | main-tech-book-outline, main-tech-chapter-opening, main-tech-chapter-hook-enhanced, main-tech-chapter-title-design, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-emotional-arc, main-tech-opening-chapter |
 | write（正文） | main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration |
 | write后（自审） | main-tech-revision-pass, sub-tech-anti-ai-grade |
 | review（审稿） | sub-tech-review-standards（16 项判定） |
