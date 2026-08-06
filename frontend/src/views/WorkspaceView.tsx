@@ -360,7 +360,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         onDoubleClick={() => { WindowToggleMaximise(); setIsMaximised(prev => !prev) }}
       >
         <Logo className="h-7 w-7 ml-3" />
-        <span className="text-sm font-medium pl-2 glow-primary" style={{ letterSpacing: '0.15em' }}>
+        <span className="text-sm font-medium pl-2 glow-primary flex-1" style={{ letterSpacing: '0.15em' }}>
           {activeNovel?.title ?? 'Goink'}
           {currentVolume && <span className="text-xs text-muted-foreground/80 font-normal" style={{ letterSpacing: '0.1em' }}> · {currentVolume}</span>}
           {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">📖 动态叙事已展开</span>}
