@@ -10,7 +10,8 @@
 
 :root {
   --radius: 0.5rem;
-  font-family: system-ui, -apple-system, "Segoe UI", 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  font-family: var(--font-body);
   color: var(--foreground);
   background: var(--background);
   -webkit-font-smoothing: antialiased;

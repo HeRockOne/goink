@@ -447,7 +447,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
 
   const tabBtnClass = (active: boolean) =>
     `px-3 py-1 text-xs rounded transition-colors cursor-pointer ${
-      active ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+      active ? 'bg-muted text-foreground font-medium glow-primary' : 'text-muted-foreground hover:text-foreground'
     }`
 
   // 空状态
@@ -599,7 +599,6 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
       {/* v2 编辑器底部状态条 */}
       <div className="editor-statusbar">
         <span>{wordCountText(activeTab.content ?? '')}</span>
-        <span className={`w-1.5 h-1.5 rounded-full ${activeTab.isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
       </div>
     </main>
   )

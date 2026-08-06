@@ -38,6 +38,13 @@ export default function GeneralConfigTab() {
   const [exaKeySaved, setExaKeySaved] = useState(false)
   const [displayFont, setDisplayFont] = useState('')
   const [fontSaved, setFontSaved] = useState(false)
+  const [systemFonts, setSystemFonts] = useState<string[]>([])
+
+  function applyFont(font: string) {
+    const val = font || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif"
+    document.documentElement.style.setProperty('--font-display', val)
+    document.documentElement.style.setProperty('--font-body', val)
+  }
 
   useEffect(() => {
     app.GetAppConfig().then(cfg => {
@@ -69,9 +76,19 @@ export default function GeneralConfigTab() {
       if (s?.exa_api_key) setExaApiKey(s.exa_api_key as string)
       if (s?.display_font) {
         setDisplayFont(s.display_font as string)
-        document.documentElement.style.setProperty('--font-display', (s.display_font as string) || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif")
+        applyFont(s.display_font as string)
       }
     }).catch(() => {})
+
+    // 读取系统字体
+    try {
+      if ('queryLocalFonts' in navigator) {
+        ;(navigator as any).queryLocalFonts().then((fonts: any[]) => {
+          const names = [...new Set(fonts.map((f: any) => f.family).filter(Boolean))].sort()
+          setSystemFonts(names)
+        }).catch(() => {})
+      }
+    } catch (_) {}
     app.GetLoggingEnabled().then(v => setLoggingEnabled(v)).catch(() => {})
     app.GetAPIUseHTTPS().then(v => setUseHTTPS(v)).catch(() => {})
     app.IsWebDAVRunning().then(r => setWebdavRunning(r)).catch(() => {})
@@ -340,19 +357,23 @@ export default function GeneralConfigTab() {
           <span className="text-sm">文</span>
           显示字体
         </label>
-        <p className="text-[11px] text-muted-foreground">标题和正文的显示字体。输入系统已安装的字体名称，留空使用默认楷体。</p>
+        <p className="text-[11px] text-muted-foreground">全局字体，影响所有界面文字。选择系统已安装字体，留空使用默认楷体。</p>
         <div className="flex items-center gap-2">
-          <input
+          <select
             value={displayFont}
             onChange={e => { setDisplayFont(e.target.value); setFontSaved(false) }}
-            placeholder="KaiTi, Noto Serif SC, serif（留空=默认）"
-            className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none"
-          />
+            className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none"
+          >
+            <option value="">默认（楷体）</option>
+            {systemFonts.map(f => (
+              <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+            ))}
+          </select>
           <button
             onClick={async () => {
               try {
                 await app.SaveSettings({ display_font: displayFont.trim() })
-                document.documentElement.style.setProperty('--font-display', displayFont.trim() || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif")
+                applyFont(displayFont.trim())
                 setFontSaved(true)
                 setTimeout(() => setFontSaved(false), 2000)
               } catch (err) {
