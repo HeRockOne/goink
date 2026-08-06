@@ -2,7 +2,11 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 
 	"novel/internal/config"
 	"novel/internal/storage"
@@ -50,6 +54,47 @@ func (a *App) UpdateDataDir(newPath string) error {
 	a.initWithConfig(cfg)
 	a.logger.Info("数据目录已更改", "data_dir", config.DataDirPath())
 	return nil
+}
+
+// GetSystemFonts 返回系统已安装字体列表（Windows 读取 C:\Windows\Fonts）。
+func (a *App) GetSystemFonts() []string {
+	fontDirs := []string{
+		filepath.Join(os.Getenv("WINDIR"), "Fonts"),
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts"),
+	}
+	seen := map[string]bool{}
+	var result []string
+	for _, dir := range fontDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			ext := strings.ToLower(filepath.Ext(name))
+			if ext != ".ttf" && ext != ".otf" && ext != ".ttc" {
+				continue
+			}
+			// 从文件名推断字体族名：去掉扩展名，替换连字符/下划线为空格
+			family := strings.TrimSuffix(name, filepath.Ext(name))
+			family = strings.ReplaceAll(family, "-", " ")
+			family = strings.ReplaceAll(family, "_", " ")
+			family = strings.TrimSpace(family)
+			if family == "" || seen[family] {
+				continue
+			}
+			seen[family] = true
+			result = append(result, family)
+		}
+	}
+	sort.Strings(result)
+	if len(result) == 0 {
+		result = []string{"KaiTi", "SimSun", "SimHei", "Microsoft YaHei", "FangSong"}
+	}
+	return result
 }
 
 // GetPlatform 返回平台信息，供前端决定默认路径等行为。

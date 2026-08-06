@@ -447,7 +447,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
 
   const tabBtnClass = (active: boolean) =>
     `px-3 py-1 text-xs rounded transition-colors cursor-pointer ${
-      active ? 'bg-muted text-foreground font-medium tab-btn-active' : 'text-muted-foreground hover:text-foreground'
+      active ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
     }`
 
   // 空状态

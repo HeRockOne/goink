@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
-import { SaveGitConfig, SetChapterWordLimit } from '@/lib/wailsjs/go/app/App'
+import { SaveGitConfig, SetChapterWordLimit, GetSystemFonts } from '@/lib/wailsjs/go/app/App'
 import { useApp, type novel } from '@/hooks/useApp'
 
 export default function GeneralConfigTab() {
@@ -39,6 +39,9 @@ export default function GeneralConfigTab() {
   const [displayFont, setDisplayFont] = useState('')
   const [fontSaved, setFontSaved] = useState(false)
   const [systemFonts, setSystemFonts] = useState<string[]>([])
+  const [fontSize, setFontSize] = useState(() => {
+    return parseInt(localStorage.getItem('global_font_size') || '15')
+  })
 
   function applyFont(font: string) {
     const val = font || "'KaiTi','STKaiti','楷体','Noto Serif SC',serif"
@@ -80,23 +83,10 @@ export default function GeneralConfigTab() {
       }
     }).catch(() => {})
 
-    // 通用字体列表（系统字体 + 常见中文字体）
-    const commonFonts = [
-      'KaiTi', 'STKaiti', 'SimSun', 'FangSong', 'STSong', 'SimHei', 'Microsoft YaHei',
-      'Microsoft JhengHei', 'Noto Serif SC', 'Noto Sans SC', 'Source Han Serif SC',
-      'Source Han Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'WenQuanYi Micro Hei',
-      'Ubuntu', 'serif', 'sans-serif',
-    ]
-    setSystemFonts(commonFonts)
-    // 尝试读取更多系统字体（queryLocalFonts 需用户手势）
-    try {
-      if ('queryLocalFonts' in navigator) {
-        ;(navigator as any).queryLocalFonts().then((fonts: any[]) => {
-          const names = [...new Set(fonts.map((f: any) => f.family).filter(Boolean))].sort()
-          if (names.length > 0) setSystemFonts(names)
-        }).catch(() => {})
-      }
-    } catch (_) {}
+    // 读取系统已安装字体
+    GetSystemFonts().then((fonts: string[]) => {
+      if (fonts && fonts.length > 0) setSystemFonts(fonts)
+    }).catch(() => {})
     app.GetLoggingEnabled().then(v => setLoggingEnabled(v)).catch(() => {})
     app.GetAPIUseHTTPS().then(v => setUseHTTPS(v)).catch(() => {})
     app.IsWebDAVRunning().then(r => setWebdavRunning(r)).catch(() => {})
@@ -406,17 +396,17 @@ export default function GeneralConfigTab() {
             type="range"
             min="12"
             max="24"
-            value={parseInt(document.documentElement.style.getPropertyValue('--font-size') || '15')}
+            value={fontSize}
             onChange={e => {
-              const v = e.target.value + 'px'
-              document.documentElement.style.setProperty('--font-size', v)
-              localStorage.setItem('global_font_size', v)
+              const v = parseInt(e.target.value)
+              setFontSize(v)
+              const px = v + 'px'
+              document.documentElement.style.setProperty('--font-size', px)
+              localStorage.setItem('global_font_size', px)
             }}
             className="flex-1 h-8"
           />
-          <span className="text-xs text-muted-foreground w-8 text-right">
-            {document.documentElement.style.getPropertyValue('--font-size') || '15px'}
-          </span>
+          <span className="text-xs text-muted-foreground w-8 text-right">{fontSize}px</span>
         </div>
       </div>
 
