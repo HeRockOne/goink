@@ -58,7 +58,7 @@ export default function ChatControls({
               { value: '', label: t('chat.thinkingOff') },
               ...levels.map(level => ({
                 value: level,
-                label: `${t('chat.thinking')} · ${cap(level)}`,
+                label: cap(level),
               })),
             ]}
             onChange={onSelectEffort}
