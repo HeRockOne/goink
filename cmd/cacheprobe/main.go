@@ -366,8 +366,34 @@ func readSkill(name string) play {
 	}
 }
 
-// gateScript 一轮创作的工具剧本，严格按门禁配置 single 模式的
-// prepare → outline → write → review → maintain 完整流程 + main-core-writing-kernel 调度。
+// initScript 开书（init）流程：加载 5 个技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
+// （对照 main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
+func initScript() []play {
+	return []play{
+		readSkill("main-core-init-phase"),
+		readSkill("main-tech-genre-templates"),
+		readSkill("main-tech-book-outline"),
+		readSkill("main-tech-character-design"),
+		readSkill("main-tech-world-building-system"),
+		{tool: "create_location", args: `{"name":"青云宗","type":"门派","desc":"主角所在宗门"}`, result: `{"id":1}`},
+		{tool: "create_character", args: `{"name":"陆沉","desc":"主角","location_id":1}`, result: `{"id":1}`},
+		{tool: "create_character", args: `{"name":"柳雪","desc":"师姐","location_id":1}`, result: `{"id":2}`},
+		{tool: "create_lore", args: `{"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}`, result: `{"id":1}`},
+		{tool: "create_item", args: `{"name":"聚气丹","owner_id":1,"narrative_role":"道具"}`, result: `{"id":3}`},
+		{tool: "create_timeline_entry", args: `{"title":"暗流涌动","category":"foreshadowing","target_chapter":8,"importance":"high"}`, result: `{"id":5}`},
+		{tool: "create_preference", args: `{"category":"style","content":"文风简练、细节丰富"}`, result: `{"id":1}`},
+		{tool: "create_story_arc", args: `{"name":"第一卷·崛起","arc_type":"volume","start_chapter":1,"end_chapter":20,"description":"主角入宗崛起"}`, result: `{"id":1}`},
+		{tool: "edit", args: editArgs("book-outline.md", "# 全书总纲\n核心矛盾：主角从废柴逆袭对抗宗门暗流\n主角成长弧线：入宗→觉醒→崛起\n结局方向：登顶青云\n篇幅规划：3 卷 60 章"), result: "写入 book-outline.md"},
+		{tool: "edit", args: editArgs("book-outline.md", "## 第一卷规划\n第 1-20 章：入宗与崛起，暗流初现\n爽点分布：每章至少 1 个\n伏笔主线：暗流涌动（第 8 章回收）"), result: "补充 book-outline.md 卷规划"},
+		{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
+	}
+}
+
+// gateScript 一轮创作的完整工具剧本，严格对照 main-core-writing-kernel 阶段指令：
+// prepare（9 required 查询 + lore/items + 3 技能）→ outline（7 技能 + 2 次大纲 edit）
+// → write（11 技能全量 + 6 段正文 + 字数校验重写 + 物品记录）→ 自审（2 技能 + 1 次修改）
+// → review（run_subagent + 自查重读 + 3 处修复 + 复查）→ maintain（7 查询 + 2 搜索
+// + 11 项更新 + goink.md 指纹 + 2 技能）
 func gateScript(turn int) []play {
 	ch := turn + 1
 	return []play{
@@ -388,25 +414,33 @@ func gateScript(turn int) []play {
 		{tool: "get_items", args: `{}`, result: `{"items":[{"id":3,"name":"聚气丹","owner":"陆沉","narrative_role":"道具"}]}`},
 		{tool: "set_phase", args: `{"phase":"outline"}`, result: `{"success":true,"phase":"outline"}`},
 
-		// 阶段 outline：加载 7 个技能 + 写大纲（require: edit），随后推进
-		readSkill("main-tech-emotion-injection"),
+		// 阶段 outline：加载 10 个技能 + 写大纲（require: edit），随后推进
+		readSkill("main-tech-book-outline"),
+		readSkill("main-tech-chapter-opening"),
 		readSkill("main-tech-chapter-hook-enhanced"),
+		readSkill("main-tech-chapter-title-design"),
 		readSkill("main-tech-maliang-method"),
 		readSkill("main-tech-dialogue-subtext"),
+		readSkill("main-tech-emotional-arc"),
+		readSkill("main-tech-emotion-injection"),
 		readSkill("main-tech-chapter-title-hooks"),
-		readSkill("main-tech-chapter-title-design"),
 		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 
-		// 阶段 write：加载 6 个技能 + 分段写正文 3000 字（6 次 edit）+ 字数校验（首次不达标、补写后达标）+ 记录物品
+		// 阶段 write：加载 11 个技能全量 + 分段写正文 3000 字（6 次 edit）+ 字数校验（首次不达标、补写后达标）+ 记录物品
 		readSkill("main-tech-show-dont-tell"),
 		readSkill("main-tech-info-density"),
 		readSkill("main-tech-pov-purity"),
 		readSkill("main-tech-anti-ai-writing"),
+		readSkill("main-tech-shuangdian-pacing"),
+		readSkill("main-tech-climax-scene"),
+		readSkill("main-tech-foreshadow-cycle"),
+		readSkill("main-tech-pacing-control"),
+		readSkill("main-tech-scene-beats"),
+		readSkill("main-tech-emotion-injection"),
 		readSkill("main-tech-word-count-calibration"),
-		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[0]), result: "写入 500 字，当前 500/3000"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[1]), result: "写入 500 字，当前 1000/3000"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[2]), result: "写入 500 字，当前 1500/3000"},
@@ -418,6 +452,11 @@ func gateScript(turn int) []play {
 		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":3012,"word_count_ok":true,"min_words":2500,"max_words":4000}`, ch)},
 		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
 		{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`},
+
+		// 阶段 write 后自审：2 技能 + 1 次修改（kernel 阶段技能表 write后 行）
+		readSkill("main-tech-revision-pass"),
+		readSkill("sub-tech-anti-ai-grade"),
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "自审修改：润色两处过渡，去除 AI 味用词。"), result: "自审完成"},
 
 		// 阶段 review：run_subagent 审稿（require: run_subagent）+ 自查重读 + 3 处修复 + 字数复查
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(ch)},
@@ -445,7 +484,12 @@ func gateScript(turn int) []play {
 		{tool: "update_character", args: `{"character_id":1,"status":"突破金丹","location_id":5}`, result: "已更新"},
 		{tool: "update_arc_node", args: `{"node_id":3,"status":"done"}`, result: "已更新"},
 		{tool: "create_timeline_entry", args: `{"title":"仇敌结怨","category":"foreshadowing","target_chapter":12,"importance":"high"}`, result: "已创建"},
+		{tool: "update_timeline_entry", args: `{"entry_id":5,"resolved_chapter_id":` + fmt.Sprintf("%d", ch) + `}`, result: "已回收伏笔"},
 		{tool: "update_reader_perspective_entry", args: `{"entry_id":7,"content":"玉佩与陈昊身世有关","type":"suspense"}`, result: "已更新"},
+		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"玉佩易主给林雪"}`, result: "已记录物品流转"},
+		{tool: "update_character_relationship", args: `{"character_a":1,"character_b":2,"relation":"并肩作战","relation_describe":"秘境中共患难"}`, result: "已更新角色关系"},
+		readSkill("main-tech-anti-repetition"),
+		readSkill("main-tech-foreshadow-cycle"),
 		{tool: "edit", args: editArgs("goink.md", fmt.Sprintf("第 %d 章完成：陈昊突破金丹，玉佩新线索。当前主线：登天之路。", ch)), result: "已更新 goink.md"},
 		{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
 	}
@@ -527,6 +571,31 @@ func compressionSummary() string {
 func buildGate(mode string, cache *TokenCache) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
+
+	// 首轮：init 开书流程（建世界观/角色/弧线 + 写总纲 + 建卷），
+	// 之后才进入 prepare 循环。NS 首次注入跟随首轮 user。
+	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
+	cur = append(cur, sysMsg(novelState(0)))
+	for i, p := range initScript() {
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		cur = append(cur,
+			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+		)
+	}
+	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
+	req := append(append([]map[string]any{}, history...), cur...)
+	hit, miss := cache.Step(req)
+	results = append(results, [2]int64{hit, miss})
+	if mode == "now" {
+		history = append(history, cur...)
+	} else {
+		legacyCur := append([]map[string]any{}, cur[0])
+		legacyCur = append(legacyCur, cur[2:]...) // 跳过 cur[1]（NS）
+		history = append(history, legacyCur...)
+	}
 
 	for turn := 1; turn <= 5; turn++ {
 		// 当轮动态消息：user + NS（两种协议都紧跟 user）
