@@ -338,8 +338,9 @@ func initBody() {
 		b.WriteRune(runes[rng.Intn(len(runes))])
 	}
 	body := b.String()
-	chapterBody = []string{
-		body[0:1000], body[1000:2000], body[2000:3000],
+	chapterBody = make([]string, 6)
+	for i := 0; i < 6; i++ {
+		chapterBody[i] = body[i*500 : (i+1)*500]
 	}
 }
 
@@ -382,32 +383,49 @@ func gateScript(turn int) []play {
 		{tool: "get_preferences", args: `{}`, result: `{"preferences":[{"category":"style","content":"快节奏、斗法细节"},{"category":"taboo","content":"禁止主角圣母"}]}`},
 		readSkill("main-tech-common-sense-logic"),
 		readSkill("main-tech-genre-templates"),
+		readSkill("main-tech-book-outline"),
+		{tool: "get_lore", args: `{}`, result: `{"lore":[{"id":1,"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}]}`},
+		{tool: "get_items", args: `{}`, result: `{"items":[{"id":3,"name":"聚气丹","owner":"陆沉","narrative_role":"道具"}]}`},
 		{tool: "set_phase", args: `{"phase":"outline"}`, result: `{"success":true,"phase":"outline"}`},
 
-		// ── outline：加载 5 个大纲技能 + 写大纲（require: edit）──
+		// 阶段 outline：加载 7 个技能 + 写大纲（require: edit），随后推进
 		readSkill("main-tech-emotion-injection"),
 		readSkill("main-tech-chapter-hook-enhanced"),
 		readSkill("main-tech-maliang-method"),
 		readSkill("main-tech-dialogue-subtext"),
 		readSkill("main-tech-chapter-title-hooks"),
+		readSkill("main-tech-chapter-title-design"),
+		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
-		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 陈昊进入秘境\n2. 遭遇仇敌\n3. 突破金丹\n\n## 章末钩子\n玉佩发出异光"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
+		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 
-		// ── write：加载 4 个正文技能 + 写正文 3000 字（require: edit, get_chapter_list）+ 记录物品 ──
+		// 阶段 write：加载 6 个技能 + 分段写正文 3000 字（6 次 edit）+ 字数校验（首次不达标、补写后达标）+ 记录物品
 		readSkill("main-tech-show-dont-tell"),
 		readSkill("main-tech-info-density"),
 		readSkill("main-tech-pov-purity"),
 		readSkill("main-tech-anti-ai-writing"),
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[0]), result: "写入 1000 字，当前 1000/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[1]), result: "写入 1000 字，当前 2000/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[2]), result: "写入 1000 字，当前 3000/3000"},
-		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"陈昊获得玉佩"}`, result: "已记录"},
+		readSkill("main-tech-word-count-calibration"),
+		readSkill("main-type-xuanhuan-cultivation"),
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[0]), result: "写入 500 字，当前 500/3000"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[1]), result: "写入 500 字，当前 1000/3000"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[2]), result: "写入 500 字，当前 1500/3000"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[3]), result: "写入 500 字，当前 2000/3000"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[4]), result: "写入 500 字，当前 2500/3000"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[5]), result: "写入 500 字，当前 3000/3000"},
+		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":2600,"word_count_ok":false,"min_words":2500,"max_words":4000}`, ch)},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: "补写 400 字，当前 3000/3000"},
+		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":3012,"word_count_ok":true,"min_words":2500,"max_words":4000}`, ch)},
+		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
 		{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`},
 
-		// ── review：run_subagent 审稿（require: run_subagent）──
+		// 阶段 review：run_subagent 审稿（require: run_subagent）+ 自查重读 + 3 处修复 + 字数复查
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(ch)},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "（根据审稿意见修复：段 3 节奏放缓，补现场描写 120 字）"), result: "已修复"},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBody[0] + chapterBody[1]},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：调整对话节奏，补充情绪铺垫。"), result: "已修复问题 1"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：前文伏笔在此回收，强化悬念。"), result: "已修复问题 2"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：删减冗余描写，收紧节奏。"), result: "已修复问题 3"},
+		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":2980,"word_count_ok":true,"min_words":2500,"max_words":4000}`, ch)},
 		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
 
 		// ── maintain：7 项状态查询 + 搜索防遗忘 + 6 类更新 + goink.md（require 13 项）──
@@ -533,11 +551,14 @@ func buildGate(mode string, cache *TokenCache) [][2]int64 {
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
 
-		// 更新历史：now 含 NS；legacy 不含 NS（NS 未落库）
+		// 更新历史：now 含 NS（落库）；legacy 不含 NS（真实修复前：NS 不落库，
+		// user 与工具结果正常落库，请求时 NS 临时拼在尾部）
 		if mode == "now" {
 			history = append(history, cur...)
 		} else {
-			history = append(history, cur[1:]...)
+			legacyCur := append([]map[string]any{}, cur[0])
+			legacyCur = append(legacyCur, cur[2:]...) // 跳过 cur[1]（NS）
+			history = append(history, legacyCur...)
 		}
 	}
 	return results
