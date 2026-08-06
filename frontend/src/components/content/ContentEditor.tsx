@@ -11,7 +11,8 @@ interface Props {
 }
 
 const LIGHT_THEME = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
+  '&': { height: '100%', backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
+  '.cm-scroller': { flex: '1 1 auto', overflow: 'auto' },
   '.cm-content': { fontFamily: 'var(--font-body)', fontSize: 'var(--font-size, 17px)', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
@@ -21,7 +22,8 @@ const LIGHT_THEME = EditorView.theme({
 })
 
 const DARK_THEME = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
+  '&': { height: '100%', backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
+  '.cm-scroller': { flex: '1 1 auto', overflow: 'auto' },
   '.cm-content': { fontFamily: 'var(--font-body)', fontSize: 'var(--font-size, 17px)', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
