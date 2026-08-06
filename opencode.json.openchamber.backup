@@ -1,0 +1,414 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "vyceai-xiuhe": {
+      "models": {
+        "gemini-3.6-flash": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "minimax-m3": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "mimo-v2.5-pro": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://vyceai.com/v1",
+        "apiKey": "{env:VYCEAI_XIUHE_API_KEY}",
+        "setCacheKey": true
+      }
+    },
+    "modelscope": {
+      "models": {
+        "deepseek-ai/DeepSeek-V4-Flash": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://api-inference.modelscope.cn/v1",
+        "apiKey": "{env:MODELSCOPE_API_KEY}",
+        "setCacheKey": true
+      }
+    },
+    "nvidia": {
+      "models": {
+        "stepfun-ai/step-3.7-flash": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "poolside/laguna-xs-2.1": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "openai/gpt-oss-120b": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://integrate.api.nvidia.com/v1",
+        "apiKey": "{env:NVIDIA_API_KEY}",
+        "setCacheKey": true
+      }
+    },
+    "cunai": {
+      "models": {
+        "deepseek-v4-flash": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "MiniMax-M3": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "deepseek-v4-pro": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://www.cun.ai/v1",
+        "apiKey": "{env:CUNAI_API_KEY}",
+        "setCacheKey": true
+      }
+    },
+    "shangtang": {
+      "models": {
+        "sensenova-6.7-flash-lite": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "deepseek-v4-flash": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://token.sensenova.cn/v1",
+        "apiKey": "{env:SHANGTANG_API_KEY}",
+        "setCacheKey": true
+      }
+    },
+    "yjm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "yjm",
+      "options": {
+        "baseURL": "https://api.yjs.im/v1"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "deepseek-v4-flash"
+        },
+        "mimo-v2.5": {
+          "name": "mimo-v2.5"
+        },
+        "minimax-m3": {
+          "name": "minimax-m3"
+        },
+        "minimax-m2.7-highspeed": {
+          "name": "minimax-m2.7-highspeed"
+        },
+        "deepseek-v4-pro": {
+          "name": "deepseek-v4-pro"
+        }
+      }
+    },
+    "peezy": {
+      "models": {
+        "deepseek-v4-flash-0731": {
+          "variants": {
+            "medium": {
+              "reasoningEffort": "medium"
+            },
+            "max": {
+              "reasoningEffort": "max"
+            },
+            "none": {
+              "reasoningEffort": "none"
+            },
+            "low": {
+              "reasoningEffort": "low"
+            },
+            "high": {
+              "reasoningEffort": "high"
+            }
+          },
+          "interleaved": {
+            "field": "reasoning_content"
+          },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        }
+      },
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://api.p0.systems/api/agents/v1",
+        "apiKey": "{env:PEEZY_API_KEY}",
+        "setCacheKey": true
+      }
+    }
+  }
+}

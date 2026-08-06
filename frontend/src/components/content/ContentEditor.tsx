@@ -11,7 +11,7 @@ interface Props {
 }
 
 const LIGHT_THEME = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)', height: '100%' },
+  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
   '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
@@ -21,7 +21,7 @@ const LIGHT_THEME = EditorView.theme({
 })
 
 const DARK_THEME = EditorView.theme({
-  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)', height: '100%' },
+  '&': { backgroundColor: 'var(--editor-surface)', color: 'var(--foreground)' },
   '.cm-content': { fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif", fontSize: '17px', lineHeight: '30px', padding: '0 16px' },
   '.cm-gutters': { display: 'none' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
@@ -42,24 +42,26 @@ export default function ContentEditor({ value, onChange, onMount, editorTheme }:
   ]
 
   return (
-    <CodeMirror
-      value={value}
-      height="100%"
-      theme={editorTheme?.includes('dark') ? 'dark' : 'light'}
-      extensions={extensions}
-      onChange={onChange}
-      onCreateEditor={handleCreate}
-      basicSetup={{
-        lineNumbers: false,
-        foldGutter: false,
-        highlightActiveLine: false,
-        highlightActiveLineGutter: false,
-        bracketMatching: false,
-        closeBrackets: false,
-        autocompletion: false,
-        indentOnInput: false,
-        syntaxHighlighting: true,
-      }}
-    />
+    <div className="h-full overflow-hidden">
+      <CodeMirror
+        value={value}
+        height="100%"
+        theme={editorTheme?.includes('dark') ? 'dark' : 'light'}
+        extensions={extensions}
+        onChange={onChange}
+        onCreateEditor={handleCreate}
+        basicSetup={{
+          lineNumbers: false,
+          foldGutter: false,
+          highlightActiveLine: false,
+          highlightActiveLineGutter: false,
+          bracketMatching: false,
+          closeBrackets: false,
+          autocompletion: false,
+          indentOnInput: false,
+          syntaxHighlighting: true,
+        }}
+      />
+    </div>
   )
 }

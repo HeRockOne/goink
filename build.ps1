@@ -1,7 +1,7 @@
 # Goink Build + Deploy Script
 Write-Host "=== Goink Build + Deploy ===" -ForegroundColor Cyan
 
-$ts = Get-Date -Format "yyyyMMdd-HHmmss"
+$ts = Get-Date -Format "yyyyMMdd-HH-mm"
 $exeName = "goink-$ts.exe"
 
 # Step 1: Build
