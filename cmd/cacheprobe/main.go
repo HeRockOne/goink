@@ -300,16 +300,30 @@ func readFilesText(names []string) string {
 }
 
 func fixedSystem() []map[string]any {
-	return []map[string]any{
-		sysMsg(identityText),
-		sysMsg(alwaysText),
-		sysMsg(catalogText),
+	// 与真实 writeSystemMessages 一致：空串跳过（identity/always/catalog 各自独立消息）
+	var msgs []map[string]any
+	for _, c := range []string{identityText, alwaysText, catalogText} {
+		if c != "" {
+			msgs = append(msgs, sysMsg(c))
+		}
 	}
+	return msgs
 }
 
-// NS 快照：主体固定 + 轮次编号变化（模拟 goink.md 状态演进）
+// novelState 模拟 NS（无 DB 环境的近似）：结构对齐真实 NovelState（书名/类型/简介/进度/章节指纹），
+// 指纹用固定大小的占位文本模拟 goink.md 最近 1500 字符。真实 NS 含 DB 实时数据，无法离线复现；
+// 作为 now/legacy 相对比较，两种协议用同一近似，结论方向不受影响。
 func novelState(turn int) string {
-	return fmt.Sprintf("【小说基础信息】\n书名：焚天志\n类型：东方玄幻\n简介：少年秦烈身怀异火，踏入万界，快意恩仇。\n\n【故事状态】\n已推进至第 %d 章。主线：宗门之争。最近提交：第 %d 章完成。", turn, turn)
+	var b strings.Builder
+	b.WriteString("【小说基础信息】\n书名：焚天志\n类型：东方玄幻\n简介：少年秦烈身怀异火，踏入万界，快意恩仇。\n")
+	fmt.Fprintf(&b, "当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", turn)
+	b.WriteString("\n【章节指纹（最近）】\n")
+	// 模拟 goink.md 最近 1500 字符指纹（每章 6 段指纹，约 120 字符/章）
+	for i := 1; i <= 12; i++ {
+		fmt.Fprintf(&b, "### 第%d章 %s\n\n开篇：%s\n\n场景：%s\n\n情感：%s\n\n对白：%s\n\n钩子：%s\n\n感官：%s\n\n",
+			i, "秘境初探", "动作开场", "宗门演武", "紧张", "冲突对话", "悬念", "视觉听觉")
+	}
+	return b.String()
 }
 
 // ---- 短问答场景 ----
@@ -616,7 +630,7 @@ func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int
 	// 消息拆分与真实一致：主历史 → [身份（常量）] → [sub-* 技能（常量，review 自动注入）] → [NS（动态）] → [指令]
 	sub := append(append([]map[string]any{}, history...), cur...)
 	sub = append(sub,
-		map[string]any{"role": "system", "content": "你是审稿人（review agent），基于以下上下文审阅本章。"},
+		map[string]any{"role": "system", "content": agentcfg.AgentIdentity(agentcfg.ReviewAgent)},
 	)
 	if subSkillsText != "" {
 		sub = append(sub, map[string]any{"role": "system", "content": subSkillsText})
