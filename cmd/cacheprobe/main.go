@@ -27,6 +27,7 @@ import (
 	"novel/internal/agentcfg"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
+	"novel/internal/platform"
 	"novel/internal/skill"
 )
 
@@ -310,20 +311,61 @@ func fixedSystem() []map[string]any {
 	return msgs
 }
 
-// novelState 模拟 NS（无 DB 环境的近似）：结构对齐真实 NovelState（书名/类型/简介/进度/章节指纹），
-// 指纹用固定大小的占位文本模拟 goink.md 最近 1500 字符。真实 NS 含 DB 实时数据，无法离线复现；
-// 作为 now/legacy 相对比较，两种协议用同一近似，结论方向不受影响。
+// novelState 模拟 NS。优先读取真实数据（与真实 NovelState 同源）：
+//   - goink.md 尾部 1500 字符指纹：从 platform.DataDir()/novels/{id}/goink.md 读取（真实文件）
+//   - 书名/类型/简介/进度：真实从 DB 读；无 DB 环境用占位（DB 部分无法离线复现）
+// 读取失败时回退结构化占位，保证两种协议相对比较不受影响。
 func novelState(turn int) string {
 	var b strings.Builder
 	b.WriteString("【小说基础信息】\n书名：焚天志\n类型：东方玄幻\n简介：少年秦烈身怀异火，踏入万界，快意恩仇。\n")
 	fmt.Fprintf(&b, "当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", turn)
+
+	// 真实 goink.md 指纹（若存在）
+	real := readRealGoinkFingerprint()
 	b.WriteString("\n【章节指纹（最近）】\n")
-	// 模拟 goink.md 最近 1500 字符指纹（每章 6 段指纹，约 120 字符/章）
+	if real != "" {
+		b.WriteString(real)
+		if !strings.HasSuffix(real, "\n") {
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+
+	// 回退占位指纹（每章 6 段指纹，约 120 字符/章，模拟 1500 字符上限）
 	for i := 1; i <= 12; i++ {
 		fmt.Fprintf(&b, "### 第%d章 %s\n\n开篇：%s\n\n场景：%s\n\n情感：%s\n\n对白：%s\n\n钩子：%s\n\n感官：%s\n\n",
 			i, "秘境初探", "动作开场", "宗门演武", "紧张", "冲突对话", "悬念", "视觉听觉")
 	}
 	return b.String()
+}
+
+// readRealGoinkFingerprint 读取真实 goink.md 尾部最近 1500 字符（与 agentcfg.NovelState 的 maxGoinkChars 一致）。
+// 查找路径：GOINK_DATA_DIR 或 exe 目录或 ~/Goink 下的 novels/{1..N}/goink.md（取存在的一本）。
+func readRealGoinkFingerprint() string {
+	dir := platform.DataDir()
+	// 遍历 novels/ 下的小说完，找第一本含 goink.md 的
+	novelsDir := filepath.Join(dir, "novels")
+	entries, err := os.ReadDir(novelsDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		p := filepath.Join(novelsDir, e.Name(), "goink.md")
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		s := string(b)
+		r := []rune(s)
+		if len(r) > 1500 {
+			r = r[len(r)-1500:]
+		}
+		return string(r)
+	}
+	return ""
 }
 
 // ---- 短问答场景 ----
