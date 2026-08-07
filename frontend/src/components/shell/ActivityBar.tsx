@@ -38,7 +38,7 @@ export default function ActivityBar({ activeId, onSelect }: Props) {
   const { t } = useTranslation()
 
   return (
-    <nav className="activity-bar flex flex-col py-2 border-r bg-sidebar backdrop-blur-md select-none cursor-default w-[56px] items-center">
+    <nav className="activity-bar flex flex-col py-2 border-r bg-sidebar backdrop-blur-md select-none cursor-default w-[56px] items-center overflow-y-auto overflow-hidden">
       <div className="h-px bg-border mx-2 mb-1" />
       {activities.map((a, i) => {
         const isActive = a.id === activeId
