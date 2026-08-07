@@ -87,6 +87,14 @@ func runPair(name string, fn func(string, *TokenCache) [][2]int64) ScenarioResul
 	return ScenarioResult{Name: name, NowHit: nH, NowMiss: nM, LegacyHit: lH, LegacyMiss: lM}
 }
 
+// phaseReminder 模拟 set_phase 后的 system-reminder 注入（真实 agent.go:483：appendMsg("user", <system-reminder>结果JSON)）。
+func phaseReminder(phase string, ok bool) map[string]any {
+	if ok {
+		return userMsg("<system-reminder>\n{\"success\":true,\"phase\":\"" + phase + "\",\"status\":\"active\"}\n</system-reminder>")
+	}
+	return userMsg("<system-reminder>\n{\"success\":false,\"error\":\"require 未满足\",\"current_phase\":\"" + phase + "\"}\n</system-reminder>")
+}
+
 // buildGateWithRounds 按指定轮数跑门禁场景。
 func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 {
 	results := [][2]int64{}
@@ -102,6 +110,9 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
 			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
 		)
+		if p.tool == "set_phase" {
+			cur = append(cur, phaseReminder(p.args, true))
+		}
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -130,6 +141,9 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 				results = append(results, subResults...)
 			}
 			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
+			if p.tool == "set_phase" {
+				cur = append(cur, phaseReminder(p.args, true))
+			}
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)

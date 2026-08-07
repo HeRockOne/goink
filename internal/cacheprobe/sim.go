@@ -50,26 +50,54 @@ type TokenCache struct {
 	miss      int64 // token
 }
 
-func NewTokenCache() *TokenCache { return &TokenCache{} }
+// msgTokens 计算单条消息的精确 token 数（tool_calls/tool_call_id/reasoning 计入）。
+// 消息内容不变则 token 数不变——用缓存避免每条历史消息被重复 tiktoken 编码（性能关键：
+// 400+ 次请求 × 上千条历史消息，不缓存约 8 万次 Encode，缓存后每个唯一消息只算一次）。
+var msgTokenCache sync.Map // key: 消息 JSON 字符串 → int token 数
 
-// msgTokens 计算单条消息的精确 token 数（含 tool_calls/tool_call_id/reasoning）。
 func msgTokens(m map[string]any) int {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return 0
+	}
+	key := string(b)
+	if v, ok := msgTokenCache.Load(key); ok {
+		return v.(int)
+	}
 	n, err := llm.CountMessageTokens(m)
 	if err != nil {
 		return 0
 	}
+	msgTokenCache.Store(key, n)
 	return n
 }
 
+// toolDefs 序列化缓存（工具定义不变，避免每次请求重复 marshal + 编码）。
+var (
+	toolsJSONOnce    sync.Once
+	toolsJSONCached  []byte
+	toolsTokenCached int64
+)
+
+func cachedToolsJSON() ([]byte, int64) {
+	toolsJSONOnce.Do(func() {
+		toolsJSONCached, _ = json.Marshal(toolDefs)
+		n, _ := llm.CountTokens(string(toolsJSONCached))
+		toolsTokenCached = int64(n)
+	})
+	return toolsJSONCached, toolsTokenCached
+}
+func NewTokenCache() *TokenCache { return &TokenCache{} }
+
+
 // requestTokens 计算完整请求的 token 数：tools 前缀（固定 system 消息）+ 各消息。
 func requestTokens(messages []map[string]any) (int64, int64) {
-	toolsJSON, _ := json.Marshal(toolDefs)
-	toolsN, _ := llm.CountTokens(string(toolsJSON))
+	_, toolsN := cachedToolsJSON()
 	var msgsN int64
 	for _, m := range messages {
 		msgsN += int64(msgTokens(m))
 	}
-	return int64(toolsN), msgsN
+	return toolsN, msgsN
 }
 
 // Step 每次 LLM 调用。返回 (hit, miss) token 数。
@@ -179,22 +207,31 @@ func skillContent(name string) string {
 // promptBytes 模拟服务端把请求解析成 token 前缀后的顺序：
 // tools 定义（转 system 前缀）→ 各消息顺序追加。新增消息在末尾，
 // 前缀连续（与 DeepSeek/OpenAI 的 KV cache 前缀匹配语义一致）。
-func promptBytes(messages []map[string]any) []byte {
-	toolsJSON, err := json.Marshal(toolDefs)
+// msgJSONCache 缓存单条消息的序列化结果（历史消息 marshal 结果不变，避免重复序列化）。
+var msgJSONCache sync.Map // key: 消息 JSON 字符串 → []byte
+
+func msgJSON(m map[string]any) []byte {
+	b0, err := json.Marshal(m)
 	if err != nil {
 		panic(err)
 	}
+	key := string(b0)
+	if v, ok := msgJSONCache.Load(key); ok {
+		return v.([]byte)
+	}
+	msgJSONCache.Store(key, b0)
+	return b0
+}
+
+func promptBytes(messages []map[string]any) []byte {
+	toolsJSON, _ := cachedToolsJSON()
 	var buf bytes.Buffer
 	buf.WriteString(`[{"role":"system","content":`)
 	buf.Write(toolsJSON)
 	buf.WriteString(`}`)
 	for _, m := range messages {
-		b, err := json.Marshal(m)
-		if err != nil {
-			panic(err)
-		}
 		buf.WriteByte(',')
-		buf.Write(b)
+		buf.Write(msgJSON(m))
 	}
 	buf.WriteByte(']')
 	return buf.Bytes()
@@ -211,15 +248,32 @@ func userMsg(content string) map[string]any {
 func asstText(content string) map[string]any {
 	return map[string]any{"role": "assistant", "content": content}
 }
+// asstToolCall 构造 assistant 工具调用消息，对齐真实 ToAPIFormat：
+// 恒有 reasoning_content（空串，thinking 关闭）+ tool_displays（displayText 摘要）。
 func asstToolCall(id, name, args string) map[string]any {
 	return map[string]any{
 		"role":    "assistant",
 		"content": "",
+		"reasoning_content": "",
 		"tool_calls": []any{map[string]any{
 			"id": id, "type": "function",
 			"function": map[string]any{"name": name, "arguments": args},
 		}},
+		"tool_displays": []any{map[string]any{
+			"tool_id": id, "tool_name": name,
+			"display_text":  name + " " + truncateArgs(args),
+			"activity_kind": "tool",
+			"phase":         "completed",
+		}},
 	}
+}
+
+// truncateArgs 截断 args 为短摘要（对齐真实 displayText 的展示习惯）。
+func truncateArgs(args string) string {
+	if len(args) > 60 {
+		return args[:60] + "…"
+	}
+	return args
 }
 func toolMsg(id, name, content string) map[string]any {
 	return map[string]any{
