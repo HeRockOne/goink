@@ -24,6 +24,7 @@ goink-master/
 │   ├── agentcfg/           # 系统提示词、工具白名单、Skill 目录
 │   ├── api/                # 移动端 API handler
 │   ├── approval/           # 文件编辑/删除审批服务
+│   ├── cacheprobe/         # 缓存命中模拟库（设置面板「缓存模拟」Tab + cmd/cacheprobe 共用）
 │   ├── cert/               # 自签名证书（HTTPS）
 │   ├── chapter/            # 章节元数据 Store
 │   ├── character/          # 角色 + 角色关系 Store（append-only 关系图）

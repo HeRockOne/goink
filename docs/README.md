@@ -37,7 +37,7 @@
 
 | 工具 | 说明 |
 |------|------|
-| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：严格按门禁配置完整流程，NS 落库后 miss 降 29.1%，`go run ./cmd/cacheprobe compare` |
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：严格按门禁配置完整流程，NS 落库后 miss 降 26.4%；核心逻辑在 internal/cacheprobe 库，设置面板「缓存模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [门禁轮数] [短对话轮数]` |
 
 ## adr/ — 决策记录（长存，不可变）
 
@@ -82,4 +82,4 @@
 > 2026-08-07：文档过时审计并修复——theme-system.md 重排（全文被压成单行）+ 删除已移除的特效系统（d032284，粒子变量标注遗留）；phase-gate.md require 表对齐出厂默认配置（prepare 9 项/write 2 项/maintain 13 项）、main-cmd-next 统一为 next、新会话起始 prepare；billing-panel.md 状态改已实施 + 缓存字段优先级对调（首选 prompt_tokens_details.cached_tokens，fallback prompt_cache_hit_tokens）；architecture.md 工具 57→59、/api/search-memory 路径、目录树补 15 个模块、get_writing_context 去伪字段、API 端点 29→31、内置 skill 表补全、help 51→53；token-injection.md skill 41→42/工具 57→59/auto 37→38；narrative-panel.md 未来卡数据源改为 useOutlineCache 读 outlines/NNN.md（3 章）、z-index 50→8、近期待收筛选 ≥当前章；provider-status.md 补 doubao/minimax/mimo；cache-hit-mechanism.md 修正行号；README 索引补 provider-status.md
 > 2026-08-07：叙事面板数据口径审计修复（对齐 maintain 流程）——当前卡角色改 characters_in 优先（回退 active_chars）、物品改 item_occurrences 本章流转（后端 get_writing_context 新增字段）、未定时伏笔单独分组、弧线当前节点排除 actual_chapter 提前完成节点、弧线节点 Limit 50→200；UI 修复——标题栏移除 Logo/标语/GitHub 链接、叙事按钮改 ScrollText 图标、新增门禁开关按钮（Shield/ShieldOff）、状态栏门禁条改 flex 中段防重叠、叙事面板标题栏删除、overlay 避开 header/状态栏、对话历史分页渲染（默认 30 轮+加载更早）、性能优化（移除 6 处 backdrop-blur、sidebar 透明度提高、bg-layer 纹理减半）
 > 2026-08-08：门禁必读技能体系——新增 read_required 工具（60 个，参数化读技能，零硬编码）+ 门禁 require_reads 字段（阶段内强制 + 通配符，跨阶段读取不算）+ 每阶段必读技能配置（init 5 个/prepare common-sense-logic/outline hook+title/write show-dont-tell+anti-ai/write maintain anti-repetition+foreshadow）；sub- 前缀技能自动注入 review 子代理（[身份][sub-*技能][NS] 消息拆分，技能常量字节放 NS 前跨 review 命中缓存，替代子代理自 read）；skill 合并 chapter-title-hooks 并入 chapter-title-design（42 个内置）；创作视角 skill 审计修复（字数下限 2500、类型口径统一、自引用修正等）
-> 2026-08-08：缓存模拟集成——cacheprobe 抽为 internal/cacheprobe 库（核心逻辑 + 真实生成器注入：identity/always/catalog/工具定义/子代理身份/NS 读真实 DB+goink.md），cmd/cacheprobe 变薄壳 CLI；设置面板新增「缓存模拟」Tab（异步 StartCacheSimulation + cachesim:done 事件，轮数/短对话穿插可调，按设置价格估算成本）
+> 2026-08-08：缓存模拟集成——cacheprobe 抽为 internal/cacheprobe 库（核心逻辑 + 真实生成器注入：identity/always/catalog/工具定义/子代理身份/NS 读真实 DB+goink.md，assistant 消息含 reasoning_content+tool_displays、set_phase 注入 system-reminder），cmd/cacheprobe 变薄壳 CLI；设置面板新增「缓存模拟」Tab（异步 StartCacheSimulation + cachesim:done 事件，轮数/短对话穿插可调，按设置价格估算成本）；消息级缓存优化（token/marshal/toolDefs 缓存，完整模拟 365s→13.8s 提速 26 倍）
