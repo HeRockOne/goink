@@ -23,10 +23,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"novel/internal/agentcfg"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
+	"novel/internal/novel"
 	"novel/internal/platform"
 	"novel/internal/skill"
 )
@@ -311,27 +316,47 @@ func fixedSystem() []map[string]any {
 	return msgs
 }
 
-// novelState 模拟 NS。优先读取真实数据（与真实 NovelState 同源）：
-//   - goink.md 尾部 1500 字符指纹：从 platform.DataDir()/novels/{id}/goink.md 读取（真实文件）
-//   - 书名/类型/简介/进度：真实从 DB 读；无 DB 环境用占位（DB 部分无法离线复现）
-// 读取失败时回退结构化占位，保证两种协议相对比较不受影响。
+// novelState 模拟 NS，与真实 agentcfg.NovelState 字节格式完全一致：
+//   【小说基础信息】书名/类型/简介 ← 真实 DB（novels 表第一本，经 GOINK_DATA_DIR/GOINK_DB_PATH）
+//   当前进度：第 N 章 ← turn 动态（模拟创作推进；真实为 DB chapters 计数）
+//   【章节指纹（最近）】← 真实 goink.md 尾部 1500 字符（platform.DataDir()/novels/{id}/goink.md）
+// DB/文件缺失时回退占位，保证相对比较不受影响。
 func novelState(turn int) string {
 	var b strings.Builder
-	b.WriteString("【小说基础信息】\n书名：焚天志\n类型：东方玄幻\n简介：少年秦烈身怀异火，踏入万界，快意恩仇。\n")
+	b.WriteString(agentcfg.NovelStatePrefix)
+	title, genre, desc := readRealNovelMeta()
+	if title == "" {
+		title, genre, desc = "焚天志", "东方玄幻", "少年秦烈身怀异火，踏入万界，快意恩仇。"
+	}
+	fmt.Fprintf(&b, "书名：%s\n", title)
+	if genre != "" {
+		fmt.Fprintf(&b, "类型：%s\n", genre)
+	}
+	if desc != "" {
+		fmt.Fprintf(&b, "简介：%s\n", desc)
+	}
+	// 进度锚点：turn 动态（真实为 DB chapters 计数；模拟创作推进）
 	fmt.Fprintf(&b, "当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", turn)
 
 	// 真实 goink.md 指纹（若存在）
 	real := readRealGoinkFingerprint()
-	b.WriteString("\n【章节指纹（最近）】\n")
 	if real != "" {
-		b.WriteString(real)
-		if !strings.HasSuffix(real, "\n") {
-			b.WriteString("\n")
+		b.WriteString("\n【章节指纹（最近）】\n")
+		r := []rune(real)
+		if len(r) > 1500 {
+			b.WriteString(string(r[len(r)-1500:]))
+			b.WriteString("\n…（更早指纹已截断，如需完整内容用 read(goink.md)）\n")
+		} else {
+			b.WriteString(real)
+			if !strings.HasSuffix(real, "\n") {
+				b.WriteString("\n")
+			}
 		}
 		return b.String()
 	}
 
 	// 回退占位指纹（每章 6 段指纹，约 120 字符/章，模拟 1500 字符上限）
+	b.WriteString("\n【章节指纹（最近）】\n")
 	for i := 1; i <= 12; i++ {
 		fmt.Fprintf(&b, "### 第%d章 %s\n\n开篇：%s\n\n场景：%s\n\n情感：%s\n\n对白：%s\n\n钩子：%s\n\n感官：%s\n\n",
 			i, "秘境初探", "动作开场", "宗门演武", "紧张", "冲突对话", "悬念", "视觉听觉")
@@ -339,11 +364,44 @@ func novelState(turn int) string {
 	return b.String()
 }
 
+// readRealNovelMeta 从真实 DB 读取第一本小说的 书名/类型/简介（与 agentcfg.NovelState 同源）。
+// DB 路径：GOINK_DB_PATH > GOINK_DATA_DIR/novel-agent.db > exe 目录 > ~/Goink。
+func readRealNovelMeta() (title, genre, desc string) {
+	db, err := openRealDB()
+	if err != nil {
+		return "", "", ""
+	}
+	defer db.DB()
+
+	var n novel.Novel
+	if err := db.First(&n).Error; err != nil {
+		return "", "", ""
+	}
+	return n.Title, n.Genre, n.Description
+}
+
+// openRealDB 打开真实 DB（只读）。gorm sqlite driver。
+var realDBOnce sync.Once
+var realDB *gorm.DB
+
+func openRealDB() (*gorm.DB, error) {
+	realDBOnce.Do(func() {
+		path := os.Getenv("GOINK_DB_PATH")
+		if path == "" {
+			path = filepath.Join(platform.DataDir(), "novel-agent.db")
+		}
+		realDB, _ = gorm.Open(sqlite.Open(path), &gorm.Config{})
+	})
+	if realDB == nil {
+		return nil, fmt.Errorf("open real db failed")
+	}
+	return realDB, nil
+}
+
 // readRealGoinkFingerprint 读取真实 goink.md 尾部最近 1500 字符（与 agentcfg.NovelState 的 maxGoinkChars 一致）。
 // 查找路径：GOINK_DATA_DIR 或 exe 目录或 ~/Goink 下的 novels/{1..N}/goink.md（取存在的一本）。
 func readRealGoinkFingerprint() string {
 	dir := platform.DataDir()
-	// 遍历 novels/ 下的小说完，找第一本含 goink.md 的
 	novelsDir := filepath.Join(dir, "novels")
 	entries, err := os.ReadDir(novelsDir)
 	if err != nil {
@@ -358,12 +416,7 @@ func readRealGoinkFingerprint() string {
 		if err != nil {
 			continue
 		}
-		s := string(b)
-		r := []rune(s)
-		if len(r) > 1500 {
-			r = r[len(r)-1500:]
-		}
-		return string(r)
+		return string(b)
 	}
 	return ""
 }
