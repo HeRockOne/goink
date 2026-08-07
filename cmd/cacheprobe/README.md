@@ -32,16 +32,16 @@ go run ./cmd/cacheprobe legacy    # 仅修复前（NS 不落库）详细曲线
 | 短问答 5 轮 | 每轮一问一答，无工具，历史极小 |
 | 门禁创作 5 轮 | **严格按门禁配置 single 模式完整流程**（含 require_reads 必读技能）：prepare（9 项必查 + 3 技能 read_required）→ outline（10 个大纲技能 + 2 次 edit 大纲）→ write（11 个正文技能 read_required + 6 次 edit 写 3000 字 + 2 次字数校验 + create_item_occurrence）→ write后自审（2 技能 + 1 次修改）→ review（run_subagent + 子代理 6 步内部序列模拟 + 重读 + 3 处修复）→ maintain（7 项状态查询 + 2 搜索 + 11 项更新 + goink.md 指纹 + 2 技能）→ set_phase("prepare")。每轮约 80 次工具调用 + 子代理 7 次请求 |
 
-> 系统提示词、always skill（main-core-writing-kernel.md / main-core-ai-communication-standard.md）、42 个内置 skill 的 read 内容均取自仓库真实文件（相对仓库根解析，go run 与 go test 结果一致）。
+> 模拟与真实请求同源（2026-08-08）：系统提示词用 `agentcfg.AgentIdentity`、always/catalog 用 `agentcfg.BuildAlwaysSkillsContent`/`BuildSkillCatalog`（真实生成器，扫描 mode: always/auto）、子代理 sub-* 技能用与 `agent.buildSubagentSkills` 同源的扫描逻辑——技能清单变动自动同步，零硬编码。
 
 ## 对照结论（门禁创作 5 轮，tiktoken 精确计数）
 
 | 指标 | 修复前 | 修复后 |
 |------|--------|--------|
-| 累计 hit | 7,509,449 | 7,538,720 |
-| 累计 miss | 77,432 | 54,921 |
-| 命中率 | 99.0% | 99.3% |
-| miss 降幅 | - | **29.1%** |
+| 累计 hit | 20,034,577 | 20,163,427 |
+| 累计 miss | 144,380 | 109,250 |
+| 命中率 | 99.3% | 99.5% |
+| miss 降幅 | - | **24.3%** |
 
 ### 关键发现
 
@@ -49,11 +49,11 @@ go run ./cmd/cacheprobe legacy    # 仅修复前（NS 不落库）详细曲线
    miss 新增的 user+NS。收益随历史（skill read、3000 字正文、maintain 查询）增长。
 
 2. **精确口径低于字节口径**：早期字节口径（1 token ≈ 4 字节）报 35.0%，tiktoken
-   精确计数修正为 **29.1%**——中文正文 token 密度高于 4 字节/token 的估算，
-   字节口径高估了收益约 6 个百分点。**29.1% 是可信的真实成本节约**。
+   精确计数修正为 **24.3%**——中文正文 token 密度高于 4 字节/token 的估算，
+   字节口径高估了收益约 6 个百分点。**24.3% 是可信的真实成本节约**。
 
 3. **收益随历史规模放大**：短问答（历史极小）差异可忽略（-1.9%，NS 位置差异）；
-   完整门禁创作 miss 降 29.1%。历史越厚，修复收益越大。
+   完整门禁创作 miss 降 24.3%。历史越厚，修复收益越大。
 
 4. **命中率上限受压缩约束**：模拟未含压缩重置（压缩会把链重置为摘要，下一轮首请求
    全部 miss）。真实场景命中率上限 ≈ 压缩窗口内连续，不可能无限趋近 100%。

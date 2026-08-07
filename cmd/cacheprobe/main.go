@@ -24,8 +24,10 @@ import (
 	"runtime"
 	"strings"
 
+	"novel/internal/agentcfg"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
+	"novel/internal/skill"
 )
 
 // ---- 消息级缓存模拟器（复刻 provider 语义 + tiktoken 精确计数） ----
@@ -200,36 +202,57 @@ func toolMsg(id, name, content string) map[string]any {
 	}
 }
 
-// ---- 固定前缀（与 writeSystemMessages 对应的三条 system，内容取自真实文件） ----
+// ---- 固定前缀（与 writeSystemMessages 对应的三条 system，内容取自真实生成器） ----
 
 var (
-	identityText string // mainAgentSystem1（agentcfg/identity.go）
-	alwaysKernel string // skills/main-core-writing-kernel.md 正文
-	alwaysComm   string // skills/main-core-ai-communication-standard.md 正文
-	catalogText  string // 技能目录（auto 模式 name+description 汇总）
+	identityText string // agentcfg.AgentIdentity(MainAgent)（真实）
+	alwaysText   string // agentcfg.BuildAlwaysSkillsContent（真实，扫描 mode: always）
+	catalogText  string // agentcfg.BuildSkillCatalog（真实，扫描 mode: auto）
+	subSkillsText string // sub- 前缀技能拼接（review 子代理注入用，与 agent.buildSubagentSkills 同源）
 )
 
-// loadSystemTexts 读取真实文件构造固定前缀。失败时降级为内嵌摘要（不影响字节结构）。
+// loadSystemTexts 用真实生成器构造固定前缀：
+// identity/always/catalog 与 app/chat.go writeSystemMessages 完全一致，
+// subSkills 与 internal/agent buildSubagentSkills 一致（扫描 sub- 前缀）。
+// 这样模拟与真实请求同源，技能清单变动（新增/合并 skill）自动同步，零硬编码。
 func loadSystemTexts() {
-	identityText = `你是 goink 小说创作系统的主创作助手，协助用户管理角色、情节、世界观和叙事结构。你可以读取小说全部数据，并通过 MCP 工具维护角色、时间线、弧线、地点、世界观、物品和读者认知。
-【核心原则】创作质量第一；设定一致性由数据库保证；按阶段门禁推进 prepare→outline→write→review→maintain。
-【输出规范】中文正文，杜绝 AI 味；每个工具调用前说明意图。`
-	alwaysKernel = readFileText("skills/main-core-writing-kernel.md", 9000)
-	alwaysComm = readFileText("skills/main-core-ai-communication-standard.md", 1000)
-	catalogText = `技能目录（auto 模式，按需 read 加载）：
-main-core-init-phase 开书流程；main-tech-genre-templates 12类型模板；main-tech-book-outline 总纲/卷纲/章节蓝图；
-main-tech-character-design 角色设计；main-tech-world-building-system 世界观；main-tech-common-sense-logic 一致性；
-main-tech-brainstorm-composer 卡情节构思；main-tech-chapter-opening 章节开头；main-tech-chapter-hook-enhanced 章末钩子；
-main-tech-maliang-method 打脸节奏；main-tech-dialogue-subtext 对白设计；main-tech-emotional-arc 情感弧线；
-main-tech-opening-chapter 第一章开篇；main-tech-show-dont-tell 展示而非告知；main-tech-info-density 信息密度；
-main-tech-pov-purity 视角纯净；main-tech-anti-ai-writing 反AI八条铁律；main-tech-shuangdian-pacing 爽点节奏；
-main-tech-climax-scene 战斗章；main-tech-foreshadow-cycle 伏笔循环；main-tech-pacing-control 节奏控制；
-main-tech-scene-beats 场景节拍；main-tech-emotion-injection 情绪注入；main-tech-word-count-calibration 字数校准；
-main-tech-revision-pass 修改润色；main-tech-anti-repetition 去重；main-tech-golden-three-chapters 黄金三章；
-main-tech-golden-finger-design 金手指；main-tech-chapter-title-design 章节标题；main-tech-book-completion 完本清单；
-main-type-xuanhuan-cultivation 玄幻；main-type-urban-martial-arts 都市；main-type-post-apocalyptic-survival 末日；
-main-type-suspense-rule-horror 悬疑；main-type-historical-time-travel 历史穿越；sub-tech-anti-ai-grade 用词反AI；
-sub-tech-review-standards 16项审稿判定`
+	store, err := skill.NewStore(slog.Default(), "")
+	if err != nil {
+		store = nil
+	}
+	var meta []skill.SkillMeta
+	if store != nil {
+		meta = store.ListMeta(0)
+		identityText = agentcfg.AgentIdentity(agentcfg.MainAgent)
+		alwaysText = agentcfg.BuildAlwaysSkillsContent(meta, store, 0)
+		catalogText = agentcfg.BuildSkillCatalog(store.ListMetaForCatalog(meta))
+		subSkillsText = buildSubSkills(meta, store)
+	} else {
+		identityText = `你是 goink 小说创作系统的主创作助手。`
+		alwaysText = ""
+		catalogText = ""
+		subSkillsText = ""
+	}
+}
+
+// buildSubSkills 扫描 sub- 前缀技能并拼接内容（与 internal/agent buildSubagentSkills 同逻辑）。
+func buildSubSkills(meta []skill.SkillMeta, store *skill.Store) string {
+	var b strings.Builder
+	for _, m := range meta {
+		if !strings.HasPrefix(m.Name, "sub-") {
+			continue
+		}
+		sk, ok := store.Get(0, m.Name)
+		if !ok {
+			continue
+		}
+		b.WriteString("--- ")
+		b.WriteString(sk.Name)
+		b.WriteString(" ---\n")
+		b.WriteString(sk.RawContent)
+		b.WriteString("\n\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // repoRoot 返回项目根目录（无论从 go run 还是 go test 运行，均解析到仓库根）。
@@ -279,8 +302,7 @@ func readFilesText(names []string) string {
 func fixedSystem() []map[string]any {
 	return []map[string]any{
 		sysMsg(identityText),
-		sysMsg("【常驻技能 1/2】main-core-writing-kernel\n" + alwaysKernel),
-		sysMsg("【常驻技能 2/2】main-core-ai-communication-standard\n" + alwaysComm),
+		sysMsg(alwaysText),
 		sysMsg(catalogText),
 	}
 }
@@ -591,9 +613,16 @@ func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int
 	var results [][2]int64
 
 	// fork 完整主历史（与 RunSubAgent 相同：msgs = parentOpts.Messages + 尾部追加）
+	// 消息拆分与真实一致：主历史 → [身份（常量）] → [sub-* 技能（常量，review 自动注入）] → [NS（动态）] → [指令]
 	sub := append(append([]map[string]any{}, history...), cur...)
 	sub = append(sub,
-		map[string]any{"role": "system", "content": "你是审稿人（review agent），基于以下上下文审阅本章。\n\n" + novelState(turn)},
+		map[string]any{"role": "system", "content": "你是审稿人（review agent），基于以下上下文审阅本章。"},
+	)
+	if subSkillsText != "" {
+		sub = append(sub, map[string]any{"role": "system", "content": subSkillsText})
+	}
+	sub = append(sub,
+		map[string]any{"role": "system", "content": novelState(turn)},
 		map[string]any{"role": "user", "content": "请审阅最新章节：检查结构、逻辑、伏笔回收、AI 味，输出审读报告与修改建议。"},
 	)
 
