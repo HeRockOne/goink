@@ -1,4 +1,4 @@
-package main
+package cacheprobe
 
 import (
 	"testing"
@@ -37,8 +37,8 @@ func TestCumulativeMiss_NowBelowLegacy(t *testing.T) {
 	nowCache := NewTokenCache()
 	legacyCache := NewTokenCache()
 
-	nowResults := buildGate("now", nowCache)
-	legacyResults := buildGate("legacy", legacyCache)
+	nowResults := buildGateWithRounds("now", nowCache, 5)
+	legacyResults := buildGateWithRounds("legacy", legacyCache, 5)
 
 	var nowMiss, legacyMiss int64
 	for _, pr := range nowResults {
@@ -61,8 +61,8 @@ func TestCumulativeMiss_NowBelowLegacy_ShortQA(t *testing.T) {
 	nowCache := NewTokenCache()
 	legacyCache := NewTokenCache()
 
-	nowResults := buildShortQA("now", nowCache)
-	legacyResults := buildShortQA("legacy", legacyCache)
+	nowResults := buildShortQAWithRounds("now", nowCache, 5)
+	legacyResults := buildShortQAWithRounds("legacy", legacyCache, 5)
 
 	var nowMiss, legacyMiss int64
 	for _, pr := range nowResults {
