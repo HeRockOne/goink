@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1522"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <linearGradient id="moon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef6fa"/>
+      <stop offset="1" stop-color="#a1c4d6"/>
+    </linearGradient>
+    <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a5a6e"/>
+      <stop offset="1" stop-color="#24384a"/>
+    </linearGradient>
+    <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e4a5e"/>
+      <stop offset="1" stop-color="#1c2e3c"/>
+    </linearGradient>
+    <linearGradient id="m3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22364a"/>
+      <stop offset="1" stop-color="#14222e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="1000" rx="180" fill="url(#bg)"/>
+
+  <circle cx="500" cy="350" r="150" fill="url(#moon)"/>
+  <circle cx="320" cy="280" r="7"  fill="#a1c4d6" opacity="0.85"/>
+  <circle cx="706" cy="252" r="5"  fill="#a1c4d6" opacity="0.6"/>
+  <circle cx="770" cy="420" r="6"  fill="#a1c4d6" opacity="0.5"/>
+  <circle cx="240" cy="470" r="4"  fill="#a1c4d6" opacity="0.45"/>
+
+  <path d="M 60 720 L 240 556 L 380 680 L 520 536 L 700 700 L 940 556 L 940 900 L 60 900 Z" fill="url(#m1)"/>
+  <path d="M 40 786 L 300 616 L 480 740 L 660 596 L 960 786 L 960 900 L 40 900 Z" fill="url(#m2)"/>
+  <path d="M 0 866 L 260 700 L 460 822 L 720 676 L 1000 866 L 1000 1000 L 0 1000 Z" fill="url(#m3)"/>
+</svg>

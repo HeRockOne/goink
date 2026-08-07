@@ -38,7 +38,7 @@ func (t *GetWritingContextTool) Description() string {
 		"使用时机：prepare 阶段开头调用一次即可，不要反复调用。\n" +
 		"返回结构说明：\n" +
 		"chapter: 当前章节 {num=章节号, title=标题, word_count=字数}\n" +
-		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数}]\n" +
+		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数, characters_in=本章出场角色ID数组JSON, arc_ids=本章涉及弧线ID数组JSON}]\n" +
 		"scenes[]: 本章场景 [{title, summary, word_count, location={name=地点名, type=地点类型}, arc_node={title=节点标题, arc_name=所属弧线名}}]\n" +
 		"characters[]: 出场角色 [{name, status=角色状态(alive/dead/missing/unknown，dead=已死亡不得出场), location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
 		"active_arcs[]: 活跃弧线 [{name, type_zh=类型中文(主线/支线/角色弧/背景), nodes_done=已完成节点数, nodes_total=总节点数, related_lore=[关联设定ID], related_items=[关联物品ID]}]\n" +

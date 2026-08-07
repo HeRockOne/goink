@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -137,15 +138,21 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	allowed := agentcfg.Allowlist(at)
 
 	// 完整主历史（含 NS、工具结果）原样复用，保证前缀字节与主会话一致
-	msgs := make([]map[string]any, 0, len(parentOpts.Messages)+2)
+	msgs := make([]map[string]any, 0, len(parentOpts.Messages)+4)
 	msgs = append(msgs, parentOpts.Messages...)
-	// 子 agent 专用层（历史之后，动态区）：身份 + 最新小说状态
-	subSystem := sysPrompt
+	// 子 agent 专用层（历史之后，动态区），按稳定前缀顺序拆分消息：
+	// [身份]（常量）→ [sub-* 技能]（review 专属，常量，见 buildSubagentSkills）→ [NS]（动态）
+	// 身份与技能字节跨 review 不变，放在 NS 之前可命中缓存；NS/指令动态 miss。
+	msgs = append(msgs, map[string]any{"role": "system", "content": sysPrompt})
+	if at == agentcfg.ReviewAgent {
+		if skills := a.buildSubagentSkills(req.NovelID); skills != "" {
+			msgs = append(msgs, map[string]any{"role": "system", "content": skills})
+		}
+	}
 	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
-		subSystem += "\n\n" + novelState
+		msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
 	}
 	msgs = append(msgs,
-		map[string]any{"role": "system", "content": subSystem},
 		map[string]any{"role": "user", "content": req.Instruction},
 	)
 
@@ -174,6 +181,32 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	a.setPG(savedPhaseGate)
 
 	return result.FinalText, err
+}
+
+// buildSubagentSkills 扫描所有 sub- 前缀技能并拼接内容（子代理专属方法论）。
+// 命名约定：sub- 前缀 = 子代理专用技能，新建 sub-*.md 自动纳入，零代码扩展。
+// 内容从 SkillStore 三层查找（小说级 > 用户级 > 内置），技能名不在此硬编码。
+func (a *Agent) buildSubagentSkills(novelID int64) string {
+	if a.skillStore == nil {
+		return ""
+	}
+	metas := a.skillStore.ListMeta(novelID)
+	var b strings.Builder
+	for _, m := range metas {
+		if !strings.HasPrefix(m.Name, "sub-") {
+			continue
+		}
+		sk, ok := a.skillStore.Get(novelID, m.Name)
+		if !ok {
+			continue
+		}
+		b.WriteString("--- ")
+		b.WriteString(sk.Name)
+		b.WriteString(" ---\n")
+		b.WriteString(sk.RawContent)
+		b.WriteString("\n\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
@@ -560,6 +593,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// 门禁：记录调用
 					if a.getPG() != nil && a.getPG().Active() {
 						a.getPG().OnToolCall(name, result.Success)
+						// read_required 成功：上报本次读取的技能名（require_reads 检查用）
+						if name == "read_required" && result.Success && result.Data != nil {
+							if skills, ok := result.Data["skills"].([]string); ok {
+								for _, s := range skills {
+									a.getPG().OnReadRequired(s)
+								}
+							}
+						}
 						// get_chapter_list 字数校验状态注入
 						if name == "get_chapter_list" && result.Data != nil {
 							if wcOK, ok := result.Data["word_count_ok"].(bool); ok {

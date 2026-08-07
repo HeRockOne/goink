@@ -19,7 +19,7 @@ func (t *SetPhaseTool) ExposeToLLM() bool    { return true }
 func (t *SetPhaseTool) Description() string {
 	return `切换当前创作阶段。
 
-门禁始终激活，当前阶段有 require 列表，必须调用过列表中的所有工具后才能切换。
+门禁开启时，当前阶段有 require 列表，必须调用过列表中的所有工具后才能切换。
 
 参数：
 - phase: 目标阶段名称（如 "prepare", "outline", "write", "review", "maintain"）
@@ -28,7 +28,7 @@ func (t *SetPhaseTool) Description() string {
 require 未满足：返回 success=false，提示缺少哪些工具调用。
 未知阶段名：返回 success=false。
 
-如果没有门禁配置，此工具无操作。`
+门禁关闭时（设置中已关）此工具无操作，可忽略。`
 }
 
 func (t *SetPhaseTool) NewArgs() any {

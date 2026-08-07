@@ -1,8 +1,9 @@
 # 计费面板技术文档
 
 > 日期：2026-07-29
-> 状态：方案设计，待实施
+> 状态：已实施（2026-08-07 更新：功能已落地于 `internal/agent/tokens.go` + `frontend/src/components/chat/ContextRing.tsx`；本文档按 archive 规则不再维护正文，仅保留正确口径供参考）
 > 原则：**永远用 API 返回的 usage 对象，不自己计算 token 数**
+> 注意：AGENTS.md 引用的缓存字段口径以此为准——**优先 `prompt_tokens_details.cached_tokens`（OpenAI 标准），fallback `prompt_cache_hit_tokens`**（与本文 3.1 表修正后一致）
 
 ---
 
@@ -53,9 +54,9 @@ DeepSeek 的 `usage` 对象：
 |------|------|--------|------|
 | prompt_tokens | API `usage.prompt_tokens` | 精确 | 含消息内容 + 工具定义 + 格式开销 |
 | completion_tokens | API `usage.completion_tokens` | 精确 | 当前请求的输出 token |
-| prompt_cache_hit_tokens | API `usage.prompt_cache_hit_tokens` | 精确 | 优先顶层字段 |
-| prompt_cache_miss_tokens | API `usage.prompt_cache_miss_tokens` | 精确 | 优先顶层字段 |
-| 缓存 fallback | API `usage.prompt_tokens_details.cached_tokens` | 精确 | 顶层字段为0时的回退 |
+| prompt_cache_hit_tokens | API `usage.prompt_cache_hit_tokens` | 精确 | **fallback**（OpenAI 标准格式缺失时） |
+| prompt_cache_miss_tokens | API `usage.prompt_cache_miss_tokens` | 精确 | fallback |
+| 缓存（首选） | API `usage.prompt_tokens_details.cached_tokens` | 精确 | **优先**（OpenAI 标准格式，键存在即按 `miss = prompt - cached` 语义） |
 | detail（分角色） | `runningTokens` 原值 | **估算** | 仅消息内容，不含工具定义和格式开销 |
 
 #### 差值分析
@@ -65,7 +66,7 @@ API prompt_tokens        = 19,469（精确）
 runningTokens 总和       =  5,892（消息内容估算）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 差值                     = 13,577
-├─ 工具定义 JSON Schema  ≈ 12,500（52个工具的完整 parameters）
+├─ 工具定义 JSON Schema  ≈ 12,500（52个工具的完整 parameters，2026-07-29 快照，现为 59 个）
 └─ 消息格式开销          ≈  1,077（role分隔符 <|im_start|>）
 ```
 
@@ -82,7 +83,7 @@ totalCost = hitCost + missCost + outCost
 
 #### 缓存优化与 allowed_tools
 
-- `tools` 数组始终发送全量52个 → 缓存前缀稳定（工具定义是缓存前缀的一部分）
+- `tools` 数组始终发送全量59个 → 缓存前缀稳定（工具定义是缓存前缀的一部分）
 - `allowed_tools` 参数传递门禁白名单 → 模型不浪费 token 考虑禁止工具
 - 不支持 `allowed_tools` 的提供商忽略该参数 → 无副作用
 - 门禁执行时硬拦截 → 双重保险
@@ -107,7 +108,7 @@ estimatedCost = (accHit × hitPrice + accMiss × missPrice + accCompletion × ou
 | 显示项 | 数据源 | 说明 |
 |--------|--------|------|
 | 上下文占用 % | `usage_ratio = accTotal / context_window * 100` | Session 级累积占上下文窗口的比例 |
-| 已用 token | `apiTotal`（当前请求的 prompt_tokens） | 单次请求的输入 token |
+| 已用 token | `total_tokens`（当前请求的输入+输出） | 单次请求的完整 token |
 | 缓存命中率 | `accHit / (accHit + accMiss) * 100` | Session 级累积 |
 | 分角色明细 | `runningTokens` 原值 + 标注"估算" | 仅消息内容，与 API 总数有差值是预期行为 |
 | 成本估算 | 累积值 × 定价表 | Session 级累积成本 |
@@ -171,7 +172,9 @@ outCost   = accCompletion × outputPrice / 1_000_000  // 输出金额
 totalCost = hitCost + missCost + outCost           // 合计（= 区域 A 求和）
 ```
 
-**区域 B：分角色金额（按占比分配）**
+**区域 B：分角色（仅 token 数，不分摊金额）**
+
+> 2026-08-07 更新：实际实现（`ContextRing.tsx`）中**成本按缓存/未命中/输出计，不按角色分摊**；分角色区只显示各角色 token 数（`runningTokens` 估算值），不显示金额。以下原方案（按占比分配金额）未采用，仅保留作历史记录：
 
 ```
 角色占比[role] = runningTokens[role] / sum(runningTokens)
@@ -325,14 +328,14 @@ AI 输出:     1K / 58K × ¥0.042 = ¥0.001
 
 ## 七、实施清单
 
-如果未来重新实现计费面板：
+> 2026-08-07 更新：以下 8 项均已实施（`internal/agent/tokens.go` updateUsage + `frontend/src/components/chat/ContextRing.tsx` + `internal/session/store.go` UpsertModelUsage）。
 
-- [ ] 后端 `tokens.go`：每请求直接用 API usage，不累加 prompt_tokens
-- [ ] 后端 `tokens.go`：累加 accHit/accMiss/accCompletion 用于成本估算
-- [ ] 后端 `tokens.go`：detail 直接用 runningTokens 原始值
-- [ ] 前端 `ContextRing.tsx`：显示当前请求的 token 明细 + session 级缓存命中率
-- [ ] 前端 `ContextRing.tsx`：成本估算用累积值 × 定价表
-- [ ] 前端 `ContextRing.tsx`：价格配置（输入/输出/缓存命中 单价）
-- [ ] 单元测试：验证 `prompt_tokens = hit + miss`
-- [ ] 单元测试：验证 `total_tokens = prompt + completion`
-- [ ] 对账：用服务商账单交叉验证面板数据
+- [x] 后端 `tokens.go`：每请求直接用 API usage，不累加 prompt_tokens
+- [x] 后端 `tokens.go`：累加 accHit/accMiss/accCompletion 用于成本估算
+- [x] 后端 `tokens.go`：detail 直接用 runningTokens 原始值
+- [x] 前端 `ContextRing.tsx`：显示当前请求的 token 明细 + session 级缓存命中率
+- [x] 前端 `ContextRing.tsx`：成本估算用累积值 × 定价表
+- [x] 前端 `ContextRing.tsx`：价格配置（输入/输出/缓存命中 单价）
+- [x] 单元测试：验证 `prompt_tokens = hit + miss`
+- [x] 单元测试：验证 `total_tokens = prompt + completion`
+- [x] 对账：用服务商账单交叉验证面板数据

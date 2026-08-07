@@ -187,7 +187,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
       ) : (
         <>
           <svg width={44} height={44} viewBox="0 0 44 44">
-            <circle cx={22} cy={22} r={r} fill="none" stroke="rgb(0 0 0 / 0.12)" strokeWidth={3} />
+            <circle cx={22} cy={22} r={r} fill="none" stroke="var(--border)" strokeWidth={3} />
             <circle
               cx={22} cy={22} r={r} fill="none"
               stroke={color}

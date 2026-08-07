@@ -41,6 +41,33 @@
 
 - k2.7-code 传入非 1.0 的 temperature 会报错（Goink 的 moonshotBuildRequest 已处理：删除 temperature/reasoning_effort）
 
+## Doubao（火山引擎）
+
+| 模型 ID | 状态 | 上下文 |
+|---------|------|--------|
+| `doubao-seed-2-1-pro-260628` | ✅ | 1M |
+| `doubao-seed-2-1-turbo-260628` | ✅ | 1M |
+| `doubao-seed-2-0-lite-260428` | ✅ | 1M |
+| `doubao-seed-2-0-code-preview-260215` | ✅ | 1M |
+| `doubao-seed-character-260628` | ✅ | 1M |
+
+## MiniMax
+
+| 模型 ID | 状态 | 上下文 |
+|---------|------|--------|
+| `MiniMax-M3` | ✅ | 1M |
+| `MiniMax-M2.7` | ✅ | 1M |
+| `MiniMax-M2.5` | ✅ | 1M |
+
+## MiMo（小米）
+
+| 模型 ID | 状态 | 上下文 |
+|---------|------|--------|
+| `mimo-v2.5-pro` | ✅ | 1M |
+| `mimo-v2.5` | ✅ | 1M |
+
+> 内置 provider 共 7 个（deepseek/doubao/qwen/zhipu/minimax/mimo/moonshot，见 `internal/llm/providers.go`）。
+
 ## 技术依赖版本
 
 | 依赖 | 当前 | 最新 | 建议 |

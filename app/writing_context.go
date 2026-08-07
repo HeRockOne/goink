@@ -52,6 +52,16 @@ type WritingContext struct {
 	Scenes          []WritingSceneBrief     `json:"scenes"`
 	Volume          *WritingVolume          `json:"volume,omitempty"`
 	VolumeEntities  *WritingVolumeEntities  `json:"volume_entities,omitempty"`
+	ItemOccurrences []WritingItemOccurrence `json:"item_occurrences"`
+}
+
+// WritingItemOccurrence 物品在章节中的流转记录（叙事面板"当前卡·物品"用）。
+type WritingItemOccurrence struct {
+	ItemID      int64  `json:"item_id"`
+	ItemName    string `json:"item_name"`
+	Action      string `json:"action"`
+	Description string `json:"description,omitempty"`
+	ChapterNum  int    `json:"chapter_num"`
 }
 
 type WritingChapter struct {
@@ -241,7 +251,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		a.db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ? AND status = 'completed'", ar.ID).Count(&done)
 		// 弧线节点详情
 		var nodes []storyarc.ArcNode
-		a.db.WithContext(ctx).Where("story_arc_id = ?", ar.ID).Order("target_chapter ASC").Limit(50).Find(&nodes)
+		a.db.WithContext(ctx).Where("story_arc_id = ?", ar.ID).Order("target_chapter ASC").Limit(200).Find(&nodes)
 		var nodeBriefs []WritingArcNodeBrief
 		for _, n := range nodes {
 			nodeBriefs = append(nodeBriefs, WritingArcNodeBrief{
@@ -349,12 +359,44 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		}
 	}
 
+	// 当前章节的物品流转记录（叙事面板"当前卡·物品"：本章实际出现/易主/使用）
+	var itemOccBriefs []WritingItemOccurrence
+	if ch.ID > 0 {
+		var occs []itemoccurrence.ItemOccurrence
+		if err := a.db.WithContext(ctx).
+			Where("novel_id = ? AND chapter_id = ?", novelID, ch.ID).
+			Order("created_at DESC").Find(&occs).Error; err == nil && len(occs) > 0 {
+			itemIDSet := map[int64]bool{}
+			for _, o := range occs {
+				itemIDSet[o.ItemID] = true
+			}
+			itemNames := map[int64]string{}
+			if len(itemIDSet) > 0 {
+				var items []item.Item
+				if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, itemIDSet).Find(&items).Error == nil {
+					for _, it := range items {
+						itemNames[it.ID] = it.Name
+					}
+				}
+			}
+			for _, o := range occs {
+				itemOccBriefs = append(itemOccBriefs, WritingItemOccurrence{
+					ItemID:      o.ItemID,
+					ItemName:    itemNames[o.ItemID],
+					Action:      o.Action,
+					Description: o.Description,
+					ChapterNum:  ch.Num,
+				})
+			}
+		}
+	}
+
 	return &WritingContext{
-		Chapter:        ch,
-		RecentChapters: recent,
-		Characters:     charBriefs,
-		ActiveArcs:     arcBriefs,
-		Timeline:       tl,
+		Chapter:         ch,
+		RecentChapters:  recent,
+		Characters:      charBriefs,
+		ActiveArcs:      arcBriefs,
+		Timeline:        tl,
 		Reader: WritingReader{
 			Known: int(knownCount), Suspense: suspenseCount, Misconception: misconCount, Entries: readerEntries,
 		},
@@ -362,6 +404,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		Scenes:          sceneBriefs,
 		Volume:          volume,
 		VolumeEntities:  volumeEntities,
+		ItemOccurrences: itemOccBriefs,
 	}, nil
 }
 

@@ -49,12 +49,15 @@ export default function PhaseGateConfigTab() {
           <span className="text-sm font-medium">{t('settings.phaseGate')}</span>
           <button
             onClick={handlePhaseGateToggle}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              phaseGateEnabled ? 'bg-primary' : 'bg-muted'
+            aria-pressed={phaseGateEnabled}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-colors shadow-inner ${
+              phaseGateEnabled
+                ? 'bg-primary border-primary shadow-[0_0_6px_var(--glow)]'
+                : 'bg-muted-foreground/25 border-border'
             }`}
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-transform ${
                 phaseGateEnabled ? 'translate-x-[18px]' : 'translate-x-[2px]'
               }`}
             />

@@ -24,7 +24,7 @@ export default function StyleSampleCard({ sample, selected, onToggle, onDelete, 
       className={`group relative flex flex-col rounded-[24px] p-5 transition-all duration-300 select-none
         bg-card/80 backdrop-blur-2xl border
         ${selected
-          ? 'ring-2 ring-primary/40 border-primary/30 shadow-[0_8px_32px_rgba(14,165,233,0.12)]'
+          ? 'ring-2 ring-primary/40 border-primary/30 shadow-[0_8px_32px_var(--glow)]'
           : 'border-white/15 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5'
         }`}
     >

@@ -86,7 +86,7 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
   const currentIdx = gateStatus?.phase ? GATE_STEPS.indexOf(gateStatus.phase) : -1
 
   return (
-    <div className="relative h-7 flex items-center justify-between px-4 border-t bg-background text-xs text-muted-foreground select-none">
+    <div className="relative h-7 flex items-center justify-between px-4 border-t bg-background text-xs text-muted-foreground select-none z-20">
       {/* 左区：字数 / 行数 */}
       <div className="flex items-center gap-4 min-w-0 shrink-0">
         <span
@@ -99,10 +99,10 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
         <span>{t('shell.lineCount')} {stats.lineCount}</span>
       </div>
 
-      {/* 中区：门禁阶段条（v2 居中） */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
+      {/* 中区：门禁阶段条（flex 中段，窄窗口自动截断不重叠） */}
+      <div className="flex-1 flex items-center justify-center min-w-0 px-3">
         {gateStatus?.phase && (
-          <span className="gate-steps">
+          <span className="gate-steps whitespace-nowrap overflow-hidden">
             {GATE_STEPS.map((p, i) => (
               <span key={p} className="flex items-center">
                 {i > 0 && <span className="gate-step-sep">·</span>}

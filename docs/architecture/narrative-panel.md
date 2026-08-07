@@ -165,16 +165,15 @@ WritingContext JSON  ← 一次 IPC 调用
 
 ### 3.1 当前卡片（cardId: current）
 
-**作用**：写前预览——即将写入正文的设定。
+**作用**：写前预览——即将写入正文的设定。数据口径对齐 maintain 清单（2026-08-07 修复）：角色用每章强制写入的 `characters_in`（事实层），物品用 `item_occurrences` 本章流转（write 阶段强制记录），不再用快照可选字段。
 
 | 展示项 | 字段 | 筛选规则 |
 |--------|------|----------|
-| 📍 地点 | `writing_snapshot.current_location` | 直接展示 |
-| 📝 内容摘要 | `recent_chapters[num=current].summary` | 匹配 `chapter.num` |
-| 👤 出场角色 | `characters` 过滤 | `active_chars` JSON 数组中的 ID 匹配；若无则全展示 |
-| 📦 物品名 | `characters[].items[]` | 每个角色持有物品名列表 |
-| 📍 角色所在地 | `characters[].location.name` | 每个角色的当前所在地 |
-| ⏳ 近期待收 | `timeline.pending` 过滤 | `target_chapter == current+1 \|\| target_chapter == current+2` |
+| 📍 地点 | `writing_snapshot.current_location` | 直接展示（maintain #2 每章必写） |
+| 📝 内容摘要 | `recent_chapters[num=current].summary` | 匹配 `chapter.num`（maintain #1 每章必写） |
+| 👤 本章出场 | `characters` 过滤 | **优先 `recent_chapters[current].characters_in`**（maintain #1 required）；为空时回退快照 `active_chars`；都空则全展示 |
+| 📦 本章物品流转 | `item_occurrences[]` | get_writing_context 按当前章过滤，显示 item_name/action/description（write 阶段 create_item_occurrence 记录） |
+| ⏳ 近期待收 | `timeline.pending` 过滤 | `target_chapter >= 当前章`（当前章及以后全部展示） |
 | 📝 字数 | `chapter.word_count` | 当前章节字数 |
 
 ### 3.2 过去卡片（cardId: past）
@@ -194,13 +193,13 @@ WritingContext JSON  ← 一次 IPC 调用
 
 **作用**：后续走向——接下来章节的大纲。
 
-**数据来源**：`get_writing_context` 返回的 `outline_chapters[]` 字段（当前章 -1 ～ +2，共 4 章）。使用 `react-markdown` 直接渲染原始大纲 Markdown，不再依赖 `OutlineParser` 语义解析。
+**数据来源**：通过 `useOutlineCache.loadOutlines` 单独加载 `outlines/NNN.md` 原始 Markdown（当前章 -1 ～ +1，共 3 章），与 `get_writing_context` 无关。使用 `react-markdown` 直接渲染原始大纲 Markdown，不再依赖 `OutlineParser` 语义解析。
 
 | 展示项 | 来源字段 | 说明 |
 |--------|----------|------|
-| 章节标题 | `outline_chapters[].title` | 从大纲 `## 章节标题` 提取 |
-| 内容 | `outline_chapters[].content` | 原始 Markdown，react-markdown 渲染 |
-| 章节号 | `outline_chapters[].num` | 用于排序和筛选 |
+| 章节标题 | 大纲文件首行 | 从文件首行提取（同 3.2 章节标题提取逻辑） |
+| 内容 | 原始大纲 Markdown | react-markdown 渲染 |
+| 章节号 | 文件名 `NNN` | 用于排序和筛选 |
 
 **排序**：按章节号降序（最新章在前）
 
@@ -214,7 +213,9 @@ WritingContext JSON  ← 一次 IPC 调用
 | 类型 | `active_arcs[].type_zh` | 主线/支线/角色弧 |
 | 进度 | `nodes_done / nodes_total` | 已完成/总节点 |
 | 进度条 | 百分比进度条 | `>=75%` 绿色，`>=40%` 黄色，`<40%` 灰色 |
-| 节点详情 | `active_arcs[].nodes[]` | 每个节点的 title/description/status/target_chapter |
+| 节点详情 | `active_arcs[].nodes[]` | 每个节点的 title/description/status/target_chapter/actual_chapter（后端 Limit 200） |
+
+**当前节点判定**（2026-08-07 修复）：`status != completed && target_chapter <= current`，且为其中 target_chapter 最小的一个（`actual_chapter` 提前完成节点不参与判定）。数据模型无 in_progress 状态（enum: pending/completed/abandoned），前端按到期章推导。
 
 **筛选**：`story_arcs WHERE status = 'active'`
 
@@ -226,6 +227,7 @@ WritingContext JSON  ← 一次 IPC 调用
 |--------|------|----------|
 | ⚠️ 超期 | `timeline.overdue[]` | `status != resolved && target_chapter < current` |
 | ⏳ 待回收 | `timeline.pending` 按 target_chapter 分组 | `status = pending` |
+| ⏳ 未定时 | `timeline.pending` 中 `target_chapter <= 0` | 单独分组显示（2026-08-07 修复，不再静默丢弃） |
 | ✅ 已回收 | `timeline.resolved` | `status = resolved`（取前 5 条） |
 | 重要度 | `importance` | 5→★★★★★ 必收，4→★★★★ 重要，3→★★★ 一般 |
 | 超期章数 | `overdue_by = current - target_chapter` | 计算值 |
@@ -384,7 +386,7 @@ EventsOn('chat:session_created', () => refresh())
 
 ### 8.2 面板加载方式
 
-固定定位 overlay，`z-index: 50`，右边界 = 对话面板左边框。不改变原有三栏（ActivityBar + SidePanel + ContentPanel + ChatPanel）布局。
+固定定位 overlay，`z-index: 8`（`index.css` `.narrative-overlay`），右边界 = 对话面板左边框。不改变原有三栏（ActivityBar + SidePanel + ContentPanel + ChatPanel）布局。
 
 ### 8.3 面板尺寸
 

@@ -210,20 +210,32 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
     return () => { if (timer) clearTimeout(timer); subs.forEach(s => s?.()) }
   }, [novelId, loadContext, invalidateCache])
 
-  const activeCharIds = new Set<number>()
-  try {
-    if ((ctx?.writing_snapshot as any)?.active_chars) {
-      JSON.parse((ctx!.writing_snapshot as any).active_chars).forEach((id: number) => activeCharIds.add(id))
-    }
-  } catch { /* */ }
-  const activeChars = (ctx?.characters ?? []).filter((c: any) => activeCharIds.size === 0 || activeCharIds.has(c.id))
   const snap = ctx?.writing_snapshot as any
   const effectiveChapter = snap?.last_chapter_num && activeChapterNum <= snap.last_chapter_num ? snap.last_chapter_num : activeChapterNum
   const currentChapter = ctx?.chapter?.num ? ctx.chapter : { num: effectiveChapter, title: '', word_count: 0 }
+
+  // 当前章出场角色：优先 maintain 强制写入的 characters_in（事实层），
+  // 回退到快照 active_chars（状态层）。两者都空则显示全部角色。
+  const currentChapterBrief = (ctx?.recent_chapters ?? []).find((c: any) => c.num === currentChapter.num)
+  const charsInIds = new Set<number>()
+  try {
+    if (currentChapterBrief?.characters_in) {
+      JSON.parse(currentChapterBrief.characters_in).forEach((id: number) => charsInIds.add(Number(id)))
+    }
+  } catch { /* */ }
+  const snapshotCharIds = new Set<number>()
+  try {
+    if ((ctx?.writing_snapshot as any)?.active_chars) {
+      JSON.parse((ctx!.writing_snapshot as any).active_chars).forEach((id: number) => snapshotCharIds.add(Number(id)))
+    }
+  } catch { /* */ }
+  const activeCharIds = charsInIds.size > 0 ? charsInIds : snapshotCharIds
+  const activeChars = (ctx?.characters ?? []).filter((c: any) => activeCharIds.size === 0 || activeCharIds.has(c.id))
   const pendingByChapter: Record<number, any[]> = {}
+  const untimedPending: any[] = []
   for (const p of ctx?.timeline.pending ?? []) {
     const k = (p as any).target_chapter || 0
-    if (k <= 0) continue // 跳过未设置目标章节的条目，避免在 current/foreshadow 卡片中错误显示
+    if (k <= 0) { untimedPending.push(p); continue } // 未定时伏笔单独分组显示
     if (!pendingByChapter[k]) pendingByChapter[k] = []
     pendingByChapter[k].push(p)
   }
@@ -259,7 +271,6 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
         document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up)
         document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'
       }} />
-      <div className="narrative-header"><span className="narrative-header-title">📖 动态叙事</span></div>
       <div className="narrative-content" onMouseMove={onContentMouseMove}>
         {showToolbar && <div className="canvas-toolbar"><button onClick={() => setShowAddMenu(!showAddMenu)} className="canvas-btn-add" title="添加/隐藏卡片">{showAddMenu ? '✕' : '+'}</button></div>}
         {showAddMenu && <div className="canvas-add-dropdown">{ALL_CARDS.map(id => { const exists = hasCard(id); return <div key={id} onClick={() => { if (exists) removeCard(id); else addCard(id) }} className={`canvas-add-item${exists ? ' checked' : ''}`}><span className="canvas-add-check">{exists ? '✓' : ''}</span>{CARD_LABELS[id]}</div> })}</div>}
@@ -287,7 +298,8 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
               {card.id === 'current' && <>
                 {snap?.current_location && <div className="card-sec"><div className="card-sec-title">📍 地点</div><div className="card-val">{snap.current_location}</div></div>}
                 {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary}</div></div>}
-                {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 出场角色 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}<div className="card-item-tags">{c.items?.length > 0 ? <span className="card-item-tag">📦 {c.items.join(', ')}</span> : ''}{c.location?.name ? <span className="card-item-tag" title="角色静态存储位置，可能与当前章节实际位置不同">📍 {c.location.name}</span> : ''}</div></div>)}</div>}
+                {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 本章出场 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}</div>)}</div>}
+                {((ctx as any)?.item_occurrences ?? []).length > 0 && <div className="card-sec"><div className="card-sec-title">📦 本章物品流转</div>{((ctx as any).item_occurrences as any[]).map((o: any, i: number) => <div key={i} className="card-item"><span className="card-item-name">{o.item_name || `#${o.item_id}`}</span><span className="card-item-tag">{o.action}</span>{o.description && <div className="card-item-desc">{o.description}</div>}</div>)}</div>}
                 {Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).length > 0 && <div className="card-sec"><div className="card-sec-title">⏳ 近期待收</div>{Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).map(([c, es]) => <div key={c} className="card-item"><span className="card-item-name">第{c}章</span> {es.map((e: any) => <span key={e.id} className="card-item-tag" title={IMP[e.importance]}>{e.title}</span>)}</div>)}</div>}
               </>}
               {card.id === 'past' && <>
@@ -302,20 +314,25 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
               {card.id === 'future' && <>
                 {Object.keys(rawOutlines).map(Number).sort((a, b) => b - a).map(n => {
                   const raw = rawOutlines[n]
-                  const title = raw?.split('\n')[0]?.replace(/^#\s+/, '')?.trim() || `第${n}章`
+                  const fileTitle = raw?.split('\n')[0]?.replace(/^#\s+/, '')?.trim() || ''
+                  // 大纲首行已含"第N章"前缀时不再重复加
+                  const title = fileTitle.startsWith(`第${n}章`) ? fileTitle : (fileTitle ? `第${n}章 · ${fileTitle}` : `第${n}章`)
+                  // markdown 内容剔除首行标题，避免与卡片标题重复渲染
+                  const body = raw?.split('\n').slice(1).join('\n') ?? ''
                   return <div key={n} className="card-item" style={{ marginBottom: 8 }}>
-                    <div className="card-item-name" style={{ marginBottom: 4, fontSize: '0.85rem' }}>第{n}章 · {title}</div>
+                    <div className="card-item-name" style={{ marginBottom: 4, fontSize: '0.85rem' }}>{title}</div>
                     <div className="outline-markdown" style={{ fontSize: '0.78rem', lineHeight: 1.6, color: 'var(--muted-foreground)' }}>
-                      <ReactMarkdown>{raw}</ReactMarkdown>
+                      <ReactMarkdown>{body}</ReactMarkdown>
                     </div>
                   </div>
                 })}
                 {Object.keys(rawOutlines).length === 0 && <div className="card-item" style={{ color: 'var(--muted-foreground)' }}>暂无章纲</div>}
               </>}
-              {card.id === 'arcs' && (ctx?.active_arcs ?? []).map((a: any) => { const p = a.nodes_total > 0 ? Math.round(a.nodes_done / a.nodes_total * 100) : 0; return <div key={a.id}><div className="card-item"><span className="card-item-name">{a.name}</span><span className="card-item-tag">{a.type_zh}</span><span className="card-item-tag">{a.nodes_done}/{a.nodes_total}</span><div className="arc-progress-bar-container"><div className={`arc-progress-bar ${p >= 75 ? 'high' : p >= 40 ? 'medium' : 'low'}`} style={{ width: `${p}%` }} /></div></div>{(a.nodes || []).map((n: any) => { const isNext = n.status !== 'completed' && (n.target_chapter > 0 && n.target_chapter <= currentChapter.num); const isCurrent = isNext && !(a.nodes || []).some((nn: any) => nn.status !== 'completed' && nn.target_chapter > n.target_chapter && nn.target_chapter <= currentChapter.num); return <div key={n.id} className="card-item" style={{ marginLeft: '0.5rem', borderLeft: isCurrent ? '3px solid var(--primary)' : '2px solid var(--primary)', padding: '0.25rem 0.4rem', background: isCurrent ? 'color-mix(in oklab, var(--primary) 8%, transparent)' : undefined }}><div className="card-item-name">{n.title}{isCurrent && ' ← 当前'}</div>{n.description && <div className="card-item-desc">{n.description}</div>}<div className="card-item-tags"><span className="card-item-tag">{n.status === 'completed' ? '✅' : '⏳'}</span>{n.target_chapter > 0 && <span className="card-item-tag">目标第{n.target_chapter}章</span>}{n.actual_chapter > 0 && <span className="card-item-tag">实际第{n.actual_chapter}章</span>}</div></div>})}</div> })}
+              {card.id === 'arcs' && (ctx?.active_arcs ?? []).map((a: any) => { const p = a.nodes_total > 0 ? Math.round(a.nodes_done / a.nodes_total * 100) : 0; return <div key={a.id}><div className="card-item"><span className="card-item-name">{a.name}</span><span className="card-item-tag">{a.type_zh}</span><span className="card-item-tag">{a.nodes_done}/{a.nodes_total}</span><div className="arc-progress-bar-container"><div className={`arc-progress-bar ${p >= 75 ? 'high' : p >= 40 ? 'medium' : 'low'}`} style={{ width: `${p}%` }} /></div></div>{(a.nodes || []).map((n: any) => { const done = n.status === 'completed'; const overdue = !done && (n.target_chapter > 0 && n.target_chapter <= currentChapter.num); const isCurrent = overdue && !(a.nodes || []).some((nn: any) => nn.status !== 'completed' && nn.target_chapter > n.target_chapter && nn.target_chapter <= currentChapter.num); return <div key={n.id} className="card-item" style={{ marginLeft: '0.5rem', borderLeft: isCurrent ? '3px solid var(--primary)' : '2px solid var(--primary)', padding: '0.25rem 0.4rem', background: isCurrent ? 'color-mix(in oklab, var(--primary) 8%, transparent)' : undefined }}><div className="card-item-name">{n.title}{isCurrent && ' ← 当前'}</div>{n.description && <div className="card-item-desc">{n.description}</div>}<div className="card-item-tags"><span className="card-item-tag">{done ? '✅' : '⏳'}</span>{n.target_chapter > 0 && <span className="card-item-tag">目标第{n.target_chapter}章</span>}{n.actual_chapter > 0 && <span className="card-item-tag">实际第{n.actual_chapter}章</span>}</div></div>})}</div> })}
               {card.id === 'foreshadow' && <>
                 {(ctx?.timeline.overdue ?? []).map((e: any) => <div key={e.id} className="card-item card-item-overdue"><div className="card-item-name">⚠️ 第{e.target_chapter}章 · {e.title}（已超{e.overdue_by}章）</div></div>)}
                 {Object.entries(pendingByChapter).sort(([a], [b]) => +a - +b).map(([c, es]) => <div key={c} className="card-sec"><div className="card-sec-title">⏳ 第{c}章 · 待回收 {es.length} 条</div>{es.map((e: any) => <div key={e.id} className="card-item"><span className="card-item-name">{e.title}</span><span className="card-item-tag">{IMP[e.importance] || `${e.importance}★`}</span></div>)}</div>)}
+                {untimedPending.length > 0 && <div className="card-sec"><div className="card-sec-title">⏳ 未定时 · 待回收 {untimedPending.length} 条</div>{untimedPending.map((e: any) => <div key={e.id} className="card-item"><span className="card-item-name">{e.title}</span><span className="card-item-tag">{IMP[e.importance] || `${e.importance}★`}</span></div>)}</div>}
                 {(ctx?.timeline.resolved ?? []).length > 0 && <div className="card-sec"><div className="card-sec-title">✅ 已回收</div>{(ctx?.timeline.resolved ?? []).slice(0, 5).map((e: any) => <div key={e.id} className="card-item card-item-resolved"><span>✅ {e.title}</span></div>)}</div>}
               </>}
               {card.id === 'reader' && ctx?.reader && <>

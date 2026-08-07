@@ -226,7 +226,7 @@ main-tech-pov-purity 视角纯净；main-tech-anti-ai-writing 反AI八条铁律�
 main-tech-climax-scene 战斗章；main-tech-foreshadow-cycle 伏笔循环；main-tech-pacing-control 节奏控制；
 main-tech-scene-beats 场景节拍；main-tech-emotion-injection 情绪注入；main-tech-word-count-calibration 字数校准；
 main-tech-revision-pass 修改润色；main-tech-anti-repetition 去重；main-tech-golden-three-chapters 黄金三章；
-main-tech-golden-finger-design 金手指；main-tech-chapter-title-hooks 标题钩子；main-tech-book-completion 完本清单；
+main-tech-golden-finger-design 金手指；main-tech-chapter-title-design 章节标题；main-tech-book-completion 完本清单；
 main-type-xuanhuan-cultivation 玄幻；main-type-urban-martial-arts 都市；main-type-post-apocalyptic-survival 末日；
 main-type-suspense-rule-horror 悬疑；main-type-historical-time-travel 历史穿越；sub-tech-anti-ai-grade 用词反AI；
 sub-tech-review-standards 16项审稿判定`
@@ -261,6 +261,19 @@ func readFileText(path string, max int) string {
 		s = s[:max]
 	}
 	return s
+}
+
+// readFilesText 拼接多个内置 skill 的内容（read_required 的返回）。
+func readFilesText(names []string) string {
+	var b strings.Builder
+	for _, n := range names {
+		b.WriteString("--- ")
+		b.WriteString(n)
+		b.WriteString(" ---\n")
+		b.WriteString(readFileText("internal/skill/builtin/"+n+".md", 4000))
+		b.WriteString("\n\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func fixedSystem() []map[string]any {
@@ -366,6 +379,16 @@ func readSkill(name string) play {
 	}
 }
 
+// readRequired 模拟门禁 require_reads 的 read_required 工具调用（2026-08-08 起各阶段必读技能用此加载）。
+func readRequired(names ...string) play {
+	skills := strings.Join(names, ",")
+	return play{
+		tool:   "read_required",
+		args:   fmt.Sprintf(`{"skills":"%s"}`, skills),
+		result: readFilesText(names),
+	}
+}
+
 // initScript 开书（init）流程：加载 5 个技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
 // （对照 main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
 func initScript() []play {
@@ -407,33 +430,30 @@ func gateScript(turn int) []play {
 		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, ch-1)},
 		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch-1), result: `{"scenes":[{"id":9,"title":"入门测验","summary":"陈昊通过测验","word_count":1200}]}`},
 		{tool: "get_preferences", args: `{}`, result: `{"preferences":[{"category":"style","content":"快节奏、斗法细节"},{"category":"taboo","content":"禁止主角圣母"}]}`},
-		readSkill("main-tech-common-sense-logic"),
+		readRequired("main-tech-common-sense-logic"),
 		readSkill("main-tech-genre-templates"),
 		readSkill("main-tech-book-outline"),
 		{tool: "get_lore", args: `{}`, result: `{"lore":[{"id":1,"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}]}`},
 		{tool: "get_items", args: `{}`, result: `{"items":[{"id":3,"name":"聚气丹","owner":"陆沉","narrative_role":"道具"}]}`},
 		{tool: "set_phase", args: `{"phase":"outline"}`, result: `{"success":true,"phase":"outline"}`},
 
-		// 阶段 outline：加载 10 个技能 + 写大纲（require: edit），随后推进
+		// 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 其余技能按需 + 写大纲
+		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
 		readSkill("main-tech-book-outline"),
 		readSkill("main-tech-chapter-opening"),
-		readSkill("main-tech-chapter-hook-enhanced"),
-		readSkill("main-tech-chapter-title-design"),
 		readSkill("main-tech-maliang-method"),
 		readSkill("main-tech-dialogue-subtext"),
 		readSkill("main-tech-emotional-arc"),
 		readSkill("main-tech-emotion-injection"),
-		readSkill("main-tech-chapter-title-hooks"),
 		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 
-		// 阶段 write：加载 11 个技能全量 + 分段写正文 3000 字（6 次 edit）+ 字数校验（首次不达标、补写后达标）+ 记录物品
-		readSkill("main-tech-show-dont-tell"),
+		// 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing）+ 其余技能按需 + 分段写正文
+		readRequired("main-tech-show-dont-tell", "main-tech-anti-ai-writing"),
 		readSkill("main-tech-info-density"),
 		readSkill("main-tech-pov-purity"),
-		readSkill("main-tech-anti-ai-writing"),
 		readSkill("main-tech-shuangdian-pacing"),
 		readSkill("main-tech-climax-scene"),
 		readSkill("main-tech-foreshadow-cycle"),
@@ -488,8 +508,7 @@ func gateScript(turn int) []play {
 		{tool: "update_reader_perspective_entry", args: `{"entry_id":7,"content":"玉佩与陈昊身世有关","type":"suspense"}`, result: "已更新"},
 		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"玉佩易主给林雪"}`, result: "已记录物品流转"},
 		{tool: "update_character_relationship", args: `{"character_a":1,"character_b":2,"relation":"并肩作战","relation_describe":"秘境中共患难"}`, result: "已更新角色关系"},
-		readSkill("main-tech-anti-repetition"),
-		readSkill("main-tech-foreshadow-cycle"),
+		readRequired("main-tech-anti-repetition", "main-tech-foreshadow-cycle"),
 		{tool: "edit", args: editArgs("goink.md", fmt.Sprintf("第 %d 章完成：陈昊突破金丹，玉佩新线索。当前主线：登天之路。", ch)), result: "已更新 goink.md"},
 		{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
 	}

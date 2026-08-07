@@ -24,6 +24,7 @@ import (
 	"novel/internal/chapter"
 	"novel/internal/character"
 	"novel/internal/config"
+	"novel/internal/platform"
 	"novel/internal/git"
 	"novel/internal/item"
 	"novel/internal/itemoccurrence"
@@ -160,7 +161,9 @@ func (s *apiServer) Start() {
 
 // killPort 杀掉占用指定端口的进程（仅 Windows）。
 func killPort(port int) {
-	out, err := exec.Command("netstat", "-ano", "-p", "tcp").Output()
+	cmd := exec.Command("netstat", "-ano", "-p", "tcp")
+	platform.SetPlatformAttr(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return
 	}
@@ -181,7 +184,9 @@ func killPort(port int) {
 			continue
 		}
 		slog.Info("杀掉旧进程", "pid", pid, "port", port)
-		exec.Command("taskkill", "/F", "/PID", pid).Run()
+		kill := exec.Command("taskkill", "/F", "/PID", pid)
+		platform.SetPlatformAttr(kill)
+		kill.Run()
 	}
 }
 

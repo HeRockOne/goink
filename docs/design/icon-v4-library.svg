@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1522"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#a1c4d6" stop-opacity="0.22"/>
+      <stop offset="0.7" stop-color="#a1c4d6" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#a1c4d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a7488"/>
+      <stop offset="1" stop-color="#3e5668"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e4a5e"/>
+      <stop offset="1" stop-color="#1c2e3c"/>
+    </linearGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef6fa"/>
+      <stop offset="1" stop-color="#a1c4d6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="1000" rx="180" fill="url(#bg)"/>
+  <circle cx="500" cy="430" r="360" fill="url(#moon)"/>
+
+  <path d="M 0 860 L 220 720 L 380 800 L 520 706 L 700 812 L 1000 660 L 1000 1000 L 0 1000 Z" fill="#16242e" opacity="0.9"/>
+  <path d="M 0 920 L 300 790 L 480 872 L 680 776 L 1000 906 L 1000 1000 L 0 1000 Z" fill="#12202a"/>
+
+  <path d="M 500 150 L 534 222 L 466 222 Z" fill="url(#roof)"/>
+  <circle cx="500" cy="140" r="10" fill="#a1c4d6" opacity="0.9"/>
+
+  <path d="M 396 246 L 604 246 L 628 262 L 604 270 L 500 238 L 396 270 L 372 262 Z" fill="url(#roof)"/>
+  <rect x="438" y="270" width="124" height="118" rx="8" fill="url(#wall)"/>
+  <circle cx="500" cy="330" r="26" fill="url(#window)"/>
+
+  <path d="M 330 406 L 670 406 L 700 424 L 670 434 L 500 396 L 330 434 L 300 424 Z" fill="url(#roof)"/>
+  <rect x="356" y="434" width="288" height="160" rx="10" fill="url(#wall)"/>
+  <circle cx="500" cy="514" r="34" fill="url(#window)"/>
+  <path d="M 500 480 L 500 548" stroke="#3e5668" stroke-width="6"/>
+  <path d="M 466 514 L 534 514" stroke="#3e5668" stroke-width="6"/>
+
+  <path d="M 262 608 L 738 608 L 774 632 L 738 644 L 500 594 L 262 644 L 226 632 Z" fill="url(#roof)"/>
+  <rect x="292" y="644" width="416" height="168" rx="12" fill="url(#wall)"/>
+  <path d="M 462 812 L 462 724 Q 500 688 538 724 L 538 812 Z" fill="url(#window)"/>
+  <circle cx="392" cy="730" r="16" fill="url(#window)" opacity="0.85"/>
+  <circle cx="608" cy="730" r="16" fill="url(#window)" opacity="0.85"/>
+
+  <rect x="258" y="812" width="484" height="46" rx="14" fill="#24384a"/>
+  <rect x="258" y="858" width="484" height="8" rx="4" fill="#3e5668" opacity="0.6"/>
+</svg>

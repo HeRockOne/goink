@@ -82,6 +82,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const [sessionsTotal, setSessionsTotal] = useState(0)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  // 历史消息分页渲染：默认只渲染最近 N 轮，点"加载更早"递增
+  const [visibleTurnCount, setVisibleTurnCount] = useState(30)
   const [sessionTitle, setSessionTitle] = useState('')
   const [initLoadError, setInitLoadError] = useState(false)
   const [initLoadRetry, setInitLoadRetry] = useState(0)
@@ -374,6 +376,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
   const handleSelectSession = useCallback((sid: string) => {
     setActiveSessionId(sid)
+    setVisibleTurnCount(30)
     app.SetLastSession(sid).catch(() => {})
     app.GetSession(sid).then(detail => {
       if (detail) {
@@ -1049,7 +1052,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       : t('chat.inputPlaceholder')
 
   return (
-    <aside className="chat-panel shrink-0 h-full flex flex-col bg-sidebar backdrop-blur-sm border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
+    <aside className="chat-panel shrink-0 h-full flex flex-col bg-sidebar border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors z-10 select-none"
         style={{ marginLeft: -2 }}
@@ -1175,7 +1178,15 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
               </div>
             ) : (
               <div className="space-y-4">
-                {turns.map(turn => (
+                {turns.length > visibleTurnCount && (
+                  <button
+                    onClick={() => setVisibleTurnCount(c => c + 50)}
+                    className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md transition-colors cursor-pointer"
+                  >
+                    加载更早消息（{turns.length - visibleTurnCount} 轮）
+                  </button>
+                )}
+                {turns.slice(-visibleTurnCount).map(turn => (
                   <div key={turn.id} className="space-y-2">
                     {turn.userMessage && (
                       <MessageBubble role="user" content={turn.userMessage} timestamp={turn.id} />

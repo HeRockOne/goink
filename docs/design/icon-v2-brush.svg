@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1522"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <linearGradient id="shaft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7e9aac"/>
+      <stop offset="0.5" stop-color="#c8dce8"/>
+      <stop offset="1" stop-color="#6c889a"/>
+    </linearGradient>
+    <linearGradient id="collar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5a7488"/>
+      <stop offset="1" stop-color="#3e5668"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe2ee"/>
+      <stop offset="0.45" stop-color="#a1c4d6"/>
+      <stop offset="1" stop-color="#3a5a6e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="1000" rx="180" fill="url(#bg)"/>
+
+  <g transform="rotate(-14 500 520)">
+    <rect x="430" y="180" width="140" height="360" rx="26" fill="url(#shaft)"/>
+    <rect x="430" y="540" width="140" height="46" rx="12" fill="url(#collar)"/>
+    <path d="M 500 590 C 415 690 385 800 420 846 C 448 886 552 886 580 846 C 615 800 585 690 500 590 Z" fill="url(#hair)"/>
+    <path d="M 500 640 C 470 700 452 756 452 796 C 452 826 470 842 500 846 C 530 842 548 826 548 796 C 548 756 530 700 500 640 Z" fill="#eef6fa" opacity="0.35"/>
+  </g>
+</svg>

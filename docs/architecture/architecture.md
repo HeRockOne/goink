@@ -15,29 +15,37 @@ Goink 是一个桌面 AI 写作系统，Wails（Go + React）构建。核心能�
 goink-master/
 ├── app/                    # Wails 绑定 + HTTP API 服务器
 │   ├── handler.go          # Wails 绑定函数
-│   ├── api_server.go       # HTTP REST API（29 个读端点 + chat）
-│   ├── dialog.go           # 系统对话框
-│   └── tray.go             # 系统托盘
+│   ├── api_server.go       # HTTP REST API（31 个端点 + chat）
+│   ├── chat.go             # 对话主流程（系统消息注入 + NS 落库）
+│   ├── default_phase_gate_config.go  # 出厂默认门禁配置 seed
+│   └── ...                 # 视图/设置/导入导出等
 ├── internal/
 │   ├── agent/              # Agent loop：LLM 调用 → 工具执行 → 阶段门禁 → 压缩
 │   ├── agentcfg/           # 系统提示词、工具白名单、Skill 目录
+│   ├── api/                # 移动端 API handler
 │   ├── approval/           # 文件编辑/删除审批服务
+│   ├── cert/               # 自签名证书（HTTPS）
 │   ├── chapter/            # 章节元数据 Store
 │   ├── character/          # 角色 + 角色关系 Store（append-only 关系图）
 │   ├── config/             # 全局配置（AppSettings 单行 SQLite）
-│   ├── export/             # 导出（TXT/Markdown/EPUB）
+│   ├── e2e/                # 端到端测试
+│   ├── export/             # 导出（TXT/Markdown/EPUB/DOCX）
 │   ├── git/                # 每本小说的 Git 仓库管理
 │   ├── import/             # 导入（TXT/EPUB + LLM 辅助）
 │   ├── item/               # 物品/法宝 Store
 │   ├── itemoccurrence/     # 物品章节出现记录 Store
 │   ├── llm/                # LLM 客户端（多供应商、流式、Token 计数、Web 搜索）
 │   ├── location/           # 地点 + 空间关系 Store
+│   ├── logger/             # 日志
 │   ├── lore/               # 世界观设定 Store
-│   ├── mcp_tools/          # 所有 MCP 工具定义（57 个）
+│   ├── mcp_tools/          # 所有 MCP 工具定义（60 个）
 │   ├── migrate/            # 数据库自动迁移（25 张表）
 │   ├── novel/              # 小说索引 + 创作偏好 Store
+│   ├── pattern/            # 写作模式（POV/节奏等）
+│   ├── platform/           # 平台相关（ONNX 运行时搜索链）
 │   ├── rag/                # RAG 向量检索（ONNX Embedder + sqlite-vec）
 │   ├── reader/             # 读者认知 Store（已知/悬念/误知）
+│   ├── rollback/           # 回退（turn_commits）
 │   ├── scene/              # 章节内场景 Store
 │   ├── search/             # 统一搜索服务（实体 LIKE + 写入缓存关键词 + 向量/FTS5 RRF 融合）
 │   ├── session/            # 对话会话 + 消息 Store
@@ -45,8 +53,13 @@ goink-master/
 │   ├── stats/              # 统计聚合
 │   ├── storage/            # SQLite 连接池 + 分页 + PATCH 工具
 │   ├── storyarc/           # 叙事弧线 + 节点 Store
+│   ├── style/              # 风格素材
+│   ├── text/               # 文本处理
 │   ├── timeline/           # 伏笔 + 章节计划 Store
+│   ├── update/             # 应用更新
+│   ├── version/            # 版本信息
 │   ├── web/                # 网页抓取
+│   ├── webdav/             # 移动端静态资源只读 HTTP 服务
 │   ├── writing/            # 写作日志 + 写作进度快照 Store
 │   └── ws/                 # WebSocket Hub（桌面-移动端同步）
 ├── frontend/               # 桌面端 React 前端
@@ -91,7 +104,7 @@ goink-master/
 | `messages` | Message | 对话消息（append-only，版本化） |
 | `turn_commits` | TurnCommit | Git commit 映射（用于回退） |
 | `operation_log` | OperationLogRecord | 数据操作日志 |
-| `model_usage` | ModelUsage | 按模型的 token 消耗累计（session_id + model_id 唯一） |
+| `model_usage` | ModelUsage | 按模型的 token 消耗累计（session_id + model_id 联合索引，非唯一约束） |
 
 ### 关键外键关系
 
@@ -116,7 +129,7 @@ reader_perspectives.novel_id → novels.id
 writing_snapshots.novel_id → novels.id (primaryKey)
 ```
 
-## 4. MCP 工具清单（59 个）
+## 4. MCP 工具清单（60 个）
 
 ### 按模块分组
 
@@ -218,13 +231,14 @@ writing_snapshots.novel_id → novels.id (primaryKey)
 | `get_phase_gate_config` | GET | - |
 | `update_phase_gate_config` | UPDATE | config(R) |
 
-#### 文件操作（2 个）
+#### 文件操作（3 个）
 | 工具 | 类型 | required 字段 |
 |------|------|--------------|
 | `read` | GET | path(R) |
 | `edit` | WRITE | path(R), change_type(R) |
+| `read_required` | GET | skills(R)（门禁 require_reads 强制的技能加载入口，按名读技能，零硬编码） |
 
-#### 搜索/辅助（8 个）
+#### 搜索/辅助（7 个）
 | 工具 | 类型 | required 字段 |
 |------|------|--------------|
 | `search_story_memory` | GET | query(R) |
@@ -240,23 +254,16 @@ writing_snapshots.novel_id → novels.id (primaryKey)
 ```
 chapter:           {num, title, word_count}
 recent_chapters[]: {num, title, summary, key_events, word_cnt, characters_in, arc_ids}
-scenes[]:           {id, title, summary, word_count, location, ...}
-characters[]:       {id, name, desc, location, items, ...}
-active_arcs[]:      {name, type_zh, nodes_done, nodes_total, nodes[]}
-timeline:           {pending[], resolved[], overdue[]}
-reader:             {known, suspense, misconception}
-writing_snapshot:   {last_chapter_num, ...}
-volume:             {name, description, detail_json, start_chapter, end_chapter}
-volume_entities:    {characters[], items[], lore[], foreshadow[]}  // ID+name 列表
 scenes[]:          {title, summary, word_count, location:{name,type}, arc_node:{title,arc_name}}
 characters[]:      {name, location:{name}, items:[{name,role}], item_count}
-active_arcs[]:     {name, type_zh, nodes_done, nodes_total, related_lore[], related_items[]}
+active_arcs[]:     {name, type_zh, nodes_done, nodes_total, nodes[]}
 timeline.pending[]: {title, category, target_chapter, importance}
 timeline.resolved[]: {title, resolved_chapter}
 timeline.overdue[]:  {title, target_chapter, importance, overdue_by}
 reader:            {known, suspense, misconception}
 writing_snapshot:  {last_chapter_num, current_arc_id, current_location, active_chars}
-stats:             {total_chapters, min_words, max_words}
+volume:            {name, description, detail_json, start_chapter, end_chapter}
+volume_entities:   {characters[], items[], lore[], foreshadow[]}  // ID+name 列表
 ```
 
 ## 6. 阶段门禁
@@ -277,14 +284,17 @@ prepare(get_writing_context) → outline(edit outlines/)
 - outline require: edit
 - write require: edit, get_chapter_list
 - review require: run_subagent
-- maintain require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective
+- maintain require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
 
 完整配置见 `docs/mcp-tools-audit.md`。
 
-## 7. HTTP API（29 个读端点）
+## 7. HTTP API（31 个端点）
 
 | 端点 | 对应工具 |
 |------|---------|
+| `GET /api/health` | - |
+| `GET /api/info` | - |
+| `GET /api/sync/state` | - |
 | `GET /api/novels` | - |
 | `GET /api/novels/{id}/chapters` | get_chapter_list |
 | `GET /api/chapters/{id}` | read |
@@ -304,10 +314,15 @@ prepare(get_writing_context) → outline(edit outlines/)
 | `GET /api/stats` | get_stats |
 | `GET /api/writing-snapshot` | get_writing_snapshot |
 | `GET /api/phase-gate-config` | get_phase_gate_config |
-| `GET /api/search-main-cmd-memory` | search_story_memory |
+| `GET /api/search-memory` | search_story_memory |
 | `GET /api/writing-context` | get_writing_context |
 | `GET /api/read` | read |
+| `GET /api/sessions` | - |
+| `GET /api/sessions/{id}` | - |
+| `GET /api/settings/model` | - |
 | `POST /api/chat` | - |
+| `POST /api/chat/cancel` | - |
+| `GET /api/ws` | WebSocket |
 
 认证：Bearer Token（`app_config.apitoken`）
 
@@ -333,15 +348,16 @@ prepare(get_writing_context) → outline(edit outlines/)
 
 | 阶段 | Skill |
 |------|-------|
-| init（开书） | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
+| init（开书） | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system, main-tech-golden-finger-design, main-tech-golden-three-chapters |
 | prepare（准备） | main-tech-common-sense-logic, main-tech-genre-templates, main-tech-book-outline, main-tech-brainstorm-composer（按需） |
 | outline（大纲） | main-tech-book-outline, main-tech-chapter-opening, main-tech-chapter-hook-enhanced, main-tech-chapter-title-design, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-emotional-arc, main-tech-opening-chapter |
 | write（正文） | main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration |
 | write后（自审） | main-tech-revision-pass, sub-tech-anti-ai-grade |
-| review（审稿） | sub-tech-review-standards（16 项判定） |
+| review（审稿） | sub-tech-review-standards（22 项判定） |
 | maintain（维护） | main-tech-anti-repetition, main-tech-foreshadow-cycle |
 | 完结 | main-tech-book-completion |
-| manual（`/` 触发） | main-cmd-collect, main-cmd-memory, main-cmd-next, review |
+| 类型（type 前缀，按题材触发） | main-type-xuanhuan-cultivation, main-type-urban-martial-arts, main-type-suspense-rule-horror, main-type-post-apocalyptic-survival, main-type-historical-time-travel |
+| manual（`/` 触发） | main-cmd-collect, main-cmd-memory, main-cmd-next, main-cmd-review, main-cmd-phase-gate（门禁说明文档） |
 
 > 完整阶段技能表见 `skills/main-core-writing-kernel.md`。新增 skill 放用户级 `~/.goink/skills/`，并在 main-core-writing-kernel 登记。
 
@@ -384,6 +400,8 @@ Windows 一键构建：`.\build.ps1` 或 `build.bat`
 
 ONNX 运行时搜索链：`<exe_dir>/runtime/` → `~/Goink/runtime/` → 系统 PATH
 
+> **惰性加载（2026-08-04）**：ONNX embedder 通过 `rag.LazyEmbedder` 惰性初始化（`app/handler.go`），首次搜索时加载、闲置 2 分钟自动卸载（idle timeout），避免启动占用内存（提交 8428f75）。
+
 ## 11. 前端架构
 
 ### 桌面端（React + Vite + TypeScript）
@@ -395,8 +413,10 @@ frontend/src/
 │   ├── InitView.tsx            # 首次启动引导
 │   └── WorkspaceView.tsx       # 主工作区
 ├── components/
-│   ├── chat/                   # 对话核心（24 个组件）
+│   ├── chat/                   # 对话核心（17 个组件）
 │   │   ├── ChatPanel.tsx       # 主面板（消息流 + 工具调用渲染）
+│   │   ├── ChatControls.tsx    # 对话输入控制
+│   │   ├── ChatInput.tsx       # 输入框
 │   │   ├── MessageBubble.tsx   # 消息气泡（复制按钮在边框外）
 │   │   ├── PhaseGateBar.tsx    # 阶段门禁进度条 + 错误提示
 │   │   ├── SubagentCard.tsx    # 子代理审稿报告卡片
@@ -404,9 +424,13 @@ frontend/src/
 │   │   ├── ToolCallCard.tsx    # 工具调用展示
 │   │   ├── WebSearchCard.tsx   # 搜索结果卡片
 │   │   ├── WebFetchCard.tsx    # 网页抓取结果卡片
-│   │   ├── SlashMenu.tsx       # / 快捷指令菜单
+│   │   ├── ContextRing.tsx     # 上下文占用圆环 + 计费面板
 │   │   ├── CompressionBlock.tsx # 上下文压缩提示
-│   │   └── RecentSessions.tsx  # 历史会话列表
+│   │   ├── SlashMenu.tsx       # / 快捷指令菜单
+│   │   ├── PopSelect.tsx       # 弹窗选择
+│   │   ├── RecentSessions.tsx  # 历史会话列表
+│   │   ├── SessionHistory.tsx  # 会话历史
+│   │   └── RetryNotification.tsx # 重试提示
 │   ├── settings/               # 设置面板（11 个组件）
 │   │   ├── SettingsDialog.tsx  # 设置主弹窗
 │   │   ├── ModelConfigTab.tsx  # 模型配置
@@ -422,8 +446,8 @@ frontend/src/
 │   ├── reader/                 # 读者认知管理
 │   ├── preference/             # 偏好管理
 │   ├── stats/                  # 统计面板
-│   ├── help/                   # 帮助中心（51 工具中英文描述）
-│   ├── shell/                  # Shell 布局（侧边栏 + 主区）
+│   ├── help/                   # 帮助中心（53 工具中英文描述）
+│   ├── shell/                  # Shell 布局（ActivityBar + StatusBar + 主区）
 │   └── ui/                     # 通用 UI 组件
 ├── hooks/                      # 自定义 Hook
 ├── lib/wailsjs/                # Wails JS 绑定（自动生成，勿手动修改）
@@ -431,7 +455,7 @@ frontend/src/
 └── assets/                     # 静态资源
 ```
 
-**技术栈**：React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons
+**技术栈**：React 18 + TypeScript + Vite + Tailwind CSS + Lucide Icons + CodeMirror 6（编辑器，替换旧 Monaco）
 **构建**：`npm run build` → 输出到 `frontend/dist/`（Wails 自动打包进 exe）
 
 ### 移动端（原生 HTML/CSS/JS，无框架）
@@ -447,7 +471,7 @@ mobile/
 ├── jsQR.js             # QR 码扫描（扫码连接桌面端）
 ├── wspulse.mjs         # WebSocket 同步模块
 ├── manifest.json       # PWA 配置
-└── API.md              # HTTP API 文档（27 节，29 个端点）
+└── API.md              # HTTP API 文档（30 节，32 个端点）
 ```
 
 **部署**：桌面端 `webdav` 包提供只读 HTTP 服务，移动端通过 `https://桌面IP:端口/mobile/` 访问

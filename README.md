@@ -52,7 +52,7 @@ prepare → outline → write → review → maintain → 回到 prepare
 
 ### HTTP API + 移动端
 
-29 个 REST 端点 + SSE 对话流 + WebSocket 双端同步，手机浏览器可完整使用 Goink：
+31 个 REST 端点 + SSE 对话流 + WebSocket 双端同步，手机浏览器可完整使用 Goink：
 
 - **书架**：小说列表、字数统计、当前书籍标识
 - **小说详情**：章节/角色/时间线/弧线/读者/偏好/地点/世界观/物品 九大模块
@@ -111,9 +111,9 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 - 卡片标题可双击重命名，布局存 localStorage
 - 实时刷新：监听文件变更和对话事件，300ms 防抖
 
-### 57 个 MCP 工具
+### 60 个 MCP 工具
 
-AI 通过 57 个 Function Calling 工具管理小说的全部数据。工具按领域划分，每个工具都有详尽的 description 教会 AI 创作方法论（世界观分类、伏笔回收节奏、悬念反转设计）。
+AI 通过 60 个 Function Calling 工具管理小说的全部数据。工具按领域划分，每个工具都有详尽的 description 教会 AI 创作方法论（世界观分类、伏笔回收节奏、悬念反转设计）。
 
 新增工具分类：
 
@@ -132,7 +132,7 @@ AI 通过 57 个 Function Calling 工具管理小说的全部数据。工具按�
 | 子 Agent（Subagent） | 1 | 启动审稿/记忆子 Agent |
 | 通用删除（Delete） | 1 | 删除任意记录 |
 
-### 43 个 Skill（技能系统）
+### 42 个 Skill（技能系统）
 
 三层 Skill 系统（内置/用户/小说 x auto/manual/always），零代码扩展：
 
@@ -172,6 +172,27 @@ AI 通过 57 个 Function Calling 工具管理小说的全部数据。工具按�
 - JSON 粘贴即应用
 - 示例主题「墨绿书斋」
 - `normalizeTheme()` 自动补全缺失变量
+
+### 图标替换
+
+| 位置 | 用途 | 格式 |
+|------|------|------|
+| `build/windows/icon.ico` | exe 文件图标 + 窗口标题栏图标 | ICO（多尺寸） |
+| `appicon.png` | Wails 构建用的应用图标 | PNG |
+| `frontend/public/logo.svg` | 标题栏左上角 Logo | SVG |
+| `frontend/public/favicon.svg` | 浏览器标签页图标 | SVG |
+| `assets/logo.svg` | Logo 源文件 | SVG |
+
+**替换步骤：**
+
+1. 准备新图标（推荐 SVG 或高清 PNG）
+2. 替换对应文件：
+   - **exe 图标**：用在线工具将 PNG 转为 ICO，替换 `build/windows/icon.ico`
+   - **应用图标**：将 PNG 放到项目根目录，重命名为 `appicon.png`，同时复制到 `build/appicon.png`
+   - **标题栏 Logo**：将 SVG 放到 `frontend/public/logo.svg`
+   - **Favicon**：将 SVG 放到 `frontend/public/favicon.svg`
+3. 运行 `.\build.ps1` 重新构建
+4. 若 exe 图标未更新，清除 Windows 图标缓存或重启电脑
 
 ### 安全
 
@@ -218,9 +239,9 @@ goink-fork/
 ├── internal/            # 核心逻辑（~150 文件）
 │   ├── agent/           #   ReAct Agent 引擎 + 阶段门禁
 │   ├── agentcfg/        #   系统提示词 + 工具白名单
-│   ├── mcp_tools/       #   57 个 MCP 工具注册表
+│   ├── mcp_tools/       #   60 个 MCP 工具注册表
 │   ├── llm/             #   多供应商 LLM 客户端
-│   ├── skill/           #   三层 Skill 系统（41 内置）
+│   ├── skill/           #   三层 Skill 系统（42 内置）
 │   ├── rag/             #   向量检索（ONNX + sqlite-vec）
 │   ├── search/          #   三路合并搜索
 │   ├── session/         #   会话存储
@@ -265,7 +286,7 @@ goink-fork/
 | 桌面框架 | Wails v2 (Go + WebView2) |
 | 前端 | React 18 + TypeScript + Tailwind CSS + shadcn/ui |
 | 后端 | Go 1.26, GORM + SQLite |
-| Agent 引擎 | ReAct 循环 (SSE + 57 工具 + 子 Agent, MaxTurns 100) |
+| Agent 引擎 | ReAct 循环 (SSE + 59 工具 + 子 Agent, MaxTurns 100) |
 | 向量搜索 | ONNX Runtime (BGE 中文) + sqlite-vec |
 | 版本控制 | 内置 Git (每本小说独立仓库) |
 | 移动端 | 原生 JS + idb-keyval + Service Worker |
@@ -294,8 +315,8 @@ goink-fork/
 
 | 指标 | 上游 v1.1 | 本 fork |
 |------|-----------|---------|
-| MCP 工具 | 33 个 | **57 个** |
-| 内置 Skill | 12 个 | **41 个** |
+| MCP 工具 | 33 个 | **60 个** |
+| 内置 Skill | 12 个 | **42 个** |
 | 数据库表 | 17 张 | **25 张** |
 
 ### 工程能力
@@ -303,7 +324,7 @@ goink-fork/
 | 功能 | 上游 v1.1 | 本 fork |
 |------|-----------|---------|
 | 阶段门禁 | 无 | 5 阶段校验 + 白名单 + require |
-| HTTP API | 无 | 29 端点 + SSE 对话 + WebSocket |
+| HTTP API | 无 | 31 端点 + SSE 对话 + WebSocket |
 | 移动端 | 无 | 完整 Web 前端 + 离线缓存 |
 | WebDAV | 无 | 内置服务器 |
 | 计费面板 | 无 | Token 统计 + 趋势图 |

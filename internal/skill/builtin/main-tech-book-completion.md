@@ -18,7 +18,7 @@ mode: auto
 
 ## 卷末收束（每卷结束）
 
-对照 `book-completion` 的卷级检查：
+对照 `foreshadow-cycle` 的回收率门槛做卷级检查：
 
 1. 本卷伏笔回收率 ≥80%（用 get_timeline 核对）
 2. 主角状态有变化（境界/关系/内心至少一条）

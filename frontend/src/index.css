@@ -48,7 +48,7 @@
   --chart-3: #c4956a;
   --chart-4: #7a9ab5;
   --chart-5: #b57a8a;
-  --sidebar: rgba(255, 255, 255, 0.68);
+  --sidebar: rgba(255, 255, 255, 0.85);
   --sidebar-foreground: #0e1a26;
   --sidebar-primary: #6b8fad;
   --sidebar-primary-foreground: #f0f4f8;
@@ -155,7 +155,7 @@
   --chart-3: #d4a870;
   --chart-4: #7a9ab5;
   --chart-5: #c0808a;
-  --sidebar: rgba(13, 20, 32, 0.5);
+  --sidebar: rgba(13, 20, 32, 0.82);
   --sidebar-foreground: #e8eef2;
   --sidebar-primary: #a1c4d6;
   --sidebar-primary-foreground: #0a0e17;
@@ -307,10 +307,8 @@
   inset: 0;
   background-image:
     linear-gradient(30deg, transparent 40%, rgba(161, 196, 214, 0.02) 41%, transparent 42%),
-    linear-gradient(-45deg, transparent 60%, rgba(161, 196, 214, 0.015) 61%, transparent 62%),
-    linear-gradient(80deg, transparent 20%, rgba(161, 196, 214, 0.012) 21%, transparent 22%),
     linear-gradient(120deg, transparent 50%, rgba(161, 196, 214, 0.018) 51%, transparent 52%);
-  background-size: 200px 200px, 300px 300px, 150px 150px, 250px 250px;
+  background-size: 200px 200px, 250px 250px;
   opacity: 0.5;
 }
 
@@ -393,7 +391,7 @@ h1, h2, h3, .font-display {
   user-select: none;
 }
 
-/* 门禁阶段条（左下角，v2 文字序列） */
+/* 门禁阶段条（状态栏中段，v2 文字序列） */
 .gate-steps {
   display: flex;
   align-items: center;
@@ -419,16 +417,6 @@ h1, h2, h3, .font-display {
   color: var(--muted-foreground);
   opacity: 0.3;
   font-size: 0.65rem;
-}
-
-/* 顶部栏装饰标语 */
-.header-slogan {
-  font-size: 0.72rem;
-  color: var(--ring);
-  opacity: 0.75;
-  letter-spacing: 0.2em;
-  white-space: nowrap;
-  text-shadow: 0 0 10px var(--glow);
 }
 
 /* AI 气泡（v2：青蓝 8% 底 + 28% 边框） */
@@ -640,9 +628,9 @@ body {
    保证叙事面板打开时主题特效（氛围光/粒子/流光）不被遮挡。 */
 .narrative-overlay {
   position: fixed;
-  top: 0;
+  top: 44px;     /* header 高度（h-11），避免被标题栏遮挡 */
   left: 0;
-  bottom: 0;
+  bottom: 28px;  /* 状态栏高度，避免遮挡（h-7 = 28px） */
   z-index: 8;
   display: flex;
   border-right: 1px solid var(--border);
@@ -654,8 +642,8 @@ body {
   display: flex;
   align-items: center;
   gap: 0.2rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.3rem;
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.25rem;
   border: 1px solid transparent;
   background: transparent;
   color: var(--muted-foreground);
@@ -663,6 +651,7 @@ body {
   transition: all 150ms ease;
   font-size: 0.75rem;
   white-space: nowrap;
+  margin-right: 0.15rem;
 }
 .narrative-toggle-btn:hover {
   background: var(--narrative-current-bg);
@@ -676,6 +665,25 @@ body {
   text-shadow: 0 0 8px var(--glow-strong);
 }
 
+/* 标题栏阶段门禁开关 */
+.phase-gate-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all 150ms ease;
+  margin-right: 0.15rem;
+}
+.phase-gate-toggle-btn:hover {
+  background: var(--narrative-current-bg);
+  color: var(--foreground);
+}
+
 /* ═══════════════════════════════════════════════
    NarrativeTimeline — 画布模式 CSS
    ═══════════════════════════════════════════════ */
@@ -686,7 +694,6 @@ body {
   flex-direction: column;
   height: 100%;
   background: var(--sidebar);
-  backdrop-filter: blur(10px);
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
@@ -713,7 +720,6 @@ body {
   border: 1px solid var(--narrative-card-border);
   border-radius: 0.5rem;
   background: var(--narrative-card-bg);
-  backdrop-filter: blur(8px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -880,8 +886,6 @@ body {
 .narrative-add-btn:hover { background: var(--primary); color: white; }
 .narrative-collapse-btn { background: none; border: none; color: var(--muted-foreground); cursor: pointer; font-size: 0.75rem; padding: 0.15rem 0.3rem; border-radius: 0.25rem; transition: background 150ms; }
 .narrative-collapse-btn:hover { background: var(--narrative-current-bg); }
-.narrative-header { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.625rem; border-bottom: 1px solid var(--narrative-divider); flex-shrink: 0; }
-.narrative-header-title { font-size: 0.88rem; font-weight: 600; color: var(--sidebar-foreground); letter-spacing: 0.12em; text-shadow: 0 0 14px var(--glow), 0 0 28px var(--glow); }
 
 /* 画布浮动工具栏 */
 .canvas-toolbar {
@@ -898,7 +902,6 @@ body {
   border-radius: 6px;
   border: 1px solid var(--narrative-card-border);
   background: var(--narrative-card-bg);
-  backdrop-filter: blur(6px);
   color: var(--muted-foreground);
   cursor: pointer;
   display: flex;
@@ -974,7 +977,6 @@ body {
 .corner-ne { top: -3px; right: -3px; cursor: ne-resize; }
 .corner-sw { bottom: -3px; left: -3px; cursor: sw-resize; }
 .corner-se { bottom: -3px; right: -3px; cursor: se-resize; }
-.narrative-header-actions { display: flex; gap: 0.2rem; align-items: center; }
 .narrative-resize-handle { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 10; transition: background 150ms; }
 .narrative-resize-handle:hover, .narrative-resize-handle:active { background: var(--primary); opacity: 0.4; }
 

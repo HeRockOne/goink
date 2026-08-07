@@ -25,6 +25,7 @@ type PhaseGate struct {
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
 	visited         []string       // 已访问过的阶段列表，用于回退校验；回到起点时重置
+	readsByPhase    map[string]map[string]bool // 阶段 → 已成功读取的技能集合（require_reads 用，阶段切换后从零开始）
 }
 
 // PhaseConfig 是单个阶段的配置。
@@ -33,6 +34,7 @@ type PhaseConfig struct {
 	Mode      string   // 所属模式："single" | "batch"（空=两种模式都适用）
 	Tools     []string // 允许使用的工具
 	Require   []string // 必须调用过的工具（完成条件）
+	RequireReads []string // 必须读取过的技能名（完成条件，如 main-tech-show-dont-tell）
 	Next      string   // 满足条件后可进入的下一阶段
 	FailNext  string   // require 不满足时的回退阶段
 	Loop      bool     // batch 模式下是否循环（write → outline）
@@ -73,6 +75,7 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 		visited:         []string{firstPhase},
 		calledTools:     make(map[string]int),
 		successfulTools: make(map[string]int),
+		readsByPhase:    make(map[string]map[string]bool),
 		mode:            mode,
 		active:          true,
 	}
@@ -102,6 +105,8 @@ func parsePhaseBlock(block string) PhaseConfig {
 			pc.Tools = parseToolList(val)
 		case "require":
 			pc.Require = parseToolList(val)
+		case "require_reads":
+			pc.RequireReads = parseToolList(val)
 		case "next":
 			pc.Next = val
 		case "fail_next":
@@ -154,6 +159,18 @@ func (g *PhaseGate) OnToolCall(toolName string, success bool) {
 	}
 }
 
+// OnReadRequired 记录当前阶段成功读取的技能（require_reads 用）。
+// 阶段切换后 readsByPhase 对新阶段从零开始——每阶段必读独立生效。
+func (g *PhaseGate) OnReadRequired(skillName string) {
+	if g == nil || !g.active || skillName == "" {
+		return
+	}
+	if g.readsByPhase[g.currentPhase] == nil {
+		g.readsByPhase[g.currentPhase] = make(map[string]bool)
+	}
+	g.readsByPhase[g.currentPhase][skillName] = true
+}
+
 // SetWordCountOK 设置字数校验结果。get_chapter_list 工具调用后由 agent 注入。
 func (g *PhaseGate) SetWordCountOK(ok bool) {
 	if g == nil || !g.active {
@@ -175,6 +192,35 @@ func (g *PhaseGate) WordCountCheck() *bool {
 func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 	for _, req := range pc.Require {
 		if g.successfulTools[req] == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// checkRequireReadsMet 检查阶段的 require_reads（必读技能）是否全部满足。
+// 只统计当前阶段内成功读取的技能（阶段切换后从零开始）。
+// 支持通配符：配置项含 * 时用 path.Match 匹配（如 "main-tech-*" 匹配所有已读的 main-tech 系技能）。
+func (g *PhaseGate) checkRequireReadsMet(pc *PhaseConfig) bool {
+	if len(pc.RequireReads) == 0 {
+		return true
+	}
+	reads := g.readsByPhase[g.currentPhase]
+	for _, pattern := range pc.RequireReads {
+		if strings.Contains(pattern, "*") {
+			matched := false
+			for read := range reads {
+				if ok, _ := path.Match(pattern, read); ok {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
+			continue
+		}
+		if !reads[pattern] {
 			return false
 		}
 	}
@@ -218,6 +264,34 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		if len(missing) > 0 {
 			return false, fmt.Sprintf("阶段 [%s] 要求必须调用以下工具后才能切换到 [%s]，当前未调用: %v",
 				g.currentPhase, targetPhase, missing)
+		}
+	}
+
+	// 检查当前阶段的 require_reads（必读技能）是否满足（不满足则阻塞）
+	if current != nil && len(current.RequireReads) > 0 {
+		reads := g.readsByPhase[g.currentPhase]
+		var missingSkills []string
+		for _, pattern := range current.RequireReads {
+			if strings.Contains(pattern, "*") {
+				matched := false
+				for read := range reads {
+					if ok, _ := path.Match(pattern, read); ok {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					missingSkills = append(missingSkills, pattern)
+				}
+				continue
+			}
+			if !reads[pattern] {
+				missingSkills = append(missingSkills, pattern)
+			}
+		}
+		if len(missingSkills) > 0 {
+			return false, fmt.Sprintf("阶段 [%s] 要求必须用 read_required 读取以下技能后才能切换到 [%s]，当前未读取: %v",
+				g.currentPhase, targetPhase, missingSkills)
 		}
 	}
 
@@ -473,11 +547,13 @@ func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 		return "", ""
 	}
 	data := struct {
-		Tools   map[string]int `json:"tools"`
-		Visited []string       `json:"visited"`
+		Tools    map[string]int            `json:"tools"`
+		Visited  []string                  `json:"visited"`
+		Reads    map[string]map[string]bool `json:"reads,omitempty"`
 	}{
 		Tools:   g.successfulTools,
 		Visited: g.visited,
+		Reads:   g.readsByPhase,
 	}
 	b, _ := json.Marshal(data)
 	return g.currentPhase, string(b)
@@ -503,13 +579,17 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	if calledToolsJSON != "" {
 		// 先尝试新格式
 		var state struct {
-			Tools   map[string]int `json:"tools"`
-			Visited []string       `json:"visited"`
+			Tools   map[string]int             `json:"tools"`
+			Visited []string                   `json:"visited"`
+			Reads   map[string]map[string]bool `json:"reads"`
 		}
 		if json.Unmarshal([]byte(calledToolsJSON), &state) == nil && state.Tools != nil {
 			g.successfulTools = state.Tools
 			for k, v := range state.Tools {
 				g.calledTools[k] = v
+			}
+			if len(state.Reads) > 0 {
+				g.readsByPhase = state.Reads
 			}
 			if len(state.Visited) > 0 {
 				g.visited = state.Visited

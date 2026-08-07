@@ -9,7 +9,7 @@ mode: always
 
 ## skill目录（加载顺序，避免浪费 read 调用）
 
-- 内置 skill（41 个通用 + 类型 skill）位于 `/builtin/skills/<name>.md`（只读），auto 模式按需 read
+- 内置 skill（42 个通用 + 类型 skill）位于 `/builtin/skills/<name>.md`（只读），auto 模式按需 read
 - 同名 skill 优先级：小说级 > 用户级 > 内置（`/builtin/skills/`）
 - always 模式 skill 已在会话开头注入，无需再 read
 
@@ -33,25 +33,27 @@ mode: always
 
 ### prepare
 
-1. **get_writing_context**（required）— 一次获取树状全量状态
-2. **get_chapter_list**（required）— 确认章节编号连续
-3. **get_characters**（required）— 确认角色阵容
-4. **get_timeline**（required）— 确认伏笔状态
-5. **get_story_arcs**（required）— 确认弧线进度
-6. **get_reader_perspective**（required）— 确认读者认知
-7. **get_writing_snapshot**（required）— 确认写作进度
-8. **get_scenes**（required）— 确认本章场景
-9. **get_preferences**（required）— 确认创作偏好
-10. 五门检查（字数/段数/情绪/节奏/禁止项）→ **set_phase("outline")**
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-common-sense-logic），门禁 require_reads 强制
+2. **get_writing_context**（required）— 一次获取树状全量状态
+3. **get_chapter_list**（required）— 确认章节编号连续
+4. **get_characters**（required）— 确认角色阵容
+5. **get_timeline**（required）— 确认伏笔状态
+6. **get_story_arcs**（required）— 确认弧线进度
+7. **get_reader_perspective**（required）— 确认读者认知
+8. **get_writing_snapshot**（required）— 确认写作进度
+9. **get_scenes**（required）— 确认本章场景
+10. **get_preferences**（required）— 确认创作偏好
+11. 五门检查（字数/段数/情绪/节奏/禁止项）→ **set_phase("outline")**
 
 ### outline
 
-1. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-chapter-hook-enhanced, main-tech-chapter-title-design），门禁 require_reads 强制
+2. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
-2. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-hooks, main-tech-chapter-title-design；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
-3. **edit**(outlines/NNN.md)（required）— 写大纲。
+3. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-design；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
+4. **edit**(outlines/NNN.md)（required）— 写大纲。
    **格式要求：**
    - 章节标题用 `# 第N章 标题`（单井号，一行）
    - 各 section 用 `## 标题`（双井号），必须包含以下全部 section，可自由扩展更多：
@@ -63,15 +65,17 @@ mode: always
      - `## 写作要点`：情绪节奏、信息密度、禁忌项
      - `## 字数预估`：目标字数、段落数、每段字数
    - 禁止使用 `**加粗**` 代替 `##` 标题
-4. 等待用户审批 → **set_phase("write")**
+5. 等待用户审批 → **set_phase("write")**
 
 ### write
 
-1. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration）
-2. **edit**(chapters/NNN.md)（required）— 写正文
-3. 校验字数（2500-4000）
-4. 记录关键物品出现 → create_item_occurrence
-5. **set_phase("review")**
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-show-dont-tell, main-tech-anti-ai-writing），门禁 require_reads 强制
+2. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
+3. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration）
+4. **edit**(chapters/NNN.md)（required）— 写正文
+5. 校验字数（2500-4000）
+6. 记录关键物品出现 → create_item_occurrence
+7. **set_phase("review")**
 
 ### review
 
@@ -80,6 +84,8 @@ mode: always
 3. **set_phase("maintain")**
 
 ### maintain（逐项检查清单，每章必做）
+
+**read_required**（required）— 先用 read_required 加载本阶段必读技能（main-tech-anti-repetition, main-tech-foreshadow-cycle），门禁 require_reads 强制，然后逐项执行以下清单。
 
 **每章必做的状态查询**（门禁 require 强制，宁可多调用不可漏维护）：
 
@@ -115,7 +121,7 @@ mode: always
 
 ## 阶段技能表（34 个内置 skill 全量调度）
 
-> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review）由用户 `/` 触发，不在此表。
+> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate）由用户 `/` 触发，不在此表。
 
 | 阶段 | 技能 |
 |------|------|

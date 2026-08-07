@@ -34,6 +34,7 @@ var mainAgentTools = []string{
 	"delete_record",
 	"edit",
 	"read",
+	"read_required",
 	"search_story_memory",
 	"web_search",
 	"web_fetch",
@@ -202,7 +203,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 
 ## 审稿准备
 
-开始审稿前，先用 read 工具读取 /builtin/skills/sub-tech-review-standards.md 和 /builtin/skills/sub-tech-anti-ai-grade.md，获取完整的审稿标准和反 AI 检测规则，并在后续检查中逐项对照。
+系统已自动注入 sub- 前缀的审稿标准技能（sub-tech-review-standards.md 审稿判定标准 + sub-tech-anti-ai-grade.md 反 AI 用词规则）到你的上下文中，直接逐项对照使用，无需再 read。
 
 ## 审稿流程
 

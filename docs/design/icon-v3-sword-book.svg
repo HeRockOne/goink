@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1522"/>
+      <stop offset="1" stop-color="#0a0e17"/>
+    </linearGradient>
+    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8fb0c2"/>
+      <stop offset="0.5" stop-color="#e8f4f8"/>
+      <stop offset="1" stop-color="#7e9aac"/>
+    </linearGradient>
+    <linearGradient id="bookL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a1c4d6"/>
+      <stop offset="1" stop-color="#3e5a6e"/>
+    </linearGradient>
+    <linearGradient id="bookR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb0c2"/>
+      <stop offset="1" stop-color="#324c60"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="1000" rx="180" fill="url(#bg)"/>
+
+  <g transform="rotate(8 500 500)">
+    <path d="M 492 200 L 526 200 L 510 560 L 508 560 Z" fill="url(#blade)"/>
+    <path d="M 508 560 L 526 200 L 510 200 Z" fill="#eef6fa" opacity="0.9"/>
+    <rect x="438" y="556" width="142" height="30" rx="10" fill="#6c889a"/>
+    <rect x="456" y="584" width="106" height="150" rx="8" fill="#3e5668"/>
+    <rect x="468" y="720" width="82" height="24" rx="10" fill="#a1c4d6" opacity="0.9"/>
+  </g>
+
+  <path d="M 500 726 C 440 662 320 650 230 690 C 200 704 188 726 196 752 C 204 778 238 794 286 800 L 286 848 C 238 842 204 824 196 796 L 196 796 C 210 826 246 852 300 856 L 300 846 L 300 856 C 400 862 460 824 500 772 Z" fill="url(#bookL)"/>
+  <path d="M 500 726 C 560 662 680 650 770 690 C 800 704 812 726 804 752 C 796 778 762 794 714 800 L 714 848 C 762 842 796 824 804 796 C 790 826 754 852 700 856 C 600 862 540 824 500 772 Z" fill="url(#bookR)"/>
+  <path d="M 500 726 L 500 772 C 520 786 548 788 566 780 L 566 730 C 548 738 520 740 500 726 Z" fill="#eef6fa" opacity="0.5"/>
+</svg>

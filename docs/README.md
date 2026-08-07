@@ -15,6 +15,7 @@
 | [narrative-panel.md](architecture/narrative-panel.md) | 动态叙事面板设计 |
 | [token-injection.md](architecture/token-injection.md) | Token 注入构成分析 + tokencount 使用说明 |
 | [cache-hit-mechanism.md](architecture/cache-hit-mechanism.md) | 缓存命中机制详解（DeepSeek 前缀缓存，含流程推演） |
+| [provider-status.md](architecture/provider-status.md) | 内置 Provider 配置状态（7 个 provider，联网核实） |
 | [theme-system.md](architecture/theme-system.md) | 主题系统文档（50+ CSS 变量清单 + 派生关系 + 自定义主题 + Apple 白示例） |
 
 ## design/ — 方案（长存，参考用）
@@ -78,3 +79,6 @@
 - 描述系统当前设计的文档 → `architecture/`
 - 尚未实施或作为参考的方案 → `design/`
 > 2026-08-07：缓存链路补全（prompt_cache_key=sessionID 路由粘性，对齐 opencode PR #22569，消除小米 MiMo 直连偶发全 miss；子 agent fork 完整主历史，重复 read 的 4-10K/轮 miss 归零；cacheprobe 补子 agent 内部序列模拟，now 99.5% vs legacy 99.3%；全 miss 告警日志；UI：思考开关+深度合并下拉、工具执行中去掉处理中徽章）
+> 2026-08-07：文档过时审计并修复——theme-system.md 重排（全文被压成单行）+ 删除已移除的特效系统（d032284，粒子变量标注遗留）；phase-gate.md require 表对齐出厂默认配置（prepare 9 项/write 2 项/maintain 13 项）、main-cmd-next 统一为 next、新会话起始 prepare；billing-panel.md 状态改已实施 + 缓存字段优先级对调（首选 prompt_tokens_details.cached_tokens，fallback prompt_cache_hit_tokens）；architecture.md 工具 57→59、/api/search-memory 路径、目录树补 15 个模块、get_writing_context 去伪字段、API 端点 29→31、内置 skill 表补全、help 51→53；token-injection.md skill 41→42/工具 57→59/auto 37→38；narrative-panel.md 未来卡数据源改为 useOutlineCache 读 outlines/NNN.md（3 章）、z-index 50→8、近期待收筛选 ≥当前章；provider-status.md 补 doubao/minimax/mimo；cache-hit-mechanism.md 修正行号；README 索引补 provider-status.md
+> 2026-08-07：叙事面板数据口径审计修复（对齐 maintain 流程）——当前卡角色改 characters_in 优先（回退 active_chars）、物品改 item_occurrences 本章流转（后端 get_writing_context 新增字段）、未定时伏笔单独分组、弧线当前节点排除 actual_chapter 提前完成节点、弧线节点 Limit 50→200；UI 修复——标题栏移除 Logo/标语/GitHub 链接、叙事按钮改 ScrollText 图标、新增门禁开关按钮（Shield/ShieldOff）、状态栏门禁条改 flex 中段防重叠、叙事面板标题栏删除、overlay 避开 header/状态栏、对话历史分页渲染（默认 30 轮+加载更早）、性能优化（移除 6 处 backdrop-blur、sidebar 透明度提高、bg-layer 纹理减半）
+> 2026-08-08：门禁必读技能体系——新增 read_required 工具（60 个，参数化读技能，零硬编码）+ 门禁 require_reads 字段（阶段内强制 + 通配符，跨阶段读取不算）+ 每阶段必读技能配置（init 5 个/prepare common-sense-logic/outline hook+title/write show-dont-tell+anti-ai/write maintain anti-repetition+foreshadow）；sub- 前缀技能自动注入 review 子代理（[身份][sub-*技能][NS] 消息拆分，技能常量字节放 NS 前跨 review 命中缓存，替代子代理自 read）；skill 合并 chapter-title-hooks 并入 chapter-title-design（42 个内置）；创作视角 skill 审计修复（字数下限 2500、类型口径统一、自引用修正等）

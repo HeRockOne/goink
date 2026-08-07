@@ -30,9 +30,9 @@ go run ./cmd/cacheprobe legacy    # 仅修复前（NS 不落库）详细曲线
 | 场景 | 说明 |
 |------|------|
 | 短问答 5 轮 | 每轮一问一答，无工具，历史极小 |
-| 门禁创作 5 轮 | **严格按门禁配置 single 模式完整流程**：prepare（9 项必查 + 2 个 prepare 技能）→ outline（5 个大纲技能 + edit 大纲）→ write（4 个正文技能 + 3 次 edit 写 3000 字正文 + create_item_occurrence）→ review（run_subagent + 修复）→ maintain（7 项状态查询 + search_lore/items + update_chapter_meta/writing_snapshot/chapter_plan + create_scene + update_character/arc_node + create_timeline_entry + update_reader_perspective_entry + edit goink.md）→ set_phase("prepare")。每轮 40 次 LLM 调用 |
+| 门禁创作 5 轮 | **严格按门禁配置 single 模式完整流程**（含 require_reads 必读技能）：prepare（9 项必查 + 3 技能 read_required）→ outline（10 个大纲技能 + 2 次 edit 大纲）→ write（11 个正文技能 read_required + 6 次 edit 写 3000 字 + 2 次字数校验 + create_item_occurrence）→ write后自审（2 技能 + 1 次修改）→ review（run_subagent + 子代理 6 步内部序列模拟 + 重读 + 3 处修复）→ maintain（7 项状态查询 + 2 搜索 + 11 项更新 + goink.md 指纹 + 2 技能）→ set_phase("prepare")。每轮约 80 次工具调用 + 子代理 7 次请求 |
 
-> 系统提示词、always skill（main-core-writing-kernel.md / main-core-ai-communication-standard.md）、41 个内置 skill 的 read 内容均取自仓库真实文件（相对仓库根解析，go run 与 go test 结果一致）。
+> 系统提示词、always skill（main-core-writing-kernel.md / main-core-ai-communication-standard.md）、42 个内置 skill 的 read 内容均取自仓库真实文件（相对仓库根解析，go run 与 go test 结果一致）。
 
 ## 对照结论（门禁创作 5 轮，tiktoken 精确计数）
 

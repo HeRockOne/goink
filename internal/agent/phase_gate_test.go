@@ -1,7 +1,11 @@
 package agent
 
 import (
+	"log/slog"
+	"strings"
 	"testing"
+
+	"novel/internal/skill"
 )
 
 func TestParsePhaseGateConfig(t *testing.T) {
@@ -557,5 +561,100 @@ next: prepare
 	ok, warning = gate.SetPhase("prepare")
 	if !ok {
 		t.Errorf("should allow transition after all 13 requires met, got warning: %s", warning)
+	}
+}
+
+// TestRequireReadsPerPhase 验证 require_reads 的阶段内强制语义：
+// 技能必须在当前阶段内用 read_required 读取，跨阶段读取不满足。
+func TestRequireReadsPerPhase(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: outline
+tools: read, read_required, edit
+require: edit
+require_reads: main-tech-chapter-hook-enhanced
+next: write
+-->
+
+<!-- phase-gate-config
+phase: write
+tools: read, read_required, edit
+require: edit
+require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing
+next: done
+-->
+
+<!-- phase-gate-config
+phase: done
+tools: read
+next: prepare
+-->
+`, "single")
+	if gate == nil {
+		t.Fatal("ParsePhaseGateConfig returned nil")
+	}
+
+	// outline 阶段：未读技能时切换被拦
+	gate.OnToolCall("edit", true)
+	ok, warning := gate.SetPhase("write")
+	if ok {
+		t.Error("should BLOCK: outline require_reads not met")
+	}
+	if warning == "" {
+		t.Error("expected warning listing missing skill")
+	}
+
+	// 读 outline 必读技能后放行
+	gate.OnReadRequired("main-tech-chapter-hook-enhanced")
+	ok, _ = gate.SetPhase("write")
+	if !ok {
+		t.Error("should allow: outline require_reads met")
+	}
+
+	// write 阶段：即使前面读过其他技能，本阶段必读未读仍被拦
+	gate.OnToolCall("edit", true)
+	ok, warning = gate.SetPhase("done")
+	if ok {
+		t.Error("should BLOCK: write require_reads not met")
+	}
+
+	// 读 write 必读技能（跨阶段读的 outline 技能不算）
+	gate.OnReadRequired("main-tech-show-dont-tell")
+	ok, warning = gate.SetPhase("done")
+	if ok {
+		t.Error("should BLOCK: anti-ai-writing still missing")
+	}
+	gate.OnReadRequired("main-tech-anti-ai-writing")
+	gate.OnToolCall("get_chapter_list", true)
+	gate.SetWordCountOK(true)
+	ok, _ = gate.SetPhase("done")
+	if !ok {
+		t.Error("should allow: write require_reads met")
+	}
+}
+
+// TestBuildSubagentSkills 验证 sub- 前缀技能注入：
+// review 自动注入所有 sub-*（含三层查找），不硬编码技能名；无 sub- 时返回空。
+func TestBuildSubagentSkills(t *testing.T) {
+	store, err := skill.NewStore(slog.Default(), "")
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	a := &Agent{skillStore: store}
+
+	out := a.buildSubagentSkills(0)
+	if out == "" {
+		t.Fatal("expected sub-* skills injected (builtin has sub-tech-review-standards + sub-tech-anti-ai-grade)")
+	}
+	// 必须包含两个现有 sub- 技能（按内容特征而非技能名）
+	if !strings.Contains(out, "22 项硬伤检查") {
+		t.Error("expected sub-tech-review-standards content injected")
+	}
+	if !strings.Contains(out, "T1 出现即换") {
+		t.Error("expected sub-tech-anti-ai-grade content injected")
+	}
+	// 不得包含 main- 技能
+	if strings.Contains(out, "main-tech-show-dont-tell") {
+		t.Error("main- skill should NOT be injected into subagent")
 	}
 }

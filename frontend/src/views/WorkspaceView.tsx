@@ -24,7 +24,6 @@ import NovelDeleteDialog from '@/components/novel/NovelDeleteDialog'
 import ImportProgressDialog from '@/components/novel/ImportProgressDialog'
 import ExportDialog from '@/components/export/ExportDialog'
 import ChatPanel from '@/components/chat/ChatPanel'
-import GitHubLink from '@/components/shell/GitHubLink'
 import SettingsDialog from '@/components/settings/SettingsDialog'
 import HelpDialog from '@/components/help/HelpDialog'
 import ProfileView from '@/components/profile/ProfileView'
@@ -34,11 +33,9 @@ import UpdateDialog from '@/components/update/UpdateDialog'
 import ErrorBoundary from '@/components/shared/ErrorBoundary'
 import { search } from '@/lib/wailsjs/go/models'
 import type { update as updateModels } from '@/lib/wailsjs/go/models'
-import { CheckUpdate } from '@/lib/wailsjs/go/app/App'
-import { Settings, User, HelpCircle, Moon, Sun } from 'lucide-react'
+import { CheckUpdate, GetSettings, SetPhaseGateEnabled } from '@/lib/wailsjs/go/app/App'
+import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText } from 'lucide-react'
 import { WindowMinimise, WindowToggleMaximise, Quit } from '@/lib/wailsjs/runtime/runtime'
-import Logo from '@/components/Logo'
-import HeaderSlogan from '@/components/shell/HeaderSlogan'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useLayoutState } from '@/hooks/useLayoutState'
 import { useWindowState } from '@/hooks/useWindowState'
@@ -81,6 +78,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [activeSkillName, setActiveSkillName] = useState<string | null>(null)
   const [selectedGitFile, setSelectedGitFile] = useState<git.FileDiff | null>(null)
   const [platformOS, setPlatformOS] = useState('')
+  const [phaseGateEnabled, setPhaseGateEnabled] = useState(true)
   const loadedRef = useRef(false)
   const { theme, toggle: toggleTheme } = useTheme()
   const { isMaximised, setIsMaximised } = useWindowState()
@@ -123,6 +121,26 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       if (info.os) setPlatformOS(info.os as string)
     })
   }, [app])
+
+  // ── 阶段门禁开关（标题栏按钮 + 设置页共享状态） ────────────
+
+  useEffect(() => {
+    GetSettings().then(s => {
+      if (s?.phase_gate_enabled !== undefined && s?.phase_gate_enabled !== null) {
+        setPhaseGateEnabled(s.phase_gate_enabled as boolean)
+      }
+    }).catch(() => {})
+  }, [])
+
+  const handleTogglePhaseGate = useCallback(async () => {
+    const next = !phaseGateEnabled
+    setPhaseGateEnabled(next)
+    try {
+      await SetPhaseGateEnabled(next)
+    } catch {
+      setPhaseGateEnabled(!next)
+    }
+  }, [phaseGateEnabled])
 
   // ── 启动时加载字体设置（localStorage 持久化） ────────────
 
@@ -252,8 +270,28 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     }
   }, [app, novels, activeNovelId])
 
-  function handleActivitySelect(id: string) {
-    const currentPanel = sidebarPanel ?? activePanel
+  // 特殊面板（不走 ContentPanel，各有独立渲染）
+  const SPECIAL_PANELS = new Set(['characters', 'locations', 'storyarcs', 'timeline', 'reader', 'preferences', 'world', 'items', 'stats', 'profile', 'git', 'style-samples'])
+
+  function renderSpecialPanel(panel: string): React.ReactNode {
+    let node: React.ReactNode = null
+    switch (panel) {
+      case 'characters': node = <CharacterListView novelId={activeNovelId} focusId={characterFocusId} />; break
+      case 'locations': node = <LocationListView novelId={activeNovelId} focusId={locationFocusId} />; break
+      case 'storyarcs': node = <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />; break
+      case 'timeline': node = <TimelineView novelId={activeNovelId} focusEntryId={timelineFocusId} />; break
+      case 'reader': node = <ReaderView novelId={activeNovelId} focusId={readerFocusId} />; break
+      case 'preferences': node = <PreferenceView novelId={activeNovelId} focusId={preferenceFocusId} />; break
+      case 'world': node = <LoreListView novelId={activeNovelId} />; break
+      case 'items': node = <ItemListView novelId={activeNovelId} />; break
+      case 'stats': node = <StatsView novelId={activeNovelId} />; break
+      case 'git': node = <GitCommitView file={selectedGitFile} />; break
+      case 'profile': node = <ProfileView />; break
+    }
+    return node
+  }
+
+  function handleActivitySelect(id: string) {    const currentPanel = sidebarPanel ?? activePanel
     if (id === currentPanel && !sidebarClosed) {
       setSidebarClosed(true)
       return
@@ -380,7 +418,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
 
   // ── 窗口按钮样式 ────────────────────────────────────────
 
-  const winBtn = 'w-12 h-full flex items-center justify-center cursor-pointer text-foreground/80 hover:text-foreground hover:bg-black/25 hover:shadow-md transition-all'
+  const winBtn = 'w-12 h-full flex items-center justify-center cursor-pointer text-foreground/80 hover:text-foreground hover:bg-muted/60 hover:shadow-md transition-all'
   const closeBtn = 'w-12 h-full flex items-center justify-center cursor-pointer text-foreground/80 hover:text-destructive-foreground hover:bg-destructive transition-colors'
 
   return (
@@ -390,19 +428,13 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         style={{ '--wails-draggable': 'drag', zIndex: 60 } as React.CSSProperties}
         onDoubleClick={() => { WindowToggleMaximise(); setIsMaximised(prev => !prev) }}
       >
-        <Logo className="h-7 w-7 ml-3" />
-        <span className="text-sm font-medium pl-2 glow-primary flex-1" style={{ letterSpacing: '0.15em' }}>
+        <span className="text-sm font-medium pl-3 glow-primary flex-1" style={{ letterSpacing: '0.15em' }}>
           {activeNovel?.title ?? 'Goink'}
           {currentVolume && <span className="text-xs text-muted-foreground/80 font-normal" style={{ letterSpacing: '0.1em' }}> · {currentVolume}</span>}
-          {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">📖 动态叙事已展开</span>}
+          {narrativeOpen && <span className="ml-2 text-xs text-primary font-normal">动态叙事已展开</span>}
         </span>
 
-        {/* v2 装饰标语（双击可自定义）居中 */}
-        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-          <div className="pointer-events-auto">
-            <HeaderSlogan />
-          </div>
-        </div>
+        {/* v2 装饰标语已移除（2026-08-07：与标题 flex-1 重叠 + emoji 风格割裂） */}
 
         <div className="flex items-center h-full" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
           <button
@@ -410,9 +442,16 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             className={`narrative-toggle-btn ${narrativeOpen ? 'active' : ''}`}
             title={narrativeOpen ? '关闭叙事面板' : '打开叙事面板'}
           >
-            📖 叙事
+            <ScrollText className="w-4 h-4" />
           </button>
-          <GitHubLink />
+          <button
+            onClick={handleTogglePhaseGate}
+            className="phase-gate-toggle-btn"
+            title={phaseGateEnabled ? '阶段门禁已开启' : '阶段门禁已关闭'}
+            style={phaseGateEnabled ? { color: 'var(--primary)', textShadow: '0 0 8px var(--glow)' } : undefined}
+          >
+            {phaseGateEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+          </button>
           <button
             onClick={() => setActivePanel('profile')}
             className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'profile' ? 'text-foreground' : ''}`}
@@ -529,7 +568,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         ) : (
           <div className="flex-1 min-w-0 flex flex-col">
             {/* ContentPanel: for non-special panels (chapters, search, etc.) */}
-            {activePanel !== 'characters' && activePanel !== 'locations' && activePanel !== 'storyarcs' && activePanel !== 'timeline' && activePanel !== 'reader' && activePanel !== 'preferences' && activePanel !== 'world' && activePanel !== 'items' && activePanel !== 'stats' && activePanel !== 'profile' && activePanel !== 'git' && activePanel !== 'style-samples' && (
+            {!SPECIAL_PANELS.has(activePanel) && (
               <ContentPanel ref={contentRef} novelId={activeNovelId} onContentChange={setActiveContent} onDirtyChange={setIsDirty} />
             )}
 
@@ -539,51 +578,9 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
                 <ExtractWorkspaceView novelId={activeNovelId} focusSampleId={styleSampleFocusId} onFocusSampleHandled={() => setStyleSampleFocusId(null)} />
               </ErrorBoundary>
             </div>
-            {activePanel === 'characters' ? (
-              <ErrorBoundary>
-                <CharacterListView novelId={activeNovelId} focusId={characterFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'locations' ? (
-              <ErrorBoundary>
-                <LocationListView novelId={activeNovelId} focusId={locationFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'storyarcs' ? (
-              <ErrorBoundary>
-                <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'timeline' ? (
-              <ErrorBoundary>
-                <TimelineView novelId={activeNovelId} focusEntryId={timelineFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'reader' ? (
-              <ErrorBoundary>
-                <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'preferences' ? (
-              <ErrorBoundary>
-                <PreferenceView novelId={activeNovelId} focusId={preferenceFocusId} />
-              </ErrorBoundary>
-            ) : activePanel === 'world' ? (
-              <ErrorBoundary>
-                <LoreListView novelId={activeNovelId} />
-              </ErrorBoundary>
-            ) : activePanel === 'items' ? (
-              <ErrorBoundary>
-                <ItemListView novelId={activeNovelId} />
-              </ErrorBoundary>
-            ) : activePanel === 'stats' ? (
-              <ErrorBoundary>
-                <StatsView novelId={activeNovelId} />
-              </ErrorBoundary>
-            ) : activePanel === 'git' ? (
-              <ErrorBoundary>
-                <GitCommitView file={selectedGitFile} />
-              </ErrorBoundary>
-            ) : activePanel === 'profile' ? (
-              <ErrorBoundary>
-                <ProfileView />
-              </ErrorBoundary>
-            ) : null}
+            {renderSpecialPanel(activePanel) && (
+              <ErrorBoundary>{renderSpecialPanel(activePanel)}</ErrorBoundary>
+            )}
           </div>
         )}
 
@@ -650,13 +647,15 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       {/* 叙事面板：悬浮在最上层 overlay，右边界对齐对话面板左边框 */}
       {narrativeOpen && (
         <div className="narrative-overlay" style={{ right: chatPanelWidth }} onClick={(e) => { if (e.target === e.currentTarget) setNarrativeOpen(false) }}>
-          <NarrativeTimeline
-            activeChapterNum={activeChapterNum}
-            novelId={activeNovelId}
-            width={narrativeWidth}
-            onWidthChange={setNarrativeWidth}
-            chatPanelWidth={chatPanelWidth}
-          />
+          <ErrorBoundary>
+            <NarrativeTimeline
+              activeChapterNum={activeChapterNum}
+              novelId={activeNovelId}
+              width={narrativeWidth}
+              onWidthChange={setNarrativeWidth}
+              chatPanelWidth={chatPanelWidth}
+            />
+          </ErrorBoundary>
         </div>
       )}
     </div>
