@@ -699,15 +699,11 @@ func readRequired(names ...string) play {
 	}
 }
 
-// initScript 开书（init）流程：加载 5 个技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
-// （对照 main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
+// initScript 开书（init）流程：read_required 加载 5 个必读技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
+// （对照门禁 init require_reads + main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
 func initScript() []play {
 	return []play{
-		readSkill("main-core-init-phase"),
-		readSkill("main-tech-genre-templates"),
-		readSkill("main-tech-book-outline"),
-		readSkill("main-tech-character-design"),
-		readSkill("main-tech-world-building-system"),
+		readRequired("main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"),
 		{tool: "create_location", args: `{"name":"青云宗","type":"门派","desc":"主角所在宗门"}`, result: `{"id":1}`},
 		{tool: "create_character", args: `{"name":"陆沉","desc":"主角","location_id":1}`, result: `{"id":1}`},
 		{tool: "create_character", args: `{"name":"柳雪","desc":"师姐","location_id":1}`, result: `{"id":2}`},
@@ -723,10 +719,10 @@ func initScript() []play {
 }
 
 // gateScript 一轮创作的完整工具剧本，严格对照 main-core-writing-kernel 阶段指令：
-// prepare（9 required 查询 + lore/items + 3 技能）→ outline（7 技能 + 2 次大纲 edit）
-// → write（11 技能全量 + 6 段正文 + 字数校验重写 + 物品记录）→ 自审（2 技能 + 1 次修改）
-// → review（run_subagent + 自查重读 + 3 处修复 + 复查）→ maintain（7 查询 + 2 搜索
-// + 11 项更新 + goink.md 指纹 + 2 技能）
+// prepare（9 required 查询 + lore/items + 必读 1 + 按需 2）→ outline（必读 2 + 类型 1 + 2 次大纲 edit）
+// → write（必读 4 + 读大纲 + 6 段正文 + 字数校验重写 + 物品记录）→ 自审（2 技能 + 1 次修改）
+// → review（run_subagent + 自查重读 + 3 处修复 + 复查）→ maintain（先读 2 技能 + 7 查询 + 2 搜索
+// + 11 项更新 + goink.md 指纹）
 func gateScript(turn int) []play {
 	ch := turn + 1
 	var plays []play
@@ -843,9 +839,11 @@ func reviewPlays(ch int) []play {
 }
 
 // maintainPlays 阶段 maintain：7 项状态查询 + 搜索防遗忘 + 6 类更新 + goink.md（require 13 项）。
-// nextPhase 是阶段切换目标：single 模式回 "prepare"，batch 模式去 "done"。
+// nextPhase 是阶段切换目标：single/batch 均回 "prepare"（batch done 阶段已移除）。
+// 注意：readRequired 必须在维护操作之前（门禁事前强制：必读技能未加载时 create_*/update_* 被拦）。
 func maintainPlays(ch int, nextPhase string) []play {
 	return []play{
+		readRequired("main-tech-anti-repetition", "main-tech-foreshadow-cycle"),
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
@@ -866,7 +864,6 @@ func maintainPlays(ch int, nextPhase string) []play {
 		{tool: "update_reader_perspective_entry", args: `{"entry_id":7,"content":"玉佩与陈昊身世有关","type":"suspense"}`, result: "已更新"},
 		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"玉佩易主给林雪"}`, result: "已记录物品流转"},
 		{tool: "update_character_relationship", args: `{"character_a":1,"character_b":2,"relation":"并肩作战","relation_describe":"秘境中共患难"}`, result: "已更新角色关系"},
-		readRequired("main-tech-anti-repetition", "main-tech-foreshadow-cycle"),
 		{tool: "edit", args: editArgs("goink.md", fmt.Sprintf("第 %d 章完成：陈昊突破金丹，玉佩新线索。当前主线：登天之路。", ch)), result: "已更新 goink.md"},
 		{tool: "set_phase", args: fmt.Sprintf(`{"phase":"%s"}`, nextPhase), result: fmt.Sprintf(`{"success":true,"phase":"%s"}`, nextPhase)},
 	}
@@ -874,7 +871,7 @@ func maintainPlays(ch int, nextPhase string) []play {
 
 // batchGatePlays 批量创作整批剧本（batch 门禁模式）：
 // init → prepare（一次）→ outline（一次出 N 章大纲）→ write（循环 N 章正文）
-// → review（统一一次）→ maintain（统一一次）→ done。
+// → review（统一一次）→ maintain（统一一次）→ prepare（done 阶段已移除）。
 // 与单章连续 N 轮的关键差异：prepare/review/maintain 各只做一次，轮边界大幅减少，
 // 历史跨章连续累积，NS 落库收益被放大。
 // 状态实时性（业界 delta 结算）：每章 write 后紧跟迷你维护（只写不查），
@@ -917,8 +914,8 @@ func batchGatePlays(chapters int) []play {
 
 	// review：整批统一一次（run_subagent + 修复）
 	plays = append(plays, reviewPlays(1)...)
-	// maintain：整批统一一次（13 项清单收尾核对），batch 出口是 done
-	plays = append(plays, maintainPlays(chapters, "done")...)
+	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
+	plays = append(plays, maintainPlays(chapters, "prepare")...)
 	return plays
 }
 

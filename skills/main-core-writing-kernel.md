@@ -52,7 +52,8 @@ mode: always
 8. **get_writing_snapshot**（required）— 确认写作进度
 9. **get_scenes**（required）— 确认本章场景
 10. **get_preferences**（required）— 确认创作偏好
-11. 五门检查（字数/段数/情绪/节奏/禁止项）→ **set_phase("outline")**
+11. 按需技能（不强制，按场景读）：main-tech-genre-templates、main-tech-book-outline（看卷纲时）、main-tech-brainstorm-composer（卡情节时构思）
+12. 五门检查（字数/段数/情绪/节奏/禁止项）→ **set_phase("outline")**
 
 ### outline
 
@@ -92,6 +93,7 @@ mode: always
      - 本章有伏笔操作 → main-tech-foreshadow-cycle
      - 情感/情绪戏 → main-tech-emotion-injection
      - 节奏紧张章 → main-tech-pacing-control
+     - 关键场景现场描写 ≥300 字 → main-tech-scene-beats
    - 字数规则由 get_chapter_list 代码校验，无需读 main-tech-word-count-calibration
 4. **edit**(chapters/NNN.md)（required）— 写正文
 5. 校验字数（2500-4000）
