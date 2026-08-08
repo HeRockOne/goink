@@ -312,18 +312,60 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
             </div>
             <div className="narrative-card-body">
               {card.id === 'current' && <>
-                {currentChapter.num > 0 && (
-                  <div className="card-sec">
-                    <div className="card-current-title">
-                      第{currentChapter.num}章{currentChapter.title ? ` ${currentChapter.title}` : ''}
-                    </div>
-                  </div>
-                )}
-                {snap?.current_location && <div className="card-sec"><div className="card-sec-title">📍 地点</div><div className="card-val">{snap.current_location}</div></div>}
-                {currentChapter.num > 0 && <div className="card-sec"><div className="card-sec-title">📝 字数</div><div className="card-val">{currentChapter.word_count || 0} 字</div></div>}
-                {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{cleanSummary((ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary)}</div></div>}
-                {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 本章出场 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}{Array.isArray(c.items) && c.items.length > 0 && <div className="card-item-tags" style={{ marginTop: 3 }}><span className="card-item-tag card-item-tag-hold">持有 {c.items.join('、')}</span></div>}</div>)}</div>}
-                {((ctx as any)?.item_occurrences ?? []).length > 0 && <div className="card-sec"><div className="card-sec-title">📦 本章物品流转</div>{((ctx as any).item_occurrences as any[]).map((o: any, i: number) => <div key={i} className="card-item"><span className="card-item-name">{o.item_name || `#${o.item_id}`}</span><span className="card-item-tag">{o.action}</span>{o.description && <div className="card-item-desc">{o.description}</div>}</div>)}</div>}
+                {(() => {
+                  const preview = (ctx as any)?.preview
+                  if (preview) {
+                    // ── 写前预览模式：待写章的设定摘要（状态层 + 规划层）──
+                    const dueForeshadow: any[] = preview.due_foreshadow ?? []
+                    const overdueForeshadow: any[] = preview.overdue_foreshadow ?? []
+                    const dueNodes: any[] = preview.due_arc_nodes ?? []
+                    const charNames = (preview.prev_chars ?? []).map((id: number) => (ctx?.characters as any[]).find((c: any) => c.id === id)?.name).filter(Boolean)
+                    return (
+                      <>
+                        <div className="card-sec">
+                          <div className="card-current-title">第{preview.chapter_num}章（待写）</div>
+                        </div>
+                        {(dueForeshadow.length > 0 || dueNodes.length > 0) && (
+                          <div className="card-sec"><div className="card-sec-title">🎯 本章目标</div>
+                            {dueForeshadow.map((e: any) => <div key={e.id} className="card-item"><span className="card-item-name">{e.title}</span><span className="card-item-tag" title={IMP[e.importance]}>伏笔·到期</span></div>)}
+                            {dueNodes.map((n: any) => <div key={n.id} className="card-item"><span className="card-item-name">{n.title}</span><span className="card-item-tag">弧线节点</span>{n.description && <div className="card-item-desc">{n.description}</div>}</div>)}
+                          </div>
+                        )}
+                        {overdueForeshadow.length > 0 && (
+                          <div className="card-sec"><div className="card-sec-title">⚠️ 超期伏笔</div>
+                            {overdueForeshadow.map((e: any) => <div key={e.id} className="card-item card-item-overdue"><span className="card-item-name">{e.title}</span><span className="card-item-tag">超{e.overdue_by}章</span></div>)}
+                          </div>
+                        )}
+                        <div className="card-sec"><div className="card-sec-title">📍 状态延续</div>
+                          {preview.prev_location && <div className="card-item">地点：{preview.prev_location}</div>}
+                          {charNames.length > 0 && <div className="card-item">👤 延续角色：{charNames.join('、')}</div>}
+                          {(preview.prev_items ?? []).length > 0 && <div className="card-item">📦 在途物品：{preview.prev_items.join('、')}</div>}
+                          {preview.recent_suspense > 0 && <div className="card-item">❓ 遗留悬念：{preview.recent_suspense} 条</div>}
+                        </div>
+                        {preview.has_outline && (
+                          <div className="card-sec"><div className="card-sec-title">📝 大纲</div><div className="card-val">outlines/{String(preview.chapter_num).padStart(3, '0')}.md 已生成，可在右侧编辑器查看</div></div>
+                        )}
+                      </>
+                    )
+                  }
+                  // ── 回顾模式：已完成章的状态（现状）──
+                  return (
+                    <>
+                      {currentChapter.num > 0 && (
+                        <div className="card-sec">
+                          <div className="card-current-title">
+                            第{currentChapter.num}章{currentChapter.title ? ` ${currentChapter.title}` : ''}
+                          </div>
+                        </div>
+                      )}
+                      {snap?.current_location && <div className="card-sec"><div className="card-sec-title">📍 地点</div><div className="card-val">{snap.current_location}</div></div>}
+                      {currentChapter.num > 0 && <div className="card-sec"><div className="card-sec-title">📝 字数</div><div className="card-val">{currentChapter.word_count || 0} 字</div></div>}
+                      {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{cleanSummary((ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary)}</div></div>}
+                      {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 本章出场 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}{Array.isArray(c.items) && c.items.length > 0 && <div className="card-item-tags" style={{ marginTop: 3 }}><span className="card-item-tag card-item-tag-hold">持有 {c.items.join('、')}</span></div>}</div>)}</div>}
+                      {((ctx as any)?.item_occurrences ?? []).length > 0 && <div className="card-sec"><div className="card-sec-title">📦 本章物品流转</div>{((ctx as any).item_occurrences as any[]).map((o: any, i: number) => <div key={i} className="card-item"><span className="card-item-name">{o.item_name || `#${o.item_id}`}</span><span className="card-item-tag">{o.action}</span>{o.description && <div className="card-item-desc">{o.description}</div>}</div>)}</div>}
+                    </>
+                  )
+                })()}
               </>}
               {card.id === 'past' && <>
                 <div className="card-sec"><div className="card-sec-title">📑 章节进度</div><div className="card-item-tags" style={{ flexWrap: 'wrap' }}>{chapterStatus.slice(-12).map(s => <span key={s.num} className={`card-item-tag ch-status ch-status-${s.status}`} title={s.status === 'done' ? `第${s.num}章 已写 ${s.wordCount} 字` : s.status === 'drafting' ? `第${s.num}章 写作中` : `第${s.num}章 未开始`}>{s.num}{s.status === 'done' ? '✓' : s.status === 'drafting' ? '✍' : ''}</span>)}</div></div>

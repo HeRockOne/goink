@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"novel/internal/chapter"
 	"novel/internal/character"
+	"novel/internal/git"
 	"novel/internal/item"
 	"novel/internal/itemoccurrence"
 	"novel/internal/location"
@@ -53,6 +56,21 @@ type WritingContext struct {
 	Volume          *WritingVolume          `json:"volume,omitempty"`
 	VolumeEntities  *WritingVolumeEntities  `json:"volume_entities,omitempty"`
 	ItemOccurrences []WritingItemOccurrence `json:"item_occurrences"`
+	Preview         *WritingPreview         `json:"preview,omitempty"` // 写前预览（请求章 >= 最新完成章时返回）
+}
+
+// WritingPreview 写前预览：当前卡"即将写入正文的设定"（待写章视角）。
+// 状态层（到期伏笔/节点/上章延续，prepare 阶段即可查）+ 规划层（大纲存在性）。
+type WritingPreview struct {
+	ChapterNum        int                    `json:"chapter_num"` // last+1，待写章
+	DueForeshadow     []WritingTimelineEntry `json:"due_foreshadow,omitempty"`
+	OverdueForeshadow []WritingTimelineEntry `json:"overdue_foreshadow,omitempty"`
+	DueArcNodes       []WritingArcNodeBrief  `json:"due_arc_nodes,omitempty"`
+	PrevLocation      string                 `json:"prev_location,omitempty"`
+	PrevChars         []int64                `json:"prev_chars,omitempty"`
+	PrevItems         []string               `json:"prev_items,omitempty"`
+	RecentSuspense    int                    `json:"recent_suspense"`
+	HasOutline        bool                   `json:"has_outline"`
 }
 
 // WritingItemOccurrence 物品在章节中的流转记录（叙事面板"当前卡·物品"用）。
@@ -391,6 +409,79 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		}
 	}
 
+	// 写前预览：请求章 >= 最新完成章（或 0）时，返回"下一章要写什么"的设定摘要。
+	// 数据源在 prepare 阶段即就绪（到期伏笔/节点是 DB 常驻状态，上一章延续已维护，大纲是文件系统），
+	// 不依赖本章维护。
+	var preview *WritingPreview
+	if snap != nil && snap.LastChapterNum > 0 && (chapterNum == 0 || chapterNum >= snap.LastChapterNum) {
+		next := snap.LastChapterNum + 1
+		pv := &WritingPreview{ChapterNum: next, PrevLocation: snap.CurrentLocation}
+		// 到期 / 超期伏笔
+		if tlEntries != nil {
+			for _, e := range tlEntries.Items {
+				if e.Status == "resolved" || e.TargetChapter <= 0 {
+					continue
+				}
+				entry := WritingTimelineEntry{
+					ID: e.ID, Title: e.Title, Status: e.Status,
+					TargetChapter: e.TargetChapter, Importance: e.Importance,
+					ResolvedChapter: e.ResolvedChapterID,
+				}
+				if e.TargetChapter == next {
+					pv.DueForeshadow = append(pv.DueForeshadow, entry)
+				} else if e.TargetChapter < next {
+					entry.OverdueBy = next - e.TargetChapter
+					pv.OverdueForeshadow = append(pv.OverdueForeshadow, entry)
+				}
+			}
+		}
+		// 到期弧线节点（复用已加载的 arcBriefs.Nodes）
+		for _, ar := range arcBriefs {
+			for _, n := range ar.Nodes {
+				if n.Status == "pending" && n.TargetCh == next {
+					pv.DueArcNodes = append(pv.DueArcNodes, n)
+				}
+			}
+		}
+		// 上一章（N-1）的出场角色与物品流转（状态延续）
+		var prevChap chapter.Chapter
+		if err := a.db.WithContext(ctx).Where("novel_id = ? AND chapter_number = ?", novelID, next-1).First(&prevChap).Error; err == nil {
+			pv.PrevChars = appParseInt64Array(prevChap.CharactersIn)
+			var prevOccs []itemoccurrence.ItemOccurrence
+			if err := a.db.WithContext(ctx).Where("novel_id = ? AND chapter_id = ?", novelID, prevChap.ID).Find(&prevOccs).Error; err == nil && len(prevOccs) > 0 {
+				itemIDSet := map[int64]bool{}
+				for _, o := range prevOccs {
+					itemIDSet[o.ItemID] = true
+				}
+				if len(itemIDSet) > 0 {
+					var items []item.Item
+					if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, itemIDSet).Find(&items).Error == nil {
+						seen := map[string]bool{}
+						for _, it := range items {
+							if !seen[it.Name] {
+								seen[it.Name] = true
+								pv.PrevItems = append(pv.PrevItems, it.Name)
+							}
+						}
+					}
+				}
+			}
+		}
+		// 最近悬念（上一章起新种、未揭示）
+		var recentSuspense int64
+		a.db.WithContext(ctx).Model(&reader.ReaderPerspective{}).
+			Where("novel_id = ? AND type = 'suspense' AND (revealed_chapter = 0 OR revealed_chapter IS NULL) AND planted_chapter >= ?", novelID, next-1).
+			Count(&recentSuspense)
+		pv.RecentSuspense = int(recentSuspense)
+		// 大纲存在性（规划层）
+		if outlinePath, err := git.ResolvePath(fmt.Sprintf("outlines/%03d.md", next), novelID); err == nil {
+			if _, err := os.Stat(outlinePath); err == nil {
+				pv.HasOutline = true
+			}
+		}
+		preview = pv
+	}
+
 	return &WritingContext{
 		Chapter:         ch,
 		RecentChapters:  recent,
@@ -405,6 +496,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		Volume:          volume,
 		VolumeEntities:  volumeEntities,
 		ItemOccurrences: itemOccBriefs,
+		Preview:         preview,
 	}, nil
 }
 
