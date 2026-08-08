@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield, ChevronDown, RotateCcw } from 'lucide-react'
-import { SaveSettings, GetSettings, SetPhaseGateEnabled, RestoreDefaultPhaseGateConfig } from '@/lib/wailsjs/go/app/App'
+import { Shield, ChevronDown, RotateCcw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
+import { SaveSettings, GetSettings, SetPhaseGateEnabled, RestoreDefaultPhaseGateConfig, ValidatePhaseGateConfig } from '@/lib/wailsjs/go/app/App'
+import type { agent } from '@/lib/wailsjs/go/models'
 import { useTranslation } from 'react-i18next'
 
 export default function PhaseGateConfigTab() {
@@ -10,6 +11,8 @@ export default function PhaseGateConfigTab() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [issues, setIssues] = useState<agent.ValidationIssue[] | null>(null)
+  const [validating, setValidating] = useState(false)
 
   useEffect(() => {
     GetSettings().then(s => {
@@ -38,10 +41,23 @@ export default function PhaseGateConfigTab() {
       await RestoreDefaultPhaseGateConfig()
       const s = await GetSettings()
       setConfig(s?.phase_gate_config || '')
+      setIssues(null)
       setMsg('已恢复出厂默认配置')
     } catch (e) {
       setMsg('恢复失败: ' + String(e))
     }
+  }
+
+  async function handleValidate() {
+    setValidating(true)
+    setMsg('')
+    try {
+      const result = await ValidatePhaseGateConfig(config)
+      setIssues(result ?? [])
+    } catch (e) {
+      setMsg('校验失败: ' + String(e))
+    }
+    setValidating(false)
   }
 
   const handlePhaseGateToggle = useCallback(async () => {
@@ -112,10 +128,39 @@ next: outline
 -->'
           />
           {msg && <p className="text-xs text-muted-foreground mt-1">{msg}</p>}
+
+          {/* 校验结果 */}
+          {issues && issues.length > 0 && (
+            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+              {issues.map((it, i) => (
+                <div key={i} className={`flex items-start gap-1.5 text-[11px] leading-tight rounded px-2 py-1 ${
+                  it.level === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-status-warning/10 text-status-warning'
+                }`}>
+                  {it.level === 'error'
+                    ? <XCircle className="w-3 h-3 shrink-0 mt-0.5" />
+                    : <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />}
+                  <span>
+                    <span className="font-medium">{it.mode}·{it.phase}:</span> {it.message}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {issues && issues.length === 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-success-foreground mt-2">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              配置有效，无问题
+            </p>
+          )}
+
           <div className="flex gap-2 mt-2">
             <button onClick={handleSave} disabled={saving}
               className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity">
               {saving ? '保存中...' : '保存配置'}
+            </button>
+            <button onClick={handleValidate} disabled={validating}
+              className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted transition-colors">
+              {validating ? '校验中...' : '校验配置'}
             </button>
             <button onClick={handleRestoreDefault}
               className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted transition-colors flex items-center gap-1">

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -75,6 +76,9 @@ func WriteFile(novelID int64, path, content string) error {
 
 var ErrPathEscape = errors.New("git: path escapes novel directory")
 
+// outlineTitleRe 匹配首行的 "第N章" 前缀（标题在章号之后，如 "# 第1章 名声" → "名声"）。
+var outlineTitleRe = regexp.MustCompile(`^第\s*\d+\s*章[\s·：:]*`)
+
 // OutlineEntry 大纲文件条目（侧边栏大纲列表用）。
 type OutlineEntry struct {
 	ChapterNumber int    `json:"chapter_number"`
@@ -111,6 +115,7 @@ func ListOutlines(novelID int64) ([]OutlineEntry, error) {
 			sc := bufio.NewScanner(f)
 			if sc.Scan() {
 				title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(sc.Text()), "#"))
+				title = outlineTitleRe.ReplaceAllString(title, "")
 			}
 			f.Close()
 		}

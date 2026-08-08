@@ -83,6 +83,58 @@ next: outline
 
 配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（用 `read_required(skills="...")` 加载，技能名从门禁配置读取，不硬编码）。
 
+## 配置设计指南（怎么配一套门禁）
+
+### 工具分阶段分配（60 个工具按角色分组）
+
+| 工具角色 | 工具名 | 放哪些阶段 |
+|---------|--------|-----------|
+| 技能加载 | read_required | 有必读技能的阶段 |
+| 文件读取 | read | outline / write / review / maintain |
+| 查询 | get_characters, get_character_relations, get_locations, get_location_relations, get_timeline, get_story_arcs, get_arc_nodes, get_reader_perspective, get_preferences, get_lore, get_items, get_item_occurrences, get_scenes, get_stats, get_writing_snapshot, get_writing_context, get_chapter_list, get_entity_appearances | 所有阶段（随时查状态） |
+| 搜索 | search_lore, search_items, search_story_memory, check_story_consistency | 所有阶段 |
+| 网络 | web_search, web_fetch | prepare / outline（查资料考据） |
+| 文件写入 | edit | 配合 edit_paths：init 写总纲（book-outline.md, goink.md）、outline 写大纲（outlines/*）、write 写正文（chapters/*）、review 修正文（chapters/*）、maintain 写指纹（goink.md） |
+| 创建 | create_character, create_location, create_location_relation, create_story_arc, create_arc_node, create_lore, create_item, create_item_occurrence, create_scene, create_timeline_entry, create_reader_perspective_entry, create_preference | 只在 init（开书）和 maintain（补录） |
+| 更新 | update_character, update_character_relationship, update_location, update_location_relation, update_story_arc, update_arc_node, update_lore, update_item, update_scene, update_timeline_entry, update_chapter_plan, update_reader_perspective_entry, update_preference, update_writing_snapshot, update_chapter_meta | 只在 maintain；batch write 额外放迷你维护 6 个（create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot） |
+| 删除 | delete_lore, delete_item, delete_scene, delete_record | 只在 maintain |
+| 审稿 | run_subagent | 只在 review |
+| 门禁管理 | get_phase_gate_config, update_phase_gate_config, set_phase | 永远放行，可不写进 tools |
+
+### require 设计（该阶段不完成就出事故的动作）
+
+| 阶段 | require 建议 |
+|------|-------------|
+| init | 7 查询（characters/locations/story_arcs/lore/items/timeline/preferences） |
+| prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） |
+| outline | edit |
+| write | edit, get_chapter_list, read, read_required（字数校验转出时自动强制，无需配置） |
+| review | run_subagent |
+| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations |
+
+### require_reads 设计（该阶段核心方法论，对照 main-core-writing-kernel 阶段技能表）
+
+| 阶段 | require_reads 建议 |
+|------|-------------------|
+| init | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
+| prepare | main-tech-common-sense-logic |
+| outline | main-tech-chapter-hook-enhanced, main-tech-chapter-title-design |
+| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density |
+| review | 空（sub-* 技能由系统自动注入子代理） |
+| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
+
+情景类技能（climax-scene/shuangdian-pacing/foreshadow-cycle/emotion-injection/pacing-control/scene-beats 等）不进 require_reads，由 kernel 按需引导。
+
+### 常见设计错误（改配置后可用设置页「校验配置」按钮检查）
+
+| 错误 | 后果 |
+|------|------|
+| require 引用了 tools 里没有的工具 | set_phase 永远被拦，流程卡死 |
+| next 指向不存在的阶段名 | 切换时报"未知阶段" |
+| 两个 mode 都空的同名阶段 | 只生效第一个（同名阶段必须写 mode 区分） |
+| edit_paths 不含 require 需要的路径 | edit 被拦，require 永不满足 |
+| require_reads 引用不存在的技能 | read_required 失败，阶段无法切换 |
+
 ## 故障排查
 
 | 现象 | 原因 | 解决 |

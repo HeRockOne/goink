@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"novel/internal/agent"
 	"novel/internal/config"
 	"novel/internal/git"
 	"novel/internal/novel"
@@ -197,6 +198,18 @@ func (a *App) SetPhaseGateEnabled(enabled bool) error {
 func (a *App) RestoreDefaultPhaseGateConfig() error {
 	a.settings.PhaseGateConfig = defaultPhaseGateConfig
 	return config.SaveSettings(a.db, a.settings)
+}
+
+// ValidatePhaseGateConfig 校验门禁配置合法性（设置页"校验配置"按钮）。
+// 返回问题列表，空 = 配置有效。require_reads 技能存在性对照当前技能库。
+func (a *App) ValidatePhaseGateConfig(configText string) []agent.ValidationIssue {
+	var skills []string
+	if a.skill != nil {
+		for _, m := range a.skill.ListMeta(0) {
+			skills = append(skills, m.Name)
+		}
+	}
+	return agent.ValidateGateConfig(configText, skills)
 }
 
 // SetWebDAVConfig 设置 WebDAV 配置。

@@ -14,7 +14,7 @@
 
 **方式一：HTTP Header（推荐）**
 ```
-Authorization: Bearer a95f2e1b78b0c01408bc32a477633c3e（当前）
+Authorization: Bearer f3058d5ce13f057bcb5f407f8c9abc41（当前）
 ```
 
 **方式二：Query 参数**

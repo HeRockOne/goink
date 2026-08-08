@@ -245,6 +245,71 @@ func isMutatingTool(toolName string) bool {
 		strings.HasPrefix(toolName, "remove_")
 }
 
+// ValidationIssue 门禁配置校验结果单条（设置页"校验配置"按钮用）。
+type ValidationIssue struct {
+	Mode    string `json:"mode"`    // "single" | "batch"
+	Phase   string `json:"phase"`   // 出问题的阶段名
+	Level   string `json:"level"`   // "error"（必然卡死）| "warning"（隐患）
+	Message string `json:"message"`
+}
+
+// ValidateGateConfig 校验门禁配置合法性（两种模式都查）。
+// knownSkills 是现有技能名集合（require_reads 引用检查用，含通配符则跳过）。
+func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue {
+	var issues []ValidationIssue
+	skills := make(map[string]bool, len(knownSkills))
+	for _, s := range knownSkills {
+		skills[s] = true
+	}
+
+	for _, mode := range []string{"single", "batch"} {
+		gate := ParsePhaseGateConfig(content, mode)
+		if gate == nil {
+			continue // 该模式没有配置块（可能只有 single 或只有 batch）
+		}
+		names := make(map[string]bool, len(gate.phases))
+		for _, p := range gate.phases {
+			names[p.Name] = true
+		}
+		for _, p := range gate.phases {
+			// next 必须指向存在的阶段
+			if p.Next == "" {
+				issues = append(issues, ValidationIssue{mode, p.Name, "error", "缺少 next（必须指向下一阶段）"})
+			} else if !names[p.Next] {
+				issues = append(issues, ValidationIssue{mode, p.Name, "error",
+					fmt.Sprintf("next 指向不存在的阶段 [%s]", p.Next)})
+			}
+			// require 的工具必须在 tools 白名单里，否则 set_phase 永远被拦
+			tools := make(map[string]bool, len(p.Tools))
+			for _, t := range p.Tools {
+				tools[t] = true
+			}
+			for _, req := range p.Require {
+				if !tools[req] {
+					issues = append(issues, ValidationIssue{mode, p.Name, "error",
+						fmt.Sprintf("require 引用了 tools 中没有的工具 [%s]，切换阶段将永远被拦截", req)})
+				}
+			}
+			// require_reads 的技能必须存在（通配符跳过）
+			for _, pattern := range p.RequireReads {
+				if strings.Contains(pattern, "*") {
+					continue
+				}
+				if !skills[pattern] {
+					issues = append(issues, ValidationIssue{mode, p.Name, "warning",
+						fmt.Sprintf("require_reads 引用的技能 [%s] 不存在，read_required 将失败", pattern)})
+				}
+			}
+			// 有 edit 工具但没限制路径
+			if tools["edit"] && p.EditPaths == "" {
+				issues = append(issues, ValidationIssue{mode, p.Name, "warning",
+					"tools 含 edit 但缺少 edit_paths（将允许编辑任意文件，建议限制路径）"})
+			}
+		}
+	}
+	return issues
+}
+
 // SetPhase 显式切换到目标阶段（LLM 主动调用 set_phase 时）。
 // 同阶段切换（current == target）直接返回成功。
 // require 未满足时阻塞，不允许跳转。

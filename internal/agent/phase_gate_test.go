@@ -716,3 +716,77 @@ func TestBuildSubagentSkills(t *testing.T) {
 		t.Error("main- skill should NOT be injected into subagent")
 	}
 }
+
+// TestValidateGateConfig 验证配置校验：require 引用 tools 外工具报错、
+// next 指向不存在阶段报错、技能不存在告警、edit 无 edit_paths 告警、有效配置零问题。
+func TestValidateGateConfig(t *testing.T) {
+	skills := []string{"main-tech-show-dont-tell", "main-tech-common-sense-logic"}
+
+	// 坏配置：require 引用 tools 外工具 + next 指向不存在阶段 + 技能不存在 + edit 无路径限制
+	bad := `
+<!-- phase-gate-config
+phase: prepare
+tools: read, get_chapter_list
+require: get_characters, missing_tool
+require_reads: main-tech-no-such-skill
+next: ghost
+-->
+<!-- phase-gate-config
+phase: write
+tools: edit, read
+require: edit
+next: prepare
+-->`
+	issues := ValidateGateConfig(bad, skills)
+	if len(issues) == 0 {
+		t.Fatal("expected issues for bad config")
+	}
+	var hasRequire, hasNext, hasSkill, hasEditPath bool
+	for _, it := range issues {
+		switch {
+		case strings.Contains(it.Message, "require 引用了 tools 中没有"):
+			hasRequire = true
+		case strings.Contains(it.Message, "不存在"):
+			if strings.Contains(it.Message, "阶段") {
+				hasNext = true
+			} else {
+				hasSkill = true
+			}
+		case strings.Contains(it.Message, "edit_paths"):
+			hasEditPath = true
+		}
+	}
+	if !hasRequire {
+		t.Error("expected require-not-in-tools error")
+	}
+	if !hasNext {
+		t.Error("expected next-ghost error")
+	}
+	if !hasSkill {
+		t.Error("expected unknown-skill warning")
+	}
+	if !hasEditPath {
+		t.Error("expected edit-without-edit_paths warning")
+	}
+
+	// 好配置：零问题
+	good := `
+<!-- phase-gate-config
+phase: prepare
+tools: read, read_required, get_characters, get_chapter_list
+require: get_characters, get_chapter_list
+require_reads: main-tech-common-sense-logic
+next: write
+-->
+<!-- phase-gate-config
+phase: write
+tools: read, read_required, edit
+edit_paths: chapters/*
+require: edit
+require_reads: main-tech-show-dont-tell
+next: prepare
+-->`
+	if issues := ValidateGateConfig(good, skills); len(issues) != 0 {
+		t.Errorf("expected no issues for good config, got %+v", issues)
+	}
+}
