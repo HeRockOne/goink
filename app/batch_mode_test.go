@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// 旧配置（无迷你维护工具）升级后,batch write 阶段 tools 应包含迷你维护工具。
+// 旧配置（无迷你维护工具）升级后,batch write 阶段 tools 和 require 都应包含迷你维护工具。
 func TestUpgradeBatchWriteTools(t *testing.T) {
 	oldCfg := `<!-- phase-gate-config
 mode: single
@@ -29,6 +29,10 @@ loop: true
 	}
 	if !strings.Contains(upgraded, "update_writing_snapshot") {
 		t.Fatal("batch write tools 应包含 update_writing_snapshot")
+	}
+	// require 行也应包含迷你维护工具（状态实时结算强制）
+	if !strings.Contains(upgraded, "require: edit, get_chapter_list, read, read_required, create_scene") {
+		t.Fatalf("batch write require 应包含迷你维护工具: %s", upgraded)
 	}
 	// single 阶段不应被改
 	if strings.Contains(upgraded, "tools: read, edit, create_scene") {

@@ -92,7 +92,7 @@ mode: batch
 phase: write
 tools: read, read_required, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 edit_paths: chapters/*
-require: edit, get_chapter_list, read, read_required
+require: edit, get_chapter_list, read, read_required, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing
 next: review
 loop: true
@@ -136,9 +136,9 @@ func EnsurePhaseGateConfigSeeded(db *gorm.DB) (*config.AppSettings, error) {
 		}
 		return s, nil
 	}
-	// 增量升级：旧配置的 batch write 阶段 tools 缺迷你维护写工具时补上
-	if !strings.Contains(s.PhaseGateConfig, "update_writing_snapshot\nedit_paths: chapters/*\nrequire: edit, get_chapter_list, read, read_required") &&
-		!strings.Contains(s.PhaseGateConfig, "create_item_occurrence, update_writing_snapshot") {
+	// 增量升级：旧配置的 batch write 阶段缺迷你维护工具（tools 或 require）时补上
+	if !strings.Contains(s.PhaseGateConfig, "create_item_occurrence, update_writing_snapshot") ||
+		!strings.Contains(s.PhaseGateConfig, "require: edit, get_chapter_list, read, read_required, create_scene") {
 		// 仅在 batch write 阶段块中补迷你维护工具（定位 "mode: batch" 后的 write 块）
 		updated := upgradeBatchWriteTools(s.PhaseGateConfig)
 		if updated != s.PhaseGateConfig {
@@ -153,27 +153,41 @@ func EnsurePhaseGateConfigSeeded(db *gorm.DB) (*config.AppSettings, error) {
 }
 
 // upgradeBatchWriteTools 在 batch 的 write 阶段 tools 行追加迷你维护工具（幂等）。
+// 同时把迷你维护工具加入 require（阶段内累计：整批 write 循环中必须调用过这些工具，
+// 未调用不能转 review——保证状态实时结算不会整批漏掉）。
 func upgradeBatchWriteTools(cfg string) string {
 	const miniTools = "create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot"
-	// 找到 batch write 阶段块：mode: batch 后第一个 phase: write 的 tools 行
 	lines := strings.Split(cfg, "\n")
 	out := make([]string, 0, len(lines))
 	inBatch := false
-	for i, line := range lines {
+	inWrite := false
+	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "mode: batch") {
 			inBatch = true
 		}
 		if strings.HasPrefix(trimmed, "mode:") && !strings.HasPrefix(trimmed, "mode: batch") {
 			inBatch = false
+			inWrite = false
 		}
-		// batch 的 write 阶段 tools 行：追加迷你维护工具
-		if inBatch && strings.HasPrefix(trimmed, "phase: write") && i+1 < len(lines) &&
-			strings.HasPrefix(strings.TrimSpace(lines[i+1]), "tools:") {
-			toolsLine := lines[i+1]
-			if !strings.Contains(toolsLine, "create_item_occurrence") {
-				out = append(out, line)
-				out = append(out, toolsLine+", "+miniTools)
+		if inBatch {
+			if strings.HasPrefix(trimmed, "phase: write") {
+				inWrite = true
+			} else if strings.HasPrefix(trimmed, "phase:") {
+				inWrite = false
+			}
+		}
+		// batch write 块内的 tools 行：追加迷你维护工具
+		if inBatch && inWrite && strings.HasPrefix(trimmed, "tools:") {
+			if !strings.Contains(line, "create_item_occurrence") {
+				out = append(out, line+", "+miniTools)
+				continue
+			}
+		}
+		// batch write 块内的 require 行：追加迷你维护工具
+		if inBatch && inWrite && strings.HasPrefix(trimmed, "require:") {
+			if !strings.Contains(line, "create_item_occurrence") {
+				out = append(out, line+", "+miniTools)
 				continue
 			}
 		}
