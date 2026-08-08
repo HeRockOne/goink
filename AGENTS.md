@@ -47,6 +47,7 @@ Go 命令在项目根目录执行。前端构建在 `build.ps1` 中自动完成�
 - **OS**: Windows 10, PowerShell 7
 - **依赖**: 仅 WebView2 Runtime（系统内置）
 - **数据目录**: `D:\Goink\`（exe 同级），含 `novel-agent.db`、`novels/`
+- **调试日志**: `D:\Goink\goink.log`（DEBUG 级，含 LLM usage/model_usage 更新、门禁拦截、工具调用、appendMsg 落库等，排查 token/门禁问题先看这里）
 - **Git**: 每本小说独立仓库在 `{DataDir}/novels/{id}/`，含 `chapters/NNN.md`、`outlines/NNN.md`
 
 ### 外部调试（HTTP API）
@@ -107,7 +108,7 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 - **并行读取文件**，减少来回
 - **每次修改写入审计**到 `docs/README.md`（更新索引）
 - **每次疑问先 `websearch`** 联网比对
-- **Commit**: 英文，具体描述，无 emoji
+- **每次修改完业务代码，必须Commit本地**: 英文，具体描述，无 emoji
 - **用户用中文** — 用中文回复
 - **不改日志和注释**，除非明确要求
 - **不用 sed/python 脚本改代码**，用 Edit/Write

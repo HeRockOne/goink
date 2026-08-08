@@ -108,7 +108,7 @@ func cachedToolsJSON() ([]byte, int64) {
 }
 func NewTokenCache() *TokenCache { return &TokenCache{} }
 
-// clearPlaceholderPrefix 已清理占位符前缀（与 internal/agent/context_clear.go 同款）。
+// clearPlaceholderPrefix 已清理占位符前缀（clean 方案已从运行时移除，模拟保留作对照研究）。
 const clearPlaceholderPrefix = "[已读技能内容已清理: "
 
 // WithCleanTransform 启用发送前清理变换：把 read/read_required 的 skill 全文

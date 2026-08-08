@@ -193,18 +193,6 @@ func (a *App) SetPhaseGateEnabled(enabled bool) error {
 	return config.SaveSettings(a.db, a.settings)
 }
 
-// SetContextClear 设置发送前工具结果清理（实验功能）：启用后已消费的 skill 全文
-// 在发送前替换为占位符（保留最近 keep 条），历史与 DB 存储不变。
-// 默认关闭；开启后请用真实创作 A/B 对比审稿质量。
-func (a *App) SetContextClear(enabled bool, keep int) error {
-	a.settings.ContextClearEnabled = enabled
-	if keep < 0 {
-		keep = 3
-	}
-	a.settings.ContextClearKeep = keep
-	return config.SaveSettings(a.db, a.settings)
-}
-
 // SetWebDAVConfig 设置 WebDAV 配置。
 func (a *App) SetWebDAVConfig(port int, user, pass string) error {
 	a.settings.WebDAVPort = port
