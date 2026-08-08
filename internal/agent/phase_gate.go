@@ -198,14 +198,13 @@ func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 	return true
 }
 
-// checkRequireReadsMet 检查阶段的 require_reads（必读技能）是否全部满足。
-// 只统计当前阶段内成功读取的技能（阶段切换后从零开始）。
-// 支持通配符：配置项含 * 时用 path.Match 匹配（如 "main-tech-*" 匹配所有已读的 main-tech 系技能）。
-func (g *PhaseGate) checkRequireReadsMet(pc *PhaseConfig) bool {
+// missingRequireReads 返回当前阶段尚未加载的必读技能列表（require_reads）。
+func (g *PhaseGate) missingRequireReads(pc *PhaseConfig) []string {
 	if len(pc.RequireReads) == 0 {
-		return true
+		return nil
 	}
 	reads := g.readsByPhase[g.currentPhase]
+	var missing []string
 	for _, pattern := range pc.RequireReads {
 		if strings.Contains(pattern, "*") {
 			matched := false
@@ -216,15 +215,34 @@ func (g *PhaseGate) checkRequireReadsMet(pc *PhaseConfig) bool {
 				}
 			}
 			if !matched {
-				return false
+				missing = append(missing, pattern)
 			}
 			continue
 		}
 		if !reads[pattern] {
-			return false
+			missing = append(missing, pattern)
 		}
 	}
-	return true
+	return missing
+}
+
+// checkRequireReadsMet 检查阶段的 require_reads（必读技能）是否全部满足。
+// 只统计当前阶段内成功读取的技能（阶段切换后从零开始）。
+// 支持通配符：配置项含 * 时用 path.Match 匹配（如 "main-tech-*" 匹配所有已读的 main-tech 系技能）。
+func (g *PhaseGate) checkRequireReadsMet(pc *PhaseConfig) bool {
+	return len(g.missingRequireReads(pc)) == 0
+}
+
+// isMutatingTool 判断工具是否是有副作用的创作/维护动作。
+// 这类动作必须在必读技能加载后才能执行——技能是创作指导，不是切换阶段的手续。
+func isMutatingTool(toolName string) bool {
+	if toolName == "edit" || toolName == "run_subagent" {
+		return true
+	}
+	return strings.HasPrefix(toolName, "create_") ||
+		strings.HasPrefix(toolName, "update_") ||
+		strings.HasPrefix(toolName, "delete_") ||
+		strings.HasPrefix(toolName, "remove_")
 }
 
 // SetPhase 显式切换到目标阶段（LLM 主动调用 set_phase 时）。
@@ -269,27 +287,7 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 
 	// 检查当前阶段的 require_reads（必读技能）是否满足（不满足则阻塞）
 	if current != nil && len(current.RequireReads) > 0 {
-		reads := g.readsByPhase[g.currentPhase]
-		var missingSkills []string
-		for _, pattern := range current.RequireReads {
-			if strings.Contains(pattern, "*") {
-				matched := false
-				for read := range reads {
-					if ok, _ := path.Match(pattern, read); ok {
-						matched = true
-						break
-					}
-				}
-				if !matched {
-					missingSkills = append(missingSkills, pattern)
-				}
-				continue
-			}
-			if !reads[pattern] {
-				missingSkills = append(missingSkills, pattern)
-			}
-		}
-		if len(missingSkills) > 0 {
+		if missingSkills := g.missingRequireReads(current); len(missingSkills) > 0 {
 			return false, fmt.Sprintf("阶段 [%s] 要求必须用 read_required 读取以下技能后才能切换到 [%s]，当前未读取: %v",
 				g.currentPhase, targetPhase, missingSkills)
 		}
@@ -423,6 +421,14 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 	// 当前阶段 tools 列表中的工具允许
 	for _, t := range current.Tools {
 		if t == toolName {
+			// 事前技能强制：必读技能未加载前，禁止执行创作/维护动作。
+			// 技能是创作指导，必须先读再动笔，不允许"干完活再补读解锁阶段"。
+			if isMutatingTool(toolName) {
+				if missing := g.missingRequireReads(current); len(missing) > 0 {
+					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 read_required 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
+					return false, warning
+				}
+			}
 			return true, ""
 		}
 	}

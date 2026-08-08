@@ -633,7 +633,65 @@ next: prepare
 	}
 }
 
-// TestBuildSubagentSkills 验证 sub- 前缀技能注入：
+// TestRequireReadsBeforeCreation 验证事前技能强制：
+// 必读技能未加载前，创作/维护动作（edit/update/create/run_subagent）被直接拦截，
+// 而不是等 set_phase 时才补读——技能是创作指导，不是切换手续。
+func TestRequireReadsBeforeCreation(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: read, read_required, edit, create_scene, run_subagent, get_characters, set_phase
+require: edit
+require_reads: main-tech-show-dont-tell
+next: done
+-->
+`, "single")
+	if gate == nil {
+		t.Fatal("ParsePhaseGateConfig returned nil")
+	}
+
+	// 未读技能时：edit 被事前拦截
+	allowed, warning := gate.CheckToolAllowed("edit")
+	if allowed {
+		t.Error("should BLOCK: edit before required skill loaded")
+	}
+	if warning == "" || !strings.Contains(warning, "main-tech-show-dont-tell") {
+		t.Errorf("warning should name missing skill, got: %q", warning)
+	}
+
+	// 未读技能时：维护类工具同样被拦
+	if allowed, _ := gate.CheckToolAllowed("create_scene"); allowed {
+		t.Error("should BLOCK: create_scene before required skill loaded")
+	}
+	if allowed, _ := gate.CheckToolAllowed("run_subagent"); allowed {
+		t.Error("should BLOCK: run_subagent before required skill loaded")
+	}
+
+	// 未读技能时：只读/查询/管理工具放行（read_required 是加载入口）
+	if allowed, _ := gate.CheckToolAllowed("read_required"); !allowed {
+		t.Error("should allow: read_required is the loading entry")
+	}
+	if allowed, _ := gate.CheckToolAllowed("read"); !allowed {
+		t.Error("should allow: read")
+	}
+	if allowed, _ := gate.CheckToolAllowed("get_characters"); !allowed {
+		t.Error("should allow: get_characters")
+	}
+	if allowed, _ := gate.CheckToolAllowed("set_phase"); !allowed {
+		t.Error("should allow: set_phase")
+	}
+
+	// 读技能后：edit 放行
+	gate.OnReadRequired("main-tech-show-dont-tell")
+	if allowed, _ := gate.CheckToolAllowed("edit"); !allowed {
+		t.Error("should allow: edit after required skill loaded")
+	}
+	if allowed, _ := gate.CheckToolAllowed("create_scene"); !allowed {
+		t.Error("should allow: create_scene after required skill loaded")
+	}
+}
+
+
 // review 自动注入所有 sub-*（含三层查找），不硬编码技能名；无 sub- 时返回空。
 func TestBuildSubagentSkills(t *testing.T) {
 	store, err := skill.NewStore(slog.Default(), "")

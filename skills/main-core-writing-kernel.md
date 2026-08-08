@@ -61,7 +61,7 @@ mode: always
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
-3. 加载技能（**首次会话加载一次，后续章节技能已在历史中则直接引用，不要重复 read**）：
+3. 加载技能（**必读技能必须在动笔前已加载**：技能是创作指导，先读再写，不是切换阶段的手续。若技能内容已被滚动压缩出上下文，必须重新 read_required，不要为了省一次 read 赌记忆——技能漏读会让大纲跑偏，门禁会在你动笔时拦截）：
    - 必读：main-tech-chapter-hook-enhanced, main-tech-chapter-title-design（门禁强制）
    - 常备：main-tech-book-outline, main-tech-chapter-opening, main-tech-maliang-method, main-tech-dialogue-subtext（有情感/对话/爽点设计时用）
    - 新书首次 outline 加：main-tech-golden-three-chapters, main-tech-golden-finger-design
@@ -84,7 +84,7 @@ mode: always
 
 1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density），门禁 require_reads 强制
 2. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
-3. 加载技能（**首次会话加载一次，后续章节技能已在历史中则直接引用，不要重复 read**）：
+3. 加载技能（**必读技能必须在动笔前已加载**：技能是创作指导，先读再写。若技能内容已被滚动压缩出上下文，必须重新 read_required，不要为了省一次 read 赌记忆——技能漏读会写崩，门禁会在你动笔时拦截）：
    - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density（门禁强制）
    - 情景按需（**仅本章涉及该情景时读**，普通章不读）：
      - 战斗/高潮章 → main-tech-climax-scene

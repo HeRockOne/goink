@@ -31,6 +31,8 @@ func (t *ReadRequiredTool) Description() string {
 
 用法：进入新阶段后，先调用 get_phase_gate_config 查看当前阶段的 require_reads 必读技能，然后用本工具传入这些技能名；否则 set_phase 会被门禁拦截。
 
+注意：必读技能必须在创作动作（edit/update/create/run_subagent）**之前**加载——技能是创作指导，不是切换阶段的手续。未加载必读技能就执行创作动作会被门禁直接拦截，提示先读技能。若技能内容已被滚动压缩出上下文，必须重新调用本工具加载，不要赌记忆。
+
 参数：
 - skills: 逗号分隔的技能名列表（不含 .md），如 "main-tech-anti-ai-writing,main-tech-show-dont-tell"
 
