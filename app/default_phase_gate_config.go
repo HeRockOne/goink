@@ -1,6 +1,9 @@
 package app
 
 import (
+	"log/slog"
+	"strings"
+
 	"gorm.io/gorm"
 
 	"novel/internal/config"
@@ -120,17 +123,61 @@ next: prepare
 
 // EnsurePhaseGateConfigSeeded 首次启动时写入默认门禁配置，返回最新的设置对象。
 // 已存在配置（用户改过）则跳过，避免覆盖用户自定义。
+// 对旧版本配置做增量升级：batch write 阶段缺少迷你维护工具时自动合并（不覆盖用户其他修改）。
 func EnsurePhaseGateConfigSeeded(db *gorm.DB) (*config.AppSettings, error) {
 	s, err := config.LoadSettings(db)
 	if err != nil {
 		return nil, err
 	}
-	if s.PhaseGateConfig != "" {
+	if s.PhaseGateConfig == "" {
+		s.PhaseGateConfig = defaultPhaseGateConfig
+		if err := config.SaveSettings(db, s); err != nil {
+			return nil, err
+		}
 		return s, nil
 	}
-	s.PhaseGateConfig = defaultPhaseGateConfig
-	if err := config.SaveSettings(db, s); err != nil {
-		return nil, err
+	// 增量升级：旧配置的 batch write 阶段 tools 缺迷你维护写工具时补上
+	if !strings.Contains(s.PhaseGateConfig, "update_writing_snapshot\nedit_paths: chapters/*\nrequire: edit, get_chapter_list, read, read_required") &&
+		!strings.Contains(s.PhaseGateConfig, "create_item_occurrence, update_writing_snapshot") {
+		// 仅在 batch write 阶段块中补迷你维护工具（定位 "mode: batch" 后的 write 块）
+		updated := upgradeBatchWriteTools(s.PhaseGateConfig)
+		if updated != s.PhaseGateConfig {
+			s.PhaseGateConfig = updated
+			if err := config.SaveSettings(db, s); err != nil {
+				return nil, err
+			}
+			slog.Info("门禁配置已增量升级：batch write 阶段补充迷你维护工具")
+		}
 	}
 	return s, nil
+}
+
+// upgradeBatchWriteTools 在 batch 的 write 阶段 tools 行追加迷你维护工具（幂等）。
+func upgradeBatchWriteTools(cfg string) string {
+	const miniTools = "create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot"
+	// 找到 batch write 阶段块：mode: batch 后第一个 phase: write 的 tools 行
+	lines := strings.Split(cfg, "\n")
+	out := make([]string, 0, len(lines))
+	inBatch := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "mode: batch") {
+			inBatch = true
+		}
+		if strings.HasPrefix(trimmed, "mode:") && !strings.HasPrefix(trimmed, "mode: batch") {
+			inBatch = false
+		}
+		// batch 的 write 阶段 tools 行：追加迷你维护工具
+		if inBatch && strings.HasPrefix(trimmed, "phase: write") && i+1 < len(lines) &&
+			strings.HasPrefix(strings.TrimSpace(lines[i+1]), "tools:") {
+			toolsLine := lines[i+1]
+			if !strings.Contains(toolsLine, "create_item_occurrence") {
+				out = append(out, line)
+				out = append(out, toolsLine+", "+miniTools)
+				continue
+			}
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
