@@ -379,7 +379,13 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 
 	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
 	cur = append(cur, sysMsg(novelState(0)))
+	if mode == "auto" {
+		cur = append(cur, sysMsg(initInject)) // auto：init 必读技能直接注入
+	}
 	for i, p := range initScript() {
+		if mode == "auto" && p.tool == "read_required" {
+			continue // auto：init 技能已注入，跳过 read_required
+		}
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
@@ -389,13 +395,20 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 		)
 		if p.tool == "set_phase" {
 			cur = append(cur, phaseReminder(p.args, true))
+			if mode == "auto" {
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+			}
 		}
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
 	hit, miss := cache.Step(req)
 	results = append(results, [2]int64{hit, miss})
-	if mode == "now" {
+	if mode == "auto" {
+		history = append(history, cur...)
+	} else if mode == "now" {
 		history = append(history, cur...)
 	} else {
 		legacyCur := append([]map[string]any{}, cur[0])
@@ -409,6 +422,9 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 
 		plays := gateScript(turn)
 		for i, p := range plays {
+			if mode == "auto" && p.tool == "read_required" {
+				continue // auto：技能在进入阶段时注入，跳过 read_required
+			}
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
@@ -420,6 +436,11 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
 			if p.tool == "set_phase" {
 				cur = append(cur, phaseReminder(p.args, true))
+				if mode == "auto" {
+					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+						cur = append(cur, sysMsg(sk))
+					}
+				}
 			}
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
@@ -427,7 +448,9 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
 
-		if mode == "now" {
+		if mode == "auto" {
+			history = append(history, cur...)
+		} else if mode == "now" {
 			history = append(history, cur...)
 		} else {
 			legacyCur := append([]map[string]any{}, cur[0])
@@ -438,7 +461,98 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 	return results
 }
 
-// buildBatchWithRounds 跑批量创作场景：连续 2 批，每批
+// isOptMode 判断是否"优化模式"（auto-inject + 自动推进 + 去提醒）
+func isOptMode(mode string) bool { return mode == "opt" }
+
+// skipReadRequired 判断是否跳过 read_required（auto 和 opt 模式）
+func skipReadRequired(mode string) bool { return mode == "auto" || mode == "opt" }
+
+// buildGateWithRoundsOpt 优化模式：auto-inject + set_phase 自动推进（不生成消息）+ 去掉成功提醒。
+func buildGateWithRoundsOpt(cache *TokenCache, rounds int) [][2]int64 {
+	return buildOptWithPrefix(cache, rounds, fixedSystem())
+}
+
+// buildGateWithRoundsOptNoCat 优化模式 + 去掉 catalog（auto 技能改 manual，不进 catalog）。
+func buildGateWithRoundsOptNoCat(cache *TokenCache, rounds int) [][2]int64 {
+	return buildOptWithPrefix(cache, rounds, fixedSystemNoCat())
+}
+
+// buildOptWithPrefix 优化模式核心：auto-inject + 自动推进 + 去提醒，prefix 可自定义（含/不含 catalog）。
+func buildOptWithPrefix(cache *TokenCache, rounds int, prefix []map[string]any) [][2]int64 {
+	return buildOptWithPrefixAndSub(cache, rounds, prefix, false)
+}
+
+// buildOptWithPrefixTrimmedSub 同 buildOptWithPrefix，但子代理用精简历史。
+func buildOptWithPrefixTrimmedSub(cache *TokenCache, rounds int, prefix []map[string]any) [][2]int64 {
+	return buildOptWithPrefixAndSub(cache, rounds, prefix, true)
+}
+
+// buildOptWithPrefixAndSub 优化模式核心 + 可选精简子代理。
+func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string]any, trimmedSub bool) [][2]int64 {
+	results := [][2]int64{}
+	history := append([]map[string]any{}, prefix...)
+
+	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
+	cur = append(cur, sysMsg(novelState(0)))
+	cur = append(cur, sysMsg(initInject))
+	for _, p := range initScript() {
+		if p.tool == "read_required" {
+			continue
+		}
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		if p.tool == "set_phase" {
+			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+				cur = append(cur, sysMsg(sk))
+			}
+			continue
+		}
+		cur = append(cur, asstToolCall("init", p.tool, p.args), toolMsg("init", p.tool, p.result))
+	}
+	cur = append(cur, asstText("开书完成"))
+	req := append(append([]map[string]any{}, history...), cur...)
+	hit, miss := cache.Step(req)
+	results = append(results, [2]int64{hit, miss})
+	history = append(history, cur...)
+
+	for turn := 1; turn <= rounds; turn++ {
+		cur := []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章。", turn+1))}
+		cur = append(cur, sysMsg(novelState(turn)))
+		plays := gateScript(turn)
+		for _, p := range plays {
+			if p.tool == "read_required" {
+				continue
+			}
+			req := append(append([]map[string]any{}, history...), cur...)
+			hit, miss := cache.Step(req)
+			results = append(results, [2]int64{hit, miss})
+			if p.tool == "set_phase" {
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+				continue
+			}
+			cur = append(cur, asstToolCall(fmt.Sprintf("t%d", turn), p.tool, p.args))
+			if p.tool == "run_subagent" {
+				var subResults [][2]int64
+				if trimmedSub {
+					subResults = simulateSubagentTrimmed(cache, history, cur, turn)
+				} else {
+					subResults = simulateSubagent(cache, history, cur, turn)
+				}
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(fmt.Sprintf("t%d", turn), p.tool, p.result))
+		}
+		cur = append(cur, asstText(finalAssistant(turn)))
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		history = append(history, cur...)
+	}
+	return results
+}
 // init → prepare（一次）→ outline（N 章大纲一次出）→ write（循环 N 章）→ review（统一）→ maintain（统一）→ done。
 // 与单章连续 N 轮不同：轮边界只在批次间出现（整批只有一次 prepare/review/maintain），
 // 历史跨章连续累积，NS 落库收益在批次边界放大——legacy 在批次边界把整批历史重发为 miss。

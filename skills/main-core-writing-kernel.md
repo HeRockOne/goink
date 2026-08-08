@@ -42,7 +42,7 @@ mode: always
 
 ### prepare
 
-1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-common-sense-logic），门禁 require_reads 强制
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-common-sense-logic），门禁 require_reads 强制。**系统在 set_phase 时已自动注入该技能，正常情况下无需手动调 read_required**（门禁保留作为后备校验）
 2. **get_writing_context**（required）— 一次获取树状全量状态
 3. **get_chapter_list**（required）— 确认章节编号连续
 4. **get_characters**（required）— 确认角色阵容
@@ -57,7 +57,7 @@ mode: always
 
 ### outline
 
-1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-chapter-hook-enhanced, main-tech-chapter-title-design），门禁 require_reads 强制
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-chapter-hook-enhanced, main-tech-chapter-title-design），门禁 require_reads 强制。**系统已自动注入，无需手动调**
 2. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
@@ -83,7 +83,7 @@ mode: always
 
 ### write
 
-1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density），门禁 require_reads 强制
+1. **必读技能已自动注入**（系统在 set_phase("write") 时自动注入本阶段 4 个必读技能，无需手动调 read_required）
 2. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
 3. 加载技能（**必读技能必须在动笔前已加载**：技能是创作指导，先读再写。若技能内容已被滚动压缩出上下文，必须重新 read_required，不要为了省一次 read 赌记忆——技能漏读会写崩，门禁会在你动笔时拦截）：
    - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density（门禁强制）
@@ -108,7 +108,7 @@ mode: always
 
 ### maintain（逐项检查清单，每章必做）
 
-**read_required**（required）— 先用 read_required 加载本阶段必读技能（main-tech-anti-repetition, main-tech-foreshadow-cycle），门禁 require_reads 强制，然后逐项执行以下清单。
+**必读技能已自动注入**（系统在 set_phase("maintain") 时自动注入 anti-repetition + foreshadow-cycle，无需手动调 read_required）。然后逐项执行以下清单。
 
 **每章必做的状态查询**（门禁 require 强制，宁可多调用不可漏维护）：
 

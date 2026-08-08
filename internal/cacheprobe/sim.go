@@ -480,6 +480,17 @@ func fixedSystem() []map[string]any {
 	return msgs
 }
 
+// fixedSystemNoCat 无 catalog 的固定前缀（auto-inject 后 catalog 可以去掉，技能已被系统注入）。
+func fixedSystemNoCat() []map[string]any {
+	var msgs []map[string]any
+	for _, c := range []string{identityText, alwaysText} {
+		if c != "" {
+			msgs = append(msgs, sysMsg(c))
+		}
+	}
+	return msgs
+}
+
 // novelState 模拟 NS，与真实 agentcfg.NovelState 字节格式完全一致：
 //   【小说基础信息】书名/类型/简介 ← 真实 DB（novels 表第一本，经 GOINK_DATA_DIR/GOINK_DB_PATH）
 //   当前进度：第 N 章 ← turn 动态（模拟创作推进；真实为 DB chapters 计数）
@@ -697,6 +708,42 @@ func readRequired(names ...string) play {
 		args:   fmt.Sprintf(`{"skills":"%s"}`, skills),
 		result: readFilesText(names),
 	}
+}
+
+// ── auto-inject 方案（对照研究）：把各阶段必读技能以 system 消息在阶段开头注入，
+// 不再依赖 read_required 工具调用。与 read_required 对比验证缓存差异。 ──
+
+// initInject init 阶段必读技能（5 个开书技能），auto 模式在 init 开始时注入。
+var initInject = readFilesText([]string{"main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"})
+
+// phaseInjectSkills 各阶段必读技能 → 注入内容（与门禁 require_reads 一致）。
+var phaseInjectSkills = map[string]string{
+	"prepare":  readFilesText([]string{"main-tech-common-sense-logic"}),
+	"outline":  readFilesText([]string{"main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"}),
+	"write":    readFilesText([]string{"main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density"}),
+	"maintain": readFilesText([]string{"main-tech-anti-repetition", "main-tech-foreshadow-cycle"}),
+}
+
+// injectSkillsPlays 把 plays 里的 read_required 移除，改为在进入新阶段时注入对应技能 system 消息。
+// 返回 (plays, 阶段注入点)。阶段注入点:sets 元素 = 阶段名，进入该阶段时需注入 phaseInjectSkills[phase]。
+// 实现：遍历 plays，遇到 set_phase 记录目标阶段；read_required 直接跳过（改为注入）。
+func injectSkillsPlays(plays []play) ([]play, []string) {
+	var out []play
+	var injects []string
+	seen := map[string]bool{}
+	for _, p := range plays {
+		if p.tool == "read_required" {
+			continue // 技能改为 system 注入，不再工具调用
+		}
+		if p.tool == "set_phase" && !seen[p.args] {
+			if _, ok := phaseInjectSkills[p.args]; ok {
+				injects = append(injects, p.args)
+				seen[p.args] = true
+			}
+		}
+		out = append(out, p)
+	}
+	return out, injects
 }
 
 // initScript 开书（init）流程：read_required 加载 5 个必读技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
@@ -1020,11 +1067,28 @@ func compressionSummary() string {
 // 然后子 agent 内部工具循环（read 章节、查角色/伏笔/弧线）在尾部增长。
 // 子 agent 消息不落库（ToAPI=false），不影响主历史。
 func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int) [][2]int64 {
+	return simulateSubagentCustom(cache, history, cur, turn, false)
+}
+
+// simulateSubagentTrimmed 精简版子代理：不带完整主历史，只带 fixedSystem + 本章 cur。
+// 用于验证"精简子代理历史"对主会话缓存的影响。
+func simulateSubagentTrimmed(cache *TokenCache, history, cur []map[string]any, turn int) [][2]int64 {
+	return simulateSubagentCustom(cache, history, cur, turn, true)
+}
+
+// simulateSubagentCustom 子代理审稿核心。trimmed=true 时精简历史。
+func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, turn int, trimmed bool) [][2]int64 {
 	var results [][2]int64
 
-	// fork 完整主历史（与 RunSubAgent 相同：msgs = parentOpts.Messages + 尾部追加）
-	// 消息拆分与真实一致：主历史 → [身份（常量）] → [sub-* 技能（常量，review 自动注入）] → [NS（动态）] → [指令]
-	sub := append(append([]map[string]any{}, history...), cur...)
+	var sub []map[string]any
+	if trimmed {
+		// 精简版：只带固定前缀 + 本章 cur（不含完整历史）
+		sub = append([]map[string]any{}, fixedSystem()...)
+		sub = append(sub, cur...)
+	} else {
+		// 完整版：fork 完整主历史 + 本章 cur（与 RunSubAgent 相同）
+		sub = append(append([]map[string]any{}, history...), cur...)
+	}
 	sub = append(sub,
 		map[string]any{"role": "system", "content": agentcfg.AgentIdentity(agentcfg.ReviewAgent)},
 	)

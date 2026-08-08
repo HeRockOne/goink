@@ -161,12 +161,14 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 | 阶段 | 完成条件 | 必须调用 |
 |------|---------|---------|
-| init | 开书：读 5 个必读技能，查询 7 项确认现状（新书写全书总纲到 book-outline.md、建角色/世界观/卷） | set_phase("prepare") |
+| init | 开书：查询 7 项确认现状（新书写全书总纲到 book-outline.md、建角色/世界观/卷） | set_phase("prepare") |
 | prepare | 用 get_writing_context 一次获取全量上下文（角色、时间线、弧线、读者认知、伏笔、设定、物品、场景），**必须检查 volume_entities（本卷涉及的实体清单）**，确认本卷设定约束、伏笔状态、物品流转，再按需补充细节。**同时必须读取返回的 outline（全书总纲摘要）与 progress（当前章号+本卷范围）**：本章创作只展开本卷情节、服务于总纲方向，后续卷设定不得提前使用。发现有异常（如角色断档、设定前后矛盾）用 get_entity_appearances 反查确认，然后 set_phase("outline") |
 | outline | 大纲写入文件 | set_phase("write") |
 | write | 正文写入+字数达标（字数由 get_chapter_list 代码校验，默认 2400-4000，设置中可调） | set_phase("review") |
 | review | 必须调用 run_subagent(agent_type="review") 且无致命问题 | set_phase("maintain") |
-| maintain | 所有数据更新完毕（清单见 kernel，15 项逐项执行） | set_phase("prepare") |
+| maintain | 所有数据更新完毕（清单见 kernel，15 项逐项执行） | 自动推进到 prepare |
+
+> **必读技能自动注入**：各阶段 require_reads 配置的必读技能（如 write 阶段的 show-dont-tell / anti-ai-writing 等）在 set_phase 成功时由系统自动注入为 system 消息，**模型无需手动调 read_required**。技能始终在创作动作前就绪。read_required 工具保留作为手动刷新入口，正常情况下不需要调用。
 
 【文件路径】
 

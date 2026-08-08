@@ -39,7 +39,7 @@ mode: single
 phase: write
 tools: read, read_required, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_item_occurrence, update_writing_snapshot
 edit_paths: chapters/*
-require: edit, get_chapter_list, read, read_required
+require: edit, get_chapter_list, read
 require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density
 next: review
 -->
@@ -91,7 +91,7 @@ mode: batch
 phase: write
 tools: read, read_required, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 edit_paths: chapters/*
-require: edit, get_chapter_list, read, read_required, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density
 next: review
 loop: true

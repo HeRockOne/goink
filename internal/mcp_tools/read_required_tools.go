@@ -27,11 +27,7 @@ func (t *ReadRequiredTool) ExposeToLLM() bool      { return true }
 func (t *ReadRequiredTool) Description() string {
 	return `读取指定技能的完整内容，返回给当前上下文。
 
-与 read 的区别：本工具是门禁强制的技能加载入口——门禁配置的 require_reads 决定每个阶段必须读哪些技能，本工具只按参数读取，不内置任何技能清单。
-
-用法：进入新阶段后，先调用 get_phase_gate_config 查看当前阶段的 require_reads 必读技能，然后用本工具传入这些技能名；否则 set_phase 会被门禁拦截。
-
-注意：必读技能必须在创作动作（edit/update/create/run_subagent）**之前**加载——技能是创作指导，不是切换阶段的手续。未加载必读技能就执行创作动作会被门禁直接拦截，提示先读技能。若技能内容已被滚动压缩出上下文，必须重新调用本工具加载，不要赌记忆。
+本工具是门禁必读技能的加载入口。各阶段必读技能（require_reads）已由系统在 set_phase 时自动注入为 system 消息，正常情况下无需手动调用本工具。仅当技能内容被滚动压缩出上下文、或需要手动刷新时使用。
 
 参数：
 - skills: 逗号分隔的技能名列表（不含 .md），如 "main-tech-anti-ai-writing,main-tech-show-dont-tell"

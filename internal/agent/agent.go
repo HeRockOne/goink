@@ -209,6 +209,55 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 	return strings.TrimSpace(b.String())
 }
 
+// injectPhaseSkills 自动注入指定阶段的必读技能（require_reads）为 system 消息。
+// 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
+// 模型无需再调 read_required——技能是创作指导，系统保证其在创作动作前就绪。
+func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
+	pg := a.getPG()
+	if pg == nil || !pg.Active() {
+		return
+	}
+	pc := pg.findPhase(phase)
+	if pc == nil || len(pc.RequireReads) == 0 {
+		return
+	}
+	content := a.buildRequiredSkillsContent(pc.RequireReads, opts.NovelID)
+	if content == "" {
+		return
+	}
+	a.appendMsg("system", content, "", nil, opts, nil)
+	for _, name := range pc.RequireReads {
+		if !strings.Contains(name, "*") {
+			pg.OnReadRequired(name)
+		}
+	}
+	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.RequireReads)
+}
+
+// buildRequiredSkillsContent 从 skill store 读取技能完整内容，拼成 system 消息正文。
+// 与 ReadRequiredTool.Execute 同源（三层查找：小说级 > 用户级 > 内置）。
+func (a *Agent) buildRequiredSkillsContent(skills []string, novelID int64) string {
+	if a.skillStore == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, name := range skills {
+		if strings.Contains(name, "*") {
+			continue
+		}
+		sk, ok := a.skillStore.Get(novelID, name)
+		if !ok {
+			continue
+		}
+		b.WriteString("--- ")
+		b.WriteString(sk.Name)
+		b.WriteString(" ---\n")
+		b.WriteString(sk.RawContent)
+		b.WriteString("\n\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // agentTypeFromString 将字符串转为 AgentType。
 func agentTypeFromString(s string) agentcfg.AgentType {
 	switch s {
@@ -479,7 +528,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							// 记录调用
 							a.getPG().OnToolCall("set_phase", true)
 							if ok {
-								// 成功：发送状态
+								// 成功：自动注入新阶段必读技能
+								a.injectPhaseSkills(targetPhase, &opts)
+								// 发送状态
 								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
 								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
@@ -745,15 +796,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		loopCount++
 	}
 
-	// 门禁强制提醒：require 已满足但未调用 set_phase 时，注入提醒消息
+	// 门禁自动推进：require 已满足时自动 set_phase（不再等 LLM 调）
 	if a.getPG() != nil && a.getPG().Active() {
 		ready, next := a.getPG().CheckTransitionReady()
 		if ready && next != "" {
+			current := a.getPG().CurrentPhase()
+			a.getPG().SetPhase(next)
+			a.injectPhaseSkills(next, &opts)
+			a.logger.Info("门禁自动推进", "from", current, "to", next)
 			reminder := fmt.Sprintf(
-				"<system-reminder>\n⚠️ 门禁提醒：当前阶段 [%s] 的所有条件已满足，你必须调用 set_phase(\"%s\") 切换到下一阶段。这是强制要求，不调用将导致流程卡死。\n</system-reminder>",
-				a.getPG().CurrentPhase(), next)
+				"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
+				current, next)
 			a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
-			a.logger.Warn("注入阶段推进提醒", "phase", a.getPG().CurrentPhase(), "next", next)
 		}
 	}
 
