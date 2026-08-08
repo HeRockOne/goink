@@ -11,6 +11,7 @@ interface Props {
   novelId: number
   target: { path: string; title: string } | null
   onSelectChapter: (ch: chapter.Chapter) => void
+  onSelectOutline: (path: string, title: string) => void
   onSelectGoink: () => void
   onSelectBookOutline: () => void
   onExportNovel: () => void
@@ -18,11 +19,19 @@ interface Props {
 
 const BLOCK_SIZE = 100
 
-export default function ChapterList({ novelId, target, onSelectChapter, onSelectGoink, onSelectBookOutline, onExportNovel }: Props) {
+interface OutlineItem {
+  chapter_number: number
+  file_path: string
+  title: string
+}
+
+export default function ChapterList({ novelId, target, onSelectChapter, onSelectOutline, onSelectGoink, onSelectBookOutline, onExportNovel }: Props) {
   const { t } = useTranslation()
   const app = useApp()
 
   const [chapters, setChapters] = useState<chapter.Chapter[]>([])
+  const [outlines, setOutlines] = useState<OutlineItem[]>([])
+  const [showOutlines, setShowOutlines] = useState(false)
   const [chapterTitle, setChapterTitle] = useState('')
   const [showCreateChapter, setShowCreateChapter] = useState(false)
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set())
@@ -42,7 +51,15 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
     }
   }, [novelId, app])
 
-  useEffect(() => { loadChapters() }, [loadChapters])
+  const loadOutlines = useCallback(async () => {
+    if (!novelId) { setOutlines([]); return }
+    try {
+      const list = await app.ListOutlines(novelId)
+      setOutlines(list ?? [])
+    } catch { /* 大纲列表加载失败不影响主列表 */ }
+  }, [novelId, app])
+
+  useEffect(() => { loadChapters(); loadOutlines() }, [loadChapters, loadOutlines])
 
   // file:changed 时刷新章节列表（字数统计、新章等）
   useEffect(() => {
@@ -50,10 +67,11 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
       if (data.novel_id !== novelId) return
       if (data.path && (data.path.startsWith('chapters/') || data.path.startsWith('outlines/') || data.path === 'goink.md' || data.path === 'book-outline.md')) {
         loadChapters()
+        loadOutlines()
       }
     })
     return () => unsub()
-  }, [novelId, loadChapters])
+  }, [novelId, loadChapters, loadOutlines])
 
   // ── 章节分块 ────────────────────────────────────────────
 
@@ -184,6 +202,42 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
         <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span className="flex-1 text-sm truncate">{t('sidebar.bookOutline')}</span>
       </button>
+
+      {/* 大纲列表：复用正文列表的交互，读取路径为 outlines/ */}
+      <button
+        onClick={() => setShowOutlines(!showOutlines)}
+        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50"
+      >
+        <ChevronRight
+          className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${showOutlines ? 'rotate-90' : ''}`}
+        />
+        <span className="text-xs text-muted-foreground">{t('sidebar.outlines', { count: outlines.length })}</span>
+        <span className="text-[10px] text-muted-foreground/50 ml-auto">{t('sidebar.chapterCountShort', { count: outlines.length })}</span>
+      </button>
+      {showOutlines && (
+        <div className="border-b border-border/50 max-h-52 overflow-y-auto overscroll-contain">
+          {outlines.length === 0 ? (
+            <p className="text-xs text-muted-foreground/70 px-3 py-2">{t('sidebar.noOutlines')}</p>
+          ) : (
+            outlines.map(o => (
+              <button
+                key={o.chapter_number}
+                onClick={() => onSelectOutline(o.file_path, o.title ? `第${o.chapter_number}章 · ${o.title}` : `第${o.chapter_number}章 大纲`)}
+                className={`w-full flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors relative
+                  ${target?.path === o.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
+              >
+                {target?.path === o.file_path && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
+                )}
+                <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
+                  {t('sidebar.chapterN', { n: o.chapter_number })}
+                </span>
+                <span className="flex-1 text-sm truncate">{o.title || t('sidebar.outlineFallback')}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {chapters.length === 0 ? (

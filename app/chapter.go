@@ -24,6 +24,11 @@ func (a *App) GetChapters(novelID int64) ([]chapter.Chapter, error) {
 	return chapters, nil
 }
 
+// ListOutlines 返回 outlines/ 目录下的大纲文件列表（章节号升序），侧边栏大纲列表用。
+func (a *App) ListOutlines(novelID int64) ([]git.OutlineEntry, error) {
+	return git.ListOutlines(novelID)
+}
+
 // GetMaxChapterNumber 返回该小说当前最大章节号，无章节时返回 0。前端确定写作进度用。
 func (a *App) GetMaxChapterNumber(novelID int64) (int, error) {
 	return a.chapter.GetLatestNumber(a.ctx, novelID)

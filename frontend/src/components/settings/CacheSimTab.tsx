@@ -100,8 +100,8 @@ export default function CacheSimTab() {
           <thead>
             <tr className="text-muted-foreground">
               <th className="text-left py-1">指标</th>
-              <th className="text-right py-1">旧版本</th>
-              <th className="text-right py-1">当前版本</th>
+              <th className="text-right py-1" title="没有缓存优化：每轮全价重发全部历史">旧版（无缓存）</th>
+              <th className="text-right py-1" title="历史留在服务端缓存，按低价付缓存读取费">当前版（有缓存）</th>
             </tr>
           </thead>
           <tbody>
@@ -145,8 +145,9 @@ export default function CacheSimTab() {
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           模拟一个真实对话窗口：先聊设定、再写正文，写完又查设定、继续写——短对话与单章/批量创作
-          交替发生在同一条对话历史里。历史随对话保留（当前版本）比每轮重发（旧版本）更省，
-          缓存命中的部分按低价计费。费用按设置中的模型价格估算。
+          交替发生在同一条对话历史里。对比「旧版行为」与「当前版本」的差距：
+          旧版 = 没有缓存优化，每一轮都把全部对话历史按全价重新发送给模型；
+          当前版本 = 对话历史留在服务端缓存里，后续轮次只按低价付缓存读取费（费用按设置中的模型价格估算）。
         </p>
       </div>
 

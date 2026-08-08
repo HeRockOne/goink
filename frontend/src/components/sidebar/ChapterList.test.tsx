@@ -17,12 +17,14 @@ vi.mock('@/lib/utils', async (importOriginal) => {
 const mockGetChapters = vi.fn()
 const mockCreateChapter = vi.fn()
 const mockUpdateChapterTitle = vi.fn()
+const mockListOutlines = vi.fn()
 
 vi.mock('@/hooks/useApp', () => ({
   useApp: () => ({
     GetChapters: mockGetChapters,
     CreateChapter: mockCreateChapter,
     UpdateChapterTitle: mockUpdateChapterTitle,
+    ListOutlines: mockListOutlines,
   }),
 }))
 
@@ -36,6 +38,7 @@ describe('ChapterList', () => {
     novelId: 1,
     target: null as { path: string; title: string } | null,
     onSelectChapter: vi.fn(),
+    onSelectOutline: vi.fn(),
     onSelectGoink: vi.fn(),
     onSelectBookOutline: vi.fn(),
     onExportNovel: vi.fn(),
@@ -44,6 +47,7 @@ describe('ChapterList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetChapters.mockResolvedValue([])
+    mockListOutlines.mockResolvedValue([])
   })
 
   it('renders empty state when no chapters', async () => {

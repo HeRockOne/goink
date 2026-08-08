@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Search, Library, List, Settings, Users, MapPin, GitBranch, History, BookOpen, Sword, GitGraph, Eye, Wrench, BarChart3, Sparkles } from 'lucide-react'
+import { Search, Library, List, Heart, Users, MapPin, GitBranch, History, BookOpen, Sword, GitGraph, Eye, Wrench, BarChart3, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 // v2 太虚风格：固定图标列（无折叠/展开）
@@ -14,7 +14,7 @@ const activities: Activity[] = [
   { id: 'search', icon: Search, labelKey: 'shell.search' },
   { id: 'novels', icon: Library, labelKey: 'shell.bookshelf' },
   { id: 'chapters', icon: List, labelKey: 'shell.chapters' },
-  { id: 'preferences', icon: Settings, labelKey: 'shell.preference' },
+  { id: 'preferences', icon: Heart, labelKey: 'shell.preference' },
   { id: 'characters', icon: Users, labelKey: 'shell.characters' },
   { id: 'locations', icon: MapPin, labelKey: 'shell.locations' },
   { id: 'storyarcs', icon: GitBranch, labelKey: 'shell.arcs' },

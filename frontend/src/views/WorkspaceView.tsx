@@ -236,6 +236,11 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     contentRef.current?.openFile('book-outline.md', t('workspace.bookOutline'))
   }
 
+  function handleSelectOutline(path: string, title: string) {
+    setTabTarget({ path, title })
+    contentRef.current?.openFile(path, title)
+  }
+
   // ── Approval ────────────────────────────────────────────
 
   async function handleApprove(toolId: string, feedback: string) {
@@ -446,9 +451,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           </button>
           <button
             onClick={handleTogglePhaseGate}
-            className="phase-gate-toggle-btn"
+            className={`phase-gate-toggle-btn ${phaseGateEnabled ? 'active' : ''}`}
             title={phaseGateEnabled ? '阶段门禁已开启' : '阶段门禁已关闭'}
-            style={phaseGateEnabled ? { color: 'var(--primary)', textShadow: '0 0 8px var(--glow)' } : undefined}
           >
             {phaseGateEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
           </button>
@@ -517,6 +521,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             novelId={activeNovelId}
             onSelectNovel={handleSelectNovel}
             onSelectChapter={handleSelectChapter}
+            onSelectOutline={handleSelectOutline}
             onSelectGoink={handleSelectGoink}
             onSelectBookOutline={handleSelectBookOutline}
             onExportNovel={(id) => setExportNovelId(id)}

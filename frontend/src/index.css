@@ -700,6 +700,14 @@ body {
   background: var(--narrative-current-bg);
   color: var(--foreground);
 }
+/* 开启态发光（与叙事面板按钮一致）：box-shadow 光晕不占布局，不会挤到旁边图标 */
+.phase-gate-toggle-btn.active {
+  background: var(--narrative-current-bg);
+  color: var(--foreground);
+  border-color: var(--primary);
+  box-shadow: 0 0 10px var(--glow), inset 0 0 10px var(--glow);
+  text-shadow: 0 0 8px var(--glow-strong);
+}
 
 /* ═══════════════════════════════════════════════
    NarrativeTimeline — 画布模式 CSS

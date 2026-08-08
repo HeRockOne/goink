@@ -1,11 +1,14 @@
 package git
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 
 	"novel/internal/config"
@@ -71,6 +74,55 @@ func WriteFile(novelID int64, path, content string) error {
 }
 
 var ErrPathEscape = errors.New("git: path escapes novel directory")
+
+// OutlineEntry 大纲文件条目（侧边栏大纲列表用）。
+type OutlineEntry struct {
+	ChapterNumber int    `json:"chapter_number"`
+	FilePath      string `json:"file_path"`
+	Title         string `json:"title"`
+}
+
+// ListOutlines 列出小说 outlines/ 目录下的大纲文件，按章节号升序。
+// 标题取文件首行（"# 第N章 标题" 去掉井号后的文本），首行缺失时为空。
+func ListOutlines(novelID int64) ([]OutlineEntry, error) {
+	dir, err := ResolvePath("outlines", novelID)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("git: read outlines dir: %w", err)
+	}
+	var out []OutlineEntry
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		base := strings.TrimSuffix(e.Name(), ".md")
+		num, err := strconv.Atoi(base)
+		if err != nil {
+			continue
+		}
+		title := ""
+		if f, err := os.Open(filepath.Join(dir, e.Name())); err == nil {
+			sc := bufio.NewScanner(f)
+			if sc.Scan() {
+				title = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(sc.Text()), "#"))
+			}
+			f.Close()
+		}
+		out = append(out, OutlineEntry{
+			ChapterNumber: num,
+			FilePath:      "outlines/" + e.Name(),
+			Title:         title,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ChapterNumber < out[j].ChapterNumber })
+	return out, nil
+}
 
 func novelDir(novelID int64) string {
 	return config.NovelDirPath(novelID)
