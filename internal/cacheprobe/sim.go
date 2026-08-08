@@ -54,6 +54,19 @@ type TokenCache struct {
 	// 如把已消费的 skill 全文替换为占位符。变换后字节才参与前缀判定——
 	// 这样"滑出保留窗口"是唯一前缀断裂点，连续性好。
 	transform func([]map[string]any) []map[string]any
+	// clearedIDs 阶段切换清理用：已结束阶段的 read/read_required 调用 ID 集合。
+	// 发送前 transform 按此集合替换为占位符（当前阶段 read 保留全文）。
+	clearedIDs map[string]bool
+}
+
+// MarkCleared 标记 tool_call_id 为可清理（阶段切换时调用：上一阶段的 read 结果）。
+func (c *TokenCache) MarkCleared(ids ...string) {
+	if c.clearedIDs == nil {
+		c.clearedIDs = make(map[string]bool)
+	}
+	for _, id := range ids {
+		c.clearedIDs[id] = true
+	}
 }
 
 // msgTokens 计算单条消息的精确 token 数（tool_calls/tool_call_id/reasoning 计入）。
@@ -95,6 +108,9 @@ func cachedToolsJSON() ([]byte, int64) {
 }
 func NewTokenCache() *TokenCache { return &TokenCache{} }
 
+// clearPlaceholderPrefix 已清理占位符前缀（与 internal/agent/context_clear.go 同款）。
+const clearPlaceholderPrefix = "[已读技能内容已清理: "
+
 // WithCleanTransform 启用发送前清理变换：把 read/read_required 的 skill 全文
 // 替换为占位符，仅保留最近 retain 条完整结果（retain<0 = 不清理）。
 // 变换在 Step 内对完整请求执行（含 history+cur），保留窗口滑动时前缀断裂一次。
@@ -106,6 +122,48 @@ func NewCleanCache(retain int) *TokenCache {
 		}
 	}
 	return c
+}
+
+// NewPhaseCleanCache 阶段切换清理：只在 set_phase 切换时标记上一阶段 read 的调用 ID
+// 为可清理（MarkCleared），发送前替换为占位符；当前阶段 read 保留全文。
+// 对齐真实实现（agent 在 set_phase 成功时标记 clearedIDs）。
+func NewPhaseCleanCache() *TokenCache {
+	c := &TokenCache{}
+	c.transform = func(msgs []map[string]any) []map[string]any {
+		return phaseCleanVersion(msgs, c.clearedIDs)
+	}
+	return c
+}
+
+// phaseCleanVersion 发送前变换：tool 消息的 tool_call_id 在 clearedIDs 中 → 占位符。
+// 只替换 read/read_required 的结果；当前阶段（未标记）保留全文。
+func phaseCleanVersion(messages []map[string]any, cleared map[string]bool) []map[string]any {
+	if len(cleared) == 0 || len(messages) == 0 {
+		return messages
+	}
+	out := make([]map[string]any, len(messages))
+	copy(out, messages)
+	for i, m := range messages {
+		role, _ := m["role"].(string)
+		if role != "tool" {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name != "read_required" && name != "read" {
+			continue
+		}
+		id, _ := m["tool_call_id"].(string)
+		if !cleared[id] {
+			continue
+		}
+		dup := make(map[string]any, len(m))
+		for k, v := range m {
+			dup[k] = v
+		}
+		dup["content"] = clearPlaceholderPrefix + name + "]"
+		out[i] = dup
+	}
+	return out
 }
 
 
@@ -703,16 +761,12 @@ func preparePlays(ch int) []play {
 	}
 }
 
-// outlinePlays 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 其余技能按需 + 写大纲。
+// outlinePlays 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 类型专精 1 个。
+// 常备技能（book-outline/chapter-opening/maliang-method/dialogue-subtext/emotional-arc/emotion-injection）
+// 首次会话加载一次，后续章节历史中已有则直接引用，不重复 read。
 func outlinePlays(ch int) []play {
 	return []play{
 		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
-		readSkill("main-tech-book-outline"),
-		readSkill("main-tech-chapter-opening"),
-		readSkill("main-tech-maliang-method"),
-		readSkill("main-tech-dialogue-subtext"),
-		readSkill("main-tech-emotional-arc"),
-		readSkill("main-tech-emotion-injection"),
 		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
@@ -720,22 +774,15 @@ func outlinePlays(ch int) []play {
 	}
 }
 
-// writePlays 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing）+ 其余技能按需
+// writePlays 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing + pov-purity + info-density）
 // + read 本章大纲（kernel write 阶段第 2 步：read(required) 读 outlines/NNN.md，门禁 require 强制——
 // 批量循环写多章时靠它锁定本章大纲，防止把别的章的大纲内容串进本章正文）+ 分段写正文。
+// 情景技能（climax/shuangdian/foreshadow/emotion/pacing）仅本章涉及该情景时读，普通章不读；
+// 字数规则由代码校验，不读 word-count-calibration。
 // 不含阶段切换（由调用方决定何时转 review：single 每章转、batch 整批循环完才转）。
 func writePlays(ch int) []play {
 	plays := []play{
-		readRequired("main-tech-show-dont-tell", "main-tech-anti-ai-writing"),
-		readSkill("main-tech-info-density"),
-		readSkill("main-tech-pov-purity"),
-		readSkill("main-tech-shuangdian-pacing"),
-		readSkill("main-tech-climax-scene"),
-		readSkill("main-tech-foreshadow-cycle"),
-		readSkill("main-tech-pacing-control"),
-		readSkill("main-tech-scene-beats"),
-		readSkill("main-tech-emotion-injection"),
-		readSkill("main-tech-word-count-calibration"),
+		readRequired("main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density"),
 		play{tool: "read", args: fmt.Sprintf(`{"path":"outlines/%03d.md"}`, ch), result: outlineText(ch)},
 	}
 	plays = append(plays, writeBodyPlays(ch)...)

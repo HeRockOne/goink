@@ -61,7 +61,11 @@ mode: always
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
-3. 加载技能（main-tech-emotion-injection, main-tech-chapter-hook-enhanced, main-tech-maliang-method, main-tech-dialogue-subtext, main-tech-chapter-title-design；新书首次 outline 加 main-tech-golden-three-chapters、main-tech-golden-finger-design，以及对应类型的专精 skill：main-type-xuanhuan-cultivation/main-type-urban-martial-arts/main-type-post-apocalyptic-survival/main-type-suspense-rule-horror/main-type-historical-time-travel）
+3. 加载技能（**首次会话加载一次，后续章节技能已在历史中则直接引用，不要重复 read**）：
+   - 必读：main-tech-chapter-hook-enhanced, main-tech-chapter-title-design（门禁强制）
+   - 常备：main-tech-book-outline, main-tech-chapter-opening, main-tech-maliang-method, main-tech-dialogue-subtext（有情感/对话/爽点设计时用）
+   - 新书首次 outline 加：main-tech-golden-three-chapters, main-tech-golden-finger-design
+   - 对应类型专精 skill（main-type-*，每本小说只加载对应 1 个，不重复读）
 4. **edit**(outlines/NNN.md)（required）— 写大纲。
    **格式要求：**
    - 章节标题用 `# 第N章 标题`（单井号，一行）
@@ -78,9 +82,17 @@ mode: always
 
 ### write
 
-1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-show-dont-tell, main-tech-anti-ai-writing），门禁 require_reads 强制
+1. **read_required**（required）— 用 read_required 加载本阶段必读技能（main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density），门禁 require_reads 强制
 2. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
-3. 加载技能（main-tech-show-dont-tell, main-tech-info-density, main-tech-pov-purity, main-tech-anti-ai-writing, main-tech-shuangdian-pacing, main-tech-climax-scene, main-tech-foreshadow-cycle, main-tech-pacing-control, main-tech-scene-beats, main-tech-emotion-injection, main-tech-word-count-calibration）
+3. 加载技能（**首次会话加载一次，后续章节技能已在历史中则直接引用，不要重复 read**）：
+   - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density（门禁强制）
+   - 情景按需（**仅本章涉及该情景时读**，普通章不读）：
+     - 战斗/高潮章 → main-tech-climax-scene
+     - 爽点/打脸章 → main-tech-shuangdian-pacing
+     - 本章有伏笔操作 → main-tech-foreshadow-cycle
+     - 情感/情绪戏 → main-tech-emotion-injection
+     - 节奏紧张章 → main-tech-pacing-control
+   - 字数规则由 get_chapter_list 代码校验，无需读 main-tech-word-count-calibration
 4. **edit**(chapters/NNN.md)（required）— 写正文
 5. 校验字数（2500-4000）
 6. 记录关键物品出现 → create_item_occurrence

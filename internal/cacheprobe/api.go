@@ -164,6 +164,10 @@ func CompareModes() (*CompareResult, error) {
 	appendMode("批量 2批×2章 + clean(全清)", NewCleanCache(0), func(mode string, c *TokenCache) [][2]int64 {
 		return buildBatchWithRounds(mode, c, 2)
 	})
+	// 阶段切换清理（set_phase 时清上一阶段 read，当前阶段保留全文）
+	appendMode("单章 4 轮 + 阶段清理", NewPhaseCleanCache(), func(mode string, c *TokenCache) [][2]int64 {
+		return buildGatePhaseClean(c, 4)
+	})
 
 	return &CompareResult{Modes: modes}, nil
 }
@@ -295,6 +299,77 @@ func phaseReminder(phase string, ok bool) map[string]any {
 		return userMsg("<system-reminder>\n{\"success\":true,\"phase\":\"" + phase + "\",\"status\":\"active\"}\n</system-reminder>")
 	}
 	return userMsg("<system-reminder>\n{\"success\":false,\"error\":\"require 未满足\",\"current_phase\":\"" + phase + "\"}\n</system-reminder>")
+}
+
+// buildGatePhaseClean 单章门禁 + 阶段切换清理：
+// prepare → outline → write → review → maintain 各阶段结束时（set_phase 切换点），
+// 把上一阶段 read/read_required 的调用 ID 标记为可清（cache.MarkCleared），
+// 发送前 transform 替换为占位符。当前阶段 read 保留全文（写正文时技能完整可用）。
+// 与"每请求 keep 窗口清理"的关键差异：阶段内永不清理，语义安全。
+func buildGatePhaseClean(cache *TokenCache, rounds int) [][2]int64 {
+	results := [][2]int64{}
+	history := append([]map[string]any{}, fixedSystem()...)
+
+	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
+	cur = append(cur, sysMsg(novelState(0)))
+	for i, p := range initScript() {
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		cur = append(cur,
+			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+		)
+		if p.tool == "set_phase" {
+			cur = append(cur, phaseReminder(p.args, true))
+		}
+	}
+	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
+	req := append(append([]map[string]any{}, history...), cur...)
+	hit, miss := cache.Step(req)
+	results = append(results, [2]int64{hit, miss})
+	history = append(history, cur...)
+
+	for turn := 1; turn <= rounds; turn++ {
+		cur := []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章，继续推进剧情。", turn+1))}
+		cur = append(cur, sysMsg(novelState(turn)))
+
+		// 阶段追踪：当前阶段内收集的 read 调用 ID，遇到 set_phase 时标记上一阶段
+		pendingReads := make([]string, 0)
+		markPhase := func() {
+			if len(pendingReads) > 0 {
+				cache.MarkCleared(pendingReads...)
+				pendingReads = pendingReads[:0]
+			}
+		}
+
+		plays := gateScript(turn)
+		for i, p := range plays {
+			req := append(append([]map[string]any{}, history...), cur...)
+			hit, miss := cache.Step(req)
+			results = append(results, [2]int64{hit, miss})
+			id := fmt.Sprintf("call_t%d_p%d", turn, i)
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, turn)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
+			if p.tool == "set_phase" {
+				cur = append(cur, phaseReminder(p.args, true))
+				// 阶段切换：上一阶段的 read 结果已消费，标记可清
+				markPhase()
+			} else if p.tool == "read_required" || p.tool == "read" {
+				pendingReads = append(pendingReads, id)
+			}
+		}
+		cur = append(cur, asstText(finalAssistant(turn)))
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		history = append(history, cur...)
+	}
+	return results
 }
 
 // buildGateWithRounds 按指定轮数跑门禁场景。
