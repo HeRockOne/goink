@@ -19,10 +19,17 @@ import "strings"
 
 const clearPlaceholderPrefix = "[已读技能内容已清理: "
 
+// minClearableMsgs 清理触发的最小历史长度。
+// 目的：首轮对话（init 阶段连续 read 5 个技能）不清理——那些 read 结果模型刚读到，
+// 属于"正在消费"而非"已消费"。只有历史足够长（一轮门禁流程约 80+ 条消息，
+// 20 条 < 一轮，保证至少跨过一轮边界）且 read 数超过保留窗口时才开始清。
+const minClearableMsgs = 20
+
 // clearToolResults 返回清理后的消息副本（保留最近 keep 条 read/read_required 结果）。
 // keep < 0 表示不清理（开关关闭时直接短路）。
+// 历史消息数 < minClearableMsgs 时不清理（首轮/短对话保护）。
 func clearToolResults(messages []map[string]any, keep int) []map[string]any {
-	if keep < 0 || len(messages) == 0 {
+	if keep < 0 || len(messages) < minClearableMsgs {
 		return messages
 	}
 

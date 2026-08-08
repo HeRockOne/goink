@@ -516,6 +516,10 @@ func commitCur(mode string, history *[]map[string]any, cur []map[string]any) {
 // 之后连续——这是 clean 的缓存代价，收益是历史大幅缩小（O(N²)→O(N)）。
 // 对齐 JetBrains observation masking：工具结果清理是主要机制。
 func cleanVersion(messages []map[string]any, retain int) []map[string]any {
+	// 首轮保护：历史过短（init 阶段刚读完技能）不清理，对齐真实实现 minClearableMsgs。
+	if len(messages) < 20 {
+		return messages
+	}
 	// 收集所有 read/read_required 的 tool 消息下标（从后向前保留 retain 条）
 	idx := make([]int, 0)
 	for i, m := range messages {
