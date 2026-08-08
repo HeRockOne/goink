@@ -666,7 +666,8 @@ func (s *apiServer) getActiveArcs(ctx context.Context, novelID int64) []map[stri
 }
 func (s *apiServer) getTimelineBrief(ctx context.Context, novelID int64, chapNum int) map[string]any {
 	ts := timeline.NewStore(s.app.db, s.logger)
-	entries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 20}})
+	// Size 对齐桌面版 GetWritingContext（100）：20 会被 resolved 占满导致 pending 全部丢失
+	entries, _ := ts.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{PageParams: storage.PageParams{Page: 1, Size: 100}})
 	pending, resolved, overdue := make([]map[string]any, 0), make([]map[string]any, 0), make([]map[string]any, 0)
 	if entries != nil {
 		for _, e := range entries.Items {
