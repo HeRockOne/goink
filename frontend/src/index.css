@@ -1039,6 +1039,18 @@ body {
   padding: 0.2rem 0;
 }
 
+/* 当前卡一级标题：第N章 标题（置于卡片内容最上方，其余内容依次分层） */
+.card-current-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.4;
+  padding: 0.15rem 0;
+  text-shadow: 0 0 10px var(--glow);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+  margin-bottom: 0.15rem;
+}
+
 /* 卡片内子条目：统一边框 + 不同底色 */
 .card-item {
   padding: 0.4rem 0.5rem;

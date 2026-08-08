@@ -253,6 +253,9 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
   }
   // 过去卡只显示已完成的章（num < current），当前章归"当前卡"，避免三卡视觉重复
   const pastChapters = (ctx?.recent_chapters ?? []).filter(c => c.summary && c.num < currentChapter.num).slice(0, 3)
+
+  // summary 由 maintain 生成时常带 "第N章," 前缀（标题已单独显示），显示层去掉避免重复
+  const cleanSummary = (s: string) => (s || '').replace(/^第\s*\d+\s*章[,，:：]\s*/, '')
   const hasCard = (id: string) => layout.some(c => c.id === id)
 
   // 章节状态维护：已写（word_count>0）/ 待写（有章记录但无正文）/ 未开始（无记录）
@@ -309,9 +312,16 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
             </div>
             <div className="narrative-card-body">
               {card.id === 'current' && <>
+                {currentChapter.num > 0 && (
+                  <div className="card-sec">
+                    <div className="card-current-title">
+                      第{currentChapter.num}章{currentChapter.title ? ` ${currentChapter.title}` : ''}
+                    </div>
+                  </div>
+                )}
                 {snap?.current_location && <div className="card-sec"><div className="card-sec-title">📍 地点</div><div className="card-val">{snap.current_location}</div></div>}
                 {currentChapter.num > 0 && <div className="card-sec"><div className="card-sec-title">📝 字数</div><div className="card-val">{currentChapter.word_count || 0} 字</div></div>}
-                {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary}</div></div>}
+                {(ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary && <div className="card-sec"><div className="card-sec-title">📝 内容摘要</div><div className="card-val">{cleanSummary((ctx?.recent_chapters as any[] | undefined)?.find((c: any) => c.num === currentChapter.num)?.summary)}</div></div>}
                 {activeChars.length > 0 && <div className="card-sec"><div className="card-sec-title">👤 本章出场 ({activeChars.length})</div>{activeChars.map((c: any) => <div key={c.id} className="card-item"><div className="card-item-name">{c.name}</div>{c.desc && <div className="card-item-desc">{c.desc}</div>}{Array.isArray(c.items) && c.items.length > 0 && <div className="card-item-tags"><span className="card-item-tag">持有 {c.items.join('、')}</span></div>}</div>)}</div>}
                 {((ctx as any)?.item_occurrences ?? []).length > 0 && <div className="card-sec"><div className="card-sec-title">📦 本章物品流转</div>{((ctx as any).item_occurrences as any[]).map((o: any, i: number) => <div key={i} className="card-item"><span className="card-item-name">{o.item_name || `#${o.item_id}`}</span><span className="card-item-tag">{o.action}</span>{o.description && <div className="card-item-desc">{o.description}</div>}</div>)}</div>}
                 {Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).length > 0 && <div className="card-sec"><div className="card-sec-title">⏳ 近期待收</div>{Object.entries(pendingByChapter).filter(([k]) => +k >= currentChapter.num).map(([c, es]) => <div key={c} className="card-item"><span className="card-item-name">第{c}章</span> {es.map((e: any) => <span key={e.id} className="card-item-tag" title={IMP[e.importance]}>{e.title}</span>)}</div>)}</div>}
@@ -322,7 +332,7 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
                 let events: string[] = []
                 try { events = JSON.parse(ch.key_events || '[]') } catch { /* */ }
                 events = events.filter(e => e?.length > 5).map(e => e.replace(/^[埋推种揭铺设]*[：:]\s*/, '')).slice(0, 3)
-                return <div key={ch.num} className="card-item"><div className="card-item-name">第{ch.num}章「{ch.title}」{ch.word_cnt > 0 && <span className="card-item-tag">{ch.word_cnt}字</span>}</div>{ch.summary && <><div className="card-sec-title" style={{ marginTop: 4 }}>📖 剧情概要</div><div className="card-item-desc">{ch.summary}</div></>}{events.length > 0 && <><div className="card-sec-title" style={{ marginTop: 4 }}>📌 关键事件</div>{events.map((e, i) => <div key={i} className="card-item-events">• {e}</div>)}</>}</div>
+                return <div key={ch.num} className="card-item"><div className="card-item-name">第{ch.num}章「{ch.title}」{ch.word_cnt > 0 && <span className="card-item-tag">{ch.word_cnt}字</span>}</div>{ch.summary && <><div className="card-sec-title" style={{ marginTop: 4 }}>📖 剧情概要</div><div className="card-item-desc">{cleanSummary(ch.summary)}</div></>}{events.length > 0 && <><div className="card-sec-title" style={{ marginTop: 4 }}>📌 关键事件</div>{events.map((e, i) => <div key={i} className="card-item-events">• {e}</div>)}</>}</div>
               })}
               </>}
               {card.id === 'future' && <>
