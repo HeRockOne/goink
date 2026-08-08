@@ -256,6 +256,8 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		PhaseCalledJSON:      sess.CalledTools,
 		PhaseMode:            "single",
 		PhaseGateEnabled:     a.settings.PhaseGateEnabled == nil || *a.settings.PhaseGateEnabled,
+		ContextClearEnabled:  a.settings.ContextClearEnabled,
+		ContextClearKeep:     a.settings.ContextClearKeep,
 		Broadcast:            a.BroadcastChatEvent, // 双端同步：agent 事件广播到移动端
 	}
 

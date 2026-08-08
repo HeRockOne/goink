@@ -26,57 +26,69 @@ DeepSeek/商汤的磁盘缓存按"请求的公共前缀"匹配（官方文档：
 ```powershell
 # 设置数据目录（读真实 DB 书名/简介 + goink.md 指纹；默认 exe 目录或 ~/Goink）
 $env:GOINK_DATA_DIR = "D:\Goink"
-go run ./cmd/cacheprobe            # 默认 5 轮门禁 + 5 轮短对话对照
-go run ./cmd/cacheprobe 5 3        # 5 轮门禁 + 3 轮短对话
+go run ./cmd/cacheprobe            # 默认：单章 5 轮 + 短对话穿插 5 轮 + 批量 5 章
+go run ./cmd/cacheprobe 5 3        # 单章 5 轮 + 短对话穿插 3 轮 + 批量 5 章
+go run ./cmd/cacheprobe 5 3 5      # 显式指定批量 5 章
 ```
 
-CLI 参数：`go run ./cmd/cacheprobe [门禁轮数] [短对话轮数]`
+CLI 参数：`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]`
 
-## 两个场景
+## 场景：一个真实对话窗口（混合会话）
 
-| 场景 | 说明 |
-|------|------|
-| 短问答 N 轮 | 每轮一问一答，无工具，历史极小（测 NS 落库膨胀成本） |
-| 门禁创作 N 轮 | **严格按门禁配置 single 模式完整流程**（含 require_reads 必读技能）：prepare（9 项必查 + read_required）→ outline（大纲技能 + 2 次 edit）→ write（正文技能 read_required + 6 次 edit 写 3000 字 + 字数校验 + create_item_occurrence）→ write后自审 → review（run_subagent + 子代理 6 步内部序列模拟 + 修复）→ maintain（7 项查询 + 搜索 + 更新 + goink.md 指纹）→ set_phase("prepare")。每轮约 80 次工具调用 + 子代理 7 次请求 |
+模拟的不是三个互斥的独立场景，而是**一个真实对话窗口**——短对话与创作交替发生在
+同一条历史里，与用户真实使用方式一致：
+
+```
+init(开书) → 短对话(查设定/改设定，AI 调工具) → 单章创作 → 短对话 → 单章创作 → ... → 短对话 → 批量创作 → 短对话
+```
+
+- **短对话轮**：每轮 2 问——用户查看设定（AI 调 get_writing_context/get_characters 并回答）、
+  修改设定（AI 调 update_item/update_character 并回答）。穿插在创作轮之间（开头 1 轮 + 每轮单章后 1 轮 + 批量前后各 1 轮，受短对话轮数配额限制）
+- **单章轮**：**严格按门禁配置 single 模式完整流程**（含 require_reads 必读技能）：prepare（9 项必查 + read_required）→ outline（大纲技能 + 2 次 edit）→ write（正文技能 read_required + 6 次 edit 写满设置字数 + 字数校验 + create_item_occurrence）→ write后自审 → review（run_subagent + 子代理 6 步内部序列模拟 + 修复）→ maintain（7 项查询 + 搜索 + 更新 + goink.md 指纹）→ set_phase("prepare")。每轮约 80 次工具调用 + 子代理 7 次请求
+- **批量轮**：**按门禁配置 batch 模式**：prepare（一次）→ outline（一次出 N 章大纲）→ write（循环 N 章正文，技能只在循环开头加载一次）→ review（统一一次）→ maintain（统一一次）→ done
 
 > 模拟与真实请求同源（2026-08-08）：
 > - 系统提示词 `agentcfg.AgentIdentity`（主/子代理真实身份）
 > - always/catalog 用 `agentcfg.BuildAlwaysSkillsContent`/`BuildSkillCatalog`（真实生成器，扫描 mode: always/auto）
 > - sub-* 技能用与 `agent.buildSubagentSkills` 同源的扫描逻辑
 > - NS 书名/类型/简介读真实 DB（novels 表，`GOINK_DB_PATH` 或 `GOINK_DATA_DIR`/novel-agent.db）、指纹读真实 `goink.md` 尾部 1500 字符
+> - **章节字数读真实设置**（app_config 的 min/max 章节字数，get_chapter_list 校验同源；目标字数 = min + (max-min)/2，正文按目标字数生成）
 > - assistant 消息含 reasoning_content + tool_displays；set_phase 后注入 user system-reminder（对齐 agent.go）
 > - 技能内容从 SkillStore 读取（三层查找），打包后可用，零仓库路径依赖
 > - 技能清单/小说数据变动自动同步，零硬编码。进度按 turn 动态（模拟创作推进；真实为 DB chapters 计数）
 
-## 对照结论（门禁创作 5 轮，tiktoken 精确计数）
+## 对照结论（tiktoken 精确计数）
 
-| 指标 | 修复前 | 修复后 |
-|------|--------|--------|
-| 累计 hit | 56,303,413 | 58,322,417 |
-| 累计 miss | 577,397 | 424,873 |
-| 命中率 | 99.0% | 99.3% |
-| miss 降幅 | - | **26.4%** |
+| 场景 | 修复前累计 miss | 修复后累计 miss | miss 降幅 |
+|------|----------------|----------------|----------|
+| 单章流程 5 轮（独立场景） | 565,667 | 413,143 | **27.0%** |
+| 批量创作 5 章 × 2 批（独立场景） | 250,021 | 198,288 | **20.7%** |
+| 混合窗口（单章2+短对话2+批量2章） | 356,130 | 271,584 | **23.7%** |
 
 ### 关键发现
 
-1. **轮边界是分叉点**：修复前每轮首个请求把整段历史当 miss 重发；修复后轮边界只
-   miss 新增的 user+NS。收益随历史（skill read、3000 字正文、maintain 查询）增长。
+1. **轮边界是分叉点**：修复前每轮（或每批）首个请求把整段历史当 miss 重发；修复后轮边界只
+   miss 新增的 user+NS。收益随历史（skill read、正文、maintain 查询）增长。
 
-2. **精确口径低于字节口径**：早期字节口径（1 token ≈ 4 字节）报 35.0%，tiktoken
-   精确计数修正为 **26.4%**——中文正文 token 密度高于 4 字节/token 的估算，
+2. **混合窗口是真实口径**：独立场景（单章 27.0%、批量 20.7%）是上下界，真实使用中短对话
+   与创作交替发生在同一窗口（23.7%）——收益落在两者之间。短对话轮的加入稀释了每章
+   收益（历史更厚、但轮边界更多），批量在窗口中的出现又把收益拉回。
+
+3. **精确口径低于字节口径**：早期字节口径（1 token ≈ 4 字节）报 35.0%，tiktoken
+   精确计数修正为 26.4%——中文正文 token 密度高于 4 字节/token 的估算，
    字节口径高估了收益约 8 个百分点。**26.4% 是可信的真实成本节约**。
 
-3. **收益随历史规模放大**：短问答（历史极小）now 略劣于 legacy（-10.9%，NS 落库使历史每轮膨胀 ~1.4K，短历史下膨胀成本 > 落库收益；门禁场景历史大则相反）；
-   完整门禁创作 miss 降 26.4%。历史越厚，修复收益越大。
+4. **收益随历史规模放大**：短问答（历史极小）now 略劣于 legacy（-10.9%，NS 落库使历史每轮膨胀 ~1.4K，短历史下膨胀成本 > 落库收益；门禁场景历史大则相反）；
+   完整门禁创作 miss 降 27.0%。历史越厚，修复收益越大。
 
-4. **命中率上限受压缩约束**：模拟未含压缩重置（压缩会把链重置为摘要，下一轮首请求
+5. **命中率上限受压缩约束**：模拟未含压缩重置（压缩会把链重置为摘要，下一轮首请求
    全部 miss）。真实场景命中率上限 ≈ 压缩窗口内连续，不可能无限趋近 100%。
 
 ## 集成（设置面板）
 
-「设置 → 缓存模拟」Tab：可调门禁轮数/短对话轮数，异步运行（`StartCacheSimulation` +
+「设置 → 缓存模拟」Tab：可调单章轮数/短对话穿插轮数/批量章数（0=不跑），异步运行（`StartCacheSimulation` +
 `cachesim:done` 事件，不卡 UI），按设置页模型价格估算成本（输入/输出/缓存命中单价，
-与 ContextRing 同源）。约 14 秒出结果（5+5 轮）。
+与 ContextRing 同源）。约 20 秒出结果（5+5+5）。
 
 ## 测试
 
@@ -84,5 +96,5 @@ CLI 参数：`go run ./cmd/cacheprobe [门禁轮数] [短对话轮数]`
 go test ./internal/cacheprobe -v
 ```
 
-覆盖：now 模式链连续、门禁场景 now miss < legacy miss、短问答差异在 NS 位置差异
-范围内、hit+miss = 请求总 token（tiktoken 精确性自检）。
+覆盖：now 模式链连续、门禁场景 now miss < legacy miss、批量场景 now miss < legacy miss（批次边界）、
+短问答差异在 NS 位置差异范围内、hit+miss = 请求总 token（tiktoken 精确性自检）。

@@ -41,6 +41,8 @@ type AppSettings struct {
 	CachePrice       float64 `gorm:"column:cache_price;default:0.27" json:"cache_price"`                     // 缓存命中价格（元/百万 token）
 	ExaAPIKey        string  `gorm:"column:exa_api_key;default:''" json:"exa_api_key"`                       // Exa 网络搜索 API key（空则用免费 tier）
 	DisplayFont      string  `gorm:"column:display_font;default:''" json:"display_font"`                    // 显示字体，空则用默认楷体
+	ContextClearEnabled bool `gorm:"column:context_clear_enabled;default:false" json:"context_clear_enabled"` // 发送前清理已消费的 skill 全文（实验功能，默认关）
+	ContextClearKeep    int  `gorm:"column:context_clear_keep;default:3" json:"context_clear_keep"`         // 清理保留最近 N 条完整结果
 }
 
 func (AppSettings) TableName() string { return "app_config" }

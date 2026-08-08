@@ -27,8 +27,10 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	"novel/internal/agentcfg"
+	"novel/internal/config"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
 	"novel/internal/novel"
@@ -48,6 +50,10 @@ type TokenCache struct {
 	prevMsgs  []map[string]any
 	hit       int64 // token
 	miss      int64 // token
+	// transform 发送前变换（clean 方案用）：每次 Step 前对完整消息序列做处理，
+	// 如把已消费的 skill 全文替换为占位符。变换后字节才参与前缀判定——
+	// 这样"滑出保留窗口"是唯一前缀断裂点，连续性好。
+	transform func([]map[string]any) []map[string]any
 }
 
 // msgTokens 计算单条消息的精确 token 数（tool_calls/tool_call_id/reasoning 计入）。
@@ -89,6 +95,19 @@ func cachedToolsJSON() ([]byte, int64) {
 }
 func NewTokenCache() *TokenCache { return &TokenCache{} }
 
+// WithCleanTransform 启用发送前清理变换：把 read/read_required 的 skill 全文
+// 替换为占位符，仅保留最近 retain 条完整结果（retain<0 = 不清理）。
+// 变换在 Step 内对完整请求执行（含 history+cur），保留窗口滑动时前缀断裂一次。
+func NewCleanCache(retain int) *TokenCache {
+	c := &TokenCache{}
+	if retain >= 0 {
+		c.transform = func(msgs []map[string]any) []map[string]any {
+			return cleanVersion(msgs, retain)
+		}
+	}
+	return c
+}
+
 
 // requestTokens 计算完整请求的 token 数：tools 前缀（固定 system 消息）+ 各消息。
 func requestTokens(messages []map[string]any) (int64, int64) {
@@ -102,7 +121,21 @@ func requestTokens(messages []map[string]any) (int64, int64) {
 
 // Step 每次 LLM 调用。返回 (hit, miss) token 数。
 // 连续性判定用字节公共前缀；token 统计按消息级精确计数。
+// 主 Agent 请求：应用 transform（clean 方案）。
 func (c *TokenCache) Step(messages []map[string]any) (int64, int64) {
+	return c.step(messages, true)
+}
+
+// StepRaw 不应用 transform（子代理/压缩摘要保持全文，对齐真实实现：
+// 子代理审稿需要读 skill 原文，压缩摘要需要全量上下文）。
+func (c *TokenCache) StepRaw(messages []map[string]any) (int64, int64) {
+	return c.step(messages, false)
+}
+
+func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64, int64) {
+	if applyTransform && c.transform != nil {
+		messages = c.transform(messages)
+	}
 	toolsN, msgsN := requestTokens(messages)
 	total := toolsN + msgsN
 
@@ -463,7 +496,9 @@ func openRealDB() (*gorm.DB, error) {
 		if path == "" {
 			path = filepath.Join(platform.DataDir(), "novel-agent.db")
 		}
-		realDB, _ = gorm.Open(sqlite.Open(path), &gorm.Config{})
+		realDB, _ = gorm.Open(sqlite.Open(path), &gorm.Config{
+			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+		})
 	})
 	if realDB == nil {
 		return nil, fmt.Errorf("open real db failed")
@@ -516,11 +551,41 @@ type play struct {
 	result string
 }
 
-// 章节正文（固定种子，可复现）：模拟真实 3000 字中文正文，
-// 拆成 3 段（每段 1000 字），逐次 edit 追加——对应 write 阶段真实写作量级。
+// 章节正文（固定种子，可复现）：按 app_config 设置的章节字数范围生成
+// （目标字数 = min + (max-min)/2，拆成 6 段逐次 edit 追加——对应 write 阶段真实写作量级）。
 var chapterBody []string
 
+// 章节字数配置（从真实 DB app_config 读取，模拟失败回退默认 2500-4000）。
+var (
+	simMinWords    int
+	simMaxWords    int
+	simTargetWords int
+	simSegLen      int
+)
+
+// readRealWordRange 从真实 DB 读章节字数上下限（get_chapter_list 校验用）。
+// DB 路径与 readRealNovelMeta 相同（GOINK_DB_PATH > GOINK_DATA_DIR > exe 目录 > ~/Goink）。
+func readRealWordRange() (int, int) {
+	db, err := openRealDB()
+	if err != nil {
+		return 2500, 4000
+	}
+	var s config.AppSettings
+	if err := db.First(&s, 1).Error; err != nil {
+		return 2500, 4000
+	}
+	minW, maxW := s.MinChapterWords, s.MaxChapterWords
+	if minW < 100 || maxW <= minW {
+		return 2500, 4000
+	}
+	return minW, maxW
+}
+
 func initBody() {
+	simMinWords, simMaxWords = readRealWordRange()
+	simTargetWords = simMinWords + (simMaxWords-simMinWords)/2
+	simSegLen = simTargetWords / 6
+
 	rng := rand.New(rand.NewSource(42))
 	const chars = "天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏金木水火土风雨雷电山海林木龙虎凤凰" +
 		"云霞烟雾雪霜星辰日月阴阳乾坤八卦五行太极剑刀枪戟弓矢戈矛阵法宗派师徒心法内力武技神通" +
@@ -529,13 +594,18 @@ func initBody() {
 		"苍茫大地九霄之上万界诸天三千世界浩瀚星空无垠宇宙轮回因果宿命机缘命数气运天道法则"
 	runes := []rune(chars)
 	var b strings.Builder
-	for i := 0; i < 3000; i++ {
+	for i := 0; i < simTargetWords; i++ {
 		b.WriteRune(runes[rng.Intn(len(runes))])
 	}
 	body := b.String()
 	chapterBody = make([]string, 6)
 	for i := 0; i < 6; i++ {
-		chapterBody[i] = body[i*500 : (i+1)*500]
+		start := i * simSegLen
+		end := (i + 1) * simSegLen
+		if end > len(body) {
+			end = len(body)
+		}
+		chapterBody[i] = body[start:end]
 	}
 }
 
@@ -601,8 +671,20 @@ func initScript() []play {
 // + 11 项更新 + goink.md 指纹 + 2 技能）
 func gateScript(turn int) []play {
 	ch := turn + 1
+	var plays []play
+	plays = append(plays, preparePlays(ch)...)
+	plays = append(plays, outlinePlays(ch)...)
+	plays = append(plays, writePlays(ch)...)
+	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
+	plays = append(plays, selfReviewPlays(ch)...)
+	plays = append(plays, reviewPlays(ch)...)
+	plays = append(plays, maintainPlays(ch, "prepare")...)
+	return plays
+}
+
+// preparePlays 阶段 prepare：9 项必查（门禁 require 强制）+ 加载 prepare 技能。
+func preparePlays(ch int) []play {
 	return []play{
-		// ── prepare：9 项必查（门禁 require 强制）+ 加载 prepare 技能 ──
 		{tool: "get_writing_context", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: longContext(ch)},
 		{tool: "get_chapter_list", args: `{}`, result: chapterList(ch)},
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3},{"id":2,"name":"林雪","desc":"师姐","location_id":3}]}`},
@@ -618,8 +700,12 @@ func gateScript(turn int) []play {
 		{tool: "get_lore", args: `{}`, result: `{"lore":[{"id":1,"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}]}`},
 		{tool: "get_items", args: `{}`, result: `{"items":[{"id":3,"name":"聚气丹","owner":"陆沉","narrative_role":"道具"}]}`},
 		{tool: "set_phase", args: `{"phase":"outline"}`, result: `{"success":true,"phase":"outline"}`},
+	}
+}
 
-		// 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 其余技能按需 + 写大纲
+// outlinePlays 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 其余技能按需 + 写大纲。
+func outlinePlays(ch int) []play {
+	return []play{
 		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
 		readSkill("main-tech-book-outline"),
 		readSkill("main-tech-chapter-opening"),
@@ -631,8 +717,15 @@ func gateScript(turn int) []play {
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
+	}
+}
 
-		// 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing）+ 其余技能按需 + 分段写正文
+// writePlays 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing）+ 其余技能按需
+// + read 本章大纲（kernel write 阶段第 2 步：read(required) 读 outlines/NNN.md，门禁 require 强制——
+// 批量循环写多章时靠它锁定本章大纲，防止把别的章的大纲内容串进本章正文）+ 分段写正文。
+// 不含阶段切换（由调用方决定何时转 review：single 每章转、batch 整批循环完才转）。
+func writePlays(ch int) []play {
+	plays := []play{
 		readRequired("main-tech-show-dont-tell", "main-tech-anti-ai-writing"),
 		readSkill("main-tech-info-density"),
 		readSkill("main-tech-pov-purity"),
@@ -643,38 +736,74 @@ func gateScript(turn int) []play {
 		readSkill("main-tech-scene-beats"),
 		readSkill("main-tech-emotion-injection"),
 		readSkill("main-tech-word-count-calibration"),
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[0]), result: "写入 500 字，当前 500/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[1]), result: "写入 500 字，当前 1000/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[2]), result: "写入 500 字，当前 1500/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[3]), result: "写入 500 字，当前 2000/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[4]), result: "写入 500 字，当前 2500/3000"},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[5]), result: "写入 500 字，当前 3000/3000"},
-		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":2600,"word_count_ok":false,"min_words":2500,"max_words":4000}`, ch)},
-		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: "补写 400 字，当前 3000/3000"},
-		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":3012,"word_count_ok":true,"min_words":2500,"max_words":4000}`, ch)},
-		{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
-		{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`},
+		play{tool: "read", args: fmt.Sprintf(`{"path":"outlines/%03d.md"}`, ch), result: outlineText(ch)},
+	}
+	plays = append(plays, writeBodyPlays(ch)...)
+	return plays
+}
 
-		// 阶段 write 后自审：2 技能 + 1 次修改（kernel 阶段技能表 write后 行）
+// writeBodyPlays 正文写入 + 字数校验（单章/批量共用）：
+// 6 段 edit 写满目标字数 → get_chapter_list 校验（首次欠字不达标）→ 补写 → 复查达标 → 物品记录。
+func writeBodyPlays(ch int) []play {
+	seg := simSegLen
+	plays := make([]play, 0, 11)
+	for i := 0; i < 6; i++ {
+		written := (i + 1) * seg
+		if written > simTargetWords {
+			written = simTargetWords
+		}
+		plays = append(plays, play{
+			tool:   "edit",
+			args:   editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[i]),
+			result: fmt.Sprintf("写入 %d 字，当前 %d/%d", len([]rune(chapterBody[i])), written, simTargetWords),
+		})
+	}
+	plays = append(plays,
+		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simMinWords-100, false)},
+		play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: fmt.Sprintf("补写 400 字，当前 %d/%d", simTargetWords, simTargetWords)},
+		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simTargetWords, true)},
+		play{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
+	)
+	return plays
+}
+
+// chapterListCheck 构造 get_chapter_list 的字数校验返回。
+func chapterListCheck(ch int, wordCount int, ok bool) string {
+	return fmt.Sprintf(`{"check_chapter":%d,"word_count":%d,"word_count_ok":%v,"min_words":%d,"max_words":%d}`,
+		ch, wordCount, ok, simMinWords, simMaxWords)
+}
+
+// selfReviewPlays 阶段 write 后自审：2 技能 + 1 次修改（kernel 阶段技能表 write后 行）。
+func selfReviewPlays(ch int) []play {
+	return []play{
 		readSkill("main-tech-revision-pass"),
 		readSkill("sub-tech-anti-ai-grade"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "自审修改：润色两处过渡，去除 AI 味用词。"), result: "自审完成"},
+	}
+}
 
-		// 阶段 review：run_subagent 审稿（require: run_subagent）+ 自查重读 + 3 处修复 + 字数复查
+// reviewPlays 阶段 review：run_subagent 审稿（require: run_subagent）+ 自查重读 + 3 处修复 + 字数复查。
+func reviewPlays(ch int) []play {
+	return []play{
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(ch)},
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBody[0] + chapterBody[1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：调整对话节奏，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：前文伏笔在此回收，强化悬念。"), result: "已修复问题 2"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：删减冗余描写，收紧节奏。"), result: "已修复问题 3"},
-		{tool: "get_chapter_list", args: `{}`, result: fmt.Sprintf(`{"check_chapter":%d,"word_count":2980,"word_count_ok":true,"min_words":2500,"max_words":4000}`, ch)},
+		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simTargetWords, true)},
 		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
+	}
+}
 
-		// ── maintain：7 项状态查询 + 搜索防遗忘 + 6 类更新 + goink.md（require 13 项）──
+// maintainPlays 阶段 maintain：7 项状态查询 + 搜索防遗忘 + 6 类更新 + goink.md（require 13 项）。
+// nextPhase 是阶段切换目标：single 模式回 "prepare"，batch 模式去 "done"。
+func maintainPlays(ch int, nextPhase string) []play {
+	return []play{
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
 		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
-		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch), result: `{"scenes":[{"id":10,"title":"秘境初探","summary":"陈昊入秘境","word_count":3000}]}`},
+		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch), result: fmt.Sprintf(`{"scenes":[{"id":10,"title":"秘境初探","summary":"陈昊入秘境","word_count":%d}]}`, simTargetWords)},
 		{tool: "get_item_occurrences", args: `{"item_id":3}`, result: `{"occurrences":[{"chapter_id":1,"action":"获得玉佩"},{"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"陈昊获得玉佩"}]}`},
 		{tool: "get_character_relations", args: `{}`, result: `{"relations":[{"a":"陈昊","b":"林雪","relation":"师姐弟"}]}`},
 		{tool: "search_lore", args: `{"query":"秘境"}`, result: `{"matches":[{"title":"青云秘境","category":"地点","content":"宗门试炼之地"}]}`},
@@ -692,8 +821,63 @@ func gateScript(turn int) []play {
 		{tool: "update_character_relationship", args: `{"character_a":1,"character_b":2,"relation":"并肩作战","relation_describe":"秘境中共患难"}`, result: "已更新角色关系"},
 		readRequired("main-tech-anti-repetition", "main-tech-foreshadow-cycle"),
 		{tool: "edit", args: editArgs("goink.md", fmt.Sprintf("第 %d 章完成：陈昊突破金丹，玉佩新线索。当前主线：登天之路。", ch)), result: "已更新 goink.md"},
-		{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
+		{tool: "set_phase", args: fmt.Sprintf(`{"phase":"%s"}`, nextPhase), result: fmt.Sprintf(`{"success":true,"phase":"%s"}`, nextPhase)},
 	}
+}
+
+// batchGatePlays 批量创作整批剧本（batch 门禁模式）：
+// init → prepare（一次）→ outline（一次出 N 章大纲）→ write（循环 N 章正文）
+// → review（统一一次）→ maintain（统一一次）→ done。
+// 与单章连续 N 轮的关键差异：prepare/review/maintain 各只做一次，轮边界大幅减少，
+// 历史跨章连续累积，NS 落库收益被放大。
+func batchGatePlays(chapters int) []play {
+	var plays []play
+	plays = append(plays, preparePlays(1)...)
+
+	// outline：一次性出 N 章大纲（连续 edit，require 只查 edit 存在）
+	plays = append(plays,
+		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
+		readSkill("main-tech-book-outline"),
+		readSkill("main-tech-chapter-opening"),
+		readSkill("main-tech-maliang-method"),
+		readSkill("main-tech-dialogue-subtext"),
+		readSkill("main-tech-emotional-arc"),
+		readSkill("main-tech-emotion-injection"),
+		readSkill("main-type-xuanhuan-cultivation"),
+	)
+	for ch := 1; ch <= chapters; ch++ {
+		plays = append(plays,
+			play{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
+			play{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
+		)
+	}
+	plays = append(plays, play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`})
+
+	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
+	// （门禁 require_reads 按阶段计，write 阶段只进入一次；后续章复用上下文）。
+	for ch := 1; ch <= chapters; ch++ {
+		if ch == 1 {
+			plays = append(plays, writePlays(ch)...)
+		} else {
+			plays = append(plays, writePlaysLean(ch)...)
+		}
+	}
+	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
+
+	// review：整批统一一次（run_subagent + 修复）
+	plays = append(plays, reviewPlays(1)...)
+	// maintain：整批统一一次（13 项清单），batch 出口是 done
+	plays = append(plays, maintainPlays(chapters, "done")...)
+	return plays
+}
+
+// writePlaysLean 批量 write 循环第 2 章起：技能已在上下文（阶段内不重复加载），
+// 但每章 write 前仍 read 本章大纲（kernel write 阶段 read(required)，防串章），
+// 然后正文 edit + 字数校验 + 物品记录。
+func writePlaysLean(ch int) []play {
+	return append([]play{
+		play{tool: "read", args: fmt.Sprintf(`{"path":"outlines/%03d.md"}`, ch), result: outlineText(ch)},
+	}, writeBodyPlays(ch)...)
 }
 
 func outlineText(ch int) string {
@@ -715,7 +899,7 @@ func chapterList(ch int) string {
 		if i > 1 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"num":%d,"title":"%s","word_count":3000}`, i, chapterTitle(i))
+		fmt.Fprintf(&b, `{"num":%d,"title":"%s","word_count":%d}`, i, chapterTitle(i), simTargetWords)
 	}
 	b.WriteString(`]}`)
 	return b.String()
@@ -729,12 +913,14 @@ func longContext(n int) string {
 	var b strings.Builder
 	b.WriteString(`{"chapter":{"num":`)
 	fmt.Fprintf(&b, "%d", n)
-	b.WriteString(`,"title":"第二章","word_count":3000},"recent_chapters":[`)
+	b.WriteString(`,"title":"第二章","word_count":`)
+	fmt.Fprintf(&b, "%d", simTargetWords)
+	b.WriteString(`},"recent_chapters":[`)
 	for i := 1; i <= n; i++ {
 		if i > 1 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"num":%d,"title":"章","word_count":3000}`, i)
+		fmt.Fprintf(&b, `{"num":%d,"title":"章","word_count":%d}`, i, simTargetWords)
 	}
 	b.WriteString(`],"scenes":[{`)
 	for i := 0; i < 8; i++ {
@@ -796,7 +982,7 @@ func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int
 		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
 	}
 	for i, sp := range subPlays {
-		hit, miss := cache.Step(sub)
+		hit, miss := cache.StepRaw(sub)
 		results = append(results, [2]int64{hit, miss})
 		sub = append(sub,
 			asstToolCall(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, sp.args),
@@ -804,7 +990,7 @@ func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int
 		)
 	}
 	// 子 agent 最终回复（审读报告）
-	hit, miss := cache.Step(sub)
+	hit, miss := cache.StepRaw(sub)
 	results = append(results, [2]int64{hit, miss})
 	sub = append(sub, asstText(reviewReport(turn)))
 

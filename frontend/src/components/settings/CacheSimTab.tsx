@@ -13,6 +13,8 @@ interface CacheSimScenario {
   now_hit_rate: number
   legacy_hit_rate: number
   miss_save_pct: number
+  now_cost: number
+  legacy_cost: number
 }
 
 interface CacheSimResult {
@@ -28,10 +30,21 @@ interface CacheSimResult {
   miss_save_pct: number
 }
 
-// 缓存模拟 Tab：手动触发模拟（后台异步，完成后事件推送），对比 NS 落库 vs 不落库的缓存收益。
+// 格式化为 M（百万）单位
+function fmtM(tokens: number): string {
+  const m = tokens / 1_000_000
+  if (m >= 100) return `${m.toFixed(0)}M`
+  if (m >= 10) return `${m.toFixed(1)}M`
+  return `${m.toFixed(2)}M`
+}
+
+// 缓存模拟 Tab：估算一个真实对话窗口写书的 token 消耗与费用——
+// 短对话（查设定/改设定）与单章/批量创作交替发生在同一条历史里。
+// 对比「历史随对话保留（当前版本）」与「每轮重发（旧版本）」的差距。
 export default function CacheSimTab() {
-  const [gateRounds, setGateRounds] = useState(5)
-  const [shortQARounds, setShortQARounds] = useState(3)
+  const [singleRounds, setSingleRounds] = useState(5)
+  const [batchChapters, setBatchChapters] = useState(5)
+  const [qaRounds, setQaRounds] = useState(3)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<CacheSimResult | null>(null)
   const [error, setError] = useState('')
@@ -55,50 +68,92 @@ export default function CacheSimTab() {
     setRunning(true)
     setError('')
     try {
-      await StartCacheSimulation(gateRounds, shortQARounds)
+      await StartCacheSimulation(singleRounds, qaRounds, batchChapters)
     } catch (e) {
       setError(String(e))
       setRunning(false)
     }
-  }, [gateRounds, shortQARounds])
+  }, [singleRounds, qaRounds, batchChapters])
+
+  const input = (value: number, setValue: (n: number) => void, min = 0, max = 20, label: string, hint?: string) => (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={e => setValue(Math.max(min, Math.min(max, Number(e.target.value) || min)))}
+        className="w-28 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
+      />
+      {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
+    </label>
+  )
+
+  const renderScenario = (s: CacheSimScenario) => {
+    const total = s.now_hit + s.now_miss + s.legacy_hit + s.legacy_miss
+    const save = s.legacy_cost - s.now_cost
+    return (
+      <div key={s.name} className="rounded-lg border p-3">
+        <div className="text-sm font-medium mb-2">{s.name}</div>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th className="text-left py-1">指标</th>
+              <th className="text-right py-1">旧版本</th>
+              <th className="text-right py-1">当前版本</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="py-1">总 token（输入）</td>
+              <td className="text-right tabular-nums">{fmtM(s.legacy_hit + s.legacy_miss)}</td>
+              <td className="text-right tabular-nums">{fmtM(s.now_hit + s.now_miss)}</td>
+            </tr>
+            <tr>
+              <td className="py-1">缓存命中率</td>
+              <td className="text-right tabular-nums">{s.legacy_hit_rate.toFixed(1)}%</td>
+              <td className="text-right tabular-nums">{s.now_hit_rate.toFixed(1)}%</td>
+            </tr>
+            <tr>
+              <td className="py-1">估算费用（¥）</td>
+              <td className="text-right tabular-nums">{s.legacy_cost.toFixed(4)}</td>
+              <td className="text-right tabular-nums">{s.now_cost.toFixed(4)}</td>
+            </tr>
+            {total > 0 && (
+              <tr className="border-t">
+                <td className="py-1">费用节省</td>
+                <td className="text-right tabular-nums" colSpan={2}>
+                  <span className={save > 0 ? 'text-success-foreground' : 'text-status-warning'}>
+                    ¥{save.toFixed(4)}（{s.miss_save_pct.toFixed(1)}%）
+                  </span>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="mb-1 pb-3 border-b">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4" />
-          <span className="text-sm font-medium">缓存命中模拟</span>
+          <span className="text-sm font-medium">写书成本模拟</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          模拟完整门禁创作流程的缓存命中，对比 NS 落库协议（修复后）vs 不落库（修复前）。
-          成本按设置中的模型价格估算（输入/输出/缓存命中单价）。
-          耗时约 1-6 分钟（tiktoken 精确计数），请耐心等待。
+          模拟一个真实对话窗口：先聊设定、再写正文，写完又查设定、继续写——短对话与单章/批量创作
+          交替发生在同一条对话历史里。历史随对话保留（当前版本）比每轮重发（旧版本）更省，
+          缓存命中的部分按低价计费。费用按设置中的模型价格估算。
         </p>
       </div>
 
       <div className="flex items-end gap-4">
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          门禁创作轮数
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={gateRounds}
-            onChange={e => setGateRounds(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-            className="w-24 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          短对话穿插轮数（0 = 不穿插）
-          <input
-            type="number"
-            min={0}
-            max={20}
-            value={shortQARounds}
-            onChange={e => setShortQARounds(Math.max(0, Math.min(20, Number(e.target.value) || 0)))}
-            className="w-28 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
-          />
-        </label>
+        {input(singleRounds, setSingleRounds, 0, 20, '单章流程轮数', '0 = 不跑')}
+        {input(batchChapters, setBatchChapters, 0, 20, '批量创作章数', '0 = 不跑')}
+        {input(qaRounds, setQaRounds, 0, 20, '短对话穿插轮数', '穿插在创作轮之间，0 = 不穿插')}
         <button
           onClick={run}
           disabled={running}
@@ -113,72 +168,30 @@ export default function CacheSimTab() {
 
       {result && (
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-          {result.scenarios.map((s: CacheSimScenario) => (
-            <div key={s.name} className="rounded-lg border p-3">
-              <div className="text-sm font-medium mb-2">{s.name}</div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="text-left py-1">指标</th>
-                    <th className="text-right py-1">修复前（NS 不落库）</th>
-                    <th className="text-right py-1">修复后（NS 落库）</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-1">累计 hit</td>
-                    <td className="text-right tabular-nums">{s.legacy_hit.toLocaleString()}</td>
-                    <td className="text-right tabular-nums">{s.now_hit.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1">累计 miss</td>
-                    <td className="text-right tabular-nums">{s.legacy_miss.toLocaleString()}</td>
-                    <td className="text-right tabular-nums">{s.now_miss.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1">命中率</td>
-                    <td className="text-right tabular-nums">{s.legacy_hit_rate.toFixed(1)}%</td>
-                    <td className="text-right tabular-nums">{s.now_hit_rate.toFixed(1)}%</td>
-                  </tr>
-                  <tr className="border-t">
-                    <td className="py-1">miss 降幅</td>
-                    <td className="text-right tabular-nums" colSpan={2}>
-                      <span className={s.miss_save_pct > 0 ? 'text-success-foreground' : 'text-status-warning'}>
-                        {s.miss_save_pct.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))}
+          {result.scenarios.map(renderScenario)}
 
           <div className="rounded-lg border p-3 bg-muted/30">
-            <div className="text-sm font-medium mb-2">汇总与成本估算（按设置价格）</div>
+            <div className="text-sm font-medium mb-2">合计</div>
             <table className="w-full text-xs">
               <tbody>
+                <tr>
+                  <td className="py-1">总输入 token</td>
+                  <td className="text-right tabular-nums">{fmtM(result.total_legacy_hit + result.total_legacy_miss)} → {fmtM(result.total_now_hit + result.total_now_miss)}</td>
+                </tr>
                 <tr>
                   <td className="py-1">总命中率</td>
                   <td className="text-right tabular-nums">{result.legacy_hit_rate.toFixed(1)}% → {result.now_hit_rate.toFixed(1)}%</td>
                 </tr>
                 <tr>
-                  <td className="py-1">总 miss 降幅</td>
-                  <td className="text-right tabular-nums">
-                    <span className={result.miss_save_pct > 0 ? 'text-success-foreground' : 'text-status-warning'}>
-                      {result.miss_save_pct.toFixed(1)}%
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-1">估算成本（¥）</td>
+                  <td className="py-1">估算费用（¥）</td>
                   <td className="text-right tabular-nums">
                     {result.legacy_cost.toFixed(4)} → {result.now_cost.toFixed(4)}
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-1">成本节约</td>
+                  <td className="py-1">费用节省</td>
                   <td className="text-right tabular-nums text-success-foreground">
-                    ¥{(result.legacy_cost - result.now_cost).toFixed(4)}
+                    ¥{(result.legacy_cost - result.now_cost).toFixed(4)}（{result.miss_save_pct.toFixed(1)}%）
                   </td>
                 </tr>
               </tbody>

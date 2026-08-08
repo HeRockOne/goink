@@ -1,7 +1,7 @@
 // ContextRing — SVG 圆环显示 token 用量 + 成本估算
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GetSettings, SaveSettings } from '@/lib/wailsjs/go/app/App'
+import { GetSettings, SaveSettings, SetContextClear } from '@/lib/wailsjs/go/app/App'
 
 export interface UsageInfo {
   prompt_tokens: number
@@ -111,6 +111,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
   const { t } = useTranslation()
   const [showPopover, setShowPopover] = useState(false)
   const [threshold, setThreshold] = useState(70)
+  const [contextClear, setContextClear] = useState(false)
   const [showPrices, setShowPrices] = useState(true)
   const [showRoles, setShowRoles] = useState(true)
   const [prices, setPrices] = useState<PriceConfig>(DEFAULT_PRICES)
@@ -121,6 +122,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
     thresholdLoaded.current = true
     GetSettings().then(s => {
       if (s?.compression_threshold) setThreshold(Math.round(s.compression_threshold * 100))
+      if (s?.context_clear_enabled !== undefined) setContextClear(!!s.context_clear_enabled)
       if (s?.price_input !== undefined) setPrices({
         priceInput: s.price_input,
         priceOutput: s.price_output,
@@ -402,6 +404,26 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
               <span>太快</span>
               <span>95%</span>
             </div>
+          </div>
+
+          {/* 已读技能清理（实验） */}
+          <div className="border-t pt-2 mt-1">
+            <label className="flex justify-between items-center text-xs cursor-pointer">
+              <span className="text-muted-foreground">已读技能清理（实验）</span>
+              <input
+                type="checkbox"
+                checked={contextClear}
+                onChange={e => {
+                  const v = e.target.checked
+                  setContextClear(v)
+                  SetContextClear(v, 3).catch(() => {})
+                }}
+                className="accent-[var(--primary)]"
+              />
+            </label>
+            <p className="text-[10px] text-muted-foreground/70 mt-1">
+              发送前把已读过的技能全文替换为占位符（保留最近3条），防止注意力漂移、缩减上下文。历史与存储不变。
+            </p>
           </div>
         </div>
       )}

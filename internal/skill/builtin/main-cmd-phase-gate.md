@@ -27,8 +27,12 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 ```
 单章：prepare → outline → write → review → maintain → prepare
-批量：init → prepare → [outline ⇄ write × N 章] → review → maintain → done → prepare
+批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲）→ review → maintain → done → prepare
 ```
+
+> 批量模式 `[outline ⇄ write × N 章]` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
+> 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
+> 把本章大纲锚定在上下文末尾再动笔，防止把别的章的大纲内容串进本章正文。write 阶段配置 `loop: true`，可回退 outline 修改大纲。
 
 ## require 清单（必须成功调用，失败不算）
 

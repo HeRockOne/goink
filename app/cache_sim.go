@@ -33,22 +33,26 @@ type CacheSimScenario struct {
 	NowHitRate    float64 `json:"now_hit_rate"`
 	LegacyHitRate float64 `json:"legacy_hit_rate"`
 	MissSavePct   float64 `json:"miss_save_pct"`
+	// 该场景的估算费用（元，按设置页价格）
+	NowCost    float64 `json:"now_cost"`
+	LegacyCost float64 `json:"legacy_cost"`
 }
 
 // StartCacheSimulation 异步启动缓存命中模拟（用户手动触发）。
 // 立即返回，模拟在后台 goroutine 运行（耗时 1-6 分钟），完成后推送事件 cachesim:done。
-// gateRounds: 门禁创作轮数；shortQARounds: 短对话穿插轮数（0=不穿插）。
-func (a *App) StartCacheSimulation(gateRounds int, shortQARounds int) error {
+// gateRounds: 单章门禁创作轮数；shortQARounds: 短对话穿插轮数（0=不穿插）；
+// batchChapters: 批量创作章数（0=不跑批量场景）。
+func (a *App) StartCacheSimulation(gateRounds int, shortQARounds int, batchChapters int) error {
 	go func() {
-		res := a.runCacheSimulationSync(gateRounds, shortQARounds)
+		res := a.runCacheSimulationSync(gateRounds, shortQARounds, batchChapters)
 		wails.EventsEmit(a.ctx, "cachesim:done", res)
 	}()
 	return nil
 }
 
 // runCacheSimulationSync 同步执行模拟并附带价格估算（供 StartCacheSimulation 后台调用）。
-func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int) *CacheSimResult {
-	raw, err := cacheprobe.Run(gateRounds, shortQARounds)
+func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchChapters int) *CacheSimResult {
+	raw, err := cacheprobe.Run(gateRounds, shortQARounds, batchChapters, 0) // clean 保留窗口默认 0（全清理）
 	if err != nil {
 		return &CacheSimResult{NowCost: -1, LegacyCost: -1} // 失败标记
 	}
@@ -68,7 +72,7 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int) *CacheSi
 	}
 
 	res := &CacheSimResult{}
-	toScenario := func(name string, nH, nM, lH, lM int64) CacheSimScenario {
+	toScenario := func(name string, nH, nM, lH, lM int64, outTokens int64) CacheSimScenario {
 		return CacheSimScenario{
 			Name:          name,
 			NowHit:        nH, NowMiss: nM,
@@ -76,10 +80,20 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int) *CacheSi
 			NowHitRate:    hitRate(nH, nM),
 			LegacyHitRate: hitRate(lH, lM),
 			MissSavePct:   missSave(nM, lM),
+			NowCost:       costOf(nH, nM, outTokens, cachePrice, inputPrice, outputPrice),
+			LegacyCost:    costOf(lH, lM, outTokens, cachePrice, inputPrice, outputPrice),
 		}
 	}
-	for _, s := range raw.Scenarios {
-		res.Scenarios = append(res.Scenarios, toScenario(s.Name, s.NowHit, s.NowMiss, s.LegacyHit, s.LegacyMiss))
+	// 每个场景的输出 token 估算（~3K/轮）。混合窗口场景 = 单章 + 短对话 + 批量章数之和
+	estOutputPerRound := int64(3000)
+	var scOut []int64
+	scOut = append(scOut, estOutputPerRound*int64(gateRounds+shortQARounds+batchChapters))
+	for i, s := range raw.Scenarios {
+		out := estOutputPerRound
+		if i < len(scOut) && scOut[i] > 0 {
+			out = scOut[i]
+		}
+		res.Scenarios = append(res.Scenarios, toScenario(s.Name, s.NowHit, s.NowMiss, s.LegacyHit, s.LegacyMiss, out))
 	}
 	res.TotalNowHit = raw.TotalNowHit
 	res.TotalNowMiss = raw.TotalNowMiss
@@ -90,8 +104,7 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int) *CacheSi
 	res.MissSavePct = missSave(raw.TotalNowMiss, raw.TotalLegacyMiss)
 
 	// 成本估算：hit×cache价 + miss×input价 + 输出按总量估算（每轮输出 ~2-4K，取 3K/轮 × 总轮数）
-	estOutputPerRound := int64(3000)
-	rounds := int64(gateRounds + shortQARounds)
+	rounds := int64(gateRounds + shortQARounds + batchChapters)
 	if rounds == 0 {
 		rounds = 1
 	}

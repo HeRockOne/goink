@@ -37,7 +37,7 @@
 
 | 工具 | 说明 |
 |------|------|
-| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：严格按门禁配置完整流程，NS 落库后 miss 降 26.4%；核心逻辑在 internal/cacheprobe 库，设置面板「缓存模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [门禁轮数] [短对话轮数]` |
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：模拟一个真实对话窗口——短对话（查/改设定）与单章/批量创作交替、一条历史贯穿，NS 落库后混合窗口 miss 降 23.7%（单章 27.0%、批量 20.7% 为上下界）；正文长度读真实设置；核心逻辑在 internal/cacheprobe 库，设置面板「写书成本模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]` |
 
 ## adr/ — 决策记录（长存，不可变）
 
@@ -83,3 +83,5 @@
 > 2026-08-07：叙事面板数据口径审计修复（对齐 maintain 流程）——当前卡角色改 characters_in 优先（回退 active_chars）、物品改 item_occurrences 本章流转（后端 get_writing_context 新增字段）、未定时伏笔单独分组、弧线当前节点排除 actual_chapter 提前完成节点、弧线节点 Limit 50→200；UI 修复——标题栏移除 Logo/标语/GitHub 链接、叙事按钮改 ScrollText 图标、新增门禁开关按钮（Shield/ShieldOff）、状态栏门禁条改 flex 中段防重叠、叙事面板标题栏删除、overlay 避开 header/状态栏、对话历史分页渲染（默认 30 轮+加载更早）、性能优化（移除 6 处 backdrop-blur、sidebar 透明度提高、bg-layer 纹理减半）
 > 2026-08-08：门禁必读技能体系——新增 read_required 工具（60 个，参数化读技能，零硬编码）+ 门禁 require_reads 字段（阶段内强制 + 通配符，跨阶段读取不算）+ 每阶段必读技能配置（init 5 个/prepare common-sense-logic/outline hook+title/write show-dont-tell+anti-ai/write maintain anti-repetition+foreshadow）；sub- 前缀技能自动注入 review 子代理（[身份][sub-*技能][NS] 消息拆分，技能常量字节放 NS 前跨 review 命中缓存，替代子代理自 read）；skill 合并 chapter-title-hooks 并入 chapter-title-design（42 个内置）；创作视角 skill 审计修复（字数下限 2500、类型口径统一、自引用修正等）
 > 2026-08-08：缓存模拟集成——cacheprobe 抽为 internal/cacheprobe 库（核心逻辑 + 真实生成器注入：identity/always/catalog/工具定义/子代理身份/NS 读真实 DB+goink.md，assistant 消息含 reasoning_content+tool_displays、set_phase 注入 system-reminder），cmd/cacheprobe 变薄壳 CLI；设置面板新增「缓存模拟」Tab（异步 StartCacheSimulation + cachesim:done 事件，轮数/短对话穿插可调，按设置价格估算成本）；消息级缓存优化（token/marshal/toolDefs 缓存，完整模拟 365s→13.8s 提速 26 倍）
+> 2026-08-08：cacheprobe 新增批量创作场景——按 batch 门禁模式模拟（prepare 一次 → outline 一次出 N 章大纲 → write 循环 N 章正文，技能仅循环开头加载 → review/maintain 统一一次 → done，连续 2 批体现批次边界）；gateScript 拆为 prepare/outline/write/selfReview/review/maintain 分段复用；CLI 第三参数批量章数、设置面板加批量章数输入；实测批量 5 章×2 批 miss 降 20.7%（单章 5 轮 27.0%）
+> 2026-08-08：cacheprobe 场景重构为真实对话窗口——短对话（带工具调用：查/改设定）与单章/批量创作交替发生在同一条历史（buildMixedSession），替代三个互斥的独立场景；正文长度与字数校验读真实 app_config 设置（min/max 章节字数，目标 = min+(max-min)/2）；设置面板改「写书成本模拟」Tab（旧版本/当前版本列、M 单位、费用估算），单章轮数/短对话穿插/批量章数均可为 0；实测混合窗口(2+2+2) miss 降 23.7%

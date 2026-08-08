@@ -91,6 +91,8 @@ type RunOptions struct {
 	PhaseCalledJSON      string     // 从 session 恢复的已调用工具 JSON
 	PhaseMode            string     // 门禁模式："single" | "batch"
 	PhaseGateEnabled     bool       // 门禁总开关，false 时跳过所有门禁检查
+	ContextClearEnabled  bool       // 发送前工具结果清理开关（默认 false）：已消费的 skill 全文替换为占位符
+	ContextClearKeep     int        // 清理时保留最近 N 条完整结果（默认 3，对齐 Anthropic clear_tool_uses keep:3）
 }
 
 // New 创建 Agent 实例。
@@ -390,7 +392,28 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 			callOpts.AllowedTools = allowed
 		}
-		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+
+		// 发送前工具结果清理（context clearing，对齐 Claude Code 微压缩）：
+		// 仅主 Agent 创作请求清理已消费的 skill 全文（子代理/压缩摘要保持全文）。
+		// 用副本发送，不污染 opts.Messages（历史落库与前端展示保持原样）。
+		sendMsgs := opts.Messages
+		if opts.AgentType == "main" && opts.ContextClearEnabled && hasClearableResults(opts.Messages) {
+			keep := opts.ContextClearKeep
+			if keep < 0 {
+				keep = 3
+			}
+			cleared := clearToolResults(opts.Messages, keep)
+			if len(cleared) != len(opts.Messages) || cleared != nil {
+				a.logger.Debug("context clearing applied",
+					"session_id", opts.SessionID,
+					"turn_id", opts.TurnID,
+					"msgs", len(opts.Messages),
+					"keep", keep,
+				)
+			}
+			sendMsgs = cleared
+		}
+		stream := a.llm.ChatStream(ctx, opts.ProviderName, sendMsgs, tools, opts.Model.ID, callOpts)
 
 		// ---- SSE 流处理 ----
 		var pendingUsage map[string]any
@@ -659,7 +682,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if ctx.Err() != nil {
 							return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
 						}
-						stream = a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+						stream = a.llm.ChatStream(ctx, opts.ProviderName, sendMsgs, tools, opts.Model.ID, callOpts)
 						continue streamLoop
 					}
 					// 不可重试或超过重试次数：保存 partial 后返回

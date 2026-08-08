@@ -84,6 +84,56 @@ func TestCumulativeMiss_NowBelowLegacy_ShortQA(t *testing.T) {
 	t.Logf("短问答5轮 累计miss now=%d legacy=%d（NS 落库膨胀成本，量级远小于门禁场景收益）", nowMiss, legacyMiss)
 }
 
+// 批量创作场景（batch 门禁）：init → prepare(一次) → outline(N 章) → write(循环) → review(一次) → maintain(一次) → done。
+// 断言：now miss < legacy miss，且批量 5 章的单章平均 miss 应低于单章连续 5 轮（轮边界少）。
+func TestCumulativeMiss_NowBelowLegacy_Batch(t *testing.T) {
+	initTools()
+
+	nowCache := NewTokenCache()
+	legacyCache := NewTokenCache()
+
+	nowResults := buildBatchWithRounds("now", nowCache, 5)
+	legacyResults := buildBatchWithRounds("legacy", legacyCache, 5)
+
+	var nowMiss, legacyMiss int64
+	for _, pr := range nowResults {
+		nowMiss += pr[1]
+	}
+	for _, pr := range legacyResults {
+		legacyMiss += pr[1]
+	}
+
+	if nowMiss >= legacyMiss {
+		t.Fatalf("批量场景修复后累计 miss 未显著降低：now=%d legacy=%d", nowMiss, legacyMiss)
+	}
+	t.Logf("批量5章 累计miss now=%d legacy=%d", nowMiss, legacyMiss)
+}
+
+// 混合对话窗口场景（真实使用方式）：短对话穿插在单章/批量创作之间，同一条历史。
+// 断言：now miss < legacy miss。
+func TestCumulativeMiss_NowBelowLegacy_Mixed(t *testing.T) {
+	initTools()
+
+	nowCache := NewTokenCache()
+	legacyCache := NewTokenCache()
+
+	nowResults := buildMixedSession("now", nowCache, 3, 3, 3)
+	legacyResults := buildMixedSession("legacy", legacyCache, 3, 3, 3)
+
+	var nowMiss, legacyMiss int64
+	for _, pr := range nowResults {
+		nowMiss += pr[1]
+	}
+	for _, pr := range legacyResults {
+		legacyMiss += pr[1]
+	}
+
+	if nowMiss >= legacyMiss {
+		t.Fatalf("混合场景修复后累计 miss 未显著降低：now=%d legacy=%d", nowMiss, legacyMiss)
+	}
+	t.Logf("混合窗口(单章3/短对话3/批量3章) 累计miss now=%d legacy=%d", nowMiss, legacyMiss)
+}
+
 // tiktoken 精确计数：命中+未命中应等于请求总 token（含 tools 前缀）。
 func TestTokenCache_HitPlusMissEqualsTotal(t *testing.T) {
 	initTools()
