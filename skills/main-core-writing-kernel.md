@@ -131,16 +131,48 @@ mode: always
 | 3 | **搜索设定防遗忘** | 每章必做 | search_lore |
 | 4 | **搜索物品防断裂** | 每章必做 | search_items |
 | 5 | **更新章节计划** | 每章必做 | update_chapter_plan（main-cmd-next 触发） |
-| 6 | **创建场景条目** | 查询 E 发现有变化时 | create_scene（title + summary required） |
-| 7 | **记录物品流转** | 查询 F 发现有变化时 | create_item_occurrence（item_id + chapter_id + action 全部 required） |
-| 8 | **更新角色状态** | 查询 A 发现有变化时 | update_character |
+| 6 | **创建场景条目** | 查询 E 发现有**关键**场景时（判定见下方标准） | create_scene（title + summary required） |
+| 7 | **记录物品流转** | 查询 F 发现有**关键**物品易主时（判定见下方标准） | create_item_occurrence（item_id + chapter_id + action 全部 required） |
+| 8 | **更新角色状态** | 查询 A 发现有**关键**角色变化时（判定见下方标准） | update_character |
 | 9 | **更新角色关系** | 查询 G 发现有变化时 | update_character_relationship（relation_describe required） |
 | 10 | **推进弧线节点** | 查询 C 发现有变化时 | update_arc_node |
-| 11 | **新伏笔/悬念** | 有新伏笔时 | create_timeline_entry（title + category + target_chapter 全部 required） |
+| 11 | **新伏笔/悬念** | 有新**关键**伏笔时（判定见下方标准） | create_timeline_entry（title + category + target_chapter 全部 required） |
 | 12 | **回收伏笔** | 查询 B 发现有要回收的时 | update_timeline_entry（resolved_chapter_id） |
 | 13 | **更新读者认知** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry |
 | 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹，格式见 anti-repetition skill：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行。必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
+
+## 关键实体判定标准（补录门槛，防止设定库污染）
+
+> 新增角色/物品/场景/伏笔前，先按下表判定。**设定库只收录关键实体**——路过的狗、野草里的石头、一次性环境布景不得入库。宁可漏录（后续用到时随时补），不可滥录（污染设定库、浪费每轮上下文、让 AI 每次读到无关实体）。
+
+### 关键角色（应补录）
+
+- **有名字**，且与主角/其他关键角色有互动（对话、冲突、合作、委托）
+- 参与**剧情因果**：推动事件、提供关键信息、改变局势走向
+- 后续章节会再次出现（大纲/弧线/伏笔中提及，或显然会复用）
+- 承担叙事功能：反派、盟友、见证者、信息源、对手戏对象
+
+**不补录**：无名布景（路过的狗、掌柜、路人甲——除非确认后续复用）、群演（战斗中杂兵、围观群众）、一次性登场即退场的过客。
+
+### 关键物品（应补录）
+
+- **有名称**，且被角色主动使用/持有/传递（信物、武器、情报文件、关键道具）
+- 推动剧情：解开谜题、改变局势、引发冲突
+- 在伏笔/弧线/大纲中涉及，或角色之间易主（需 create_item_occurrence 记录流转）
+- 后续章节还会出现
+
+**不补录**：纯环境描写物（野草、石头、桌椅、路灯）、一次性道具（随手用完即弃且无后续）。
+
+### 关键场景/地点/伏笔
+
+- 场景：对剧情有独立承载作用（关键事件发生地、反复出现的场所）；不录过场地点
+- 地点：角色会反复进出、对行动有约束（禁地、据点、家园）；不录路过街道
+- 伏笔：埋设或回收必须入库（create_timeline_entry）；普通背景信息不算伏笔
+
+### 判定一句话
+
+**这个实体未来会影响设定一致性吗？会影响→入库；只是本章背景→不录。**
 
 ## 阶段技能表（30 个内置 skill 全量调度）
 

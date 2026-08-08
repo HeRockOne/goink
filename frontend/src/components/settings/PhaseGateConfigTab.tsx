@@ -112,7 +112,7 @@ export default function PhaseGateConfigTab() {
           <p className="text-xs text-muted-foreground mb-2">
             此配置存储在数据库，仅门禁代码读取，不占用 AI 上下文 token。
             AI 可通过 <code className="text-xs bg-muted px-1 rounded">update_phase_gate_config</code> 工具编辑。
-            字段说明与设计指南见 <code className="text-xs bg-muted px-1 rounded">docs/architecture/phase-gate.md</code>「配置设计指南」。
+            字段说明与设计指南见 <code className="text-xs bg-muted px-1 rounded">skill：main-cmd-phase-gate</code>「门禁配置设计指南」。
           </p>
           <textarea
             value={config}
