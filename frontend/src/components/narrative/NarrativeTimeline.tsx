@@ -65,6 +65,8 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
   const [labels, setLabels] = useState<Record<string, string>>(loadLabels)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [chapters, setChapters] = useState<Array<{ chapter_number: number; title: string; word_count: number }>>([])
+  // 当前卡视图：auto=跟随后端 preview 字段（待写章时自动预览）；手动点按钮可锁定到另一种
+  const [currentMode, setCurrentMode] = useState<'auto' | 'preview' | 'review'>('auto')
   const renameRef = useRef<HTMLInputElement>(null)
   const toolbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const maxZRef = useRef(10)
@@ -314,7 +316,18 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
               {card.id === 'current' && <>
                 {(() => {
                   const preview = (ctx as any)?.preview
-                  if (preview) {
+                  const showPreview = currentMode === 'preview' || (currentMode === 'auto' && !!preview)
+                  // 切换按钮：点击锁定到另一种模式（标题行右侧小链接）
+                  const toggleBtn = (
+                    <button
+                      onClick={() => setCurrentMode(showPreview ? 'review' : 'preview')}
+                      className="shrink-0 text-[10px] text-muted-foreground/70 hover:text-primary transition-colors cursor-pointer ml-2"
+                      title="点击切换当前卡视图（写前预览 / 已完成章回顾）"
+                    >
+                      {showPreview ? '上章回顾 ▸' : '写前预览 ▸'}
+                    </button>
+                  )
+                  if (showPreview) {
                     // ── 写前预览模式：待写章的设定摘要（状态层 + 规划层）──
                     const dueForeshadow: any[] = preview.due_foreshadow ?? []
                     const overdueForeshadow: any[] = preview.overdue_foreshadow ?? []
@@ -323,7 +336,10 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
                     return (
                       <>
                         <div className="card-sec">
-                          <div className="card-current-title">第{preview.chapter_num}章（待写）</div>
+                          <div className="card-current-title card-current-title-row">
+                            第{preview.chapter_num}章（待写）
+                            {toggleBtn}
+                          </div>
                         </div>
                         {(dueForeshadow.length > 0 || dueNodes.length > 0) && (
                           <div className="card-sec"><div className="card-sec-title">🎯 本章目标</div>
@@ -353,8 +369,9 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
                     <>
                       {currentChapter.num > 0 && (
                         <div className="card-sec">
-                          <div className="card-current-title">
+                          <div className="card-current-title card-current-title-row">
                             第{currentChapter.num}章{currentChapter.title ? ` ${currentChapter.title}` : ''}
+                            {preview && toggleBtn}
                           </div>
                         </div>
                       )}

@@ -1050,6 +1050,13 @@ body {
   border-bottom: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
   margin-bottom: 0.15rem;
 }
+/* 标题行：标题 + 视图切换按钮（预览/回顾）并排 */
+.card-current-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
 
 /* 卡片内子条目：统一边框 + 不同底色 */
 .card-item {
