@@ -193,6 +193,12 @@ func (a *App) SetPhaseGateEnabled(enabled bool) error {
 	return config.SaveSettings(a.db, a.settings)
 }
 
+// RestoreDefaultPhaseGateConfig 恢复出厂默认门禁配置（覆盖用户当前配置）。
+func (a *App) RestoreDefaultPhaseGateConfig() error {
+	a.settings.PhaseGateConfig = defaultPhaseGateConfig
+	return config.SaveSettings(a.db, a.settings)
+}
+
 // SetWebDAVConfig 设置 WebDAV 配置。
 func (a *App) SetWebDAVConfig(port int, user, pass string) error {
 	a.settings.WebDAVPort = port

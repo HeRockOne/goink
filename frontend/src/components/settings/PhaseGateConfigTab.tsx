@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Shield } from 'lucide-react'
-import { SaveSettings, GetSettings, SetPhaseGateEnabled } from '@/lib/wailsjs/go/app/App'
+import { Shield, ChevronDown, RotateCcw } from 'lucide-react'
+import { SaveSettings, GetSettings, SetPhaseGateEnabled, RestoreDefaultPhaseGateConfig } from '@/lib/wailsjs/go/app/App'
 import { useTranslation } from 'react-i18next'
 
 export default function PhaseGateConfigTab() {
   const { t } = useTranslation()
   const [config, setConfig] = useState('')
   const [phaseGateEnabled, setPhaseGateEnabled] = useState(true)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -29,6 +30,18 @@ export default function PhaseGateConfigTab() {
       setMsg('保存失败: ' + String(e))
     }
     setSaving(false)
+  }
+
+  async function handleRestoreDefault() {
+    setMsg('')
+    try {
+      await RestoreDefaultPhaseGateConfig()
+      const s = await GetSettings()
+      setConfig(s?.phase_gate_config || '')
+      setMsg('已恢复出厂默认配置')
+    } catch (e) {
+      setMsg('恢复失败: ' + String(e))
+    }
   }
 
   const handlePhaseGateToggle = useCallback(async () => {
@@ -64,34 +77,54 @@ export default function PhaseGateConfigTab() {
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{t('settings.phaseGateDesc')}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          门禁按「准备 → 大纲 → 正文 → 审读 → 维护」强制 AI 依序创作，出厂配置已按创作流程设计好，普通用户无需修改。
+        </p>
       </div>
 
-      <p className="text-xs text-muted-foreground mb-2">
-        此配置存储在数据库，仅门禁代码读取，不占用 AI 上下文 token。
-        AI 可通过 <code className="text-xs bg-muted px-1 rounded">update_phase_gate_config</code> 工具编辑。
-      </p>
-      <div className="flex-1 flex flex-col min-h-0">
-        <textarea
-          value={config}
-          onChange={e => { setConfig(e.target.value); setMsg('') }}
-          className="flex-1 min-h-[280px] w-full text-xs font-mono rounded border bg-background p-3 resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          spellCheck={false}
-          placeholder='<!-- phase-gate-config
+      {/* 高级配置（默认收起，避免普通用户面对配置代码） */}
+      <button
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors self-start mb-2 cursor-pointer"
+      >
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+        高级配置（阶段白名单 / 必读技能 / 流转规则）
+      </button>
+
+      {showAdvanced && (
+        <div className="flex-1 flex flex-col min-h-0">
+          <p className="text-xs text-muted-foreground mb-2">
+            此配置存储在数据库，仅门禁代码读取，不占用 AI 上下文 token。
+            AI 可通过 <code className="text-xs bg-muted px-1 rounded">update_phase_gate_config</code> 工具编辑。
+            字段说明与设计指南见 <code className="text-xs bg-muted px-1 rounded">docs/architecture/phase-gate.md</code>「配置设计指南」。
+          </p>
+          <textarea
+            value={config}
+            onChange={e => { setConfig(e.target.value); setMsg('') }}
+            className="flex-1 min-h-[280px] w-full text-xs font-mono rounded border bg-background p-3 resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            spellCheck={false}
+            placeholder='<!-- phase-gate-config
 mode: single
 phase: prepare
 tools: get_chapter_list, read, ...
 require: ...
 next: outline
 -->'
-        />
-        {msg && <p className="text-xs text-muted-foreground mt-1">{msg}</p>}
-        <div className="flex gap-2 mt-2">
-          <button onClick={handleSave} disabled={saving}
-            className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity">
-            {saving ? '保存中...' : '保存配置'}
-          </button>
+          />
+          {msg && <p className="text-xs text-muted-foreground mt-1">{msg}</p>}
+          <div className="flex gap-2 mt-2">
+            <button onClick={handleSave} disabled={saving}
+              className="px-3 py-1.5 text-xs rounded bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity">
+              {saving ? '保存中...' : '保存配置'}
+            </button>
+            <button onClick={handleRestoreDefault}
+              className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted transition-colors flex items-center gap-1">
+              <RotateCcw className="w-3 h-3" />
+              恢复出厂默认
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

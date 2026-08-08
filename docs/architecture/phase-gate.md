@@ -33,7 +33,7 @@
 
 **回退修正**：单轮创作内，LLM 可回退到本轮已访问过的阶段（如 write 阶段发现大纲问题，回 outline 修改）。
 
-**循环重置**：完成一轮完整流程（single 的 maintain→prepare，或 batch 的 maintain→done→prepare）后，访问记录重置——第二轮创作不能利用上一轮的访问历史任意跳转。
+**循环重置**：完成一轮完整流程（single 或 batch 的 maintain→prepare）后，访问记录重置——第二轮创作不能利用上一轮的访问历史任意跳转。
 
 **字数校验（write 阶段转出）**：`set_phase("review")` 前强制检查：
 - 必须调用过 `get_chapter_list`（其返回的 `word_count_ok` 写入门禁状态），未检查则阻塞
@@ -59,10 +59,10 @@ maintain → 状态维护（require: 13 项清单）→ set_phase("prepare")
 ### 批量模式（mode: batch）
 
 ```
-init → prepare → [outline → write] × N 章循环 → review → maintain → done → prepare
+init → prepare → outline（一次出 N 章大纲）→ [write → 迷你维护] × N 章 → review → maintain → prepare
 ```
 
-每章完成后 maintain→done→prepare，访问记录重置后开始下一章。
+与单章差异：outline 一次产出全部 N 章大纲；write 循环 N 章正文，每章写后紧跟迷你维护（只写不查，6 个状态写入工具，状态实时结算）；review / maintain 整批统一一次；整批末尾 maintain 收尾后回 prepare（访问记录重置，开始下一批）。
 
 ## 工具白名单
 
@@ -70,12 +70,12 @@ init → prepare → [outline → write] × N 章循环 → review → maintain 
 
 | 阶段 | 允许的工具（简化） | 阻止的工具（简化） |
 |------|-------------------|-------------------|
-| init | create_*, get_*, set_phase | edit, update_*, delete_*, run_subagent |
-| prepare | get_*, read, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
-| outline | read, edit(get: outlines/*, goink.md, book-outline.md, skills/*), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
-| write | read, edit(get: chapters/*), search_story_memory, get_*, set_phase | update_*, create_*, delete_*, run_subagent |
-| review | read, edit(get: chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
-| maintain | read, edit(goink.md, chapters/*, outlines/*, skills/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
+| init | read_required, edit(book-outline.md, goink.md), create_*, get_*, set_phase | update_*, delete_*, run_subagent |
+| prepare | get_*, read, read_required, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
+| outline | read, read_required, edit(outlines/*, goink.md, book-outline.md), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
+| write | read, read_required, edit(chapters/*), create_item_occurrence, update_writing_snapshot, search_story_memory, get_*, set_phase | update_*, create_*（除迷你维护 6 个）, delete_*, run_subagent |
+| review | read, read_required, edit(chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
+| maintain | read, read_required, edit(goink.md, chapters/*, outlines/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
 
 > **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
 > create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 init 和 maintain 阶段可用（即新建/修改设定的操作集中在开书与维护阶段）。
@@ -116,14 +116,86 @@ next: outline
 |------|------|------|
 | mode | 否 | "single" 或 "batch"，空=两种模式都适用 |
 | phase | 是 | 阶段名称 |
-| tools | 是 | 该阶段允许使用的工具列表 |
-| require | 是 | 必须调用过的工具列表 |
-| require_reads | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符（如 `main-tech-*`） |
+| tools | 是 | 该阶段允许使用的工具列表（白名单，未列出的工具被硬拦截） |
+| require | 是 | 必须调用过（且成功）的工具列表，全部满足后才能切换阶段 |
+| require_reads | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符（如 `main-tech-*`）。**未加载时 edit/run_subagent/create_*/update_*/delete_* 会被事前拦截**（技能先于创作，不是切换手续） |
 | next | 是 | require 满足后可进入的下一阶段 |
-| edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
-| loop | 否 | "true" 表示 batch 模式下可循环（write 阶段可回退到上一阶段 outline，连续多章写作） |
+| fail_next | 否 | require 不满足时的回退阶段（当前出厂配置未使用，代码支持） |
+| edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制；逗号分隔） |
+| loop | 否 | "true" 表示 batch 模式下 write 可回退到上一阶段 outline（连续多章写作时改大纲） |
 
-> 批量模式循环：默认配置中 batch 的 write 阶段带 `loop: true`，配合 visited 回退机制实现「outline ⇄ write × N 章」。
+> 批量模式循环：默认配置中 batch 的 write 阶段带 `loop: true`，配合 visited 回退机制实现「write 写多章时可回 outline 修大纲」。
+
+## 配置设计指南（怎么设计一套门禁）
+
+### 第一步：定阶段链
+
+阶段 = 创作流程的步骤。默认六阶段流程，一般不需要增删：
+
+```
+init（开书）→ prepare（全量状态）→ outline（大纲）→ write（正文）→ review（审稿）→ maintain（维护）
+```
+
+每阶段一个配置块；**第一个阶段是流程起点**（新会话从它开始），最后一个阶段的 next 指回第一个阶段（闭环）。
+
+### 第二步：定每阶段的 tools（放什么工具）
+
+按工具角色分组，分配原则：
+
+| 工具角色 | 工具名 | 放哪些阶段 |
+|---------|--------|-----------|
+| 技能加载 | read_required | 所有阶段（该阶段有必读技能才需要） |
+| 文件读取 | read | 需要读正文/大纲/文件的阶段（outline/write/review/maintain） |
+| 查询 | get_*、search_*、check_story_consistency、get_stats | 所有阶段（随时查状态，宁可多查不可漏） |
+| 网络 | web_search、web_fetch | 需要查资料/考据的阶段（prepare） |
+| 文件写入 | edit | 配合 edit_paths 限制路径：init 写总纲（book-outline.md, goink.md）、outline 写大纲（outlines/*）、write 写正文（chapters/*）、review 修正文（chapters/*）、maintain 写指纹（goink.md） |
+| 创建 | create_* | 只在 init（开书建世界观/角色）和 maintain（补录缺失条目） |
+| 更新 | update_* | 只在 maintain（状态维护）；batch write 额外放迷你维护 6 个（create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot） |
+| 删除 | delete_* | 只在 maintain |
+| 审稿 | run_subagent | 只在 review |
+
+**工具清单以 `internal/mcp_tools/` 各文件注册名为准**（get_characters、create_item_occurrence 等 60 个）。
+
+### 第三步：定每阶段的 require（必须完成的动作）
+
+原则：require = "该阶段不完成就产生创作事故的动作"。
+
+| 阶段 | require | 为什么 |
+|------|---------|--------|
+| init | 7 个查询（characters/locations/story_arcs/lore/items/timeline/preferences） | 开书前必须确认世界观现状 |
+| prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） | 全量状态必须加载才能动笔 |
+| outline | edit | 大纲必须写入文件 |
+| write | edit、get_chapter_list、read、read_required | 正文必须写入 + 字数校验 + 读大纲 + 读技能 |
+| review | run_subagent | 审稿必须启动 |
+| maintain | 13 项（edit 指纹 + 3 更新 + 2 搜索 + 7 查询） | 设定/伏笔/关系全量维护 |
+
+注意：write 阶段转出时**自动强制字数检查**（get_chapter_list 的 word_count_ok），无需配置。
+
+### 第四步：定每阶段的 require_reads（必读技能）
+
+原则：该阶段核心方法论，对照 kernel 阶段技能表（`skills/main-core-writing-kernel.md` 的"阶段技能表"）。
+
+| 阶段 | require_reads |
+|------|---------------|
+| init | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
+| prepare | main-tech-common-sense-logic |
+| outline | main-tech-chapter-hook-enhanced, main-tech-chapter-title-design |
+| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density |
+| review | 空（sub-tech-review-standards 由系统自动注入子代理，主代理不用读） |
+| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
+
+按需技能（情景类）不进 require_reads，由 kernel 措辞引导模型按需 read。
+
+### 常见设计错误
+
+| 错误 | 后果 | 修正 |
+|------|------|------|
+| require 引用了 tools 里没有的工具 | set_phase 永远被拦，流程卡死 | require 的工具必须同时在 tools 里 |
+| next 指向不存在的阶段名 | 切换时提示"未知阶段" | next 必须与某块配置的 phase 一致 |
+| 两个 mode 都空的同名阶段 | 解析时只生效第一个（findPhase 取首个） | 同名阶段必须写 mode: single / mode: batch 区分 |
+| edit_paths 不含 require 需要的路径 | edit 被拦，require 永不满足 | outline 的 edit_paths 必须含 outlines/* |
+| 首阶段不是 init/prepare | 新会话从错误起点开始 | 第一个配置块就是流程起点 |
+| tools 忘放 set_phase | set_phase 永远放行，不写也没事 | 可不写，但建议写上可读性更好 |
 
 ## 故障排查
 
@@ -153,7 +225,7 @@ next: outline
 
 - `POST /api/chat` 发送消息后，Agent 按当前 session 的阶段执行
 - 门禁状态持久化在 `sessions` 表的 `current_phase` 字段
-- 新会话自动从 prepare 开始（`current_phase` 为空时强制设为 `"prepare"`，见 `app/chat.go`），之后由 LLM 主动 set_phase 推进
+- 新会话自动从配置的第一个阶段开始（默认 init），之后由 LLM 主动 set_phase 推进；已有小说的会话模型会快速走过 init（只查不建），切到 prepare
 
 
 ## 示例门禁配置
