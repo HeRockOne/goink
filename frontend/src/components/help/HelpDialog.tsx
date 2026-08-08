@@ -223,6 +223,26 @@ function QuickStartTab() {
           <p><span className="text-foreground font-medium">{t('help.quickStart_conceptApproval')}</span> —— {t('help.quickStart_conceptApprovalDesc')}</p>
         </div>
       </section>
+
+      <section>
+        <h3 className="text-base font-medium mb-2">{t('help.quickStart_creationModes')}</h3>
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <h4 className="text-foreground font-medium mb-1">{t('help.quickStart_modeSingle')}</h4>
+            <p>{t('help.quickStart_modeSingleDesc')}</p>
+          </div>
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <h4 className="text-foreground font-medium mb-1">{t('help.quickStart_modeBatch')}</h4>
+            <p>{t('help.quickStart_modeBatchDesc')}</p>
+            <p className="mt-1 text-muted-foreground/80">{t('help.quickStart_modeBatchExample')}</p>
+          </div>
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <h4 className="text-foreground font-medium mb-1">{t('help.quickStart_modeClean')}</h4>
+            <p>{t('help.quickStart_modeCleanDesc')}</p>
+            <p className="mt-1 text-muted-foreground/80">{t('help.quickStart_modeCleanWhere')}</p>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
