@@ -236,11 +236,6 @@ function QuickStartTab() {
             <p>{t('help.quickStart_modeBatchDesc')}</p>
             <p className="mt-1 text-muted-foreground/80">{t('help.quickStart_modeBatchExample')}</p>
           </div>
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <h4 className="text-foreground font-medium mb-1">{t('help.quickStart_modeClean')}</h4>
-            <p>{t('help.quickStart_modeCleanDesc')}</p>
-            <p className="mt-1 text-muted-foreground/80">{t('help.quickStart_modeCleanWhere')}</p>
-          </div>
         </div>
       </section>
     </div>
