@@ -20,6 +20,15 @@ export default function ThinkingBlock({ content, isStreaming }: Props) {
     }
   }, [content])
 
+  // 思考完成后自动收回：流式结束（isStreaming true → false）时折叠，避免思考过程长期占据界面
+  const wasStreaming = useRef(isStreaming)
+  useEffect(() => {
+    if (wasStreaming.current && !isStreaming) {
+      setExpanded(false)
+    }
+    wasStreaming.current = isStreaming
+  }, [isStreaming])
+
   const toggle = useCallback(() => setExpanded(prev => !prev), [])
 
   if (!content) return null

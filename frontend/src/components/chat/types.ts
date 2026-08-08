@@ -16,6 +16,7 @@ export enum AgentEventType {
 // PhaseStatus 与 Go 端 agent.PhaseGate.Status() 的返回值对应
 export interface PhaseStatus {
   phase: string
+  mode?: string // "single" | "batch"
   called: Record<string, number>
   ready: boolean
   next?: string

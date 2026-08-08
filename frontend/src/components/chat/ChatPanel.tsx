@@ -239,17 +239,22 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         }
 
         // 构建文本段（合并 thinking + content）
+        // 固定 id：增量更新最后一条 text 段，避免每次事件新建 segment 导致 ThinkingBlock 重挂载、展开状态丢失
         if (apiStreamRef.content.length > 0 || apiStreamRef.thinking.length > 0) {
-          segments.push({
-            id: `api-text-${Date.now()}`,
-            type: 'text',
+          const textSegId = 'api-text'
+          const existing = segments.findIndex(s => s.id === textSegId)
+          const textSeg = {
+            id: textSegId,
+            type: 'text' as const,
             content: apiStreamRef.content,
             thinkingContent: apiStreamRef.thinking,
             thinkingDone: ev.type === 'done',
             isStreaming: ev.type === 'content',
-            toolName: '', toolId: '', toolStatus: 'completed',
+            toolName: '', toolId: '', toolStatus: 'completed' as const,
             displayText: '', activityKind: '', error: '',
-          })
+          }
+          if (existing >= 0) segments[existing] = textSeg
+          else segments.push(textSeg)
         }
 
         // 构建工具调用段

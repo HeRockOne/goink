@@ -23,6 +23,11 @@ export default function PhaseGateBar({ status, error }: Props) {
       <div className="flex items-center gap-2">
         <Shield className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span className="text-muted-foreground font-medium">阶段门禁</span>
+        {status.mode && (
+          <span className={`gate-mode-badge ${status.mode === 'batch' ? 'batch' : 'single'}`}>
+            {status.mode === 'batch' ? '批量' : '单章'}
+          </span>
+        )}
 
         <div className="flex items-center gap-1 ml-2">
           {PHASE_ORDER.map((phase, i) => {

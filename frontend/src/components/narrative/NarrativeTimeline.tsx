@@ -200,7 +200,19 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
     const refresh = (nid?: number) => {
       if (nid && nid !== novelId) return
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => { timer = null; invalidateCache(); loadContext(latestRef.current.activeChapterNum || snapshotRef.current) }, 300)
+      timer = setTimeout(async () => {
+        timer = null
+        invalidateCache()
+        // 优先用最新章节号拉上下文：写完新章后 current/past 卡片必须显示最新章，
+        // 否则会一直停留在用户选中的旧章锚点（recent 以锚点为基准往前取）
+        let ch = latestRef.current.activeChapterNum || 0
+        try {
+          const chs = await app.GetChapters(novelId)
+          const latest = Math.max(0, ...(chs ?? []).map((c: any) => c.chapter_number ?? 0))
+          if (latest > 0) ch = Math.max(ch, latest)
+        } catch { /* 保持原值 */ }
+        loadContext(ch)
+      }, 300)
     }
     const subs = [
       EventsOn('file:changed', (d: any) => refresh(d?.novel_id)),
@@ -208,7 +220,7 @@ const [rawOutlines, setRawOutlines] = useState<Record<number, string>>({})
       EventsOn('chat:session_created', () => refresh()),
     ]
     return () => { if (timer) clearTimeout(timer); subs.forEach(s => s?.()) }
-  }, [novelId, loadContext, invalidateCache])
+  }, [novelId, loadContext, invalidateCache, app])
 
   const snap = ctx?.writing_snapshot as any
   const effectiveChapter = snap?.last_chapter_num && activeChapterNum <= snap.last_chapter_num ? snap.last_chapter_num : activeChapterNum

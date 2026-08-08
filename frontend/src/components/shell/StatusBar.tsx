@@ -100,7 +100,12 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
       </div>
 
       {/* 中区：门禁阶段条（flex 中段，窄窗口自动截断不重叠） */}
-      <div className="flex-1 flex items-center justify-center min-w-0 px-3">
+      <div className="flex-1 flex items-center justify-center min-w-0 px-3 gap-2">
+        {gateStatus?.mode && (
+          <span className={`gate-mode-badge shrink-0 ${gateStatus.mode === 'batch' ? 'batch' : 'single'}`}>
+            {gateStatus.mode === 'batch' ? '批量' : '单章'}
+          </span>
+        )}
         {gateStatus?.phase && (
           <span className="gate-steps whitespace-nowrap overflow-hidden">
             {GATE_STEPS.map((p, i) => (

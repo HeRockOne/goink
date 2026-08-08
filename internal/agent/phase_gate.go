@@ -521,6 +521,7 @@ func (g *PhaseGate) StatusString() string {
 // PhaseStatus 事件数据，用于向前端报告阶段状态。
 type PhaseStatus struct {
 	Phase   string         `json:"phase"`
+	Mode    string         `json:"mode,omitempty"`
 	Called  map[string]int `json:"called"`
 	Ready   bool           `json:"ready"`
 	Next    string         `json:"next,omitempty"`
@@ -536,6 +537,7 @@ func (g *PhaseGate) Status() PhaseStatus {
 		return ps
 	}
 	ps.Phase = g.currentPhase
+	ps.Mode = g.mode
 	// 显示成功次数（require 只看成功）
 	for k, v := range g.successfulTools {
 		ps.Called[k] = v
