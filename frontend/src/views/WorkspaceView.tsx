@@ -25,6 +25,7 @@ import ImportProgressDialog from '@/components/novel/ImportProgressDialog'
 import ExportDialog from '@/components/export/ExportDialog'
 import ChatPanel from '@/components/chat/ChatPanel'
 import SettingsDialog from '@/components/settings/SettingsDialog'
+import GitHubLink from '@/components/shell/GitHubLink'
 import HelpDialog from '@/components/help/HelpDialog'
 import ProfileView from '@/components/profile/ProfileView'
 import GitCommitView from '@/components/git/GitCommitView'
@@ -456,6 +457,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           >
             {phaseGateEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
           </button>
+          <GitHubLink />
           <button
             onClick={() => setActivePanel('profile')}
             className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'profile' ? 'text-foreground' : ''}`}
