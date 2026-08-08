@@ -16,11 +16,16 @@ mode: always
 ## 流程
 
 单章：prepare → outline → write → review → maintain → prepare
-批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲）→ review → maintain → done
+批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → done
 
 > 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
 > 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
 > 把本章大纲锚定在上下文末尾再动笔，防止把别的章的大纲内容串进本章正文。write 阶段可回退 outline 修改大纲（loop）。
+
+> **批量状态实时性（迷你维护）**：每章 write 完成后立即执行"迷你维护"——只写不查，把本章事实写入 DB
+> （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
+> 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
+> 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
 
 ## 卷结构（长篇必建）
 

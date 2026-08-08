@@ -830,6 +830,8 @@ func maintainPlays(ch int, nextPhase string) []play {
 // → review（统一一次）→ maintain（统一一次）→ done。
 // 与单章连续 N 轮的关键差异：prepare/review/maintain 各只做一次，轮边界大幅减少，
 // 历史跨章连续累积，NS 落库收益被放大。
+// 状态实时性（业界 delta 结算）：每章 write 后紧跟迷你维护（只写不查），
+// 让下一章的 get_writing_context 读到最新角色/伏笔状态；整批末尾仍保留完整 maintain 收尾。
 func batchGatePlays(chapters int) []play {
 	var plays []play
 	plays = append(plays, preparePlays(1)...)
@@ -855,20 +857,38 @@ func batchGatePlays(chapters int) []play {
 
 	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
 	// （门禁 require_reads 按阶段计，write 阶段只进入一次；后续章复用上下文）。
+	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
+		plays = append(plays, miniMaintainPlays(ch)...)
 	}
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
 
 	// review：整批统一一次（run_subagent + 修复）
 	plays = append(plays, reviewPlays(1)...)
-	// maintain：整批统一一次（13 项清单），batch 出口是 done
+	// maintain：整批统一一次（13 项清单收尾核对），batch 出口是 done
 	plays = append(plays, maintainPlays(chapters, "done")...)
 	return plays
+}
+
+// miniMaintainPlays 迷你维护（业界 delta 结算）：只写不查——
+// 本章事实立即入 DB（场景/角色状态/新伏笔/物品流转/关系），
+// 不调用 get_*/search_* 查询（批量下上下文已有本章正文，无需确认查询）。
+// 解决"批量末尾才 maintain 导致第 N 章读到第 1 章状态"的坑，
+// 同时不产生查询类轮边界（写操作是增量，前缀连续）。
+func miniMaintainPlays(ch int) []play {
+	return []play{
+		{tool: "create_scene", args: fmt.Sprintf(`{"chapter_id":%d,"scene_number":1,"title":"秘境初探","summary":"陈昊进入秘境遭遇仇敌","location_id":5,"character_ids":[1]}`, ch), result: "已创建"},
+		{tool: "update_character", args: `{"character_id":1,"status":"突破金丹","location_id":5}`, result: "已更新"},
+		{tool: "create_timeline_entry", args: `{"title":"仇敌结怨","category":"foreshadowing","target_chapter":12,"importance":"high"}`, result: "已创建"},
+		{tool: "update_timeline_entry", args: fmt.Sprintf(`{"entry_id":5,"resolved_chapter_id":%d}`, ch), result: "已回收伏笔"},
+		{tool: "create_item_occurrence", args: fmt.Sprintf(`{"item_id":3,"chapter_id":%d,"action":"玉佩易主给林雪"}`, ch), result: "已记录物品流转"},
+		{tool: "update_writing_snapshot", args: fmt.Sprintf(`{"last_chapter_num":%d,"summary":"第 %d 章完成"}`, ch, ch), result: "已更新"},
+	}
 }
 
 // writePlaysLean 批量 write 循环第 2 章起：技能已在上下文（阶段内不重复加载），
