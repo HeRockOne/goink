@@ -27,7 +27,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 ```
 单章：prepare → outline → write → review → maintain → prepare
-批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → done → prepare
+批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
 ```
 
 > 批量模式 `[outline ⇄ write × N 章]` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
@@ -43,6 +43,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 | 阶段 | require | 说明 |
 |------|---------|------|
+| init | get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences | 开书：7 项查询确认现状（新书另写 book-outline.md 总纲） |
 | prepare | get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences | 9 项必查，全量状态必须加载 |
 | outline | edit | 大纲必须写入 outlines/NNN.md |
 | write | edit, get_chapter_list | 正文必须写入 chapters/NNN.md + 字数校验前置检查 |
@@ -80,7 +81,7 @@ next: outline
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
 
-配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing、maintain anti-repetition+foreshadow-cycle（用 `read_required(skills="...")` 加载，技能名从门禁配置读取，不硬编码）。
+配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（用 `read_required(skills="...")` 加载，技能名从门禁配置读取，不硬编码）。
 
 ## 故障排查
 
@@ -96,4 +97,4 @@ next: outline
 
 - 设置页或标题栏盾牌按钮（Shield/ShieldOff）可开关门禁
 - 开启时：严格按阶段执行；关闭时：AI 可自由调用所有工具
-- 新会话自动从 prepare 开始（current_phase 为空时强制 prepare），之后由 AI 主动 set_phase 推进
+- 新会话自动从配置的第一个阶段开始（默认 init，开书流程；已有小说的会话快速查 7 项确认现状后切 prepare），之后由 AI 主动 set_phase 推进

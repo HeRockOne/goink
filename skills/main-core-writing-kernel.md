@@ -16,7 +16,7 @@ mode: always
 ## 流程
 
 单章：prepare → outline → write → review → maintain → prepare
-批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → done
+批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
 
 > 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
 > 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
@@ -96,7 +96,7 @@ mode: always
      - 关键场景现场描写 ≥300 字 → main-tech-scene-beats
    - 字数规则由 get_chapter_list 代码校验，无需读 main-tech-word-count-calibration
 4. **edit**(chapters/NNN.md)（required）— 写正文
-5. 校验字数（2500-4000）
+5. 校验字数（2400-4000，以设置中 min/max 为准，get_chapter_list 代码校验）
 6. 记录关键物品出现 → create_item_occurrence
 7. **set_phase("review")**
 
@@ -142,7 +142,7 @@ mode: always
 | 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹，格式见 anti-repetition skill：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行。必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
-## 阶段技能表（34 个内置 skill 全量调度）
+## 阶段技能表（30 个内置 skill 全量调度）
 
 > 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate）由用户 `/` 触发，不在此表。
 
@@ -164,7 +164,7 @@ mode: always
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
 - 每章至少1个爽点（对照 main-tech-shuangdian-pacing）；章末必有钩子且类型不与前2章重复
 - 禁止功能报告体（连续3段无感官描写）；禁止散文体
-- 每章35-55段，每段60-80字，总字数2500-4000
+- 每章35-55段，每段60-80字，总字数2400-4000（以设置为准）
 - 字数不足禁止转阶段
 - 大战之间必须插非战斗章（对照 main-tech-climax-scene）
 - 完结前检查伏笔回收率≥90%（对照 main-tech-foreshadow-cycle / main-tech-book-completion）
