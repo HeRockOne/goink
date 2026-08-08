@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -259,6 +260,11 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		ContextClearEnabled:  a.settings.ContextClearEnabled,
 		ContextClearKeep:     a.settings.ContextClearKeep,
 		Broadcast:            a.BroadcastChatEvent, // 双端同步：agent 事件广播到移动端
+	}
+	// 批量创作意图 → batch 门禁模式（outline 一次出 N 章大纲，write 循环 + 每章迷你维护）
+	if isBatchCreationIntent(input.Message) {
+		runOpts.PhaseMode = "batch"
+		a.logger.Info("检测到批量创作意图，启用 batch 门禁模式", "session_id", sess.SessionID)
 	}
 
 	// API 模式需要 EventCallback 转发事件；Wails 模式让 agent.go 自己 emit 到 "agent:${turnID}"
@@ -616,9 +622,19 @@ func isChapterCreationIntent(msg string) bool {
 	return true // 永远返回 true，门禁始终激活
 }
 
-// isBatchCreationIntent 检测用户消息是否包含批量创作意图（保留备用，当前未使用）。
+// isBatchCreationIntent 检测用户消息是否包含批量创作意图。
+// 触发词：批量/连写/一口气写/连续写/同时写 + N 章/几章/多章。
+// 命中时 PhaseMode 切换为 "batch"，加载 batch 门禁配置
+// （outline 一次出 N 章大纲，write 循环 + 每章迷你维护 + 末尾统一 review/maintain）。
 func isBatchCreationIntent(msg string) bool {
-	return false
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return false
+	}
+	hasBatchVerb := regexp.MustCompile(`批量|连写|连续写|一口气写|一次性写|同时写`).MatchString(msg)
+	hasChapterCount := regexp.MustCompile(`\d+\s*章|几章|多章|五章|十章`).MatchString(msg)
+	hasWriteVerb := regexp.MustCompile(`写|创作|出`).MatchString(msg)
+	return hasBatchVerb && hasChapterCount && hasWriteVerb
 }
 
 // ChatFromAPI 供 API 服务器调用，通过 channel 推送事件。
