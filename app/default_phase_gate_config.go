@@ -1,9 +1,6 @@
 package app
 
 import (
-	"log/slog"
-	"strings"
-
 	"gorm.io/gorm"
 
 	"novel/internal/config"
@@ -123,75 +120,17 @@ next: prepare
 
 // EnsurePhaseGateConfigSeeded 首次启动时写入默认门禁配置，返回最新的设置对象。
 // 已存在配置（用户改过）则跳过，避免覆盖用户自定义。
-// 对旧版本配置做增量升级：batch write 阶段缺少迷你维护工具时自动合并（不覆盖用户其他修改）。
 func EnsurePhaseGateConfigSeeded(db *gorm.DB) (*config.AppSettings, error) {
 	s, err := config.LoadSettings(db)
 	if err != nil {
 		return nil, err
 	}
-	if s.PhaseGateConfig == "" {
-		s.PhaseGateConfig = defaultPhaseGateConfig
-		if err := config.SaveSettings(db, s); err != nil {
-			return nil, err
-		}
+	if s.PhaseGateConfig != "" {
 		return s, nil
 	}
-	// 增量升级：旧配置的 batch write 阶段缺迷你维护工具（tools 或 require）时补上
-	if !strings.Contains(s.PhaseGateConfig, "create_item_occurrence, update_writing_snapshot") ||
-		!strings.Contains(s.PhaseGateConfig, "require: edit, get_chapter_list, read, read_required, create_scene") {
-		// 仅在 batch write 阶段块中补迷你维护工具（定位 "mode: batch" 后的 write 块）
-		updated := upgradeBatchWriteTools(s.PhaseGateConfig)
-		if updated != s.PhaseGateConfig {
-			s.PhaseGateConfig = updated
-			if err := config.SaveSettings(db, s); err != nil {
-				return nil, err
-			}
-			slog.Info("门禁配置已增量升级：batch write 阶段补充迷你维护工具")
-		}
+	s.PhaseGateConfig = defaultPhaseGateConfig
+	if err := config.SaveSettings(db, s); err != nil {
+		return nil, err
 	}
 	return s, nil
-}
-
-// upgradeBatchWriteTools 在 batch 的 write 阶段 tools 行追加迷你维护工具（幂等）。
-// 同时把迷你维护工具加入 require（阶段内累计：整批 write 循环中必须调用过这些工具，
-// 未调用不能转 review——保证状态实时结算不会整批漏掉）。
-func upgradeBatchWriteTools(cfg string) string {
-	const miniTools = "create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot"
-	lines := strings.Split(cfg, "\n")
-	out := make([]string, 0, len(lines))
-	inBatch := false
-	inWrite := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "mode: batch") {
-			inBatch = true
-		}
-		if strings.HasPrefix(trimmed, "mode:") && !strings.HasPrefix(trimmed, "mode: batch") {
-			inBatch = false
-			inWrite = false
-		}
-		if inBatch {
-			if strings.HasPrefix(trimmed, "phase: write") {
-				inWrite = true
-			} else if strings.HasPrefix(trimmed, "phase:") {
-				inWrite = false
-			}
-		}
-		// batch write 块内的 tools 行：追加迷你维护工具
-		if inBatch && inWrite && strings.HasPrefix(trimmed, "tools:") {
-			if !strings.Contains(line, "create_item_occurrence") {
-				out = append(out, line+", "+miniTools)
-				continue
-			}
-		}
-		// batch write 块内的 require 行：追加迷你维护工具
-		if inBatch && inWrite && strings.HasPrefix(trimmed, "require:") {
-			if !strings.Contains(line, "create_item_occurrence") {
-				out = append(out, line+", "+miniTools)
-				continue
-			}
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
 }
