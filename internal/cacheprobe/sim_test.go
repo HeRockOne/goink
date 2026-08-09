@@ -29,8 +29,12 @@ func TestPrefixChain_NowModeContinuous(t *testing.T) {
 	b2 := promptBytes(req2)
 
 	lcp := longestCommonPrefix(b1, b2)
-	// 公共前缀应覆盖：固定前缀 + origHist + 第1问 + NS（req1 的全部消息，不含末尾 tools）
-	prefix := []byte(`{"model":"goink-sim","messages":[`)
+	// 公共前缀应覆盖：tools + 固定前缀 + origHist + 第1问 + NS（req1 的全部，除末尾闭合）
+	// 前缀：{"tools":<tools>,"model":"goink-sim","messages":[
+	toolsJSON, _ := json.Marshal(toolDefs)
+	prefix := []byte(`{"tools":`)
+	prefix = append(prefix, toolsJSON...)
+	prefix = append(prefix, []byte(`,"model":"goink-sim","messages":[`)...)
 	expected := len(prefix)
 	msgs := append(append([]map[string]any{}, origHist...), userMsg("第 1 问"), ns)
 	for i, m := range msgs {

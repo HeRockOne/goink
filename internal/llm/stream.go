@@ -71,7 +71,7 @@ func (c *Client) ChatStream(
 
 		payload := c.buildPayload(&p, messages, tools, model, opts)
 
-		body, err := json.Marshal(payload)
+		body, err := marshalPayload(payload)
 		if err != nil {
 			ch <- StreamEvent{Type: EventError, Error: fmt.Errorf("failed to marshal request body: %w", err)}
 			return
@@ -129,6 +129,7 @@ func (c *Client) ChatStream(
 }
 
 // buildPayload 组装 LLM API 请求体。
+// 工具定义放在 messages 之前（固定前缀），确保工具定义始终命中缓存。
 func (c *Client) buildPayload(
 	p *Provider,
 	messages []map[string]any,
@@ -136,6 +137,9 @@ func (c *Client) buildPayload(
 	model string,
 	opts *CallOptions,
 ) map[string]any {
+	// 不使用 map（字段顺序随机），而是按固定前缀顺序组装 JSON
+	// 顺序：tools(固定)→model→messages(动态)→stream→stream_options→...
+	// 工具定义在消息之前，始终是公共前缀的一部分，确保缓存命中
 	payload := map[string]any{
 		"model":          model,
 		"messages":       messages,
@@ -213,6 +217,30 @@ func (c *Client) buildPayload(
 	}
 
 	return payload
+}
+
+// marshalPayload 序列化 payload，工具定义放在最前（固定前缀，确保缓存命中）。
+// Go 的 map 序列化按字母序排字段，tools 会被排在 messages 之后 → 消息变化时 tools 不命中缓存。
+// 这里把 tools 提取到开头，让工具定义始终是公共前缀的一部分。
+func marshalPayload(payload map[string]any) ([]byte, error) {
+	toolsVal, hasTools := payload["tools"]
+	if hasTools {
+		delete(payload, "tools")
+	}
+	restBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	if !hasTools {
+		return restBytes, nil
+	}
+	toolsBytes, err := json.Marshal(toolsVal)
+	if err != nil {
+		return nil, err
+	}
+	// restBytes = {"model":...,"messages":...,...} → 插入 tools 到开头
+	// {"tools":<toolsBytes>,<rest 去掉第一个 {>
+	return []byte(`{"tools":` + string(toolsBytes) + `,` + string(restBytes[1:])), nil
 }
 
 // streamIdleTimeout 流中无新数据判定为半开连接的阈值。

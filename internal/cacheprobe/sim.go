@@ -208,14 +208,22 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	}
 
 	lcp := longestCommonPrefix(c.prevBytes, reqBytes)
-	// 由字节公共前缀反推覆盖了多少条消息：逐条累加字节长度，直到超出 lcp
+	// 工具定义在最前（固定前缀）：只要 lcp 覆盖到 tools 前缀，tools 即命中。
+	// 前缀：{"tools":<toolsJSON>,"model":"goink-sim","messages":[
+	toolsJSON, _ := json.Marshal(toolDefs)
+	toolsPrefix := []byte(`{"tools":`)
+	toolsPrefix = append(toolsPrefix, toolsJSON...)
+	// toolsN 命中：lcp 至少覆盖到 tools 前缀之后（含 tools 本身）
 	hitMsgs := int64(0)
-	// 前缀：{"model":"goink-sim","messages":[
-	prefix := []byte(`{"model":"goink-sim","messages":[`)
-	acc := len(prefix)
+	if lcp >= len(toolsPrefix) {
+		hitMsgs += toolsN
+	}
+	// 消息前缀：tools 前缀 + `,"model":"goink-sim","messages":[`
+	msgPrefix := append(append([]byte{}, toolsPrefix...), []byte(`,"model":"goink-sim","messages":[`)...)
+	acc := len(msgPrefix)
 	if acc > lcp {
-		// 连前缀都没完全命中（正常不会发生，前缀固定）
-		hitMsgs = 0
+		// 连消息前缀都没完全命中（正常不会发生，前缀固定）
+		// tools 已计入，消息不命中
 	} else {
 		for _, m := range messages {
 			b, err := json.Marshal(m)
@@ -227,14 +235,6 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 				break
 			}
 			hitMsgs += int64(msgTokens(m))
-		}
-		// 若所有消息都被覆盖，后缀（含末尾 tools）也命中，toolsN 计入 hit
-		// 但需判断后缀是否也被 lcp 覆盖：累加后缀长度后若仍 <= lcp，则 tools 命中
-		suffix := []byte(`],"stream":true,"stream_options":{"include_usage":true},"tools":`)
-		toolsJSON, _ := json.Marshal(toolDefs)
-		acc += len(suffix) + len(toolsJSON) + 1 // 后缀 + tools + }
-		if acc <= lcp {
-			hitMsgs += toolsN
 		}
 	}
 
@@ -322,17 +322,18 @@ func msgJSON(m map[string]any) []byte {
 func promptBytes(messages []map[string]any) []byte {
 	toolsJSON, _ := cachedToolsJSON()
 	var buf bytes.Buffer
-	// 与真实 buildPayload 完全一致：{"model":"goink-sim","messages":[...],"stream":true,"stream_options":{"include_usage":true},"tools":[...]}
-	buf.WriteString(`{"model":"goink-sim","messages":[`)
+	// 与真实 buildPayload + marshalPayload 一致：工具定义在最前（固定前缀），然后 messages 等
+	// {"tools":[...],"model":"goink-sim","messages":[...],"stream":true,"stream_options":{...}}
+	buf.WriteString(`{"tools":`)
+	buf.Write(toolsJSON)
+	buf.WriteString(`,"model":"goink-sim","messages":[`)
 	for i, m := range messages {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
 		buf.Write(msgJSON(m))
 	}
-	buf.WriteString(`],"stream":true,"stream_options":{"include_usage":true},"tools":`)
-	buf.Write(toolsJSON)
-	buf.WriteByte('}')
+	buf.WriteString(`],"stream":true,"stream_options":{"include_usage":true}}`)
 	return buf.Bytes()
 }
 
