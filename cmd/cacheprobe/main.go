@@ -7,6 +7,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -15,17 +16,21 @@ import (
 )
 
 func main() {
-	args := os.Args[1:]
+	gateRounds, shortQA, batchChapters, cleanRetain := 5, 5, 5, 0
+	cachePrice := flag.Float64("cache", 0.02, "缓存命中价格（元/百万 token）")
+	inputPrice := flag.Float64("input", 1.0, "输入（未命中）价格（元/百万 token）")
+	outputPrice := flag.Float64("output", 2.0, "输出价格（元/百万 token）")
+	flag.Parse()
+
+	args := flag.Args()
 	if len(args) > 0 && args[0] == "matrix" {
-		runMatrix()
+		runMatrix(*cachePrice, *inputPrice)
 		return
 	}
 	if len(args) > 0 && args[0] == "compare" {
-		runCompare()
+		runCompare(*cachePrice, *inputPrice, *outputPrice)
 		return
 	}
-
-	gateRounds, shortQA, batchChapters, cleanRetain := 5, 5, 5, 0
 	if len(args) > 0 {
 		fmt.Sscanf(args[0], "%d", &gateRounds)
 	}
@@ -49,13 +54,14 @@ func main() {
 	fmt.Println(" cacheprobe：缓存命中对照（消息级前缀模拟，tiktoken 精确计数）")
 	fmt.Println(" 三协议：legacy(NS不落库) / now(NS落库) / clean(NS落库+skill全文清理)")
 	fmt.Println(" 场景：一个真实对话窗口——短对话与单章/批量创作交替，一条历史贯穿")
+	fmt.Printf(" 价格：缓存 ¥%.3f/M · 输入 ¥%.3f/M · 输出 ¥%.3f/M（-cache/-input/-output 可改）\n", *cachePrice, *inputPrice, *outputPrice)
 	fmt.Println("================================================================")
 
 	for _, s := range res.Scenarios {
 		fmt.Printf("\n=== %s ===\n", s.Name)
-		fmt.Printf("  legacy  hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", s.LegacyHit, s.LegacyMiss, s.LegacyHit+s.LegacyMiss, pct(s.LegacyHit, s.LegacyMiss))
-		fmt.Printf("  now     hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", s.NowHit, s.NowMiss, s.NowHit+s.NowMiss, pct(s.NowHit, s.NowMiss))
-		fmt.Printf("  clean   hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", s.CleanHit, s.CleanMiss, s.CleanHit+s.CleanMiss, pct(s.CleanHit, s.CleanMiss))
+		fmt.Printf("  legacy  hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", s.LegacyHit, s.LegacyMiss, s.LegacyOutput, pct(s.LegacyHit, s.LegacyMiss), cost(s.LegacyHit, s.LegacyMiss, s.LegacyOutput, *cachePrice, *inputPrice, *outputPrice))
+		fmt.Printf("  now     hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", s.NowHit, s.NowMiss, s.NowOutput, pct(s.NowHit, s.NowMiss), cost(s.NowHit, s.NowMiss, s.NowOutput, *cachePrice, *inputPrice, *outputPrice))
+		fmt.Printf("  clean   hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", s.CleanHit, s.CleanMiss, s.CleanOutput, pct(s.CleanHit, s.CleanMiss), cost(s.CleanHit, s.CleanMiss, s.CleanOutput, *cachePrice, *inputPrice, *outputPrice))
 		// now vs clean：总输入 token（真实成本口径）
 		nowTotal := s.NowHit + s.NowMiss
 		cleanTotal := s.CleanHit + s.CleanMiss
@@ -67,9 +73,9 @@ func main() {
 	}
 
 	fmt.Printf("\n=== 汇总 ===\n")
-	fmt.Printf("  legacy  hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", res.TotalLegacyHit, res.TotalLegacyMiss, res.TotalLegacyHit+res.TotalLegacyMiss, pct(res.TotalLegacyHit, res.TotalLegacyMiss))
-	fmt.Printf("  now     hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", res.TotalNowHit, res.TotalNowMiss, res.TotalNowHit+res.TotalNowMiss, pct(res.TotalNowHit, res.TotalNowMiss))
-	fmt.Printf("  clean   hit=%12d miss=%10d 总输入=%12d 命中率=%5.1f%%\n", res.TotalCleanHit, res.TotalCleanMiss, res.TotalCleanHit+res.TotalCleanMiss, pct(res.TotalCleanHit, res.TotalCleanMiss))
+	fmt.Printf("  legacy  hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", res.TotalLegacyHit, res.TotalLegacyMiss, res.TotalLegacyOutput, pct(res.TotalLegacyHit, res.TotalLegacyMiss), cost(res.TotalLegacyHit, res.TotalLegacyMiss, res.TotalLegacyOutput, *cachePrice, *inputPrice, *outputPrice))
+	fmt.Printf("  now     hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", res.TotalNowHit, res.TotalNowMiss, res.TotalNowOutput, pct(res.TotalNowHit, res.TotalNowMiss), cost(res.TotalNowHit, res.TotalNowMiss, res.TotalNowOutput, *cachePrice, *inputPrice, *outputPrice))
+	fmt.Printf("  clean   hit=%12d miss=%10d out=%10d 命中率=%5.1f%% 成本¥%.4f\n", res.TotalCleanHit, res.TotalCleanMiss, res.TotalCleanOutput, pct(res.TotalCleanHit, res.TotalCleanMiss), cost(res.TotalCleanHit, res.TotalCleanMiss, res.TotalCleanOutput, *cachePrice, *inputPrice, *outputPrice))
 	nowTotal := res.TotalNowHit + res.TotalNowMiss
 	cleanTotal := res.TotalCleanHit + res.TotalCleanMiss
 	if nowTotal > 0 {
@@ -77,8 +83,13 @@ func main() {
 	}
 }
 
+// cost 按价格计算总成本（元）。价格单位：元/百万 token。
+func cost(hit, miss, out int64, cachePrice, inputPrice, outputPrice float64) float64 {
+	return float64(hit)*cachePrice/1e6 + float64(miss)*inputPrice/1e6 + float64(out)*outputPrice/1e6
+}
+
 // runMatrix 边界矩阵：会话结构 × 保留窗口，找 clean 的收益拐点。
-func runMatrix() {
+func runMatrix(cachePrice, inputPrice float64) {
 	res, err := cacheprobe.RunMatrix()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "矩阵模拟失败:", err)
@@ -86,7 +97,7 @@ func runMatrix() {
 	}
 	fmt.Println("================================================================")
 	fmt.Println(" clean 边界矩阵：会话结构 × 保留窗口（-1=now 不清理，0=全清，N=保留N条）")
-	fmt.Println(" 指标：总输入降幅% / 命中率% / 成本¥（hit×0.02 + miss×1，DeepSeek V4-Flash/mimo 同价）")
+	fmt.Printf(" 指标：总输入降幅%% / 命中率%% / 成本¥（hit×%.2f + miss×%.2f，输入口径）\n", cachePrice, inputPrice)
 	fmt.Println("================================================================")
 
 	fmt.Printf("\n%-22s %-24s %-24s %-24s %-24s %-24s\n", "会话结构", "retain=-1(now)", "retain=0", "retain=1", "retain=3", "retain=5")
@@ -102,14 +113,14 @@ func runMatrix() {
 }
 
 // runCompare 同章数不同模式对比：单章/批量 × 是否清理。
-func runCompare() {
+func runCompare(cachePrice, inputPrice, outputPrice float64) {
 	res, err := cacheprobe.CompareModes()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "对比模拟失败:", err)
 		os.Exit(1)
 	}
 	fmt.Println("================================================================")
-	fmt.Println(" 创作模式对比（同 4 章产出,真实价 hit×0.02 + miss×1）")
+	fmt.Printf(" 创作模式对比（同 4 章产出,成本口径 hit×%.2f + miss×%.2f，输入）\n", cachePrice, inputPrice)
 	fmt.Println("================================================================")
 	fmt.Printf("\n%-28s %12s %10s %9s %10s %10s\n", "模式", "总输入", "miss", "命中率", "成本¥", "降幅")
 	fmt.Println(strings.Repeat("-", 82))

@@ -113,9 +113,9 @@ func (a *App) GetTokenUsageTrend(days int) ([]DailyTokenUsage, error) {
 		acc.comp += comp
 	}
 
-	cachePrice := 0.27
-	inputPrice := 1.35
-	outputPrice := 8.1
+	cachePrice := 0.02
+	inputPrice := 1.0
+	outputPrice := 2.0
 	if s, err := config.LoadSettings(a.db); err == nil && s != nil {
 		cachePrice = s.CachePrice
 		inputPrice = s.PriceInput

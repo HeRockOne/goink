@@ -57,8 +57,8 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 		return &CacheSimResult{NowCost: -1, LegacyCost: -1} // 失败标记
 	}
 
-	// 价格：从设置读（ContextRing 同源）
-	inputPrice, outputPrice, cachePrice := 1.35, 8.1, 0.27
+	// 价格：从设置读（ContextRing 同源），默认 DeepSeek 价（0.02/1/2，元/百万 token）
+	inputPrice, outputPrice, cachePrice := 1.0, 2.0, 0.02
 	if s, err := config.LoadSettings(a.db); err == nil {
 		if s.PriceInput > 0 {
 			inputPrice = s.PriceInput
@@ -72,7 +72,7 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 	}
 
 	res := &CacheSimResult{}
-	toScenario := func(name string, nH, nM, lH, lM int64, outTokens int64) CacheSimScenario {
+	toScenario := func(name string, nH, nM, lH, lM int64, nOut, lOut int64) CacheSimScenario {
 		return CacheSimScenario{
 			Name:          name,
 			NowHit:        nH, NowMiss: nM,
@@ -80,20 +80,12 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 			NowHitRate:    hitRate(nH, nM),
 			LegacyHitRate: hitRate(lH, lM),
 			MissSavePct:   missSave(nM, lM),
-			NowCost:       costOf(nH, nM, outTokens, cachePrice, inputPrice, outputPrice),
-			LegacyCost:    costOf(lH, lM, outTokens, cachePrice, inputPrice, outputPrice),
+			NowCost:       costOf(nH, nM, nOut, cachePrice, inputPrice, outputPrice),
+			LegacyCost:    costOf(lH, lM, lOut, cachePrice, inputPrice, outputPrice),
 		}
 	}
-	// 每个场景的输出 token 估算（~3K/轮）。混合窗口场景 = 单章 + 短对话 + 批量章数之和
-	estOutputPerRound := int64(3000)
-	var scOut []int64
-	scOut = append(scOut, estOutputPerRound*int64(gateRounds+shortQARounds+batchChapters))
-	for i, s := range raw.Scenarios {
-		out := estOutputPerRound
-		if i < len(scOut) && scOut[i] > 0 {
-			out = scOut[i]
-		}
-		res.Scenarios = append(res.Scenarios, toScenario(s.Name, s.NowHit, s.NowMiss, s.LegacyHit, s.LegacyMiss, out))
+	for _, s := range raw.Scenarios {
+		res.Scenarios = append(res.Scenarios, toScenario(s.Name, s.NowHit, s.NowMiss, s.LegacyHit, s.LegacyMiss, s.NowOutput, s.LegacyOutput))
 	}
 	res.TotalNowHit = raw.TotalNowHit
 	res.TotalNowMiss = raw.TotalNowMiss
@@ -103,14 +95,9 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 	res.LegacyHitRate = hitRate(raw.TotalLegacyHit, raw.TotalLegacyMiss)
 	res.MissSavePct = missSave(raw.TotalNowMiss, raw.TotalLegacyMiss)
 
-	// 成本估算：hit×cache价 + miss×input价 + 输出按总量估算（每轮输出 ~2-4K，取 3K/轮 × 总轮数）
-	rounds := int64(gateRounds + shortQARounds + batchChapters)
-	if rounds == 0 {
-		rounds = 1
-	}
-	outTokens := estOutputPerRound * rounds
-	res.LegacyCost = costOf(res.TotalLegacyHit, res.TotalLegacyMiss, outTokens, cachePrice, inputPrice, outputPrice)
-	res.NowCost = costOf(res.TotalNowHit, res.TotalNowMiss, outTokens, cachePrice, inputPrice, outputPrice)
+	// 成本估算：hit×cache价 + miss×input价 + 输出（模拟器累计的 assistant 消息字节，含正文/思考）
+	res.LegacyCost = costOf(res.TotalLegacyHit, res.TotalLegacyMiss, raw.TotalLegacyOutput, cachePrice, inputPrice, outputPrice)
+	res.NowCost = costOf(res.TotalNowHit, res.TotalNowMiss, raw.TotalNowOutput, cachePrice, inputPrice, outputPrice)
 
 	return res
 }

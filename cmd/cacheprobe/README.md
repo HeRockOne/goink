@@ -15,11 +15,18 @@ DeepSeek/商汤的磁盘缓存按"请求的公共前缀"匹配（官方文档：
 2. **token 统计**：每条消息用 **tiktoken（o200k_base）精确计数**（`llm.CountMessageTokens`，
    含 content/tool_calls/tool_call_id/reasoning），tools 定义作为固定前缀消息计数
 3. 命中 = 公共前缀覆盖的消息 token 和；miss = 其余消息 token 和
-4. **消息级缓存**（2026-08-08）：消息 token 数/序列化字节/toolDefs 均缓存，完整门禁
+4. **输出 token 统计**：相对上次请求新增的 assistant 消息字节（含 reasoning_content）——
+   与输入侧同源，覆盖正文（edit arguments）/文本回答/子代理报告/思考
+5. **消息级缓存**（2026-08-08）：消息 token 数/序列化字节/toolDefs 均缓存，完整门禁
    5 轮模拟 365s → **13.8s**（26 倍加速）
 
 关键前提（已在代码中验证）：provider 缓存作用于**解析后的 token 前缀**（tools 定义
 转 system 前缀在最前、消息按序追加在末尾），而非原始 JSON body 的字节顺序。
+
+> 2026-08-09：assistant 消息带 reasoning_content（思考模式），长度按门禁阶段均值
+> （init 556/prepare 822/outline 971/write 322/review 1558/maintain 364 字符，统计自
+> 真实 DB thinking_content 按 set_phase 边界分阶段）；set_phase 消息顺序对齐真实
+> agent.go（技能注入+reminder 在 assistant 落库前）；成本 = hit×cache + miss×input + out×output。
 
 ## 用法
 
@@ -29,9 +36,11 @@ $env:GOINK_DATA_DIR = "D:\Goink"
 go run ./cmd/cacheprobe            # 默认：单章 5 轮 + 短对话穿插 5 轮 + 批量 5 章
 go run ./cmd/cacheprobe 5 3        # 单章 5 轮 + 短对话穿插 3 轮 + 批量 5 章
 go run ./cmd/cacheprobe 5 3 5      # 显式指定批量 5 章
+# 价格参数（元/百万 token，默认 DeepSeek：缓存 0.02 / 输入 1 / 输出 2）
+go run ./cmd/cacheprobe -cache 0.02 -input 1 -output 2 5 5 5
 ```
 
-CLI 参数：`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]`
+CLI 参数：`go run ./cmd/cacheprobe [-cache ¥] [-input ¥] [-output ¥] [单章轮数] [短对话穿插轮数] [批量章数]`
 
 ## 场景：一个真实对话窗口（混合会话）
 

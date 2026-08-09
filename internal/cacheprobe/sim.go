@@ -50,6 +50,7 @@ type TokenCache struct {
 	prevMsgs  []map[string]any
 	hit       int64 // token
 	miss      int64 // token
+	output    int64 // LLM 输出 token（新增 assistant 消息，与输入侧同源）
 	// transform 发送前变换（clean 方案用）：每次 Step 前对完整消息序列做处理，
 	// 如把已消费的 skill 全文替换为占位符。变换后字节才参与前缀判定——
 	// 这样"滑出保留窗口"是唯一前缀断裂点，连续性好。
@@ -242,6 +243,17 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	miss := total - hit
 	c.hit += hit
 	c.miss += miss
+	// output 累计：相对上次请求新增的 assistant 消息 = 本次 LLM 调用的输出字节。
+	// 与输入侧同源：同一段字节既作为历史输入（前缀命中判定）也作为输出计费，
+	// 覆盖正文（edit arguments）、文本回答、子代理报告、thinking（reasoning_content）。
+	// 消息 append-only 追加，transform（clean 占位符）不改变条数，diff 安全。
+	if c.prevMsgs != nil && len(messages) > len(c.prevMsgs) {
+		for _, m := range messages[len(c.prevMsgs):] {
+			if role, _ := m["role"].(string); role == "assistant" {
+				c.output += int64(msgTokens(m))
+			}
+		}
+	}
 	c.prevBytes = reqBytes
 	c.prevMsgs = append([]map[string]any{}, messages...)
 	return hit, miss
@@ -253,9 +265,13 @@ func (c *TokenCache) Reset() {
 	c.prevMsgs = nil
 	c.hit = 0
 	c.miss = 0
+	c.output = 0
 }
 
 func (c *TokenCache) TotalTokens() int64 { return c.hit + c.miss }
+
+// Output 返回累计的 LLM 输出 token（assistant 消息字节）。
+func (c *TokenCache) Output() int64 { return c.output }
 
 func longestCommonPrefix(a, b []byte) int {
 	n := len(a)
@@ -345,16 +361,13 @@ func sysMsg(content string) map[string]any {
 func userMsg(content string) map[string]any {
 	return map[string]any{"role": "user", "content": content}
 }
-func asstText(content string) map[string]any {
-	return map[string]any{"role": "assistant", "content": content}
-}
 // asstToolCall 构造 assistant 工具调用消息，对齐真实 ToAPIFormat：
-// 恒有 reasoning_content（空串，thinking 关闭），无 tool_displays（真实 API 不发送）。
+// 恒有 reasoning_content（思考模式开启时非空），无 tool_displays（真实 API 不发送）。
 func asstToolCall(id, name, args string) map[string]any {
 	return map[string]any{
-		"role":             "assistant",
-		"content":          "",
-		"reasoning_content": "",
+		"role":              "assistant",
+		"content":           "",
+		"reasoning_content": thinkingText(thinkingForPhase(simPhase)),
 		"tool_calls": []any{map[string]any{
 			"id": id, "type": "function",
 			"function": map[string]any{"name": name, "arguments": args},
@@ -362,10 +375,59 @@ func asstToolCall(id, name, args string) map[string]any {
 	}
 }
 
+// asstText 构造 assistant 纯文本消息（思考模式开启时同样带 reasoning_content）。
+func asstText(content string) map[string]any {
+	return map[string]any{
+		"role":              "assistant",
+		"content":           content,
+		"reasoning_content": thinkingText(thinkingForPhase(simPhase)),
+	}
+}
+
 func toolMsg(id, name, content string) map[string]any {
 	return map[string]any{
 		"role": "tool", "tool_call_id": id, "name": name, "content": content,
 	}
+}
+
+// simPhase 当前模拟阶段（决定 assistant 消息 reasoning_content 长度）。
+// 初始为开书阶段，处理 set_phase 时更新（真实：模型每次输出都带思考，长度随阶段不同）。
+var simPhase = "init"
+
+// phaseThinkChars 各门禁阶段 assistant 消息 thinking 均值（字符），
+// 统计自真实 DB messages.thinking_content，按 set_phase 边界分阶段
+// （2026-08-09，D:\Goink\novel-agent.db 全会话聚合）。
+var phaseThinkChars = map[string]int{
+	"init":     556,
+	"prepare":  822,
+	"outline":  971,
+	"write":    322,
+	"review":   1558,
+	"maintain": 364,
+}
+
+// thinkingForPhase 返回某阶段的推理长度（字符），未知阶段回退 write。
+func thinkingForPhase(phase string) int {
+	if n, ok := phaseThinkChars[phase]; ok {
+		return n
+	}
+	return phaseThinkChars["write"]
+}
+
+// thinkingText 生成 n 字符的推理占位文本（固定字符集循环，可复现；
+// 中文密度与真实推理接近，tiktoken 精确计数后直接作为 token 参与估算）。
+var thinkingRunes = []rune("审视当前任务目标与上下文约束权衡多种方案推演后果决定下一步行动选择最稳妥路径避免遗漏关键细节保持叙事连贯性确保设定一致推进情节发展")
+
+func thinkingText(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(n)
+	for i := 0; i < n; i++ {
+		b.WriteRune(thinkingRunes[i%len(thinkingRunes)])
+	}
+	return b.String()
 }
 
 // ---- 固定前缀（与 writeSystemMessages 对应的三条 system，内容取自真实生成器） ----

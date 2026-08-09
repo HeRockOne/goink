@@ -22,6 +22,10 @@ type ScenarioResult struct {
 	// clean：NS 落库 + 工具结果清理（read/read_required 的 skill 全文 → 占位符）
 	CleanHit  int64 `json:"clean_hit"`
 	CleanMiss int64 `json:"clean_miss"`
+	// LLM 输出 token（assistant 消息字节，含 reasoning_content）
+	NowOutput    int64 `json:"now_output"`
+	LegacyOutput int64 `json:"legacy_output"`
+	CleanOutput  int64 `json:"clean_output"`
 }
 
 // Result 模拟总结果。
@@ -33,6 +37,9 @@ type Result struct {
 	TotalLegacyMiss int64 `json:"total_legacy_miss"`
 	TotalCleanHit  int64 `json:"total_clean_hit"`
 	TotalCleanMiss int64 `json:"total_clean_miss"`
+	TotalNowOutput    int64 `json:"total_now_output"`
+	TotalLegacyOutput int64 `json:"total_legacy_output"`
+	TotalCleanOutput  int64 `json:"total_clean_output"`
 }
 
 // Run 执行缓存模拟，三方对照：
@@ -79,6 +86,9 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 		res.TotalLegacyMiss += s.LegacyMiss
 		res.TotalCleanHit += s.CleanHit
 		res.TotalCleanMiss += s.CleanMiss
+		res.TotalNowOutput += s.NowOutput
+		res.TotalLegacyOutput += s.LegacyOutput
+		res.TotalCleanOutput += s.CleanOutput
 	}
 	return res, nil
 }
@@ -298,7 +308,10 @@ func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64)
 		cH += pr[0]
 		cM += pr[1]
 	}
-	return ScenarioResult{Name: name, NowHit: nH, NowMiss: nM, LegacyHit: lH, LegacyMiss: lM, CleanHit: cH, CleanMiss: cM}
+	return ScenarioResult{
+		Name: name, NowHit: nH, NowMiss: nM, LegacyHit: lH, LegacyMiss: lM, CleanHit: cH, CleanMiss: cM,
+		NowOutput: nowCache.Output(), LegacyOutput: legacyCache.Output(), CleanOutput: cleanCache.Output(),
+	}
 }
 
 // phaseReminder 模拟 set_phase 后的 system-reminder 注入（真实 agent.go:483：appendMsg("user", <system-reminder>结果JSON)）。
@@ -324,13 +337,14 @@ func buildGatePhaseClean(cache *TokenCache, rounds int) [][2]int64 {
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
+		if p.tool == "set_phase" {
+			simPhase = p.args
+			cur = append(cur, phaseReminder(p.args, true))
+		}
 		cur = append(cur,
 			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
 			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
 		)
-		if p.tool == "set_phase" {
-			cur = append(cur, phaseReminder(p.args, true))
-		}
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -357,19 +371,20 @@ func buildGatePhaseClean(cache *TokenCache, rounds int) [][2]int64 {
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
 			id := fmt.Sprintf("call_t%d_p%d", turn, i)
-			cur = append(cur, asstToolCall(id, p.tool, p.args))
-			if p.tool == "run_subagent" {
-				subResults := simulateSubagent(cache, history, cur, turn)
-				results = append(results, subResults...)
-			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
 			if p.tool == "set_phase" {
+				simPhase = p.args
 				cur = append(cur, phaseReminder(p.args, true))
 				// 阶段切换：上一阶段的 read 结果已消费，标记可清
 				markPhase()
 			} else if p.tool == "read_required" || p.tool == "read" {
 				pendingReads = append(pendingReads, id)
 			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, turn)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -397,18 +412,19 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
-		cur = append(cur,
-			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
-		)
 		if p.tool == "set_phase" {
-			cur = append(cur, phaseReminder(p.args, true))
+			simPhase = p.args
 			if mode == "auto" {
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
 			}
+			cur = append(cur, phaseReminder(p.args, true))
 		}
+		cur = append(cur,
+			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+		)
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -436,20 +452,22 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
-			cur = append(cur, asstToolCall(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.args))
-			if p.tool == "run_subagent" {
-				subResults := simulateSubagent(cache, history, cur, turn)
-				results = append(results, subResults...)
-			}
-			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
+			id := fmt.Sprintf("call_t%d_p%d", turn, i)
 			if p.tool == "set_phase" {
-				cur = append(cur, phaseReminder(p.args, true))
+				simPhase = p.args
 				if mode == "auto" {
 					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 						cur = append(cur, sysMsg(sk))
 					}
 				}
+				cur = append(cur, phaseReminder(p.args, true))
 			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, turn)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -511,6 +529,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
 		if p.tool == "set_phase" {
+			simPhase = p.args
 			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 				cur = append(cur, sysMsg(sk))
 			}
@@ -536,6 +555,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
 			if p.tool == "set_phase" {
+				simPhase = p.args
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
@@ -576,13 +596,14 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 				req := append(append([]map[string]any{}, history...), cur...)
 				hit, miss := cache.Step(req)
 				results = append(results, [2]int64{hit, miss})
+				if p.tool == "set_phase" {
+					simPhase = p.args
+					cur = append(cur, phaseReminder(p.args, true))
+				}
 				cur = append(cur,
 					asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
 					toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
 				)
-				if p.tool == "set_phase" {
-					cur = append(cur, phaseReminder(p.args, true))
-				}
 			}
 		} else {
 			req := append(append([]map[string]any{}, history...), cur...)
@@ -595,15 +616,17 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
-			cur = append(cur, asstToolCall(fmt.Sprintf("call_b%d_p%d", batch, i), p.tool, p.args))
+			id := fmt.Sprintf("call_b%d_p%d", batch, i)
+			if p.tool == "set_phase" {
+				simPhase = p.args
+				cur = append(cur, phaseReminder(p.args, true))
+			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
 			if p.tool == "run_subagent" {
 				subResults := simulateSubagent(cache, history, cur, batch*chapters+chapters)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(fmt.Sprintf("call_b%d_p%d", batch, i), p.tool, p.result))
-			if p.tool == "set_phase" {
-				cur = append(cur, phaseReminder(p.args, true))
-			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
 		}
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", chapters)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -772,18 +795,19 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
-		cur = append(cur,
-			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
-		)
 		if p.tool == "set_phase" {
-			cur = append(cur, phaseReminder(p.args, true))
+			simPhase = p.args
 			if mode == "auto" {
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
 			}
+			cur = append(cur, phaseReminder(p.args, true))
 		}
+		cur = append(cur,
+			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+		)
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -820,20 +844,22 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
-			cur = append(cur, asstToolCall(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.args))
-			if p.tool == "run_subagent" {
-				subResults := simulateSubagent(cache, history, cur, turn)
-				results = append(results, subResults...)
-			}
-			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
+			id := fmt.Sprintf("call_t%d_p%d", turn, i)
 			if p.tool == "set_phase" {
-				cur = append(cur, phaseReminder(p.args, true))
+				simPhase = p.args
 				if mode == "auto" {
 					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 						cur = append(cur, sysMsg(sk))
 					}
 				}
+				cur = append(cur, phaseReminder(p.args, true))
 			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, turn)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -858,20 +884,22 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
-			cur = append(cur, asstToolCall(fmt.Sprintf("call_b_p%d", i), p.tool, p.args))
-			if p.tool == "run_subagent" {
-				subResults := simulateSubagent(cache, history, cur, gateRounds+1)
-				results = append(results, subResults...)
-			}
-			cur = append(cur, toolMsg(fmt.Sprintf("call_b_p%d", i), p.tool, p.result))
+			id := fmt.Sprintf("call_b_p%d", i)
 			if p.tool == "set_phase" {
-				cur = append(cur, phaseReminder(p.args, true))
+				simPhase = p.args
 				if mode == "auto" {
 					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 						cur = append(cur, sysMsg(sk))
 					}
 				}
+				cur = append(cur, phaseReminder(p.args, true))
 			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				subResults := simulateSubagent(cache, history, cur, gateRounds+1)
+				results = append(results, subResults...)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
 		}
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
 		req := append(append([]map[string]any{}, history...), cur...)
