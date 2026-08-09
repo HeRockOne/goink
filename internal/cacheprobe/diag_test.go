@@ -319,8 +319,9 @@ func TestDiagBatchSelfReview(t *testing.T) {
 	}
 
 	fmt.Printf("\n批量 5 章 质量 × 成本 全方案对比（now 协议, DeepSeek 价, 单章 ¥%.4f/章）:\n", singlePer)
-	fmt.Printf("%-32s %10s %8s %10s %10s %8s %10s\n", "方案", "成本¥/章", "省vs单章", "审稿覆盖", "自检节奏", "质量分", "质量/成本")
-	fmt.Println(strings.Repeat("-", 100))
+	fmt.Printf("%-32s %12s %12s %12s %10s %8s %10s %10s %8s %10s\n",
+		"方案", "输入hit", "输入miss", "输出out", "成本¥/章", "省vs单章", "审稿覆盖", "自检节奏", "质量分", "质量/成本")
+	fmt.Println(strings.Repeat("-", 132))
 	for _, md := range modes {
 		var h, m, out int64
 		if md.kind < 0 {
@@ -339,8 +340,8 @@ func TestDiagBatchSelfReview(t *testing.T) {
 		} else if md.kind < 0 {
 			cadence = "每章"
 		}
-		fmt.Printf("%-32s %10.4f %7.1f%% %9.0f%% %10s %8.1f %10.1f\n",
-			md.name, per, save, md.covered*100, cadence, score, qpc)
+		fmt.Printf("%-32s %12d %12d %12d %10.4f %7.1f%% %9.0f%% %10s %8.1f %10.1f\n",
+			md.name, h, m, out, per, save, md.covered*100, cadence, score, qpc)
 	}
 }
 
@@ -395,8 +396,9 @@ func TestDiagBatchCheckCoverage(t *testing.T) {
 		{"完整门禁流程·批量6章", 6, 3, 3, 6.0 / 6, 2.5},
 	}
 	fmt.Printf("\n批内检查 vs 完整门禁流程（批量大小边界效应, now 协议, DeepSeek 价）:\n")
-	fmt.Printf("%-30s %8s %8s %10s %8s %10s\n", "方案", "成本¥/章", "审稿覆盖", "质量分", "质量/成本", "维护次数")
-	fmt.Println(strings.Repeat("-", 82))
+	fmt.Printf("%-30s %12s %12s %12s %8s %10s %8s %10s %8s\n",
+		"方案", "输入hit", "输入miss", "输出out", "成本¥/章", "审稿覆盖", "质量分", "质量/成本", "维护次数")
+	fmt.Println(strings.Repeat("-", 112))
 	for _, c := range cases {
 		h, m, out := runBatchN(c.ch, c.kind, c.every)
 		per := cost(h, m, out) / float64(c.ch)
@@ -406,7 +408,8 @@ func TestDiagBatchCheckCoverage(t *testing.T) {
 		if c.kind == 3 {
 			maintains = (c.ch + c.every - 1) / c.every
 		}
-		fmt.Printf("%-30s %8.4f %7.0f%% %8.1f %10.1f %8d\n", c.name, per, c.covered*100, sc, sc/per, maintains)
+		fmt.Printf("%-30s %12d %12d %12d %8.4f %9.0f%% %8.1f %10.1f %8d\n",
+			c.name, h, m, out, per, c.covered*100, sc, sc/per, maintains)
 	}
 }
 
