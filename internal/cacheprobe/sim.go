@@ -1117,18 +1117,22 @@ func batchEndReview(chapters int) []play { return batchCore(chapters, 4, 0) }
 // 但设定矛盾一眼穿帮）+ 批末全批审稿（子代理覆盖全批）。零阶段切换。
 func batchLightEndReview(chapters int) []play { return batchCore(chapters, 5, 3) }
 
-// batchLightCheckPlays 每 N 章轻量状态对照自检（一致性向，替代文笔向 selfReviewPlays）：
-// 调 get_* 查询读取角色/伏笔/快照状态，对照最近 N 章正文检查设定矛盾
-// （角色状态不符、时间线错乱、伏笔状态不一致、章节衔接断裂），edit 修复。
-// 门禁：get_* 在 write 白名单 ✓；edit 事前技能强制（write 4 必读已在阶段入口注入）✓。
-// 与业界 check_consistency（对照状态数据检查一致性）同模式。
+// batchLightCheckPlays 每 N 章轻量自检（一致性 + 文笔双向）：
+// 1) 一致性（重点，普通用户一眼穿帮）：get_characters/get_timeline/get_writing_snapshot 读状态，
+//    对照最近 N 章正文检查设定矛盾（角色状态不符、时间线错乱、伏笔矛盾、章节衔接断裂、重复）
+// 2) 文笔（次重点）：read revision-pass + anti-ai-grade 查节奏/AI 味
+// 发现问题 edit 修复。门禁：get_*/read/edit 都在 write 白名单 ✓；
+// edit 事前技能强制（write 4 必读已在阶段入口注入）✓。与业界 check_consistency 同模式。
 func batchLightCheckPlays(chStart, chEnd int) []play {
 	return []play{
+		readSkill("main-tech-revision-pass"),
+		readSkill("sub-tech-anti-ai-grade"),
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"},{"id":2,"name":"林雪","desc":"师姐","relation":"师姐弟"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, chEnd)},
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "一致性修复：角色状态/时间线/伏笔与 DB 状态对齐。"), result: "已修复一致性矛盾"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "文笔修复：润色过渡，去除 AI 味用词。"), result: "已修复文笔问题"},
 	}
 }
 
