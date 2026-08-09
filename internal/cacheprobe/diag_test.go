@@ -344,6 +344,72 @@ func TestDiagBatchSelfReview(t *testing.T) {
 	}
 }
 
+// 诊断:审稿覆盖的批量大小边界效应——5 章时批内检查(第3章后触发1次)覆盖 60%，
+// 6 章时(第3/6章触发)覆盖 100%，此时批内检查 vs 完整门禁流程的差异只剩 maintain 次数。
+// 回答"完整门禁流程多花的钱在什么批量下值得"。
+func TestDiagBatchCheckCoverage(t *testing.T) {
+	initTools()
+
+	runBatchN := func(chapters, checkKind, checkEvery int) (hit, miss, out int64) {
+		cache := NewTokenCache()
+		plays := batchGatePlaysWith(chapters, checkKind, checkEvery)
+		history := append([]map[string]any{}, fixedSystem()...)
+		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", chapters))}
+		cur = append(cur, sysMsg(novelState(0)))
+		for i, p := range plays {
+			cache.Step(append(append([]map[string]any{}, history...), cur...))
+			id := fmt.Sprintf("call_b_p%d", i)
+			if p.tool == "set_phase" {
+				simPhase = p.args
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+				cur = append(cur, phaseReminder(p.args, true))
+			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				simulateSubagent(cache, history, cur, chapters)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
+		}
+		cur = append(cur, asstText("批量创作完成"))
+		cache.Step(append(append([]map[string]any{}, history...), cur...))
+		return cache.hit, cache.miss, cache.output
+	}
+
+	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
+	// 质量分（同 TestDiagBatchSelfReview 口径）: 写后自检 + 覆盖×3 + 实时 + 对齐 + 章纲
+	score := func(covered float64, postCheck float64) float64 {
+		return postCheck + covered*3 + 2 + 0.5 + 1
+	}
+
+	cases := []struct {
+		name          string
+		ch, kind, every int
+		covered       float64 // 被子代理审过的章数/总章数
+		postCheck     float64
+	}{
+		{"批内检查·批量5章", 5, 2, 3, 3.0 / 5, 2.5},
+		{"完整门禁流程·批量5章", 5, 3, 3, 5.0 / 5, 2.5},
+		{"批内检查·批量6章", 6, 2, 3, 6.0 / 6, 2.5},
+		{"完整门禁流程·批量6章", 6, 3, 3, 6.0 / 6, 2.5},
+	}
+	fmt.Printf("\n批内检查 vs 完整门禁流程（批量大小边界效应, now 协议, DeepSeek 价）:\n")
+	fmt.Printf("%-30s %8s %8s %10s %8s %10s\n", "方案", "成本¥/章", "审稿覆盖", "质量分", "质量/成本", "维护次数")
+	fmt.Println(strings.Repeat("-", 82))
+	for _, c := range cases {
+		h, m, out := runBatchN(c.ch, c.kind, c.every)
+		per := cost(h, m, out) / float64(c.ch)
+		sc := score(c.covered, c.postCheck)
+		// 维护次数：批内检查=统一1次；完整门禁=每批1次(ch/3 向上取整)
+		maintains := 1
+		if c.kind == 3 {
+			maintains = (c.ch + c.every - 1) / c.every
+		}
+		fmt.Printf("%-30s %8.4f %7.0f%% %8.1f %10.1f %8d\n", c.name, per, c.covered*100, sc, sc/per, maintains)
+	}
+}
+
 // 诊断:批量大小 × 三章一轮的权衡——批内章数越大固定成本摊得越薄（越便宜），
 // 但连续多批引入批次边界（新窗口 prepare 重来 = 额外 miss）。
 // 回答"批量上限应该设多少、三章一轮是否影响"。
