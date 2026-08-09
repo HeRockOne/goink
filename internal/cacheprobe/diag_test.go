@@ -204,14 +204,15 @@ func TestDiagMissBreakdown(t *testing.T) {
 }
 
 // 诊断:批量模式质量自检节奏的成本对比（白金方法论"三章一轮"对照）。
-// 方案:0=现状(攒批统一审)/1=每章自审/3=三章一轮(每 3 章批次自检)。
+// 实现方式：outline 一次出全批大纲，write 循环内每 N 章插入批次检查（不跳阶段）。
+// checkKind: 0=无 / 1=轻量自检(selfReviewPlays) / 2=完整批次检查(子代理审最近 N 章+修复)
 // 单章 5 轮作基准。回答"批量省钱的同时把质量节奏拉近单章，代价是多少"。
 func TestDiagBatchSelfReview(t *testing.T) {
 	initTools()
 
-	runBatch := func(selfReviewEvery int) (hit, miss, out int64) {
+	runBatch := func(checkKind, checkEvery int) (hit, miss, out int64) {
 		cache := NewTokenCache()
-		plays := batchGatePlaysWith(5, selfReviewEvery)
+		plays := batchGatePlaysWith(5, checkKind, checkEvery)
 		history := append([]map[string]any{}, fixedSystem()...)
 		cur := []map[string]any{userMsg("请批量创作 5 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。")}
 		cur = append(cur, sysMsg(novelState(0)))
@@ -240,19 +241,20 @@ func TestDiagBatchSelfReview(t *testing.T) {
 	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
 
 	modes := []struct {
-		name string
-		every int
+		name     string
+		kind, every int
 	}{
-		{"现状(攒批统一审)", 0},
-		{"每章自审", 1},
-		{"三章一轮(第3章批次自检)", 3},
+		{"现状(攒批统一审)", 0, 0},
+		{"每章轻量自检", 1, 1},
+		{"三章一轮·轻量自检", 1, 3},
+		{"三章一轮·完整批次检查", 2, 3},
 	}
 	fmt.Printf("\n批量 5 章质量节奏对比（now 协议, DeepSeek 价, 单章 5 轮基准 ¥0.2751/章）:\n")
 	for _, md := range modes {
-		h, m, out := runBatch(md.every)
+		h, m, out := runBatch(md.kind, md.every)
 		c := cost(h, m, out)
 		save := (1 - c/5/0.2751) * 100
-		fmt.Printf("  %-22s: hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章) 比单章省 %.1f%%\n",
+		fmt.Printf("  %-24s: hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章) 比单章省 %.1f%%\n",
 			md.name, h, m, out, rate(h, m), c, c/5, save)
 	}
 }
@@ -263,11 +265,11 @@ func TestDiagBatchSelfReview(t *testing.T) {
 func TestDiagBatchSizeTradeoff(t *testing.T) {
 	initTools()
 
-	// 连续 batches 批 × chapters 章（批次边界 = 新窗口，历史保留），三章一轮自检
+	// 连续 batches 批 × chapters 章（批次边界 = 新窗口，历史保留），三章一轮轻量自检
 	runBatches := func(chapters, every, batches int) (hit, miss, out int64) {
 		cache := NewTokenCache()
 		for b := 0; b < batches; b++ {
-			plays := batchGatePlaysWith(chapters, every)
+			plays := batchGatePlaysWith(chapters, 1, every)
 			history := append([]map[string]any{}, fixedSystem()...)
 			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章（第 %d 批）。", chapters, b+1))}
 			cur = append(cur, sysMsg(novelState(b*chapters)))

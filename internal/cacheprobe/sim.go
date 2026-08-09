@@ -1093,14 +1093,15 @@ func maintainPlays(ch int, nextPhase string) []play {
 // 状态实时性（业界 delta 结算）：每章 write 后紧跟迷你维护（只写不查），
 // 让下一章的 get_writing_context 读到最新角色/伏笔状态；整批末尾仍保留完整 maintain 收尾。
 // batchGatePlays 批量门禁流程（prepare 一次 → outline N 章 → write N 章循环 → review 统一 → maintain 统一）。
-// 质量节奏：selfReviewEvery=0 无自检（现状）；=1 每章自审（对齐单章 gateScript 的 write 后自审）；
-// =3 三章一轮（白金作者方法论核心制度：每 3 章停笔自检，避免攒批积错）。
+// 质量节奏：checkKind=0 无自检（现状）；=1 轻量自检（每 N 章 selfReviewPlays：2 技能+1 修改）；
+// =2 完整批次检查（每 N 章 batchCheckPlays：子代理审最近 N 章 + 修复 + 字数复查）。
+// 白金方法论"三章一轮"：每 3 章停笔自检，反对攒批积错。
 func batchGatePlays(chapters int) []play {
-	return batchGatePlaysWith(chapters, 0)
+	return batchGatePlaysWith(chapters, 0, 0)
 }
 
-// batchGatePlaysWith 批量门禁流程，selfReviewEvery 控制 write 循环内的自检节奏。
-func batchGatePlaysWith(chapters int, selfReviewEvery int) []play {
+// batchGatePlaysWith 批量门禁流程，checkEvery 控制 write 循环内的批次检查节奏（0=不检查）。
+func batchGatePlaysWith(chapters int, checkKind int, checkEvery int) []play {
 	var plays []play
 	plays = append(plays, preparePlays(1)...)
 
@@ -1126,14 +1127,20 @@ func batchGatePlaysWith(chapters int, selfReviewEvery int) []play {
 	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
 	// （门禁 auto_skill_injection 按阶段计，write 阶段只进入一次；后续章复用上下文）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
+	// 批次检查插在 write 循环内、不跳阶段（避免 set_phase 技能重复注入与大纲分批）。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
-		if selfReviewEvery > 0 && ch%selfReviewEvery == 0 {
-			plays = append(plays, selfReviewPlays(ch)...)
+		if checkEvery > 0 && ch%checkEvery == 0 {
+			switch checkKind {
+			case 1:
+				plays = append(plays, selfReviewPlays(ch)...)
+			case 2:
+				plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
+			}
 		}
 		plays = append(plays, miniMaintainPlays(ch)...)
 	}
@@ -1144,6 +1151,18 @@ func batchGatePlaysWith(chapters int, selfReviewEvery int) []play {
 	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
 	plays = append(plays, maintainPlays(chapters, "prepare")...)
 	return plays
+}
+
+// batchCheckPlays 批次完整检查（checkKind=2）：子代理审读最近一个批次（chStart..chEnd 章）
+// + 修复 + 字数复查。不 set_phase（保持 write 阶段，避免技能重复注入）。
+func batchCheckPlays(chStart, chEnd int) []play {
+	return []play{
+		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chEnd)},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：调整对话节奏，去除 AI 味，补充情绪铺垫。"), result: "已修复问题 1"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：伏笔衔接，强化章末悬念。"), result: "已修复问题 2"},
+		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
+	}
 }
 
 // miniMaintainPlays 迷你维护（业界 delta 结算）：只写不查——
