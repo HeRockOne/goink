@@ -4,11 +4,11 @@
 > 对比基准：5 轮门禁创作（init → prepare → outline → write → review → maintain × 5），
 > 当前成本 ¥0.195/章，优化目标 ¥0.12-0.13/章。
 
-## 方案 1：auto-inject require_reads（核心收益 -33.6% miss）
+## 方案 1：auto-inject auto_skill_injection（核心收益 -33.6% miss）
 
 **现状**：各阶段必读技能通过 `read_required` 工具调用加载，模型发 tool_call → 返回 tool_result(技能内容)。事前强制拦截兜底（未读技能时拦 edit 等创作动作）。
 
-**优化**：`set_phase` 成功时，代码自动从 skill store 读取该阶段 `require_reads` 技能，以 system 消息注入到下一轮（NS 后固定位置）。同时调用 `OnReadRequired` 标记已读。
+**优化**：`set_phase` 成功时，代码自动从 skill store 读取该阶段 `auto_skill_injection` 技能，以 system 消息注入到下一轮（NS 后固定位置）。同时调用 `OnReadRequired` 标记已读。
 
 **省掉**：read_required 的 tool_call + tool_result 两跳，以及事前强制拦截时 model 被拦后的重试 system-reminder。
 

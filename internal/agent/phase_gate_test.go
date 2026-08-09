@@ -572,7 +572,7 @@ func TestRequireReadsPerPhase(t *testing.T) {
 phase: outline
 tools: read, auto_skill_injection, edit
 require: edit
-require_reads: main-tech-chapter-hook-enhanced
+auto_skill_injection: main-tech-chapter-hook-enhanced
 next: write
 -->
 
@@ -580,7 +580,7 @@ next: write
 phase: write
 tools: read, auto_skill_injection, edit
 require: edit
-require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing
+auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing
 next: done
 -->
 
@@ -642,7 +642,7 @@ func TestRequireReadsBeforeCreation(t *testing.T) {
 phase: write
 tools: read, auto_skill_injection, edit, create_scene, run_subagent, get_characters, set_phase
 require: edit
-require_reads: main-tech-show-dont-tell
+auto_skill_injection: main-tech-show-dont-tell
 next: done
 -->
 `, "single")
@@ -728,7 +728,7 @@ func TestValidateGateConfig(t *testing.T) {
 phase: prepare
 tools: read, get_chapter_list
 require: get_characters, missing_tool
-require_reads: main-tech-no-such-skill
+auto_skill_injection: main-tech-no-such-skill
 next: ghost
 -->
 <!-- phase-gate-config
@@ -775,7 +775,7 @@ next: prepare
 phase: prepare
 tools: read, auto_skill_injection, get_characters, get_chapter_list
 require: get_characters, get_chapter_list
-require_reads: main-tech-common-sense-logic
+auto_skill_injection: main-tech-common-sense-logic
 next: write
 -->
 <!-- phase-gate-config
@@ -783,7 +783,7 @@ phase: write
 tools: read, auto_skill_injection, edit
 edit_paths: chapters/*
 require: edit
-require_reads: main-tech-show-dont-tell
+auto_skill_injection: main-tech-show-dont-tell
 next: prepare
 -->`
 	if issues := ValidateGateConfig(good, skills); len(issues) != 0 {

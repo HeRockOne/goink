@@ -105,7 +105,7 @@ func parsePhaseBlock(block string) PhaseConfig {
 			pc.Tools = parseToolList(val)
 		case "require":
 			pc.Require = parseToolList(val)
-		case "require_reads":
+		case "auto_skill_injection":
 			pc.RequireReads = parseToolList(val)
 		case "next":
 			pc.Next = val

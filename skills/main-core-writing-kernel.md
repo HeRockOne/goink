@@ -42,7 +42,7 @@ mode: always
 
 ### prepare
 
-**必读技能在动笔前已由系统就绪**（门禁 require_reads 阶段会在 set_phase 时自动注入）。然后执行：
+**必读技能在动笔前已由系统就绪**（门禁 auto_skill_injection 阶段会在 set_phase 时自动注入）。然后执行：
 1. **get_writing_context**（required）— 一次获取树状全量状态
 3. **get_chapter_list**（required）— 确认章节编号连续
 4. **get_characters**（required）— 确认角色阵容

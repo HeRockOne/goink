@@ -52,3 +52,8 @@ docs.local/
 
 # MiMoCode
 .mimocode/
+
+# Agent workspace / session files (not part of the repo)
+.mindfs/
+.zcode/
+.opencode/

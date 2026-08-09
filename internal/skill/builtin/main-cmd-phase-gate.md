@@ -76,7 +76,7 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| require_reads | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符 |
+| auto_skill_injection | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符 |
 | next | 是 | require 满足后可进入的下一阶段（旧字段名 main-cmd-next 已废弃，只解析 next） |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
@@ -112,9 +112,9 @@ next: outline
 | review | run_subagent |
 | maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations |
 
-### require_reads 设计（该阶段核心方法论，对照 main-core-writing-kernel 阶段技能表）
+### auto_skill_injection 设计（该阶段核心方法论，对照 main-core-writing-kernel 阶段技能表）
 
-| 阶段 | require_reads 建议 |
+| 阶段 | auto_skill_injection 建议 |
 |------|-------------------|
 | init | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
 | prepare | main-tech-common-sense-logic |
@@ -123,7 +123,7 @@ next: outline
 | review | 空（sub-* 技能由系统自动注入子代理） |
 | maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
 
-情景类技能（climax-scene/shuangdian-pacing/foreshadow-cycle/emotion-injection/pacing-control/scene-beats 等）不进 require_reads，由 kernel 按需引导。
+情景类技能（climax-scene/shuangdian-pacing/foreshadow-cycle/emotion-injection/pacing-control/scene-beats 等）不进 auto_skill_injection，由 kernel 按需引导。
 
 ### 常见设计错误（改配置后可用设置页「校验配置」按钮检查）
 
@@ -133,7 +133,7 @@ next: outline
 | next 指向不存在的阶段名 | 切换时报"未知阶段" |
 | 两个 mode 都空的同名阶段 | 只生效第一个（同名阶段必须写 mode 区分） |
 | edit_paths 不含 require 需要的路径 | edit 被拦，require 永不满足 |
-| require_reads 引用不存在的技能 | read_required 失败，阶段无法切换 |
+| auto_skill_injection 引用不存在的技能 | read_required 失败，阶段无法切换 |
 
 ## 故障排查
 
