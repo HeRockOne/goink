@@ -140,7 +140,7 @@ type tableScenario struct {
 	name    string
 }
 
-// runTable 跑一组常用工作负载场景，输出 Markdown 表格（now 协议，含输出计费）。
+// runTable 跑一组常用工作负载场景，输出 Markdown 表格（now 协议，含输出计费 + miss 构成）。
 func runTable(cachePrice, inputPrice, outputPrice float64) {
 	scenarios := []tableScenario{
 		{1, 0, 0, "单章 1 轮"},
@@ -152,6 +152,16 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 		{3, 2, 3, "混合 3+2+3"},
 		{5, 5, 5, "混合 5+5+5"},
 	}
+
+	type row struct {
+		sc   tableScenario
+		h, m int64
+		out  int64
+		rate float64
+		cost float64
+		cat  map[string]int64
+	}
+	rows := make([]row, 0, len(scenarios))
 
 	fmt.Printf("# cacheprobe 成本模拟表（now 协议）\n\n")
 	fmt.Printf("价格：缓存 ¥%.3f/M · 输入 ¥%.3f/M · 输出 ¥%.3f/M　正文与思考按真实分布生成\n\n", cachePrice, inputPrice, outputPrice)
@@ -173,6 +183,18 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 		}
 		fmt.Printf("| %s | %d | %d | %d | %d | %d | %d | %.1f%% | %.4f | %.4f |\n",
 			sc.name, sc.g, sc.q, sc.b, h, m, out, rate, c, c/float64(chapters))
+		rows = append(rows, row{sc: sc, h: h, m: m, out: out, rate: rate, cost: c, cat: res.TotalNowMissByCat})
+	}
+
+	// miss 构成表（now 协议，按消息来源分类）
+	fmt.Printf("\n## miss 构成（now 协议，按消息来源分类）\n\n")
+	fmt.Printf("| 场景 | miss 总计 | thinking | 技能注入 | 工具结果 | 查询 | 固定/NS | 正文 | 大纲 | 其他 |\n")
+	fmt.Printf("|------|----------|----------|----------|----------|------|---------|------|------|------|\n")
+	for _, r := range rows {
+		get := func(k string) int64 { return r.cat[k] }
+		fmt.Printf("| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+			r.sc.name, r.m,
+			get("thinking"), get("skill_inject"), get("update"), get("query"), get("fixed"), get("body"), get("outline"), get("other"))
 	}
 }
 

@@ -133,3 +133,72 @@ func TestDiagTokenBreakdown(t *testing.T) {
 	}
 	fmt.Printf("%-12s %12d %7.1f%%\n", "总计", grand, 100.0)
 }
+
+// 诊断:单章多轮 miss 构成——与 TokenCache 同路径按分类累计 miss，
+// 回答"技能自动注入在 miss 中占多少"。
+// 分类:skill_inject(阶段技能注入 system)/thinking(assistant reasoning_content)
+//       body(正文 edit)/outline/query/update/other(含 reminder、工具结果等)
+func TestDiagMissBreakdown(t *testing.T) {
+	initTools()
+
+	catOf := func(m map[string]any) string {
+		role, _ := m["role"].(string)
+		if role == "system" {
+			content, _ := m["content"].(string)
+			if strings.HasPrefix(content, "--- ") {
+				return "skill_inject"
+			}
+			return "fixed"
+		}
+		if role == "assistant" {
+			if rc, ok := m["reasoning_content"].(string); ok && len(rc) > 0 {
+				return "thinking"
+			}
+			return "assistant"
+		}
+		name, _ := m["name"].(string)
+		if name == "edit" {
+			content, _ := m["content"].(string)
+			if len(content) > 100 {
+				return "body"
+			}
+			return "outline"
+		}
+		if strings.HasPrefix(name, "get_") || strings.HasPrefix(name, "search_") {
+			return "query"
+		}
+		if strings.HasPrefix(name, "create_") || strings.HasPrefix(name, "update_") || name == "set_phase" || name == "read" || name == "read_required" {
+			return "update"
+		}
+		return "other"
+	}
+
+	cache := NewTokenCache()
+	cache.SetMissCat(catOf)
+	buildMixedSession("auto", cache, 3, 0, 0)
+
+	var sum int64
+	for _, v := range cache.MissByCat {
+		sum += v
+	}
+	fmt.Printf("\n单章 3 轮 miss 构成(buildMixedSession,与 table 同路径): miss=%d 分类和=%d 缺口=%d\n", cache.miss, sum, cache.miss-sum)
+
+	fmt.Printf("\n单章 3 轮 miss 构成(与 TokenCache 同路径):\n")
+	fmt.Printf("%-14s %12s %8s\n", "类别", "miss token", "占比")
+	fmt.Println(strings.Repeat("-", 40))
+	var grand int64
+	for _, v := range cache.MissByCat {
+		grand += v
+	}
+	for k, v := range cache.MissByCat {
+		fmt.Printf("%-14s %12d %7.1f%%\n", k, v, 100*float64(v)/float64(grand))
+	}
+	fmt.Printf("%-14s %12d\n", "总计", grand)
+	// 每章重复注入的成本（首轮 initInject 一次性，其余为各章 set_phase 注入）
+	fmt.Printf("参考: initInject 单次注入=%d token; phaseInjectSkills 每章注入 prepare=%d outline=%d write=%d maintain=%d token\n",
+		msgTokens(sysMsg(initInject)),
+		msgTokens(sysMsg(phaseInjectSkills["prepare"])),
+		msgTokens(sysMsg(phaseInjectSkills["outline"])),
+		msgTokens(sysMsg(phaseInjectSkills["write"])),
+		msgTokens(sysMsg(phaseInjectSkills["maintain"])))
+}

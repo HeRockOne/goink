@@ -58,6 +58,15 @@ type TokenCache struct {
 	// clearedIDs 阶段切换清理用：已结束阶段的 read/read_required 调用 ID 集合。
 	// 发送前 transform 按此集合替换为占位符（当前阶段 read 保留全文）。
 	clearedIDs map[string]bool
+	// missCat 诊断钩子：非 nil 时按分类累计 miss token（与 miss 计算同路径）。
+	missCat   func(m map[string]any) string
+	MissByCat map[string]int64
+}
+
+// SetMissCat 启用 miss 分类统计（诊断用，不影响模拟结果）。
+func (c *TokenCache) SetMissCat(fn func(m map[string]any) string) {
+	c.missCat = fn
+	c.MissByCat = map[string]int64{}
 }
 
 // MarkCleared 标记 tool_call_id 为可清理（阶段切换时调用：上一阶段的 read 结果）。
@@ -202,6 +211,13 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	reqBytes := promptBytes(messages)
 
 	if c.prevBytes == nil {
+		// 首轮全 miss：消息按分类统计，tools 计入 fixed（固定前缀）
+		if c.missCat != nil {
+			for _, m := range messages {
+				c.MissByCat[c.missCat(m)] += int64(msgTokens(m))
+			}
+			c.MissByCat["fixed"] += toolsN
+		}
 		c.miss += total
 		c.prevBytes = reqBytes
 		c.prevMsgs = append([]map[string]any{}, messages...)
@@ -218,24 +234,38 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	hitMsgs := int64(0)
 	if lcp >= len(toolsPrefix) {
 		hitMsgs += toolsN
+	} else if c.missCat != nil {
+		// tools 未命中（罕见：工具定义变更/前缀断裂在 tools 内）→ 计入 fixed
+		c.MissByCat["fixed"] += toolsN
 	}
 	// 消息前缀：tools 前缀 + `,"max_tokens":8192,"messages":[`
 	msgPrefix := append(append([]byte{}, toolsPrefix...), []byte(`,"max_tokens":8192,"messages":[`)...)
 	acc := len(msgPrefix)
+	missFrom := 0 // 第一个未命中消息的索引（诊断用）
 	if acc > lcp {
 		// 连消息前缀都没完全命中（正常不会发生，前缀固定）
 		// tools 已计入，消息不命中
 	} else {
-		for _, m := range messages {
+		for idx, m := range messages {
 			b, err := json.Marshal(m)
 			if err != nil {
+				missFrom = idx
 				break
 			}
 			acc += 1 + len(b) // 逗号 + 消息体
 			if acc > lcp {
+				missFrom = idx
 				break
 			}
 			hitMsgs += int64(msgTokens(m))
+		}
+	}
+
+	// miss 分类统计（诊断钩子）：与 miss 计算同路径，按未命中消息分类累计
+	if c.missCat != nil && missFrom < len(messages) {
+		for _, m := range messages[missFrom:] {
+			cat := c.missCat(m)
+			c.MissByCat[cat] += int64(msgTokens(m))
 		}
 	}
 
@@ -266,6 +296,9 @@ func (c *TokenCache) Reset() {
 	c.hit = 0
 	c.miss = 0
 	c.output = 0
+	if c.MissByCat != nil {
+		c.MissByCat = map[string]int64{}
+	}
 }
 
 func (c *TokenCache) TotalTokens() int64 { return c.hit + c.miss }
@@ -283,6 +316,56 @@ func longestCommonPrefix(a, b []byte) int {
 		i++
 	}
 	return i
+}
+
+// missCatOf 按消息来源分类（诊断/table 用，与 TokenCache 的 miss 计算同路径）。
+// 分类:skill_inject(阶段技能注入 system)/thinking(assistant reasoning_content)
+//       body(正文 edit)/outline(大纲 edit)/query(get_*/search_*)/update(create_*/update_*)
+//       fixed(固定前缀+NS)/other
+func missCatOf(m map[string]any) string {
+	role, _ := m["role"].(string)
+	if role == "system" {
+		content, _ := m["content"].(string)
+		if strings.HasPrefix(content, "--- ") {
+			return "skill_inject"
+		}
+		return "fixed"
+	}
+	if role == "assistant" {
+		// 工具调用消息的 arguments 含正文/大纲全文（LLM 输出），优先于 thinking 分类
+		if tcs, ok := m["tool_calls"].([]any); ok {
+			for _, tc := range tcs {
+				tcm, _ := tc.(map[string]any)
+				fn, _ := tcm["function"].(map[string]any)
+				args, _ := fn["arguments"].(string)
+				if strings.Contains(args, "chapters/") && len(args) > 100 {
+					return "body"
+				}
+				if strings.Contains(args, "outlines/") {
+					return "outline"
+				}
+			}
+		}
+		if rc, ok := m["reasoning_content"].(string); ok && len(rc) > 0 {
+			return "thinking"
+		}
+		return "assistant"
+	}
+	name, _ := m["name"].(string)
+	if name == "edit" {
+		content, _ := m["content"].(string)
+		if len(content) > 100 {
+			return "body"
+		}
+		return "outline"
+	}
+	if strings.HasPrefix(name, "get_") || strings.HasPrefix(name, "search_") {
+		return "query"
+	}
+	if strings.HasPrefix(name, "create_") || strings.HasPrefix(name, "update_") || name == "set_phase" || name == "read" || name == "read_required" {
+		return "update"
+	}
+	return "other"
 }
 
 // ---- 请求序列化（模拟服务端解析后的 token 前缀顺序） ----

@@ -26,6 +26,10 @@ type ScenarioResult struct {
 	NowOutput    int64 `json:"now_output"`
 	LegacyOutput int64 `json:"legacy_output"`
 	CleanOutput  int64 `json:"clean_output"`
+	// miss 构成（按消息来源分类，诊断/成本明细用）
+	NowMissByCat    map[string]int64 `json:"now_miss_by_cat,omitempty"`
+	LegacyMissByCat map[string]int64 `json:"legacy_miss_by_cat,omitempty"`
+	CleanMissByCat  map[string]int64 `json:"clean_miss_by_cat,omitempty"`
 }
 
 // Result 模拟总结果。
@@ -40,6 +44,8 @@ type Result struct {
 	TotalNowOutput    int64 `json:"total_now_output"`
 	TotalLegacyOutput int64 `json:"total_legacy_output"`
 	TotalCleanOutput  int64 `json:"total_clean_output"`
+	// miss 构成（now 协议，按消息来源分类）
+	TotalNowMissByCat map[string]int64 `json:"total_now_miss_by_cat,omitempty"`
 }
 
 // Run 执行缓存模拟，三方对照：
@@ -89,6 +95,12 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 		res.TotalNowOutput += s.NowOutput
 		res.TotalLegacyOutput += s.LegacyOutput
 		res.TotalCleanOutput += s.CleanOutput
+		if res.TotalNowMissByCat == nil {
+			res.TotalNowMissByCat = map[string]int64{}
+		}
+		for k, v := range s.NowMissByCat {
+			res.TotalNowMissByCat[k] += v
+		}
 	}
 	return res, nil
 }
@@ -289,8 +301,11 @@ func runPair(name string, fn func(string, *TokenCache) [][2]int64) ScenarioResul
 // runTriple 跑 now/legacy/clean(retain) 三种协议并汇总（clean 用发送前变换的 TokenCache）。
 func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64) ScenarioResult {
 	nowCache := NewTokenCache()
+	nowCache.SetMissCat(missCatOf)
 	legacyCache := NewTokenCache()
+	legacyCache.SetMissCat(missCatOf)
 	cleanCache := NewCleanCache(retain)
+	cleanCache.SetMissCat(missCatOf)
 	nowR := fn("now", nowCache)
 	legR := fn("legacy", legacyCache)
 	cleanR := fn("clean", cleanCache)
@@ -311,6 +326,7 @@ func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64)
 	return ScenarioResult{
 		Name: name, NowHit: nH, NowMiss: nM, LegacyHit: lH, LegacyMiss: lM, CleanHit: cH, CleanMiss: cM,
 		NowOutput: nowCache.Output(), LegacyOutput: legacyCache.Output(), CleanOutput: cleanCache.Output(),
+		NowMissByCat: nowCache.MissByCat, LegacyMissByCat: legacyCache.MissByCat, CleanMissByCat: cleanCache.MissByCat,
 	}
 }
 
