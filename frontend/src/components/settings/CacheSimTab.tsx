@@ -91,45 +91,23 @@ export default function CacheSimTab() {
   )
 
   const renderScenario = (s: CacheSimScenario) => {
-    const total = s.now_hit + s.now_miss + s.legacy_hit + s.legacy_miss
-    const save = s.legacy_cost - s.now_cost
     return (
       <div key={s.name} className="rounded-lg border p-3">
         <div className="text-sm font-medium mb-2">{s.name}</div>
         <table className="w-full text-xs">
-          <thead>
-            <tr className="text-muted-foreground">
-              <th className="text-left py-1">指标</th>
-              <th className="text-right py-1" title="旧版：read_required 工具调用加载技能">旧版（read_required）</th>
-              <th className="text-right py-1" title="当前版：auto_skill_injection 系统自动注入技能">当前版（自动注入）</th>
-            </tr>
-          </thead>
           <tbody>
             <tr>
               <td className="py-1">总 token（输入）</td>
-              <td className="text-right tabular-nums">{fmtM(s.legacy_hit + s.legacy_miss)}</td>
               <td className="text-right tabular-nums">{fmtM(s.now_hit + s.now_miss)}</td>
             </tr>
             <tr>
               <td className="py-1">缓存命中率</td>
-              <td className="text-right tabular-nums">{s.legacy_hit_rate.toFixed(1)}%</td>
               <td className="text-right tabular-nums">{s.now_hit_rate.toFixed(1)}%</td>
             </tr>
             <tr>
               <td className="py-1">估算费用（¥）</td>
-              <td className="text-right tabular-nums">{s.legacy_cost.toFixed(4)}</td>
               <td className="text-right tabular-nums">{s.now_cost.toFixed(4)}</td>
             </tr>
-            {total > 0 && (
-              <tr className="border-t">
-                <td className="py-1">费用节省</td>
-                <td className="text-right tabular-nums" colSpan={2}>
-                  <span className={save > 0 ? 'text-success-foreground' : 'text-status-warning'}>
-                    ¥{save.toFixed(4)}（{s.miss_save_pct.toFixed(1)}%）
-                  </span>
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
@@ -144,10 +122,9 @@ export default function CacheSimTab() {
           <span className="text-sm font-medium">写书成本模拟</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          模拟一个真实对话窗口：短对话与单章/批量创作交替发生在同一条历史里。
-          对比「旧版」与「当前版」的差距：旧版 = read_required 工具调用加载必读技能；
-          当前版 = auto_skill_injection 系统自动注入技能（省掉工具调用两跳 + 拦截重试），
-          两者都有缓存命中（费用按设置中的模型价格估算）。
+          模拟一个真实对话窗口的历史 Token 消耗与费用。短对话与单章/批量创作
+          交替发生在同一条对话历史里。必读技能由系统自动注入（auto_skill_injection），
+          历史留在服务端缓存，费用按设置中的模型价格估算。
         </p>
       </div>
 
@@ -177,23 +154,15 @@ export default function CacheSimTab() {
               <tbody>
                 <tr>
                   <td className="py-1">总输入 token</td>
-                  <td className="text-right tabular-nums">{fmtM(result.total_legacy_hit + result.total_legacy_miss)} → {fmtM(result.total_now_hit + result.total_now_miss)}</td>
+                  <td className="text-right tabular-nums">{fmtM(result.total_now_hit + result.total_now_miss)}</td>
                 </tr>
                 <tr>
                   <td className="py-1">总命中率</td>
-                  <td className="text-right tabular-nums">{result.legacy_hit_rate.toFixed(1)}% → {result.now_hit_rate.toFixed(1)}%</td>
+                  <td className="text-right tabular-nums">{result.now_hit_rate.toFixed(1)}%</td>
                 </tr>
                 <tr>
                   <td className="py-1">估算费用（¥）</td>
-                  <td className="text-right tabular-nums">
-                    {result.legacy_cost.toFixed(4)} → {result.now_cost.toFixed(4)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-1">费用节省</td>
-                  <td className="text-right tabular-nums text-success-foreground">
-                    ¥{(result.legacy_cost - result.now_cost).toFixed(4)}（{result.miss_save_pct.toFixed(1)}%）
-                  </td>
+                  <td className="text-right tabular-nums">{result.now_cost.toFixed(4)}</td>
                 </tr>
               </tbody>
             </table>
