@@ -248,6 +248,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 		{"每章轻量自检", 1, 1},
 		{"三章一轮·轻量自检", 1, 3},
 		{"三章一轮·完整批次检查", 2, 3},
+		{"三章一轮·完整门禁流程(review+maintain)", 3, 3},
 	}
 	fmt.Printf("\n批量 5 章质量节奏对比（now 协议, DeepSeek 价, 单章 5 轮基准 ¥0.2751/章）:\n")
 	for _, md := range modes {

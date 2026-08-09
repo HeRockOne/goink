@@ -1134,23 +1134,33 @@ func batchGatePlaysWith(chapters int, checkKind int, checkEvery int) []play {
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
-		if checkEvery > 0 && ch%checkEvery == 0 {
-			switch checkKind {
-			case 1:
-				plays = append(plays, selfReviewPlays(ch)...)
-			case 2:
-				plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
-			}
+	// 批次检查（checkKind=1/2）：write 循环内按节奏插入，不跳阶段
+	if checkKind > 0 && checkKind < 3 && checkEvery > 0 && ch%checkEvery == 0 {
+		switch checkKind {
+		case 1:
+			plays = append(plays, selfReviewPlays(ch)...)
+		case 2:
+			plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
 		}
-		plays = append(plays, miniMaintainPlays(ch)...)
 	}
-	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
-
-	// review：整批统一一次（run_subagent + 修复）
-	plays = append(plays, reviewPlays(1)...)
-	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
-	plays = append(plays, maintainPlays(chapters, "prepare")...)
+	// 批次完整流程（checkKind=3）：每个批次边界（含末尾剩余章）都走 review+maintain，
+	// 替代统一 review/maintain 收尾——即"三章一批"的完整门禁循环。
+	if checkKind == 3 && (ch%checkEvery == 0 || ch == chapters) {
+		plays = append(plays, batchFullCheckPlays(ch-checkEvery+1, ch)...)
+	}
+	plays = append(plays, miniMaintainPlays(ch)...)
+}
+if checkKind == 3 {
+	// 完整门禁流程方案：统一 review/maintain 已由各批次边界覆盖
 	return plays
+}
+plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
+
+// review：整批统一一次（run_subagent + 修复）
+plays = append(plays, reviewPlays(1)...)
+// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
+plays = append(plays, maintainPlays(chapters, "prepare")...)
+return plays
 }
 
 // batchCheckPlays 批次完整检查（checkKind=2）：走阶段切换（门禁白名单约束）——
@@ -1168,6 +1178,26 @@ func batchCheckPlays(chStart, chEnd int) []play {
 		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 	}
+}
+
+// batchFullCheckPlays 批次完整门禁流程（checkKind=3，用户提议的"三章一批完整流程"）：
+// write 批次结束 → set_phase("review")（审最近 N 章）→ set_phase("maintain")（该批状态结算）
+// → set_phase("write") 回 write 继续。阶段链 write→review→maintain 为 next 推进，
+// maintain→write 为回退到 visited 阶段（phase_gate.go:380）。每次切回 write 注入 write 技能，
+// 每次切 maintain 注入 maintain 技能（anti-repetition/foreshadow，配置内有）。
+func batchFullCheckPlays(chStart, chEnd int) []play {
+	plays := []play{
+		{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`},
+		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chEnd)},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：调整对话节奏，去除 AI 味，补充情绪铺垫。"), result: "已修复问题 1"},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：伏笔衔接，强化章末悬念。"), result: "已修复问题 2"},
+		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
+		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
+	}
+	// 该批状态结算（maintain 13 项），出口 set_phase("write") 回写
+	plays = append(plays, maintainPlays(chEnd, "write")...)
+	return plays
 }
 
 // miniMaintainPlays 迷你维护（业界 delta 结算）：只写不查——
