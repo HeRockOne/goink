@@ -218,8 +218,8 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	if lcp >= len(toolsPrefix) {
 		hitMsgs += toolsN
 	}
-	// 消息前缀：tools 前缀 + `,"model":"goink-sim","messages":[`
-	msgPrefix := append(append([]byte{}, toolsPrefix...), []byte(`,"model":"goink-sim","messages":[`)...)
+	// 消息前缀：tools 前缀 + `,"max_tokens":8192,"messages":[`
+	msgPrefix := append(append([]byte{}, toolsPrefix...), []byte(`,"max_tokens":8192,"messages":[`)...)
 	acc := len(msgPrefix)
 	if acc > lcp {
 		// 连消息前缀都没完全命中（正常不会发生，前缀固定）
@@ -322,18 +322,18 @@ func msgJSON(m map[string]any) []byte {
 func promptBytes(messages []map[string]any) []byte {
 	toolsJSON, _ := cachedToolsJSON()
 	var buf bytes.Buffer
-	// 与真实 buildPayload + marshalPayload 一致：工具定义在最前（固定前缀），然后 messages 等
-	// {"tools":[...],"model":"goink-sim","messages":[...],"stream":true,"stream_options":{...}}
+	// 与真实 marshalPayload 完全一致：工具定义在最前，其余字段字母序
+	// {"tools":<tools>,"max_tokens":8192,"messages":[...],"model":"goink-sim","stream":true,"stream_options":{"include_usage":true},"temperature":0.7}
 	buf.WriteString(`{"tools":`)
 	buf.Write(toolsJSON)
-	buf.WriteString(`,"model":"goink-sim","messages":[`)
+	buf.WriteString(`,"max_tokens":8192,"messages":[`)
 	for i, m := range messages {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
 		buf.Write(msgJSON(m))
 	}
-	buf.WriteString(`],"stream":true,"stream_options":{"include_usage":true}}`)
+	buf.WriteString(`],"model":"goink-sim","stream":true,"stream_options":{"include_usage":true},"temperature":0.7}`)
 	return buf.Bytes()
 }
 
