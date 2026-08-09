@@ -1092,7 +1092,15 @@ func maintainPlays(ch int, nextPhase string) []play {
 // 历史跨章连续累积，NS 落库收益被放大。
 // 状态实时性（业界 delta 结算）：每章 write 后紧跟迷你维护（只写不查），
 // 让下一章的 get_writing_context 读到最新角色/伏笔状态；整批末尾仍保留完整 maintain 收尾。
+// batchGatePlays 批量门禁流程（prepare 一次 → outline N 章 → write N 章循环 → review 统一 → maintain 统一）。
+// 质量差距：单章每章有 selfReview 自审，批量循环内没有（见 batchGatePlaysWith）。
 func batchGatePlays(chapters int) []play {
+	return batchGatePlaysWith(chapters, false)
+}
+
+// batchGatePlaysWith 批量门禁流程，selfReview=true 时每章 write 后追加自审
+// （对齐单章 gateScript 的 write 后自审，缩小批量 vs 单章质量差距）。
+func batchGatePlaysWith(chapters int, selfReview bool) []play {
 	var plays []play
 	plays = append(plays, preparePlays(1)...)
 
@@ -1123,6 +1131,9 @@ func batchGatePlays(chapters int) []play {
 			plays = append(plays, writePlays(ch)...)
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
+		}
+		if selfReview {
+			plays = append(plays, selfReviewPlays(ch)...)
 		}
 		plays = append(plays, miniMaintainPlays(ch)...)
 	}

@@ -202,3 +202,52 @@ func TestDiagMissBreakdown(t *testing.T) {
 		msgTokens(sysMsg(phaseInjectSkills["write"])),
 		msgTokens(sysMsg(phaseInjectSkills["maintain"])))
 }
+
+// 诊断:批量模式补齐"每章自审"（对齐单章 gateScript 的 write 后 selfReview）的成本增量。
+// 回答"批量省钱的同时把质量拉近单章，代价是多少"。
+func TestDiagBatchSelfReview(t *testing.T) {
+	initTools()
+
+	runBatch := func(selfReview bool) (hit, miss, out int64) {
+		cache := NewTokenCache()
+		var plays []play
+		if selfReview {
+			plays = batchGatePlaysWith(5, true)
+		} else {
+			plays = batchGatePlays(5)
+		}
+		history := append([]map[string]any{}, fixedSystem()...)
+		cur := []map[string]any{userMsg("请批量创作 5 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。")}
+		cur = append(cur, sysMsg(novelState(0)))
+		for i, p := range plays {
+			cache.Step(append(append([]map[string]any{}, history...), cur...))
+			id := fmt.Sprintf("call_b_p%d", i)
+			if p.tool == "set_phase" {
+				simPhase = p.args
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+				cur = append(cur, phaseReminder(p.args, true))
+			}
+			cur = append(cur, asstToolCall(id, p.tool, p.args))
+			if p.tool == "run_subagent" {
+				simulateSubagent(cache, history, cur, 5)
+			}
+			cur = append(cur, toolMsg(id, p.tool, p.result))
+		}
+		cur = append(cur, asstText("批量创作完成"))
+		cache.Step(append(append([]map[string]any{}, history...), cur...))
+		return cache.hit, cache.miss, cache.output
+	}
+
+	baseH, baseM, baseOut := runBatch(false)
+	enhH, enhM, enhOut := runBatch(true)
+	rate := func(h, m int64) float64 { return 100 * float64(h) / float64(h+m) }
+	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
+
+	fmt.Printf("\n批量 5 章 vs 批量+每章自审（now 协议, DeepSeek 价）:\n")
+	fmt.Printf("  当前批量    : hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章)\n", baseH, baseM, baseOut, rate(baseH, baseM), cost(baseH, baseM, baseOut), cost(baseH, baseM, baseOut)/5)
+	fmt.Printf("  批量+自审   : hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章)\n", enhH, enhM, enhOut, rate(enhH, enhM), cost(enhH, enhM, enhOut), cost(enhH, enhM, enhOut)/5)
+	fmt.Printf("  成本增量    : +¥%.4f/章 (+%.1f%%)\n", (cost(enhH, enhM, enhOut)-cost(baseH, baseM, baseOut))/5, (cost(enhH, enhM, enhOut)-cost(baseH, baseM, baseOut))/cost(baseH, baseM, baseOut)*100)
+	fmt.Printf("  对比单章 5 轮（¥0.2751/章）: 批量+自审仍省 %.1f%%\n", (1-cost(enhH, enhM, enhOut)/5/0.2751)*100)
+}
