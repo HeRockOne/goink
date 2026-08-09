@@ -34,7 +34,7 @@ L3  Skill catalog   →  ~1,150 tokens   auto 模式 skill 的 name+description 
 L4  NovelState      → 落库进消息历史    小说状态快照（紧跟 user 消息之后，永不清理）
 ```
 
-**固定前缀 = L1 + L2 + L3 + 工具定义（全量 JSON）≈ 20,899 tokens**（2026-08-06 实测 `fixed_prefix_tokens`）
+**固定前缀 = L1 + L2 + L3 ≈ 10,899 tokens**（2026-08-06 实测 `fixed_prefix_tokens`）。工具定义（全量 JSON）不在固定前缀中——它在 API payload 的顶层 `tools` 字段（`messages` 数组之后），`messages` 变化时工具定义也 miss（见 4.8 节）。
 - `writeSystemMessages` **只在创建新 session（isNew）时执行**（`chat.go`）
 - 固定前缀写入 messages 表后**不再重写**，保证缓存稳定命中
 - `computePrefixHash` 只哈希前导 system 消息 + 工具名（历史中的 NS 不参与，避免误报）
@@ -120,6 +120,18 @@ OpenAI 兼容多节点负载均衡下，相同前缀的请求可能被路由到�
 | **新开窗口** | 系统前缀用最新 skill → **首轮 miss**，之后恢复命中 |
 
 两者都会在"变更点"有一次缓存重建成本（几厘钱级），之后都正常。
+
+### 4.8 工具定义（tools）在 API payload 末尾，不被固定前缀缓存
+
+API 请求体（`buildPayload`，`stream.go:72`）结构：
+
+```json
+{"model":"goink-sim","messages":[...],"stream":true,"stream_options":{"include_usage":true},"tools":[...]}
+```
+
+工具定义在顶层 `tools` 字段，位于 `messages` 数组之后。`messages` 变化时，字节级公共前缀在 `messages` 数组中断裂，`tools` 字段（~10K token）不在公共前缀中，**每次请求都 miss**。
+
+缓存命中率中，工具定义贡献约 10K token 的固定 miss，占总 miss 的绝大部分。这是真实 API 的行为，不是模拟缺陷。
 
 ---
 
