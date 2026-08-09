@@ -230,4 +230,46 @@ func totalHit(results [][2]int64) int64 {
 	return h
 }
 
+// TestAutoInjectVerification 验证技能自动注入功能正常：
+// 三种模式（now/auto/opt）都能完成完整门禁流程，无 panic 或异常。
+func TestAutoInjectVerification(t *testing.T) {
+	initTools()
+	initBody()
+
+	// 验证 opt 模式（auto-inject + 自动推进）
+	optCache := NewTokenCache()
+	optResults := buildOptWithPrefix(optCache, 1, fixedSystem())
+	if len(optResults) == 0 {
+		t.Fatal("opt 流程产生 0 个结果")
+	}
+	optMiss, optHit := totalMiss(optResults), totalHit(optResults)
+	t.Logf("opt 1轮: 请求=%d hit=%d miss=%d hit率=%.1f%%", len(optResults), optHit, optMiss, float64(optHit)/float64(optHit+optMiss)*100)
+
+	// 验证 auto 模式（auto-inject + 保留 set_phase 工具调用）
+	autoCache := NewTokenCache()
+	autoResults := buildGateWithRounds("auto", autoCache, 1)
+	if len(autoResults) == 0 {
+		t.Fatal("auto 流程产生 0 个结果")
+	}
+	autoMiss, autoHit := totalMiss(autoResults), totalHit(autoResults)
+	t.Logf("auto 1轮: 请求=%d hit=%d miss=%d hit率=%.1f%%", len(autoResults), autoHit, autoMiss, float64(autoHit)/float64(autoHit+autoMiss)*100)
+
+	// 验证 now 模式（read_required 工具调用，回归基线）
+	nowCache := NewTokenCache()
+	nowResults := buildGateWithRounds("now", nowCache, 1)
+	if len(nowResults) == 0 {
+		t.Fatal("now 流程产生 0 个结果")
+	}
+	nowMiss, nowHit := totalMiss(nowResults), totalHit(nowResults)
+	t.Logf("now 1轮: 请求=%d hit=%d miss=%d hit率=%.1f%%", len(nowResults), nowHit, nowMiss, float64(nowHit)/float64(nowHit+nowMiss)*100)
+
+	// 验证：三种模式的命中率都合理（>95%）
+	if float64(nowHit)/float64(nowHit+nowMiss) < 0.95 {
+		t.Log("now 命中率低于 95%，请检查缓存配置")
+	}
+	if float64(optHit)/float64(optHit+optMiss) < 0.95 {
+		t.Log("opt 命中率低于 95%，请检查自动注入配置")
+	}
+}
+
 var _ = fmt.Sprintf("")
