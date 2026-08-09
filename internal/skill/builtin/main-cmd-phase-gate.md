@@ -27,7 +27,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 ```
 单章：prepare → outline → write → review → maintain → prepare
-批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
+批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
 ```
 
 > 批量模式 `[outline ⇄ write × N 章]` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
@@ -38,6 +38,12 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
 > 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
 > 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
+
+> **批量质量节奏（每 3 章轻量自检 + 批末全批审稿）**：write 循环每写 3 章停笔轻量自检一次
+> （read main-tech-revision-pass + sub-tech-anti-ai-grade，检查最近 3 章节奏/AI 味并立即修复，不攒批末，
+> 不调 run_subagent 不 set_phase——write 阶段白名单无 run_subagent）；批末 review 阶段 run_subagent
+> 审读**本批全部 N 章**（子代理 fork 完整主历史可见全部正文），逐章 read 自查 + edit 修复 + 字数复查，
+> 不要只审第 1 章。
 
 ## require 清单（必须成功调用，失败不算）
 

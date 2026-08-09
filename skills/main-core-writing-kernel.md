@@ -16,7 +16,7 @@ mode: always
 ## 流程
 
 单章：prepare → outline → write → review → maintain → prepare
-批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
+批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
 
 > 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
 > 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
@@ -26,6 +26,14 @@ mode: always
 > （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
 > 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
 > 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
+
+> **批量质量节奏（每 3 章轻量自检 + 批末全批审稿）**：
+> - **每 3 章轻量自检（三章一轮，不积攒）**：write 循环中每写 3 章停笔自检一次——read
+>   main-tech-revision-pass 与 sub-tech-anti-ai-grade，检查最近 3 章的节奏、逻辑、AI 味，
+>   发现问题立即 edit 修复，不攒到批末。自检不调 run_subagent（那是批末的事），不 set_phase。
+> - **批末审稿覆盖全批**：整批写完进入 review 阶段后，run_subagent 审读**本批全部 N 章**
+>   （子代理 fork 完整主历史，正文已在上下文中，无需重复 read 注入）；根据审稿意见
+>   **逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，**不要只审第 1 章**。
 
 ## 卷结构（长篇必建）
 
@@ -103,8 +111,8 @@ mode: always
 
 ### review
 
-1. **run_subagent**(agent_type="review")（required）— 启动审稿
-2. 根据意见修复
+1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章
+2. 根据意见修复（**批量模式：逐章 read 自查 + edit 修复 + 字数复查**，查 N 修 N）
 3. **set_phase("maintain")**
 
 ### maintain（逐项检查清单，每章必做）

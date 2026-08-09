@@ -60,13 +60,16 @@ cacheprobe 模拟验证（2026-08-09，DeepSeek 价 0.02/1/2）：
 | 批量+批内检查（旧方案，废弃） | 0.0971 | 64.7% | 60% | 每3章 | 7.8 | 80.3 |
 | 批量+完整门禁流程 | 0.1110 | 59.6% | 100% | 每3章 | 9.0 | 81.1 |
 
-**落地（业务侧）**：
-1. main-core-writing-kernel.md 批量流程段（第 19-25 行）改为：
-   > 批量 write 循环每 3 章执行一次轻量自检（selfReview 技能 + 修改）；批末统一审稿**覆盖全批**（run_subagent 审读全部 N 章 → 逐章修复 → 字数复查）
-2. 门禁配置零改动（review 阶段白名单已有 run_subagent）
-3. 模拟器实现：`batchLightEndReview(chapters)`（internal/cacheprobe/sim.go），`reviewPlaysBatch` 查 N 修 N
+**落地（✅ kernel 技能已改 2026-08-09；剩余真机验证）**：
+1. ✅ skills/main-core-writing-kernel.md（用户级生效）+ internal/skill/builtin 备份 + ~/.goink/skills 同步：
+   - 批量流程概述加"每 3 章轻量自检 + 批末审稿覆盖全批"
+   - 新增"批量质量节奏"说明段（每 3 章 read revision-pass + anti-ai-grade 自检修复，不调 run_subagent 不 set_phase；批末 run_subagent 审全部 N 章，逐章 read 自查 + edit 修复 + 字数复查）
+   - review 阶段指令加批量说明（审全批，不要只审第 1 章）
+2. ✅ internal/skill/builtin/main-cmd-phase-gate.md 批量流程描述同步
+3. ✅ 门禁配置示例.md 头部批量建议更新为定案方案
+4. 门禁配置零改动（review 阶段白名单已有 run_subagent；write 阶段轻量自检用 read/edit 白名单已有）
 
-**完成标准**：kernel 技能批量段含"每 3 章轻量自检 + 批末全批审稿"，真机跑批量验证子代理审全批实际触发 + 成本符合预期。
+**完成标准**：真机跑批量验证"每 3 章轻量自检 + 批末子代理审全批"实际触发 + 成本符合预期（¥0.0954/章）。
 
 ---
 
