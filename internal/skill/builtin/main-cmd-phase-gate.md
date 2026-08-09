@@ -44,6 +44,8 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > 不调 run_subagent 不 set_phase——write 阶段白名单无 run_subagent）；批末 review 阶段 run_subagent
 > 审读**本批全部 N 章**（子代理 fork 完整主历史可见全部正文），逐章 read 自查 + edit 修复 + 字数复查，
 > 不要只审第 1 章。
+> **注意：同阶段 set_phase 会重复注入技能全文**（SetPhase 同阶段直接成功 + injectPhaseSkills 无条件注入），
+> write 循环内禁止重复 set_phase("write")——只有阶段真正切换才需要 set_phase。
 
 ## require 清单（必须成功调用，失败不算）
 

@@ -34,6 +34,9 @@ mode: always
 > - **批末审稿覆盖全批**：整批写完进入 review 阶段后，run_subagent 审读**本批全部 N 章**
 >   （子代理 fork 完整主历史，正文已在上下文中，无需重复 read 注入）；根据审稿意见
 >   **逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，**不要只审第 1 章**。
+> - **write 循环内禁止重复 set_phase("write")**：阶段入口已注入本阶段必读技能，循环中每
+>   set_phase 一次系统会重复注入技能全文（浪费 token 且挤占注意力）。只有阶段真正切换
+>   （outline→write、write→review）才需要 set_phase；自检、修复、迷你维护都不需要它。
 
 ## 卷结构（长篇必建）
 
