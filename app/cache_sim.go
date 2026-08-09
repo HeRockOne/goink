@@ -15,6 +15,9 @@ type CacheSimResult struct {
 	TotalNowMiss   int64   `json:"total_now_miss"`
 	TotalLegacyHit int64   `json:"total_legacy_hit"`
 	TotalLegacyMiss int64  `json:"total_legacy_miss"`
+	// LLM 输出 token（assistant 消息字节，含 reasoning_content）
+	TotalNowOutput    int64 `json:"total_now_output"`
+	TotalLegacyOutput int64 `json:"total_legacy_output"`
 	// 成本估算（按设置页配置的价格，元）
 	NowCost       float64 `json:"now_cost"`
 	LegacyCost    float64 `json:"legacy_cost"`
@@ -33,6 +36,9 @@ type CacheSimScenario struct {
 	NowHitRate    float64 `json:"now_hit_rate"`
 	LegacyHitRate float64 `json:"legacy_hit_rate"`
 	MissSavePct   float64 `json:"miss_save_pct"`
+	// LLM 输出 token（assistant 消息字节，含 reasoning_content）
+	NowOutput    int64 `json:"now_output"`
+	LegacyOutput int64 `json:"legacy_output"`
 	// 该场景的估算费用（元，按设置页价格）
 	NowCost    float64 `json:"now_cost"`
 	LegacyCost float64 `json:"legacy_cost"`
@@ -80,6 +86,7 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 			NowHitRate:    hitRate(nH, nM),
 			LegacyHitRate: hitRate(lH, lM),
 			MissSavePct:   missSave(nM, lM),
+			NowOutput:     nOut, LegacyOutput: lOut,
 			NowCost:       costOf(nH, nM, nOut, cachePrice, inputPrice, outputPrice),
 			LegacyCost:    costOf(lH, lM, lOut, cachePrice, inputPrice, outputPrice),
 		}
@@ -91,6 +98,8 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 	res.TotalNowMiss = raw.TotalNowMiss
 	res.TotalLegacyHit = raw.TotalLegacyHit
 	res.TotalLegacyMiss = raw.TotalLegacyMiss
+	res.TotalNowOutput = raw.TotalNowOutput
+	res.TotalLegacyOutput = raw.TotalLegacyOutput
 	res.NowHitRate = hitRate(raw.TotalNowHit, raw.TotalNowMiss)
 	res.LegacyHitRate = hitRate(raw.TotalLegacyHit, raw.TotalLegacyMiss)
 	res.MissSavePct = missSave(raw.TotalNowMiss, raw.TotalLegacyMiss)

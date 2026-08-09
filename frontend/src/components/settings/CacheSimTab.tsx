@@ -13,6 +13,8 @@ interface CacheSimScenario {
   now_hit_rate: number
   legacy_hit_rate: number
   miss_save_pct: number
+  now_output: number
+  legacy_output: number
   now_cost: number
   legacy_cost: number
 }
@@ -23,6 +25,8 @@ interface CacheSimResult {
   total_now_miss: number
   total_legacy_hit: number
   total_legacy_miss: number
+  total_now_output: number
+  total_legacy_output: number
   now_cost: number
   legacy_cost: number
   now_hit_rate: number
@@ -90,23 +94,30 @@ export default function CacheSimTab() {
     </label>
   )
 
-  const renderScenario = (s: CacheSimScenario) => {
+  const renderScenario = (s: CacheSimScenario, chapters: number) => {
+    const perChapter = s.now_cost / Math.max(1, chapters)
     return (
       <div key={s.name} className="rounded-lg border p-3">
         <div className="text-sm font-medium mb-2">{s.name}</div>
         <table className="w-full text-xs">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th className="text-left py-1 font-normal">输入 hit</th>
+              <th className="text-right py-1 font-normal">输入 miss</th>
+              <th className="text-right py-1 font-normal">输出 out</th>
+              <th className="text-right py-1 font-normal">命中率</th>
+              <th className="text-right py-1 font-normal">成本 ¥</th>
+              <th className="text-right py-1 font-normal">每章 ¥</th>
+            </tr>
+          </thead>
           <tbody>
             <tr>
-              <td className="py-1">总 token（输入）</td>
-              <td className="text-right tabular-nums">{fmtM(s.now_hit + s.now_miss)}</td>
-            </tr>
-            <tr>
-              <td className="py-1">缓存命中率</td>
-              <td className="text-right tabular-nums">{s.now_hit_rate.toFixed(1)}%</td>
-            </tr>
-            <tr>
-              <td className="py-1">估算费用（¥）</td>
-              <td className="text-right tabular-nums">{s.now_cost.toFixed(4)}</td>
+              <td className="py-1 tabular-nums">{fmtM(s.now_hit)}</td>
+              <td className="py-1 text-right tabular-nums">{fmtM(s.now_miss)}</td>
+              <td className="py-1 text-right tabular-nums">{fmtM(s.now_output)}</td>
+              <td className="py-1 text-right tabular-nums">{s.now_hit_rate.toFixed(1)}%</td>
+              <td className="py-1 text-right tabular-nums">{s.now_cost.toFixed(4)}</td>
+              <td className="py-1 text-right tabular-nums">{perChapter.toFixed(4)}</td>
             </tr>
           </tbody>
         </table>
@@ -124,7 +135,8 @@ export default function CacheSimTab() {
         <p className="text-xs text-muted-foreground mt-1">
           模拟一个真实对话窗口的历史 Token 消耗与费用。短对话与单章/批量创作
           交替发生在同一条对话历史里。必读技能由系统自动注入（auto_skill_injection），
-          历史留在服务端缓存，费用按设置中的模型价格估算。
+          历史留在服务端缓存；正文长度与思考过程按真实分布生成（分阶段 thinking），
+          费用 = 输入命中 × 缓存价 + 输入未命中 × 输入价 + 输出 × 输出价（设置页模型价格）。
         </p>
       </div>
 
@@ -146,23 +158,29 @@ export default function CacheSimTab() {
 
       {result && (
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-          {result.scenarios.map(renderScenario)}
+          {result.scenarios.map(s => renderScenario(s, singleRounds + batchChapters))}
 
           <div className="rounded-lg border p-3 bg-muted/30">
             <div className="text-sm font-medium mb-2">合计</div>
             <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="text-left py-1 font-normal">输入 hit</th>
+                  <th className="text-right py-1 font-normal">输入 miss</th>
+                  <th className="text-right py-1 font-normal">输出 out</th>
+                  <th className="text-right py-1 font-normal">命中率</th>
+                  <th className="text-right py-1 font-normal">成本 ¥</th>
+                  <th className="text-right py-1 font-normal">每章 ¥</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr>
-                  <td className="py-1">总输入 token</td>
-                  <td className="text-right tabular-nums">{fmtM(result.total_now_hit + result.total_now_miss)}</td>
-                </tr>
-                <tr>
-                  <td className="py-1">总命中率</td>
-                  <td className="text-right tabular-nums">{result.now_hit_rate.toFixed(1)}%</td>
-                </tr>
-                <tr>
-                  <td className="py-1">估算费用（¥）</td>
-                  <td className="text-right tabular-nums">{result.now_cost.toFixed(4)}</td>
+                  <td className="py-1 tabular-nums">{fmtM(result.total_now_hit)}</td>
+                  <td className="py-1 text-right tabular-nums">{fmtM(result.total_now_miss)}</td>
+                  <td className="py-1 text-right tabular-nums">{fmtM(result.total_now_output)}</td>
+                  <td className="py-1 text-right tabular-nums">{result.now_hit_rate.toFixed(1)}%</td>
+                  <td className="py-1 text-right tabular-nums">{result.now_cost.toFixed(4)}</td>
+                  <td className="py-1 text-right tabular-nums">{(result.now_cost / Math.max(1, singleRounds + batchChapters)).toFixed(4)}</td>
                 </tr>
               </tbody>
             </table>
