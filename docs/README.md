@@ -17,7 +17,7 @@
 | [cache-hit-mechanism.md](architecture/cache-hit-mechanism.md) | 缓存命中机制详解（DeepSeek 前缀缓存，含流程推演） |
 | [provider-status.md](architecture/provider-status.md) | 内置 Provider 配置状态（7 个 provider，联网核实） |
 | [theme-system.md](architecture/theme-system.md) | 主题系统文档（50+ CSS 变量清单 + 派生关系 + 自定义主题 + Apple 白示例） |
-| [cache-simulation.md](architecture/cache-simulation.md) | 缓存命中模拟库（cacheprobe）实现原理与验证结论 |
+| [cache-simulation.md](architecture/cache-simulation.md) | 缓存命中模拟库（cacheprobe）实现原理、成本估算口径与验证结论 |
 
 ## design/ — 方案（长存，参考用）
 
@@ -38,7 +38,7 @@
 
 | 工具 | 说明 |
 |------|------|
-| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数）：模拟一个真实对话窗口——短对话（查/改设定）与单章/批量创作交替、一条历史贯穿，NS 落库后混合窗口 miss 降 23.7%（单章 27.0%、批量 20.7% 为上下界）；正文长度读真实设置；核心逻辑在 internal/cacheprobe 库，设置面板「写书成本模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]` |
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数，2026-08-09 起含精确输出统计 + 分阶段思考模拟 + 正文真实波动）：模拟一个真实对话窗口——短对话（查/改设定）与单章/批量创作交替、一条历史贯穿；成本 = hit×缓存价 + miss×输入价 + out×输出价（默认 0.02/1/2，CLI 可调）；`table` 子命令输出 8 个常用工作负载 Markdown 成本表（实测批量 5 章 ¥0.10/章、单章 ¥0.24-0.28/章，与真实日志吻合）；正文长度读真实设置、小说信息读真实 DB；核心逻辑在 internal/cacheprobe 库，设置面板「写书成本模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]` |
 
 ## adr/ — 决策记录（长存，不可变）
 
