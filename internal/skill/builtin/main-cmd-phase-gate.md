@@ -76,12 +76,12 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| auto_skill_injection | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符 |
+| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符 |
 | next | 是 | require 满足后可进入的下一阶段（旧字段名 main-cmd-next 已废弃，只解析 next） |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
 
-配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（用 `read_required(skills="...")` 加载，技能名从门禁配置读取，不硬编码）。
+配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（系统在 set_phase 进入该阶段时自动注入，技能名从门禁配置读取，不硬编码）。
 
 ## 配置设计指南（怎么配一套门禁）
 
@@ -89,7 +89,7 @@ next: outline
 
 | 工具角色 | 工具名 | 放哪些阶段 |
 |---------|--------|-----------|
-| 技能加载 | read_required | 有必读技能的阶段 |
+| 技能加载 | auto_skill_injection | 有必读技能的阶段 |
 | 文件读取 | read | outline / write / review / maintain |
 | 查询 | get_characters, get_character_relations, get_locations, get_location_relations, get_timeline, get_story_arcs, get_arc_nodes, get_reader_perspective, get_preferences, get_lore, get_items, get_item_occurrences, get_scenes, get_stats, get_writing_snapshot, get_writing_context, get_chapter_list, get_entity_appearances | 所有阶段（随时查状态） |
 | 搜索 | search_lore, search_items, search_story_memory, check_story_consistency | 所有阶段 |
@@ -108,7 +108,7 @@ next: outline
 | init | 7 查询（characters/locations/story_arcs/lore/items/timeline/preferences） |
 | prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） |
 | outline | edit |
-| write | edit, get_chapter_list, read, read_required（字数校验转出时自动强制，无需配置） |
+| write | edit, get_chapter_list, read（字数校验转出时自动强制，无需配置） |
 | review | run_subagent |
 | maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations |
 
@@ -133,7 +133,7 @@ next: outline
 | next 指向不存在的阶段名 | 切换时报"未知阶段" |
 | 两个 mode 都空的同名阶段 | 只生效第一个（同名阶段必须写 mode 区分） |
 | edit_paths 不含 require 需要的路径 | edit 被拦，require 永不满足 |
-| auto_skill_injection 引用不存在的技能 | read_required 失败，阶段无法切换 |
+| auto_skill_injection 引用不存在的技能 | 自动注入跳过该技能（best-effort），需手动确认 |
 
 ## 故障排查
 

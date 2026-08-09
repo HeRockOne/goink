@@ -17,6 +17,7 @@
 | [cache-hit-mechanism.md](architecture/cache-hit-mechanism.md) | 缓存命中机制详解（DeepSeek 前缀缓存，含流程推演） |
 | [provider-status.md](architecture/provider-status.md) | 内置 Provider 配置状态（7 个 provider，联网核实） |
 | [theme-system.md](architecture/theme-system.md) | 主题系统文档（50+ CSS 变量清单 + 派生关系 + 自定义主题 + Apple 白示例） |
+| [cache-simulation.md](architecture/cache-simulation.md) | 缓存命中模拟库（cacheprobe）实现原理与验证结论 |
 
 ## design/ — 方案（长存，参考用）
 
@@ -86,4 +87,5 @@
 > 2026-08-08：cacheprobe 新增批量创作场景——按 batch 门禁模式模拟（prepare 一次 → outline 一次出 N 章大纲 → write 循环 N 章正文，技能仅循环开头加载 → review/maintain 统一一次 → done，连续 2 批体现批次边界）；gateScript 拆为 prepare/outline/write/selfReview/review/maintain 分段复用；CLI 第三参数批量章数、设置面板加批量章数输入；实测批量 5 章×2 批 miss 降 20.7%（单章 5 轮 27.0%）
 > 2026-08-08：批量模式 + clean 真机验证（第 11-16 章，mimo-v2.5）——单章 ¥0.16/章（命中 97.7%）、批量 3 章 ¥0.12/章（命中 98.7%，与模拟吻合）；clean（已读技能清理）负收益——模型会重读被清内容，miss 120K→457K、输出翻倍，¥0.23/章 比批量贵 92%，结论：永久关闭（模拟假设"清了不用重读"错误）；事后技能补读审计——门禁只在 set_phase 校验，模型"先干活后补读"解锁，必读技能变手续非指导，已改事前强制（8c70a41：必读未加载时拦截 edit/update/create/run_subagent，只读/查询/管理放行）；UI 修复（d6c270e）——流式 text 段固定 id 防 ThinkingBlock 重挂载丢展开状态 + 思考结束自动收回、门禁进度条加单章/批量徽章（PhaseStatus 增 mode）、叙事面板刷新先取最新章节号再拉上下文（写完新章 current/past 卡立即更新）
 > 2026-08-08：clean 数据复核与功能移除——查 goink.log model_usage 累计（会话 id=9），窗口 3 数值被 turn 2"继续"（19:46:53 被停止）污染（+525K hit/+78K miss），修正后批量+clean = ¥0.602/3 章（¥0.20/章），仍比纯批量 ¥0.12/章 贵 67%；根因不变（重读全 miss + 前缀断裂命中率 98.7%→93.8% + 输出 +78%）；已移除 clean 运行时功能（删除 context_clear.go/test、agent.go 选项与发送前 transform、app SetContextClear、config 字段、ContextRing 开关），cacheprobe 模拟保留作对照研究；AGENTS.md 补充调试日志位置 D:\Goink\goink.log
+> 2026-08-08：token 链路优化（每章 ¥0.195→¥0.130，省 33%）——auto-inject 必读技能（set_phase 时系统自动注入该阶段 auto_skill_injection 技能为 system 消息，model 无需调 auto_skill_injection 工具，省掉工具调用两跳 + 拦截重试）+ set_phase 自动推进（require 满足后自动切换，不再等 LLM 调）；工具 read_required 重命名为 auto_skill_injection，配置字段 require_reads 统一为 auto_skill_injection（避免与 require 字段混淆）；删系统提示词阶段表格（与常驻 kernel 90% 重复，2 条唯一指令补入 kernel prepare）；kernel 复制到内置做备份；NS 缩短 800 字符已确认不能做（每章指纹 ~300 字，800 只够 2 章，防重复检查需 3 章）；writing_context 描述精简风险大不动；子代理完整历史 fork 精简后成本更高（模拟验证 1.4x）保持现状；设置面板缓存模拟同步 auto-inject 模式并简化展示（去掉旧/新对比，只显示总输入/命中率/费用）
 > 2026-08-08：cacheprobe 场景重构为真实对话窗口——短对话（带工具调用：查/改设定）与单章/批量创作交替发生在同一条历史（buildMixedSession），替代三个互斥的独立场景；正文长度与字数校验读真实 app_config 设置（min/max 章节字数，目标 = min+(max-min)/2）；设置面板改「写书成本模拟」Tab（旧版本/当前版本列、M 单位、费用估算），单章轮数/短对话穿插/批量章数均可为 0；实测混合窗口(2+2+2) miss 降 23.7%

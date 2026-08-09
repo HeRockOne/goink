@@ -111,12 +111,6 @@ tools: read, auto_skill_injection, edit, update_character, update_character_rela
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle
-next: done
--->
-<!-- phase-gate-config
-mode: batch
-phase: done
-tools: read
 next: prepare
 -->`
 

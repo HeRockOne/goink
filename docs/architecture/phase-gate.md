@@ -118,7 +118,7 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表（白名单，未列出的工具被硬拦截） |
 | require | 是 | 必须调用过（且成功）的工具列表，全部满足后才能切换阶段 |
-| auto_skill_injection | 否 | 必须用 read_required 读取的技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。阶段内强制：切换阶段时检查本阶段是否读过，跨阶段读取不算；支持 `*` 通配符（如 `main-tech-*`）。**未加载时 edit/run_subagent/create_*/update_*/delete_* 会被事前拦截**（技能先于创作，不是切换手续） |
+| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**这些技能为 system 消息，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符（如 `main-tech-*`） |
 | next | 是 | require 满足后可进入的下一阶段 |
 | fail_next | 否 | require 不满足时的回退阶段（当前出厂配置未使用，代码支持） |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制；逗号分隔） |
@@ -173,7 +173,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 
 ### 第四步：定每阶段的 auto_skill_injection（必读技能）
 
-原则：该阶段核心方法论，对照 kernel 阶段技能表（`skills/main-core-writing-kernel.md` 的"阶段技能表"）。
+原则：该阶段核心方法论，对照 kernel 阶段技能表（`skills/main-core-writing-kernel.md` 的"阶段技能表"）。**这些技能由系统在 set_phase 进入该阶段时自动注入为 system 消息**，模型无需手动调用 auto_skill_injection 工具。
 
 | 阶段 | auto_skill_injection |
 |------|---------------|
