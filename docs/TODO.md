@@ -33,6 +33,10 @@ cacheprobe 模拟验证（2026-08-09，DeepSeek 价 0.02/1/2）：
 5. 关注两条告警日志：
    - `前缀变化，缓存可能失效`：internal/agent/agent.go:321-328（computePrefixHash + computeSystemBlockHashes 定位哪个 system 块变了）
    - `全量缓存未命中`：internal/agent/tokens.go:224（hit=0 且 miss>1 万，turn>1 出现才算异常）
+6. **批量长循环技能衰减观察**（方案 B 验证点：技能只在 outline→write 注入一次）：批量 10 章后观察
+   write 4 技能规则是否仍被遵守（质量是否衰减）。若衰减，补救 = 每 3 章自检顺带 read write 核心技能
+   （非重复注入）；业界共识：规则性指导注入即内化，重复注入 = miss + 注意力浪费，状态新鲜由
+   miniMaintain/查询保证，非技能注入职责
 
 **完成标准**：真实 vs 模拟的 miss 构成/命中率对照表，差异原因说明。
 
