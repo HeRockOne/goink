@@ -25,7 +25,7 @@ type PhaseGate struct {
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
 	visited         []string       // 已访问过的阶段列表，用于回退校验；回到起点时重置
-	readsByPhase    map[string]map[string]bool // 阶段 → 已成功读取的技能集合（require_reads 用，阶段切换后从零开始）
+	readsByPhase    map[string]map[string]bool // 阶段 → 已成功读取的技能集合（auto_skill_injection 用，阶段切换后从零开始）
 }
 
 // PhaseConfig 是单个阶段的配置。
@@ -34,7 +34,7 @@ type PhaseConfig struct {
 	Mode      string   // 所属模式："single" | "batch"（空=两种模式都适用）
 	Tools     []string // 允许使用的工具
 	Require   []string // 必须调用过的工具（完成条件）
-	RequireReads []string // 必须读取过的技能名（完成条件，如 main-tech-show-dont-tell）
+	AutoSkillInjection []string // 必须读取过的技能名（完成条件，如 main-tech-show-dont-tell）
 	Next      string   // 满足条件后可进入的下一阶段
 	FailNext  string   // require 不满足时的回退阶段
 	Loop      bool     // batch 模式下是否循环（write → outline）
@@ -106,7 +106,7 @@ func parsePhaseBlock(block string) PhaseConfig {
 		case "require":
 			pc.Require = parseToolList(val)
 		case "auto_skill_injection":
-			pc.RequireReads = parseToolList(val)
+			pc.AutoSkillInjection = parseToolList(val)
 		case "next":
 			pc.Next = val
 		case "fail_next":
@@ -159,9 +159,9 @@ func (g *PhaseGate) OnToolCall(toolName string, success bool) {
 	}
 }
 
-// OnReadRequired 记录当前阶段成功读取的技能（require_reads 用）。
+// OnSkillInjected 记录当前阶段成功读取的技能（auto_skill_injection 用）。
 // 阶段切换后 readsByPhase 对新阶段从零开始——每阶段必读独立生效。
-func (g *PhaseGate) OnReadRequired(skillName string) {
+func (g *PhaseGate) OnSkillInjected(skillName string) {
 	if g == nil || !g.active || skillName == "" {
 		return
 	}
@@ -198,14 +198,14 @@ func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 	return true
 }
 
-// missingRequireReads 返回当前阶段尚未加载的必读技能列表（require_reads）。
-func (g *PhaseGate) missingRequireReads(pc *PhaseConfig) []string {
-	if len(pc.RequireReads) == 0 {
+// missingInjections 返回当前阶段尚未加载的必读技能列表（auto_skill_injection）。
+func (g *PhaseGate) missingInjections(pc *PhaseConfig) []string {
+	if len(pc.AutoSkillInjection) == 0 {
 		return nil
 	}
 	reads := g.readsByPhase[g.currentPhase]
 	var missing []string
-	for _, pattern := range pc.RequireReads {
+	for _, pattern := range pc.AutoSkillInjection {
 		if strings.Contains(pattern, "*") {
 			matched := false
 			for read := range reads {
@@ -226,11 +226,11 @@ func (g *PhaseGate) missingRequireReads(pc *PhaseConfig) []string {
 	return missing
 }
 
-// checkRequireReadsMet 检查阶段的 require_reads（必读技能）是否全部满足。
+// checkInjectionsMet 检查阶段的 auto_skill_injection（必读技能）是否全部满足。
 // 只统计当前阶段内成功读取的技能（阶段切换后从零开始）。
 // 支持通配符：配置项含 * 时用 path.Match 匹配（如 "main-tech-*" 匹配所有已读的 main-tech 系技能）。
-func (g *PhaseGate) checkRequireReadsMet(pc *PhaseConfig) bool {
-	return len(g.missingRequireReads(pc)) == 0
+func (g *PhaseGate) checkInjectionsMet(pc *PhaseConfig) bool {
+	return len(g.missingInjections(pc)) == 0
 }
 
 // isMutatingTool 判断工具是否是有副作用的创作/维护动作。
@@ -254,7 +254,7 @@ type ValidationIssue struct {
 }
 
 // ValidateGateConfig 校验门禁配置合法性（两种模式都查）。
-// knownSkills 是现有技能名集合（require_reads 引用检查用，含通配符则跳过）。
+// knownSkills 是现有技能名集合（auto_skill_injection 引用检查用，含通配符则跳过）。
 func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue {
 	var issues []ValidationIssue
 	skills := make(map[string]bool, len(knownSkills))
@@ -290,14 +290,14 @@ func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue 
 						fmt.Sprintf("require 引用了 tools 中没有的工具 [%s]，切换阶段将永远被拦截", req)})
 				}
 			}
-			// require_reads 的技能必须存在（通配符跳过）
-			for _, pattern := range p.RequireReads {
+			// auto_skill_injection 的技能必须存在（通配符跳过）
+			for _, pattern := range p.AutoSkillInjection {
 				if strings.Contains(pattern, "*") {
 					continue
 				}
 				if !skills[pattern] {
 					issues = append(issues, ValidationIssue{mode, p.Name, "warning",
-						fmt.Sprintf("require_reads 引用的技能 [%s] 不存在，auto_skill_injection 将失败", pattern)})
+						fmt.Sprintf("auto_skill_injection 引用的技能 [%s] 不存在，auto_skill_injection 将失败", pattern)})
 				}
 			}
 			// 有 edit 工具但没限制路径
@@ -350,9 +350,9 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
-	// 检查当前阶段的 require_reads（必读技能）是否满足（不满足则阻塞）
-	if current != nil && len(current.RequireReads) > 0 {
-		if missingSkills := g.missingRequireReads(current); len(missingSkills) > 0 {
+	// 检查当前阶段的 auto_skill_injection（必读技能）是否满足（不满足则阻塞）
+	if current != nil && len(current.AutoSkillInjection) > 0 {
+		if missingSkills := g.missingInjections(current); len(missingSkills) > 0 {
 			return false, fmt.Sprintf("阶段 [%s] 要求必须用 auto_skill_injection 读取以下技能后才能切换到 [%s]，当前未读取: %v",
 				g.currentPhase, targetPhase, missingSkills)
 		}
@@ -489,7 +489,7 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 			// 事前技能强制：必读技能未加载前，禁止执行创作/维护动作。
 			// 技能是创作指导，必须先读再动笔，不允许"干完活再补读解锁阶段"。
 			if isMutatingTool(toolName) {
-				if missing := g.missingRequireReads(current); len(missing) > 0 {
+				if missing := g.missingInjections(current); len(missing) > 0 {
 					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 auto_skill_injection 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
 					return false, warning
 				}

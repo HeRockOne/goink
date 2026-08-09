@@ -700,7 +700,7 @@ func readSkill(name string) play {
 	}
 }
 
-// readRequired 模拟门禁 require_reads 的 read_required 工具调用（2026-08-08 起各阶段必读技能用此加载）。
+// readRequired 模拟门禁 auto_skill_injection 的 read_required 工具调用（2026-08-08 起各阶段必读技能用此加载）。
 func readRequired(names ...string) play {
 	skills := strings.Join(names, ",")
 	return play{
@@ -716,7 +716,7 @@ func readRequired(names ...string) play {
 // initInject init 阶段必读技能（5 个开书技能），auto 模式在 init 开始时注入。
 var initInject = readFilesText([]string{"main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"})
 
-// phaseInjectSkills 各阶段必读技能 → 注入内容（与门禁 require_reads 一致）。
+// phaseInjectSkills 各阶段必读技能 → 注入内容（与门禁 auto_skill_injection 一致）。
 var phaseInjectSkills = map[string]string{
 	"prepare":  readFilesText([]string{"main-tech-common-sense-logic"}),
 	"outline":  readFilesText([]string{"main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"}),
@@ -747,7 +747,7 @@ func injectSkillsPlays(plays []play) ([]play, []string) {
 }
 
 // initScript 开书（init）流程：read_required 加载 5 个必读技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
-// （对照门禁 init require_reads + main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
+// （对照门禁 init auto_skill_injection + main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
 func initScript() []play {
 	return []play{
 		readRequired("main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"),
@@ -804,7 +804,7 @@ func preparePlays(ch int) []play {
 	}
 }
 
-// outlinePlays 阶段 outline：require_reads 必读（hook-enhanced + title-design）+ 类型专精 1 个。
+// outlinePlays 阶段 outline：auto_skill_injection 必读（hook-enhanced + title-design）+ 类型专精 1 个。
 // 常备技能（book-outline/chapter-opening/maliang-method/dialogue-subtext/emotional-arc/emotion-injection）
 // 首次会话加载一次，后续章节历史中已有则直接引用，不重复 read。
 func outlinePlays(ch int) []play {
@@ -817,7 +817,7 @@ func outlinePlays(ch int) []play {
 	}
 }
 
-// writePlays 阶段 write：require_reads 必读（show-dont-tell + anti-ai-writing + pov-purity + info-density）
+// writePlays 阶段 write：auto_skill_injection 必读（show-dont-tell + anti-ai-writing + pov-purity + info-density）
 // + read 本章大纲（kernel write 阶段第 2 步：read(required) 读 outlines/NNN.md，门禁 require 强制——
 // 批量循环写多章时靠它锁定本章大纲，防止把别的章的大纲内容串进本章正文）+ 分段写正文。
 // 情景技能（climax/shuangdian/foreshadow/emotion/pacing）仅本章涉及该情景时读，普通章不读；
@@ -947,7 +947,7 @@ func batchGatePlays(chapters int) []play {
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`})
 
 	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
-	// （门禁 require_reads 按阶段计，write 阶段只进入一次；后续章复用上下文）。
+	// （门禁 auto_skill_injection 按阶段计，write 阶段只进入一次；后续章复用上下文）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {

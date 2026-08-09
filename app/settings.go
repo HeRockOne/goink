@@ -201,7 +201,7 @@ func (a *App) RestoreDefaultPhaseGateConfig() error {
 }
 
 // ValidatePhaseGateConfig 校验门禁配置合法性（设置页"校验配置"按钮）。
-// 返回问题列表，空 = 配置有效。require_reads 技能存在性对照当前技能库。
+// 返回问题列表，空 = 配置有效。auto_skill_injection 技能存在性对照当前技能库。
 func (a *App) ValidatePhaseGateConfig(configText string) []agent.ValidationIssue {
 	var skills []string
 	if a.skill != nil {

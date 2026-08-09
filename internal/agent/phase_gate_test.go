@@ -564,9 +564,9 @@ next: prepare
 	}
 }
 
-// TestRequireReadsPerPhase 验证 require_reads 的阶段内强制语义：
+// TestAutoSkillInjectionPerPhase 验证 auto_skill_injection 的阶段内强制语义：
 // 技能必须在当前阶段内用 auto_skill_injection 读取，跨阶段读取不满足。
-func TestRequireReadsPerPhase(t *testing.T) {
+func TestAutoSkillInjectionPerPhase(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
 phase: outline
@@ -598,45 +598,45 @@ next: prepare
 	gate.OnToolCall("edit", true)
 	ok, warning := gate.SetPhase("write")
 	if ok {
-		t.Error("should BLOCK: outline require_reads not met")
+		t.Error("should BLOCK: outline auto_skill_injection not met")
 	}
 	if warning == "" {
 		t.Error("expected warning listing missing skill")
 	}
 
 	// 读 outline 必读技能后放行
-	gate.OnReadRequired("main-tech-chapter-hook-enhanced")
+	gate.OnSkillInjected("main-tech-chapter-hook-enhanced")
 	ok, _ = gate.SetPhase("write")
 	if !ok {
-		t.Error("should allow: outline require_reads met")
+		t.Error("should allow: outline auto_skill_injection met")
 	}
 
 	// write 阶段：即使前面读过其他技能，本阶段必读未读仍被拦
 	gate.OnToolCall("edit", true)
 	ok, warning = gate.SetPhase("done")
 	if ok {
-		t.Error("should BLOCK: write require_reads not met")
+		t.Error("should BLOCK: write auto_skill_injection not met")
 	}
 
 	// 读 write 必读技能（跨阶段读的 outline 技能不算）
-	gate.OnReadRequired("main-tech-show-dont-tell")
+	gate.OnSkillInjected("main-tech-show-dont-tell")
 	ok, warning = gate.SetPhase("done")
 	if ok {
 		t.Error("should BLOCK: anti-ai-writing still missing")
 	}
-	gate.OnReadRequired("main-tech-anti-ai-writing")
+	gate.OnSkillInjected("main-tech-anti-ai-writing")
 	gate.OnToolCall("get_chapter_list", true)
 	gate.SetWordCountOK(true)
 	ok, _ = gate.SetPhase("done")
 	if !ok {
-		t.Error("should allow: write require_reads met")
+		t.Error("should allow: write auto_skill_injection met")
 	}
 }
 
-// TestRequireReadsBeforeCreation 验证事前技能强制：
+// TestAutoSkillInjectionBeforeCreation 验证事前技能强制：
 // 必读技能未加载前，创作/维护动作（edit/update/create/run_subagent）被直接拦截，
 // 而不是等 set_phase 时才补读——技能是创作指导，不是切换手续。
-func TestRequireReadsBeforeCreation(t *testing.T) {
+func TestAutoSkillInjectionBeforeCreation(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
 phase: write
@@ -682,7 +682,7 @@ next: done
 	}
 
 	// 读技能后：edit 放行
-	gate.OnReadRequired("main-tech-show-dont-tell")
+	gate.OnSkillInjected("main-tech-show-dont-tell")
 	if allowed, _ := gate.CheckToolAllowed("edit"); !allowed {
 		t.Error("should allow: edit after required skill loaded")
 	}

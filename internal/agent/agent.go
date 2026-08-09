@@ -209,7 +209,7 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 	return strings.TrimSpace(b.String())
 }
 
-// injectPhaseSkills 自动注入指定阶段的必读技能（require_reads）为 system 消息。
+// injectPhaseSkills 自动注入指定阶段的必读技能（auto_skill_injection）为 system 消息。
 // 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
 // 模型无需再调 auto_skill_injection——技能是创作指导，系统保证其在创作动作前就绪。
 func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
@@ -218,10 +218,10 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 		return
 	}
 	pc := pg.findPhase(phase)
-	if pc == nil || len(pc.RequireReads) == 0 {
+	if pc == nil || len(pc.AutoSkillInjection) == 0 {
 		return
 	}
-	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.RequireReads)
+	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
 	if err != nil {
 		a.logger.Warn("自动注入必读技能失败", "phase", phase, "err", err)
 		return
@@ -230,12 +230,12 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 		return
 	}
 	a.appendMsg("system", content, "", nil, opts, nil)
-	for _, name := range pc.RequireReads {
+	for _, name := range pc.AutoSkillInjection {
 		if !strings.Contains(name, "*") {
-			pg.OnReadRequired(name)
+			pg.OnSkillInjected(name)
 		}
 	}
-	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.RequireReads)
+	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.AutoSkillInjection)
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
@@ -625,11 +625,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// 门禁：记录调用
 					if a.getPG() != nil && a.getPG().Active() {
 						a.getPG().OnToolCall(name, result.Success)
-// auto_skill_injection 成功：上报本次读取的技能名（require_reads 检查用）
+// auto_skill_injection 成功：上报本次读取的技能名（auto_skill_injection 检查用）
 					if name == "auto_skill_injection" && result.Success && result.Data != nil {
 							if skills, ok := result.Data["skills"].([]string); ok {
 								for _, s := range skills {
-									a.getPG().OnReadRequired(s)
+									a.getPG().OnSkillInjected(s)
 								}
 							}
 						}
