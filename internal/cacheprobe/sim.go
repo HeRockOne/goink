@@ -1105,6 +1105,18 @@ func batchInCheck(chapters, every int) []play { return batchCore(chapters, 2, ev
 // （write→review→maintain→write 阶段链），无统一收尾——批量 <6 章时覆盖 100% 的唯一方案。
 func batchFullCycle(chapters, every int) []play { return batchCore(chapters, 3, every) }
 
+// batchEndReview 批量 + 批末全批审稿（简单方案，业界"重型低频"做法）：
+// 现状流程不变（每章 miniMaintain + 字数校验 + 读大纲 = 轻量质量机制），
+// 仅把批末统一 review 从"只审第 1 章"改为"覆盖全批"——子代理 fork 完整主历史
+// （正文天然在上下文中），主会话查 N 修 N（每章 read + 修复 + 字数复查）。
+// 零阶段切换、零技能重复注入。
+func batchEndReview(chapters int) []play { return batchCore(chapters, 4, 0) }
+
+// batchLightEndReview 批量 + 业界标准组合（轻量高频 + 重型低频）：
+// 每 3 章轻量自检（selfReviewPlays，对应白金"三章一轮"节奏）+ 批末全批审稿
+// （子代理覆盖全批）。零阶段切换。
+func batchLightEndReview(chapters int) []play { return batchCore(chapters, 5, 3) }
+
 // batchCore 批量门禁流程核心构造器（内部实现，外部用上面的语义化入口）。
 // checkKind: 0=无自检 / 1=轻量自检(selfReviewPlays) / 2=批内检查(子代理审最近 N 章) / 3=完整门禁循环(review+maintain)
 // checkEvery: 自检节奏（章数，0=不检查；3 的倍数对齐白金"三章一轮"）
@@ -1141,14 +1153,13 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
-		// 批次检查（checkKind=1/2）：write 循环内按节奏插入
-		if checkKind > 0 && checkKind < 3 && checkEvery > 0 && ch%checkEvery == 0 {
-			switch checkKind {
-			case 1:
-				plays = append(plays, selfReviewPlays(ch)...)
-			case 2:
-				plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
-			}
+		// 批次检查（checkKind=1/5）：write 循环内按节奏插入轻量自检，不跳阶段
+		if (checkKind == 1 || checkKind == 5) && checkEvery > 0 && ch%checkEvery == 0 {
+			plays = append(plays, selfReviewPlays(ch)...)
+		}
+		// 批次检查（checkKind=2）：write 循环内按节奏插入，走阶段切换
+		if checkKind == 2 && checkEvery > 0 && ch%checkEvery == 0 {
+			plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
 		}
 		// 批次完整流程（checkKind=3）：每个批次边界（含末尾剩余章）都走 review+maintain，
 		// 替代统一 review/maintain 收尾——即"三章一批"的完整门禁循环。
@@ -1163,10 +1174,33 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	}
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
 
-	// review：整批统一一次（run_subagent + 修复）
-	plays = append(plays, reviewPlays(1)...)
+	// review：整批统一一次。checkKind=4/5 覆盖全批（查 N 修 N），其余只审第 1 章
+	if checkKind == 4 || checkKind == 5 {
+		plays = append(plays, reviewPlaysBatch(chapters)...)
+	} else {
+		plays = append(plays, reviewPlays(1)...)
+	}
 	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
 	plays = append(plays, maintainPlays(chapters, "prepare")...)
+	return plays
+}
+
+// reviewPlaysBatch 批末审稿覆盖全批（简单方案）：子代理 fork 完整主历史（正文已在上下文中，
+// 无需额外注入），主会话"查 N 修 N"——每章 read 自查 + 修复 1 处，末尾字数复查。
+// 对齐单章 reviewPlays 的"子代理 + 自查重读 + 修复 + 复查"模式。
+func reviewPlaysBatch(chapters int) []play {
+	plays := []play{
+		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chapters)},
+	}
+	for ch := 1; ch <= chapters; ch++ {
+		plays = append(plays,
+			play{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBodies[ch-1][0] + chapterBodies[ch-1][1]},
+			play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "审稿修复：调整节奏，去除 AI 味，补强章末悬念。"), result: "已修复问题"},
+		)
+	}
+	plays = append(plays,
+		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chapters, simChapterTarget[chapters-1], true)},
+	)
 	return plays
 }
 

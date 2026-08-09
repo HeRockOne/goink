@@ -38,27 +38,35 @@ cacheprobe 模拟验证（2026-08-09，DeepSeek 价 0.02/1/2）：
 
 ---
 
-### P2. 批量模式：批内三章一轮检查（模拟已验证 checkKind=2）
+### P2. 批量模式：批末全批审稿 + 每 3 章轻量自检（业界组合，2026-08-09 定案）
 
-**目标**：批量 write 循环每 3 章插一次批次检查（子代理审最近 3 章 + 修复），对齐白金"三章一轮"，成本 +6.1%。
+**背景**：原"批内三章一轮检查（batchInCheck，阶段切换子代理）"经 websearch 对照业界长篇框架（ainovel-cli / novel-creator / QMAI / webnovel-writer / xuanji-write）判定**过度复杂**：
+- 业界共识 = **轻量高频 + 重型低频**：每章/每 3 章做轻量自检（状态对照/正则/技能自检，零阶段切换），每 10 章/段级才上 LLM 子代理评审
+- 批内检查每 3 章子代理 + 7 步阶段切换（set_phase review→write）是"重型高频"，且 plays 存在"子代理审 3 章但只 read 1 章修 2 处"的不一致
+- ainovel-cli 原话："越简单越稳定，拒绝复杂编排"
 
-**背景知识（重要）**：批量循环**不是 Go 代码循环**，是 LLM 按 kernel 技能驱动的流程（internal/skill/builtin/main-core-writing-kernel.md:19-25：`prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章 read 本章大纲 + 迷你维护）→ review → maintain`，write 阶段门禁配置 `loop: true`）。所以落地点是**技能文档 + 门禁配置**，不是 agent.go。
+**定案方案（batchLightEndReview，模拟实测性价比 94.4 全场第一）**：
+1. **每 3 章轻量自检**（对齐白金"三章一轮"）：selfReviewPlays（2 技能 + 1 修改），不跳阶段，+0.3%
+2. **批末全批审稿**（对齐业界"段级评审"）：run_subagent 审全批（子代理 fork 完整主历史，正文天然在上下文中）+ 主会话**查 N 修 N**（每章 read + 修复 1 处）+ 字数复查，+4%
+3. 每章 miniMaintain（状态实时）+ 字数校验 + 读大纲（轻量机制，现状已有）
+4. 零阶段切换、零技能重复注入
 
-**技术实现（两步）**：
-1. **main-core-writing-kernel.md 批量流程段**（第 19-25 行附近）加"批次自检"步骤：
-   > 批量 write 循环每 3 章执行一次批次检查：`set_phase("review")` → run_subagent 审读最近 3 章（结构/逻辑/伏笔/AI 味）→ 修复问题 → get_chapter_list 字数复查 → `set_phase("write")` 继续循环
-   （注意对齐 main-cmd-phase-gate.md:30 的批量流程描述，两处同步）
-2. **门禁配置零改动**，已验证可行性：
-   - run_subagent 白名单在 review 阶段（门禁配置示例.md batch review 段），write 阶段会拦截（internal/agent/phase_gate.go:466-505 CheckToolAllowed）→ 必须 set_phase("review") 后调用
-   - write→review 是 next 推进（phase_gate.go:374），review→write 是回退到 visited 阶段（phase_gate.go:380-385）✓
-   - batch review 段配置无 auto_skill_injection → 切 review 不注入技能；set_phase("write") 会重复注入 write 技能（成本已计入，无需处理）
-   - set_phase("write") 会重置 wordCountOK（phase_gate.go:334-336）→ 批次检查里必须调 get_chapter_list 完成字数校验再回 write
+**模拟数据（批量 5 章，now 协议，DeepSeek 价）**：
+| 方案 | 成本¥/章 | 省vs单章 | 审稿覆盖 | 自检节奏 | 质量分 | 质量/成本 |
+|---|---|---|---|---|---|---|
+| 批量现状（只审第 1 章） | 0.0886 | 67.8% | 20% | 无 | 4.1 | 46.3 |
+| 批量+批末全审（简单） | 0.0921 | 66.5% | 100% | 无 | 6.5 | 70.6 |
+| **批量+轻量自检+批末全审（定案）** | **0.0954** | **65.3%** | **100%** | **每3章** | **9.0** | **94.4** |
+| 批量+批内检查（旧方案，废弃） | 0.0971 | 64.7% | 60% | 每3章 | 7.8 | 80.3 |
+| 批量+完整门禁流程 | 0.1110 | 59.6% | 100% | 每3章 | 9.0 | 81.1 |
 
-**模拟器对照**：internal/cacheprobe/sim.go `batchGatePlaysWith(chapters, checkKind=2, checkEvery=3)` + `batchCheckPlays`（走阶段切换的实现），`go test ./internal/cacheprobe -run TestDiagBatchSelfReview`。
+**落地（业务侧）**：
+1. main-core-writing-kernel.md 批量流程段（第 19-25 行）改为：
+   > 批量 write 循环每 3 章执行一次轻量自检（selfReview 技能 + 修改）；批末统一审稿**覆盖全批**（run_subagent 审读全部 N 章 → 逐章修复 → 字数复查）
+2. 门禁配置零改动（review 阶段白名单已有 run_subagent）
+3. 模拟器实现：`batchLightEndReview(chapters)`（internal/cacheprobe/sim.go），`reviewPlaysBatch` 查 N 修 N
 
-**预期**：批量 5 章 ¥0.0915 → ¥0.0971/章（+6.1%，仍比单章省 64.7%）。
-
-**完成标准**：kernel 技能批量段含批次自检说明，真机跑批量 5 章验证子代理审稿实际触发 + 成本符合预期。
+**完成标准**：kernel 技能批量段含"每 3 章轻量自检 + 批末全批审稿"，真机跑批量验证子代理审全批实际触发 + 成本符合预期。
 
 ---
 
@@ -146,14 +154,13 @@ batchFullCycle(5, 3)       // 每 3 章完整门禁流程（review+maintain 阶�
 | 批量 + 三章一轮·批内检查 | 11,711,939 | 139,534 | 55,869 | 0.0971 | 64.7% | 60% | 每3章 | 7.8 | 80.3 |
 | 批量 + 三章一轮·完整门禁流程 | 14,054,200 | 149,661 | 62,155 | 0.1110 | 59.6% | 100% | 每3章 | 9.0 | 81.1 |
 
-> 注：批内检查的审稿覆盖 60% 是批量 5 章边界效应（第 3 章后触发 1 次）；批量 6 章时
-> 第 3/6 章触发覆盖 100%，此时批内检查 ¥0.0991/章（性价比 90.8）优于完整门禁流程
-> ¥0.1033（87.1）——见 TestDiagBatchCheckCoverage。
+> 注：**定案方案 = 批量 + 轻量自检（每3章）+ 批末全批审稿（batchLightEndReview）**：
+> 成本 ¥0.0954/章、质量 9.0、性价比 94.4 全场第一、零阶段切换、查 N 修 N 一致。
+> 旧方案 batchInCheck（批内阶段切换子代理）经业界对照（ainovel-cli/novel-creator/QMAI/
+> webnovel-writer/xuanji-write）判定过度复杂，已废弃（见 P2）。
 
 解读：
-- **决策规则（批量大小 × 方案）**：
-  - 批量 **≥6 章**（三章一轮完整触发：第 3/6/9 章）：**批内检查最优**（质量 9.0 与完整门禁流程相同，maintain 只做 1 次，成本低 4.1%，性价比 90.8）
-  - 批量 **5 章**（检查只触发 1 次、覆盖 60%）：**完整门禁流程更好**（多 ¥0.014/章换 1.2 分质量，性价比 81.1 > 77.8）
-- 三章一轮·批内检查是批量 6 章+ 的性价比最优；要满分质量且批量小（3-5 章）选完整门禁流程
+- **定案：批量 + 每 3 章轻量自检 + 批末全批审稿**（业界"轻量高频 + 重型低频"组合），任何批量大小适用，性价比 94.4 全场最高
+- 三章一轮·批内检查（旧方案）：5 章覆盖 60%（触发 1 次），6 章覆盖 100%——已被业界组合取代
 - 单章性价比最低（32.7）：质量 9 分但贵 3.1 倍
 - 批量现状性价比 46.3 但质量 4.1（第 2-N 章零审稿），不可取

@@ -225,6 +225,10 @@ func TestDiagBatchSelfReview(t *testing.T) {
 			plays = batchInCheck(5, checkEvery)
 		case 3:
 			plays = batchFullCycle(5, checkEvery)
+		case 4:
+			plays = batchEndReview(5)
+		case 5:
+			plays = batchLightEndReview(5)
 		}
 		history := append([]map[string]any{}, fixedSystem()...)
 		cur := []map[string]any{userMsg("请批量创作 5 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。")}
@@ -322,8 +326,8 @@ func TestDiagBatchSelfReview(t *testing.T) {
 	}{
 		{"单章 5 轮（基准）", -1, 0, 3, 1.0, 1, 1},
 		{"批量现状（攒批统一审）", 0, 0, 0, 0.2, 2, 0.5},
-		{"批量+每章轻量自检", 1, 1, 3, 0.0, 2, 0.5},
-		{"批量+三章一轮·轻量自检", 1, 3, 2.5, 0.0, 2, 0.5},
+		{"批量+批末全批审稿(简单方案)", 4, 0, 0, 1.0, 2, 0.5},
+		{"批量+轻量自检+批末全审(业界组合)", 5, 3, 2.5, 1.0, 2, 0.5},
 		{"批量+三章一轮·批内检查", 2, 3, 2.5, 0.6, 2, 0.5},
 		{"批量+三章一轮·完整门禁流程", 3, 3, 2.5, 1.0, 2, 0.5},
 	}
