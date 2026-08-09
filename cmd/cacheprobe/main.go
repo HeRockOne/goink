@@ -31,6 +31,10 @@ func main() {
 		runCompare(*cachePrice, *inputPrice, *outputPrice)
 		return
 	}
+	if len(args) > 0 && args[0] == "table" {
+		runTable(*cachePrice, *inputPrice, *outputPrice)
+		return
+	}
 	if len(args) > 0 {
 		fmt.Sscanf(args[0], "%d", &gateRounds)
 	}
@@ -127,6 +131,48 @@ func runCompare(cachePrice, inputPrice, outputPrice float64) {
 	for _, m := range res.Modes {
 		fmt.Printf("%-28s %10dK %9dK %8.1f%% %9.4f %9.1f%%\n",
 			m.Name, m.TotalIn/1000, m.Miss/1000, m.HitRate, m.Cost, m.CostSave)
+	}
+}
+
+// tableScenario 表格场景：单章轮数 / 短对话轮数 / 批量章数 / 展示名。
+type tableScenario struct {
+	g, q, b int
+	name    string
+}
+
+// runTable 跑一组常用工作负载场景，输出 Markdown 表格（now 协议，含输出计费）。
+func runTable(cachePrice, inputPrice, outputPrice float64) {
+	scenarios := []tableScenario{
+		{1, 0, 0, "单章 1 轮"},
+		{3, 0, 0, "单章 3 轮"},
+		{5, 0, 0, "单章 5 轮"},
+		{5, 3, 0, "单章 5 轮 + 短对话 3"},
+		{0, 0, 5, "批量 5 章"},
+		{0, 2, 5, "批量 5 章 + 短对话 2"},
+		{3, 2, 3, "混合 3+2+3"},
+		{5, 5, 5, "混合 5+5+5"},
+	}
+
+	fmt.Printf("# cacheprobe 成本模拟表（now 协议）\n\n")
+	fmt.Printf("价格：缓存 ¥%.3f/M · 输入 ¥%.3f/M · 输出 ¥%.3f/M　正文与思考按真实分布生成\n\n", cachePrice, inputPrice, outputPrice)
+	fmt.Printf("| 场景 | 单章 | 短对话 | 批量 | 输入 hit | 输入 miss | 输出 out | 命中率 | 成本 ¥ | 每章 ¥ |\n")
+	fmt.Printf("|------|-----|-------|------|---------|----------|---------|--------|--------|--------|\n")
+
+	for _, sc := range scenarios {
+		res, err := cacheprobe.Run(sc.g, sc.q, sc.b, 0)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "场景 %s 模拟失败: %v\n", sc.name, err)
+			continue
+		}
+		h, m, out := res.TotalNowHit, res.TotalNowMiss, res.TotalNowOutput
+		rate := pct(h, m)
+		c := cost(h, m, out, cachePrice, inputPrice, outputPrice)
+		chapters := sc.g + sc.b
+		if chapters == 0 {
+			chapters = 1
+		}
+		fmt.Printf("| %s | %d | %d | %d | %d | %d | %d | %.1f%% | %.4f | %.4f |\n",
+			sc.name, sc.g, sc.q, sc.b, h, m, out, rate, c, c/float64(chapters))
 	}
 }
 
