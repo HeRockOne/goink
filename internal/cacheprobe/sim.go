@@ -1085,23 +1085,30 @@ func maintainPlays(ch int, nextPhase string) []play {
 	}
 }
 
-// batchGatePlays 批量创作整批剧本（batch 门禁模式）：
-// init → prepare（一次）→ outline（一次出 N 章大纲）→ write（循环 N 章正文）
-// → review（统一一次）→ maintain（统一一次）→ prepare（done 阶段已移除）。
-// 与单章连续 N 轮的关键差异：prepare/review/maintain 各只做一次，轮边界大幅减少，
-// 历史跨章连续累积，NS 落库收益被放大。
-// 状态实时性（业界 delta 结算）：每章 write 后紧跟迷你维护（只写不查），
-// 让下一章的 get_writing_context 读到最新角色/伏笔状态；整批末尾仍保留完整 maintain 收尾。
-// batchGatePlays 批量门禁流程（prepare 一次 → outline N 章 → write N 章循环 → review 统一 → maintain 统一）。
-// 质量节奏：checkKind=0 无自检（现状）；=1 轻量自检（每 N 章 selfReviewPlays：2 技能+1 修改）；
-// =2 完整批次检查（每 N 章 batchCheckPlays：子代理审最近 N 章 + 修复 + 字数复查）。
-// 白金方法论"三章一轮"：每 3 章停笔自检，反对攒批积错。
-func batchGatePlays(chapters int) []play {
-	return batchGatePlaysWith(chapters, 0, 0)
-}
+// ── 批量门禁流程（语义化入口）──
+// 全部共享 batchCore 一个构造器，对外按方案命名，避免参数泥潭。
+// 质量节奏（白金方法论"三章一轮"）：自检 cadence 取 3 的倍数；
+// 批量 <6 章建议 batchFullCycle（覆盖 100%），≥6 章建议 batchInCheck（覆盖 100% 且 maintain 只 1 次）。
 
-// batchGatePlaysWith 批量门禁流程，checkEvery 控制 write 循环内的批次检查节奏（0=不检查）。
-func batchGatePlaysWith(chapters int, checkKind int, checkEvery int) []play {
+// batchAsIs 批量现状：outline 一次出 N 章 → write 循环（无自检）→ 统一 review（只审第 1 章）+ 统一 maintain。
+func batchAsIs(chapters int) []play { return batchCore(chapters, 0, 0) }
+
+// batchLightSelfCheck 批量 + 轻量自检：每 every 章插入 selfReviewPlays（2 技能 + 1 修改），不跳阶段。
+func batchLightSelfCheck(chapters, every int) []play { return batchCore(chapters, 1, every) }
+
+// batchInCheck 批量 + 批内检查：每 every 章走阶段切换 set_phase("review") → 子代理审最近 N 章 + 修复
+// + 字数复查 → set_phase("write") 回写（write→review next 推进，review→write visited 回退，
+// phase_gate.go:380）；统一 review + 统一 maintain 收尾。
+func batchInCheck(chapters, every int) []play { return batchCore(chapters, 2, every) }
+
+// batchFullCycle 批量 + 完整门禁循环：每个批次边界（含末尾剩余章）走 review + maintain
+// （write→review→maintain→write 阶段链），无统一收尾——批量 <6 章时覆盖 100% 的唯一方案。
+func batchFullCycle(chapters, every int) []play { return batchCore(chapters, 3, every) }
+
+// batchCore 批量门禁流程核心构造器（内部实现，外部用上面的语义化入口）。
+// checkKind: 0=无自检 / 1=轻量自检(selfReviewPlays) / 2=批内检查(子代理审最近 N 章) / 3=完整门禁循环(review+maintain)
+// checkEvery: 自检节奏（章数，0=不检查；3 的倍数对齐白金"三章一轮"）
+func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	var plays []play
 	plays = append(plays, preparePlays(1)...)
 
@@ -1127,40 +1134,40 @@ func batchGatePlaysWith(chapters int, checkKind int, checkEvery int) []play {
 	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
 	// （门禁 auto_skill_injection 按阶段计，write 阶段只进入一次；后续章复用上下文）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
-	// 批次检查插在 write 循环内、不跳阶段（避免 set_phase 技能重复注入与大纲分批）。
+	// 批次检查插在 write 循环内，checkKind=2 走阶段切换（门禁白名单约束：run_subagent 仅在 review 阶段）。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
-	// 批次检查（checkKind=1/2）：write 循环内按节奏插入，不跳阶段
-	if checkKind > 0 && checkKind < 3 && checkEvery > 0 && ch%checkEvery == 0 {
-		switch checkKind {
-		case 1:
-			plays = append(plays, selfReviewPlays(ch)...)
-		case 2:
-			plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
+		// 批次检查（checkKind=1/2）：write 循环内按节奏插入
+		if checkKind > 0 && checkKind < 3 && checkEvery > 0 && ch%checkEvery == 0 {
+			switch checkKind {
+			case 1:
+				plays = append(plays, selfReviewPlays(ch)...)
+			case 2:
+				plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
+			}
 		}
+		// 批次完整流程（checkKind=3）：每个批次边界（含末尾剩余章）都走 review+maintain，
+		// 替代统一 review/maintain 收尾——即"三章一批"的完整门禁循环。
+		if checkKind == 3 && (ch%checkEvery == 0 || ch == chapters) {
+			plays = append(plays, batchFullCheckPlays(ch-checkEvery+1, ch)...)
+		}
+		plays = append(plays, miniMaintainPlays(ch)...)
 	}
-	// 批次完整流程（checkKind=3）：每个批次边界（含末尾剩余章）都走 review+maintain，
-	// 替代统一 review/maintain 收尾——即"三章一批"的完整门禁循环。
-	if checkKind == 3 && (ch%checkEvery == 0 || ch == chapters) {
-		plays = append(plays, batchFullCheckPlays(ch-checkEvery+1, ch)...)
+	if checkKind == 3 {
+		// 完整门禁流程方案：统一 review/maintain 已由各批次边界覆盖
+		return plays
 	}
-	plays = append(plays, miniMaintainPlays(ch)...)
-}
-if checkKind == 3 {
-	// 完整门禁流程方案：统一 review/maintain 已由各批次边界覆盖
-	return plays
-}
-plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
+	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
 
-// review：整批统一一次（run_subagent + 修复）
-plays = append(plays, reviewPlays(1)...)
-// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
-plays = append(plays, maintainPlays(chapters, "prepare")...)
-return plays
+	// review：整批统一一次（run_subagent + 修复）
+	plays = append(plays, reviewPlays(1)...)
+	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
+	plays = append(plays, maintainPlays(chapters, "prepare")...)
+	return plays
 }
 
 // batchCheckPlays 批次完整检查（checkKind=2）：走阶段切换（门禁白名单约束）——

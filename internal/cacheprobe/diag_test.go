@@ -215,7 +215,17 @@ func TestDiagBatchSelfReview(t *testing.T) {
 
 	runBatch := func(checkKind, checkEvery int) (hit, miss, out int64) {
 		cache := NewTokenCache()
-		plays := batchGatePlaysWith(5, checkKind, checkEvery)
+		var plays []play
+		switch checkKind {
+		case 0:
+			plays = batchAsIs(5)
+		case 1:
+			plays = batchLightSelfCheck(5, checkEvery)
+		case 2:
+			plays = batchInCheck(5, checkEvery)
+		case 3:
+			plays = batchFullCycle(5, checkEvery)
+		}
 		history := append([]map[string]any{}, fixedSystem()...)
 		cur := []map[string]any{userMsg("请批量创作 5 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。")}
 		cur = append(cur, sysMsg(novelState(0)))
@@ -353,7 +363,13 @@ func TestDiagBatchCheckCoverage(t *testing.T) {
 
 	runBatchN := func(chapters, checkKind, checkEvery int) (hit, miss, out int64) {
 		cache := NewTokenCache()
-		plays := batchGatePlaysWith(chapters, checkKind, checkEvery)
+		var plays []play
+		switch checkKind {
+		case 2:
+			plays = batchInCheck(chapters, checkEvery)
+		case 3:
+			plays = batchFullCycle(chapters, checkEvery)
+		}
 		history := append([]map[string]any{}, fixedSystem()...)
 		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", chapters))}
 		cur = append(cur, sysMsg(novelState(0)))
@@ -423,7 +439,7 @@ func TestDiagBatchSizeTradeoff(t *testing.T) {
 	runBatches := func(chapters, every, batches int) (hit, miss, out int64) {
 		cache := NewTokenCache()
 		for b := 0; b < batches; b++ {
-			plays := batchGatePlaysWith(chapters, 1, every)
+			plays := batchLightSelfCheck(chapters, every)
 			history := append([]map[string]any{}, fixedSystem()...)
 			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章（第 %d 批）。", chapters, b+1))}
 			cur = append(cur, sysMsg(novelState(b*chapters)))

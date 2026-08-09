@@ -627,7 +627,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 			results = append(results, [2]int64{hit, miss})
 		}
 
-		plays := batchGatePlays(chapters)
+		plays := batchAsIs(chapters)
 		for i, p := range plays {
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
@@ -892,7 +892,7 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		doQA(gateRounds + 1)
 		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", batchChapters))}
 		cur = append(cur, sysMsg(novelState(gateRounds + 1)))
-		plays := batchGatePlays(batchChapters)
+		plays := batchAsIs(batchChapters)
 		for i, p := range plays {
 			if mode == "auto" && p.tool == "read_required" {
 				continue

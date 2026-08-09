@@ -87,22 +87,18 @@ cacheprobe 模拟验证（2026-08-09，DeepSeek 价 0.02/1/2）：
 
 **完成标准**：cacheprobe 支持压缩模拟（按模型窗口），输出"批量章数 × 压缩触发"表，文档给出推荐上限（mimo 6-8 章 / deepseek 10+ 章）。
 
-### P6. 模拟器 API 简化（用户批评过度设计，参数泥潭）
+### P6. 模拟器 API 简化（✅ 已完成 2026-08-09）
 
 **现状**：`batchGatePlaysWith(chapters, checkKind, checkEvery)` 三个魔法参数（checkKind 0/1/2/3 + checkEvery），在一个函数里打补丁堆出 4 种方案，难读难维护。
 
-**目标**：按场景拆命名函数，需要什么直接引用：
+**已实施**：按场景拆命名函数，需要什么直接引用：
 ```go
-// 现状（参数泥潭）
-batchGatePlaysWith(5, 2, 3)   // 什么意思？要读文档
-
-// 目标（命名即语义）
-batchAsIs(5)                    // 现状：攒批统一审
-batchLightSelfCheck(5, 3)       // 每 3 章轻量自检
-batchInCheck(5, 3)              // 每 3 章批内检查（子代理审最近 N 章）
-batchFullCycle(5, 3)            // 每 3 章完整门禁流程（review+maintain）
+batchAsIs(5)               // 现状：攒批统一审
+batchLightSelfCheck(5, 3)  // 每 3 章轻量自检（2 技能+1 修改，不跳阶段）
+batchInCheck(5, 3)         // 每 3 章批内检查（阶段切换 review→子代理→write，统一 maintain）
+batchFullCycle(5, 3)       // 每 3 章完整门禁流程（review+maintain 阶段链，无统一收尾）
 ```
-内部共享一个核心构造函数（plays 组装），对外暴露语义化入口；diag 测试同步改用新 API。
+内部共享 `batchCore(chapters, checkKind, checkEvery)` 一个构造器；调用点（api.go buildBatchWithRounds/buildMixedSession、diag 测试）已全部迁移；`batchGatePlays`/`batchGatePlaysWith` 已删除。
 **原则**：模拟器是业务代码的建模镜，结构应跟业务概念走（方案/节奏），不是参数矩阵。
 
 ---
