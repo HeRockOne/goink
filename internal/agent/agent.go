@@ -211,7 +211,7 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 
 // injectPhaseSkills 自动注入指定阶段的必读技能（require_reads）为 system 消息。
 // 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
-// 模型无需再调 read_required——技能是创作指导，系统保证其在创作动作前就绪。
+// 模型无需再调 auto_skill_injection——技能是创作指导，系统保证其在创作动作前就绪。
 func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	pg := a.getPG()
 	if pg == nil || !pg.Active() {
@@ -221,7 +221,11 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	if pc == nil || len(pc.RequireReads) == 0 {
 		return
 	}
-	content := a.buildRequiredSkillsContent(pc.RequireReads, opts.NovelID)
+	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.RequireReads)
+	if err != nil {
+		a.logger.Warn("自动注入必读技能失败", "phase", phase, "err", err)
+		return
+	}
 	if content == "" {
 		return
 	}
@@ -232,30 +236,6 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 		}
 	}
 	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.RequireReads)
-}
-
-// buildRequiredSkillsContent 从 skill store 读取技能完整内容，拼成 system 消息正文。
-// 与 ReadRequiredTool.Execute 同源（三层查找：小说级 > 用户级 > 内置）。
-func (a *Agent) buildRequiredSkillsContent(skills []string, novelID int64) string {
-	if a.skillStore == nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, name := range skills {
-		if strings.Contains(name, "*") {
-			continue
-		}
-		sk, ok := a.skillStore.Get(novelID, name)
-		if !ok {
-			continue
-		}
-		b.WriteString("--- ")
-		b.WriteString(sk.Name)
-		b.WriteString(" ---\n")
-		b.WriteString(sk.RawContent)
-		b.WriteString("\n\n")
-	}
-	return strings.TrimSpace(b.String())
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
@@ -645,8 +625,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// 门禁：记录调用
 					if a.getPG() != nil && a.getPG().Active() {
 						a.getPG().OnToolCall(name, result.Success)
-						// read_required 成功：上报本次读取的技能名（require_reads 检查用）
-						if name == "read_required" && result.Success && result.Data != nil {
+// auto_skill_injection 成功：上报本次读取的技能名（require_reads 检查用）
+					if name == "auto_skill_injection" && result.Success && result.Data != nil {
 							if skills, ok := result.Data["skills"].([]string); ok {
 								for _, s := range skills {
 									a.getPG().OnReadRequired(s)

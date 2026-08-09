@@ -297,7 +297,7 @@ func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue 
 				}
 				if !skills[pattern] {
 					issues = append(issues, ValidationIssue{mode, p.Name, "warning",
-						fmt.Sprintf("require_reads 引用的技能 [%s] 不存在，read_required 将失败", pattern)})
+						fmt.Sprintf("require_reads 引用的技能 [%s] 不存在，auto_skill_injection 将失败", pattern)})
 				}
 			}
 			// 有 edit 工具但没限制路径
@@ -353,7 +353,7 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	// 检查当前阶段的 require_reads（必读技能）是否满足（不满足则阻塞）
 	if current != nil && len(current.RequireReads) > 0 {
 		if missingSkills := g.missingRequireReads(current); len(missingSkills) > 0 {
-			return false, fmt.Sprintf("阶段 [%s] 要求必须用 read_required 读取以下技能后才能切换到 [%s]，当前未读取: %v",
+			return false, fmt.Sprintf("阶段 [%s] 要求必须用 auto_skill_injection 读取以下技能后才能切换到 [%s]，当前未读取: %v",
 				g.currentPhase, targetPhase, missingSkills)
 		}
 	}
@@ -490,7 +490,7 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 			// 技能是创作指导，必须先读再动笔，不允许"干完活再补读解锁阶段"。
 			if isMutatingTool(toolName) {
 				if missing := g.missingRequireReads(current); len(missing) > 0 {
-					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 read_required 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
+					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 auto_skill_injection 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
 					return false, warning
 				}
 			}

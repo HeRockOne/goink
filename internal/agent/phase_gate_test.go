@@ -565,12 +565,12 @@ next: prepare
 }
 
 // TestRequireReadsPerPhase 验证 require_reads 的阶段内强制语义：
-// 技能必须在当前阶段内用 read_required 读取，跨阶段读取不满足。
+// 技能必须在当前阶段内用 auto_skill_injection 读取，跨阶段读取不满足。
 func TestRequireReadsPerPhase(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
 phase: outline
-tools: read, read_required, edit
+tools: read, auto_skill_injection, edit
 require: edit
 require_reads: main-tech-chapter-hook-enhanced
 next: write
@@ -578,7 +578,7 @@ next: write
 
 <!-- phase-gate-config
 phase: write
-tools: read, read_required, edit
+tools: read, auto_skill_injection, edit
 require: edit
 require_reads: main-tech-show-dont-tell, main-tech-anti-ai-writing
 next: done
@@ -640,7 +640,7 @@ func TestRequireReadsBeforeCreation(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
 phase: write
-tools: read, read_required, edit, create_scene, run_subagent, get_characters, set_phase
+tools: read, auto_skill_injection, edit, create_scene, run_subagent, get_characters, set_phase
 require: edit
 require_reads: main-tech-show-dont-tell
 next: done
@@ -667,9 +667,9 @@ next: done
 		t.Error("should BLOCK: run_subagent before required skill loaded")
 	}
 
-	// 未读技能时：只读/查询/管理工具放行（read_required 是加载入口）
-	if allowed, _ := gate.CheckToolAllowed("read_required"); !allowed {
-		t.Error("should allow: read_required is the loading entry")
+	// 未读技能时：只读/查询/管理工具放行（auto_skill_injection 是加载入口）
+	if allowed, _ := gate.CheckToolAllowed("auto_skill_injection"); !allowed {
+		t.Error("should allow: auto_skill_injection is the loading entry")
 	}
 	if allowed, _ := gate.CheckToolAllowed("read"); !allowed {
 		t.Error("should allow: read")
@@ -773,14 +773,14 @@ next: prepare
 	good := `
 <!-- phase-gate-config
 phase: prepare
-tools: read, read_required, get_characters, get_chapter_list
+tools: read, auto_skill_injection, get_characters, get_chapter_list
 require: get_characters, get_chapter_list
 require_reads: main-tech-common-sense-logic
 next: write
 -->
 <!-- phase-gate-config
 phase: write
-tools: read, read_required, edit
+tools: read, auto_skill_injection, edit
 edit_paths: chapters/*
 require: edit
 require_reads: main-tech-show-dont-tell

@@ -26,5 +26,5 @@ func RegisterAllTools(r *Registry) {
 	RegisterWritingContextTool(r)
 	RegisterAppearanceTools(r)
 	RegisterChapterMetaTool(r)
-	RegisterReadRequiredTool(r)
+	RegisterAutoSkillInjectionTool(r)
 }
