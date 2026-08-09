@@ -130,6 +130,27 @@ batchFullCycle(5, 3)       // 每 3 章完整门禁流程（review+maintain 阶�
 
 ---
 
+### P5. 门禁系统性重构（✅ 部分落地 2026-08-09，剩余待真机）
+
+**已落地（行为开关显式化，缺省=legacy 零迁移）**：
+1. PhaseConfig 显式行为开关：`inject` / `inject_dedup` / `same_phase` / `word_count_check`（*bool，nil=legacy 仅 write）/ `word_count_reset`（*bool）/ `mutating_guard`——替代 "write" 阶段名硬编码、进阶段无条件注入、同阶段幂等隐式语义
+2. **门禁自动推进已删除**（agent.go 回合末尾 CheckTransitionReady 自动 set_phase 块）：与文档/评估（system-reminder-assessment"高危不做"）对齐；曾有的失败路径缺陷（SetPhase 返回值被忽略、假成功 reminder、技能记错阶段）一并消除；阶段切换必须 LLM 主动 set_phase
+3. set_phase 失败不计成功（OnToolCall("set_phase", ok)）
+4. 通配符技能展开（injectPhaseSkills 对 "main-tech-*" 用 ListMeta 展开为具体名再注入，auto_skill_injection 通配符半成品修复）
+5. 删除死代码：FailNext 字段、SaveWordCount/LoadWordCount
+6. default 配置 single/batch write 显式声明全部行为开关
+
+**剩余（需真机验证后做）**：
+- require 按阶段重置（successfulTools 加阶段维度）——批量每章 read 大纲真实强制
+- wordCountOK 结构化 `{chapter, ok}`——批量多章转出正确性
+- visited 重置条件改为"回到首阶段"——回退往返后不失效
+- chat.go 新会话起始阶段对齐配置首阶段（init 可达）
+- 配置损坏显式告警（解析失败日志 + 前端状态）
+- 工具元数据化（isMutatingTool/readOnlyTools 从注册层推导）
+- 门禁状态 per-session（RunOptions 值化或 map 缓存）——多会话并发串扰（当前 PhaseGate 挂 Agent 单实例）
+- 配置写入前强制 ValidateGateConfig（update_phase_gate_config 无校验）
+- 技能缺失从 warning 升 error（当前会导致阶段死锁）
+
 ### P5. 模拟器已知差异（口径级，不影响结构结论）
 
 | 差异 | 位置 | 收敛方式 |

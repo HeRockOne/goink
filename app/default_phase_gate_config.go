@@ -41,6 +41,12 @@ tools: read, auto_skill_injection, edit, search_story_memory, get_characters, ge
 edit_paths: chapters/*
 require: edit, get_chapter_list, read
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density
+inject: true
+inject_dedup: true
+same_phase: true
+word_count_check: true
+word_count_reset: true
+mutating_guard: true
 next: review
 -->
 <!-- phase-gate-config
@@ -93,6 +99,12 @@ tools: read, auto_skill_injection, edit, search_story_memory, get_characters, ge
 edit_paths: chapters/*
 require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density
+inject: true
+inject_dedup: true
+same_phase: true
+word_count_check: true
+word_count_reset: true
+mutating_guard: true
 next: review
 loop: true
 -->

@@ -90,12 +90,20 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符 |
+| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符（展开为技能库实际存在的技能再注入）。注入去重：已注入过或已读过的技能不重复注入 |
 | next | 是 | require 满足后可进入的下一阶段（旧字段名 main-cmd-next 已废弃，只解析 next） |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
+| inject | 否 | 进入该阶段是否自动注入必读技能（默认 true；false=需手动 auto_skill_injection） |
+| inject_dedup | 否 | 同阶段重复进入是否去重注入（默认 true，已注入过不重复；false=每次全量注入） |
+| same_phase | 否 | 同阶段 set_phase 是否幂等成功（默认 true，批量"每章声明边界"语义；false=禁止同阶段重复 set_phase） |
+| word_count_check | 否 | 转出该阶段是否强制 get_chapter_list 字数校验（缺省=仅 write 阶段强制；true=任何阶段都强制；false=不强制） |
+| word_count_reset | 否 | 进入该阶段是否重置字数状态（缺省=仅进 write 时重置；true/false 显式覆盖） |
+| mutating_guard | 否 | 事前技能强制：必读技能未加载前禁止创作/维护动作（默认 true；false=放行） |
 
 配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（系统在 set_phase 进入该阶段时自动注入，技能名从门禁配置读取，不硬编码）。
+
+> **行为开关缺省即 legacy 行为**：存量配置不写新字段时，行为与历史版本完全一致（字数校验仍只对 write 阶段生效）。新字段的意义是显式化——自定义阶段名、按阶段关闭注入/强制等场景不再需要改代码。
 
 ## 配置设计指南（怎么配一套门禁）
 

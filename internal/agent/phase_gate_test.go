@@ -790,3 +790,153 @@ next: prepare
 		t.Errorf("expected no issues for good config, got %+v", issues)
 	}
 }
+
+// 行为开关缺省值：存量配置（无新字段）行为与之前一致
+func TestPhaseGateBehaviorSwitchDefaults(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: prepare
+tools: get_chapter_list, read
+require: get_chapter_list
+next: outline
+-->
+<!-- phase-gate-config
+phase: outline
+tools: read, edit
+require: edit
+next: write
+-->
+<!-- phase-gate-config
+phase: write
+tools: read, edit, get_chapter_list
+require: edit
+next: prepare
+-->`, "single")
+	p := gate.findPhase("write")
+	if !p.Inject || !p.InjectDedup || !p.SamePhase || !p.MutatingGuard {
+		t.Error("behavior switches should default to true (legacy behavior)")
+	}
+	if p.WordCountCheck != nil || p.WordCountReset != nil {
+		t.Error("WordCount* should default to nil (legacy: only 'write' phase checks)")
+	}
+}
+
+// same_phase: false 时同阶段 set_phase 被拒（章边界打卡语义可关闭）
+func TestPhaseGateSamePhaseSwitchOff(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: read, edit, get_chapter_list
+require: edit
+same_phase: false
+next: prepare
+-->`, "single")
+	gate.OnToolCall("edit", true)
+	gate.OnToolCall("get_chapter_list", true)
+	gate.SetWordCountOK(true)
+	ok, msg := gate.SetPhase("write")
+	if ok {
+		t.Error("same_phase: false should reject same-phase set_phase")
+	}
+	if !strings.Contains(msg, "same_phase") {
+		t.Errorf("expected same_phase warning, got %q", msg)
+	}
+}
+
+// word_count_check 开关替代 "write" 阶段名硬编码：
+// 自定义阶段名配置 word_count_check: true 也强制字数校验；write 配 false 则不校验
+func TestPhaseGateWordCountSwitch(t *testing.T) {
+	// 自定义阶段名（非 write）+ word_count_check: true → 转出强制字数校验
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: drafting
+tools: read, edit, get_chapter_list
+require: edit
+word_count_check: true
+word_count_reset: true
+next: prepare
+-->
+<!-- phase-gate-config
+phase: prepare
+tools: read
+next: drafting
+-->`, "single")
+	gate.OnToolCall("edit", true)
+	// 未调用 get_chapter_list → 转出被阻塞（原硬编码只认 "write"，此处验证开关生效）
+	ok, msg := gate.SetPhase("prepare")
+	if ok {
+		t.Error("word_count_check: true should require get_chapter_list before exit")
+	}
+	if !strings.Contains(msg, "get_chapter_list") {
+		t.Errorf("expected word count warning, got %q", msg)
+	}
+	gate.SetWordCountOK(true)
+	ok, _ = gate.SetPhase("prepare")
+	if !ok {
+		t.Error("word count checked -> exit should succeed")
+	}
+
+	// write 阶段 word_count_check: false → 转出不查字数
+	gate2 := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: read, edit
+require: edit
+word_count_check: false
+next: prepare
+-->
+<!-- phase-gate-config
+phase: prepare
+tools: read
+next: write
+-->`, "single")
+	gate2.OnToolCall("edit", true)
+	ok, _ = gate2.SetPhase("prepare")
+	if !ok {
+		t.Error("word_count_check: false should allow exit without word count")
+	}
+}
+
+// mutating_guard: false 时技能未加载也可执行创作动作（事前技能强制按阶段可关）
+func TestPhaseGateMutatingGuardSwitchOff(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: auto_skill_injection, read, edit
+auto_skill_injection: main-tech-show-dont-tell
+mutating_guard: false
+next: prepare
+-->`, "single")
+	// 未加载技能 + mutating_guard: false → edit 放行
+	allowed, _ := gate.CheckToolAllowed("edit")
+	if !allowed {
+		t.Error("mutating_guard: false should allow edit without skill loaded")
+	}
+	// 对照组：缺省 mutating_guard: true → edit 被拦
+	gate2 := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: auto_skill_injection, read, edit
+auto_skill_injection: main-tech-show-dont-tell
+next: prepare
+-->`, "single")
+	allowed, _ = gate2.CheckToolAllowed("edit")
+	if allowed {
+		t.Error("mutating_guard default true should block edit before skill loaded")
+	}
+}
+
+// inject: false 时该阶段不自动注入必读技能（注入由 LLM 手动 auto_skill_injection）
+func TestPhaseGateInjectSwitchOff(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: read, edit
+inject: false
+next: prepare
+-->`, "single")
+	p := gate.findPhase("write")
+	if p.Inject {
+		t.Error("inject: false should disable auto injection")
+	}
+}
