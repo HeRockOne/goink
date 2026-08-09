@@ -100,8 +100,8 @@ export default function CacheSimTab() {
           <thead>
             <tr className="text-muted-foreground">
               <th className="text-left py-1">指标</th>
-              <th className="text-right py-1" title="旧版：read_required 工具调用加载技能，每轮全价重发全部历史">旧版（无缓存）</th>
-              <th className="text-right py-1" title="当前版：缓存命中 + auto_skill_injection 自动注入技能，历史留在服务端缓存">当前版（有缓存+自动注入）</th>
+              <th className="text-right py-1" title="旧版：read_required 工具调用加载技能">旧版（read_required）</th>
+              <th className="text-right py-1" title="当前版：auto_skill_injection 系统自动注入技能">当前版（自动注入）</th>
             </tr>
           </thead>
           <tbody>
@@ -144,11 +144,10 @@ export default function CacheSimTab() {
           <span className="text-sm font-medium">写书成本模拟</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          模拟一个真实对话窗口：先聊设定、再写正文，写完又查设定、继续写——短对话与单章/批量创作
-          交替发生在同一条对话历史里。对比「旧版行为」与「当前版本」的差距：
-          旧版 = 没有缓存优化，每一轮都把全部对话历史按全价重新发送给模型；
-          当前版本 = 历史留在服务端缓存 + 必读技能由系统自动注入（auto_skill_injection），
-          只按低价付缓存读取费（费用按设置中的模型价格估算）。
+          模拟一个真实对话窗口：短对话与单章/批量创作交替发生在同一条历史里。
+          对比「旧版」与「当前版」的差距：旧版 = read_required 工具调用加载必读技能；
+          当前版 = auto_skill_injection 系统自动注入技能（省掉工具调用两跳 + 拦截重试），
+          两者都有缓存命中（费用按设置中的模型价格估算）。
         </p>
       </div>
 

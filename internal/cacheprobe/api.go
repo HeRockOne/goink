@@ -58,14 +58,17 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 
 	res := &Result{}
 
-	// 混合对话窗口场景（真实使用方式）
+// 混合对话窗口场景（真实使用方式）
+	// auto = 当前自动注入行为, now = 旧 read_required 行为（两者都有 NS 缓存，差异仅 auto-inject）
 	sc := runTriple(fmt.Sprintf("对话窗口（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章）", gateRounds, shortQARounds, batchChapters), cleanRetain, func(mode string, c *TokenCache) [][2]int64 {
-		// auto = 当前自动注入行为, now = 旧 read_required 行为, clean = 实验方案
-		actualMode := mode
+		simMode := mode
 		if mode == "now" {
-			actualMode = "auto"
+			simMode = "auto" // 当前版：auto-inject
 		}
-		return buildMixedSession(actualMode, c, gateRounds, shortQARounds, batchChapters)
+		if mode == "legacy" {
+			simMode = "now" // 旧版：read_required（NS 缓存，无 auto-inject）
+		}
+		return buildMixedSession(simMode, c, gateRounds, shortQARounds, batchChapters)
 	})
 	res.Scenarios = append(res.Scenarios, sc)
 
