@@ -1,31 +1,47 @@
 package cacheprobe
 
 import (
+	"encoding/json"
 	"testing"
 )
 
-// 修复后：请求2 应完全包含请求1 作为前缀（链连续）。
+// 修复后：请求1 的公共前缀应完全包含在请求2 中（链连续）。
+// 注意：新格式（工具定义在 payload 末尾）下，请求1 的完整字节不一定是请求2 的前缀，
+// 因为工具定义在末尾，请求2 多出的消息会让工具定义偏移。但公共消息部分应完全命中。
 func TestPrefixChain_NowModeContinuous(t *testing.T) {
 	initTools()
-	hist := append([]map[string]any{}, fixedSystem()...)
+	origHist := append([]map[string]any{}, fixedSystem()...)
 
-	req1 := append(append([]map[string]any{}, hist...),
-		userMsg("第 1 问：这个世界的修炼体系是什么？"),
+	ns := sysMsg("【小说基础信息】\n书名：测试\n当前进度：第 1 章。\n")
+
+	req1 := append(append([]map[string]any{}, origHist...),
+		userMsg("第 1 问"),
+		ns,
 	)
-	req1 = append(req1, sysMsg(novelState(1)))
 	b1 := promptBytes(req1)
 
-	hist = append(hist, userMsg("第 1 问：这个世界的修炼体系是什么？"), sysMsg(novelState(1)), asstText(shortAnswer()))
-	req2 := append(append([]map[string]any{}, hist...),
-		userMsg("第 2 问：这个世界的修炼体系是什么？"),
+	hist2 := append([]map[string]any{}, origHist...)
+	hist2 = append(hist2, userMsg("第 1 问"), ns, asstText("回答"))
+	req2 := append(append([]map[string]any{}, hist2...),
+		userMsg("第 2 问"),
+		ns,
 	)
-	req2 = append(req2, sysMsg(novelState(2)))
 	b2 := promptBytes(req2)
 
 	lcp := longestCommonPrefix(b1, b2)
-	// 链连续的条件：请求1 全部字节都应是请求2 前缀，仅数组闭合括号 `]` 因后续消息而错位
-	if lcp < len(b1)-2 {
-		t.Fatalf("链断裂：请求2 未包含请求1 全部作为前缀，lcp=%d/%d", lcp, len(b1))
+	// 公共前缀应覆盖：固定前缀 + origHist + 第1问 + NS（req1 的全部消息，不含末尾 tools）
+	prefix := []byte(`{"model":"goink-sim","messages":[`)
+	expected := len(prefix)
+	msgs := append(append([]map[string]any{}, origHist...), userMsg("第 1 问"), ns)
+	for i, m := range msgs {
+		b, _ := json.Marshal(m)
+		if i > 0 {
+			expected += 1 // 逗号
+		}
+		expected += len(b)
+	}
+	if lcp < expected {
+		t.Fatalf("公共前缀未覆盖 req1 的全部消息：lcp=%d, 期望≥%d", lcp, expected)
 	}
 }
 

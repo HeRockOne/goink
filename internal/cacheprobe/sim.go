@@ -197,7 +197,7 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	toolsN, msgsN := requestTokens(messages)
 	total := toolsN + msgsN
 
-	// tools 前缀固定，始终作为第一条；消息数组整体字节用于连续性判定
+	// 与真实 buildPayload 一致：完整请求体字节用于连续性判定
 	reqBytes := promptBytes(messages)
 
 	if c.prevBytes == nil {
@@ -210,13 +210,11 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	lcp := longestCommonPrefix(c.prevBytes, reqBytes)
 	// 由字节公共前缀反推覆盖了多少条消息：逐条累加字节长度，直到超出 lcp
 	hitMsgs := int64(0)
-	covered := 0
-	var acc int
-	prefix := []byte(`[{"role":"system","content":`)
-	toolsJSON, _ := json.Marshal(toolDefs)
-	acc += len(prefix) + len(toolsJSON) + 2 // tools 前缀消息本身
+	// 前缀：{"model":"goink-sim","messages":[
+	prefix := []byte(`{"model":"goink-sim","messages":[`)
+	acc := len(prefix)
 	if acc > lcp {
-		// 连 tools 前缀都没完全命中（正常不会发生，tools 固定）
+		// 连前缀都没完全命中（正常不会发生，前缀固定）
 		hitMsgs = 0
 	} else {
 		for _, m := range messages {
@@ -229,11 +227,18 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 				break
 			}
 			hitMsgs += int64(msgTokens(m))
-			covered++
+		}
+		// 若所有消息都被覆盖，后缀（含末尾 tools）也命中，toolsN 计入 hit
+		// 但需判断后缀是否也被 lcp 覆盖：累加后缀长度后若仍 <= lcp，则 tools 命中
+		suffix := []byte(`],"stream":true,"stream_options":{"include_usage":true},"tools":`)
+		toolsJSON, _ := json.Marshal(toolDefs)
+		acc += len(suffix) + len(toolsJSON) + 1 // 后缀 + tools + }
+		if acc <= lcp {
+			hitMsgs += toolsN
 		}
 	}
 
-	hit := toolsN + hitMsgs
+	hit := hitMsgs
 	miss := total - hit
 	c.hit += hit
 	c.miss += miss
@@ -317,14 +322,17 @@ func msgJSON(m map[string]any) []byte {
 func promptBytes(messages []map[string]any) []byte {
 	toolsJSON, _ := cachedToolsJSON()
 	var buf bytes.Buffer
-	buf.WriteString(`[{"role":"system","content":`)
-	buf.Write(toolsJSON)
-	buf.WriteString(`}`)
-	for _, m := range messages {
-		buf.WriteByte(',')
+	// 与真实 buildPayload 完全一致：{"model":"goink-sim","messages":[...],"stream":true,"stream_options":{"include_usage":true},"tools":[...]}
+	buf.WriteString(`{"model":"goink-sim","messages":[`)
+	for i, m := range messages {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
 		buf.Write(msgJSON(m))
 	}
-	buf.WriteByte(']')
+	buf.WriteString(`],"stream":true,"stream_options":{"include_usage":true},"tools":`)
+	buf.Write(toolsJSON)
+	buf.WriteByte('}')
 	return buf.Bytes()
 }
 
@@ -340,32 +348,19 @@ func asstText(content string) map[string]any {
 	return map[string]any{"role": "assistant", "content": content}
 }
 // asstToolCall 构造 assistant 工具调用消息，对齐真实 ToAPIFormat：
-// 恒有 reasoning_content（空串，thinking 关闭）+ tool_displays（displayText 摘要）。
+// 恒有 reasoning_content（空串，thinking 关闭），无 tool_displays（真实 API 不发送）。
 func asstToolCall(id, name, args string) map[string]any {
 	return map[string]any{
-		"role":    "assistant",
-		"content": "",
+		"role":             "assistant",
+		"content":          "",
 		"reasoning_content": "",
 		"tool_calls": []any{map[string]any{
 			"id": id, "type": "function",
 			"function": map[string]any{"name": name, "arguments": args},
 		}},
-		"tool_displays": []any{map[string]any{
-			"tool_id": id, "tool_name": name,
-			"display_text":  name + " " + truncateArgs(args),
-			"activity_kind": "tool",
-			"phase":         "completed",
-		}},
 	}
 }
 
-// truncateArgs 截断 args 为短摘要（对齐真实 displayText 的展示习惯）。
-func truncateArgs(args string) string {
-	if len(args) > 60 {
-		return args[:60] + "…"
-	}
-	return args
-}
 func toolMsg(id, name, content string) map[string]any {
 	return map[string]any{
 		"role": "tool", "tool_call_id": id, "name": name, "content": content,
