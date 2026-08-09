@@ -27,6 +27,9 @@ DeepSeek/商汤的磁盘缓存按"请求的公共前缀"匹配（官方文档：
 > （init 556/prepare 822/outline 971/write 322/review 1558/maintain 364 字符，统计自
 > 真实 DB thinking_content 按 set_phase 边界分阶段）；set_phase 消息顺序对齐真实
 > agent.go（技能注入+reminder 在 assistant 落库前）；成本 = hit×cache + miss×input + out×output。
+> 正文按章独立生成：目标字数 = 设置的 (min+max)/2 + 正态波动×386 字符（真实 std，
+> 实测 D:\Goink\novels 19 章：均值 3319/范围 2652-4073），clamp 到设置范围，固定
+> seed 可复现——章节间长度与内容均不同，贴近真实输出分散度。
 
 ## 用法
 

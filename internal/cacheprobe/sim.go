@@ -678,16 +678,26 @@ type play struct {
 	result string
 }
 
-// 章节正文（固定种子，可复现）：按 app_config 设置的章节字数范围生成
-// （目标字数 = min + (max-min)/2，拆成 6 段逐次 edit 追加——对应 write 阶段真实写作量级）。
-var chapterBody []string
+// 章节正文（固定种子，可复现）：每章正文独立生成，目标字数按真实章节字数分布波动
+// （均值 = 设置的 (min+max)/2，std 取真实章节实测 386 字符），拆成 6 段逐次 edit 追加
+// ——对应 write 阶段真实写作量级，且章与章之间长度/内容不同。
+var chapterBodies [][]string
+
+// simChapterTarget 每章目标字数（波动后），与 chapterBodies 同索引。
+var simChapterTarget []int
+
+// maxSimChapters 预生成章节数（覆盖单章轮 + 批量 + 子代理读取的最大章号）。
+const maxSimChapters = 16
+
+// realWordStdDev 真实章节字数标准差（字符，D:\Goink\novels 19 章实测：
+// 均值 3319、std 386、范围 2652-4073，设置范围 2500-4000）。
+const realWordStdDev = 386.0
 
 // 章节字数配置（从真实 DB app_config 读取，模拟失败回退默认 2500-4000）。
 var (
-	simMinWords    int
-	simMaxWords    int
-	simTargetWords int
-	simSegLen      int
+	simMinWords int
+	simMaxWords int
+	simMeanWords int
 )
 
 // readRealWordRange 从真实 DB 读章节字数上下限（get_chapter_list 校验用）。
@@ -710,8 +720,8 @@ func readRealWordRange() (int, int) {
 
 func initBody() {
 	simMinWords, simMaxWords = readRealWordRange()
-	simTargetWords = simMinWords + (simMaxWords-simMinWords)/2
-	simSegLen = simTargetWords / 6
+	simMeanWords = simMinWords + (simMaxWords-simMinWords)/2
+	mean := simMeanWords
 
 	rng := rand.New(rand.NewSource(42))
 	const chars = "天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏金木水火土风雨雷电山海林木龙虎凤凰" +
@@ -720,19 +730,35 @@ func initBody() {
 		"试炼机缘造化天骄妖孽至尊大帝圣主神王主宰荒古太古远古上古中古近古百年千年万年永恒不朽" +
 		"苍茫大地九霄之上万界诸天三千世界浩瀚星空无垠宇宙轮回因果宿命机缘命数气运天道法则"
 	runes := []rune(chars)
-	var b strings.Builder
-	for i := 0; i < simTargetWords; i++ {
-		b.WriteRune(runes[rng.Intn(len(runes))])
-	}
-	body := b.String()
-	chapterBody = make([]string, 6)
-	for i := 0; i < 6; i++ {
-		start := i * simSegLen
-		end := (i + 1) * simSegLen
-		if end > len(body) {
-			end = len(body)
+
+	chapterBodies = make([][]string, maxSimChapters)
+	simChapterTarget = make([]int, maxSimChapters)
+	for ch := 0; ch < maxSimChapters; ch++ {
+		// 目标字数：均值 + 正态波动（真实 std），clamp 到设置范围
+		target := int(rng.NormFloat64()*realWordStdDev + float64(mean))
+		if target < simMinWords {
+			target = simMinWords
 		}
-		chapterBody[i] = body[start:end]
+		if target > simMaxWords {
+			target = simMaxWords
+		}
+		simChapterTarget[ch] = target
+		segLen := target / 6
+		var b strings.Builder
+		for i := 0; i < target; i++ {
+			b.WriteRune(runes[rng.Intn(len(runes))])
+		}
+		body := b.String()
+		segs := make([]string, 6)
+		for i := 0; i < 6; i++ {
+			start := i * segLen
+			end := (i + 1) * segLen
+			if end > len(body) {
+				end = len(body)
+			}
+			segs[i] = body[start:end]
+		}
+		chapterBodies[ch] = segs
 	}
 }
 
@@ -893,23 +919,25 @@ func writePlays(ch int) []play {
 // writeBodyPlays 正文写入 + 字数校验（单章/批量共用）：
 // 6 段 edit 写满目标字数 → get_chapter_list 校验（首次欠字不达标）→ 补写 → 复查达标 → 物品记录。
 func writeBodyPlays(ch int) []play {
-	seg := simSegLen
+	body := chapterBodies[ch-1]
+	target := simChapterTarget[ch-1]
 	plays := make([]play, 0, 11)
 	for i := 0; i < 6; i++ {
-		written := (i + 1) * seg
-		if written > simTargetWords {
-			written = simTargetWords
+		segLen := len([]rune(body[i]))
+		written := (i + 1) * target / 6
+		if written > target {
+			written = target
 		}
 		plays = append(plays, play{
 			tool:   "edit",
-			args:   editArgs(fmt.Sprintf("chapters/%03d.md", ch), chapterBody[i]),
-			result: fmt.Sprintf("写入 %d 字，当前 %d/%d", len([]rune(chapterBody[i])), written, simTargetWords),
+			args:   editArgs(fmt.Sprintf("chapters/%03d.md", ch), body[i]),
+			result: fmt.Sprintf("写入 %d 字，当前 %d/%d", segLen, written, target),
 		})
 	}
 	plays = append(plays,
 		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simMinWords-100, false)},
-		play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: fmt.Sprintf("补写 400 字，当前 %d/%d", simTargetWords, simTargetWords)},
-		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simTargetWords, true)},
+		play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: fmt.Sprintf("补写 400 字，当前 %d/%d", target, target)},
+		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, target, true)},
 		play{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
 	)
 	return plays
@@ -934,11 +962,11 @@ func selfReviewPlays(ch int) []play {
 func reviewPlays(ch int) []play {
 	return []play{
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(ch)},
-		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBody[0] + chapterBody[1]},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBodies[ch-1][0] + chapterBodies[ch-1][1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：调整对话节奏，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：前文伏笔在此回收，强化悬念。"), result: "已修复问题 2"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：删减冗余描写，收紧节奏。"), result: "已修复问题 3"},
-		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simTargetWords, true)},
+		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simChapterTarget[ch-1], true)},
 		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
 	}
 }
@@ -953,7 +981,7 @@ func maintainPlays(ch int, nextPhase string) []play {
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
 		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
-		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch), result: fmt.Sprintf(`{"scenes":[{"id":10,"title":"秘境初探","summary":"陈昊入秘境","word_count":%d}]}`, simTargetWords)},
+		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch), result: fmt.Sprintf(`{"scenes":[{"id":10,"title":"秘境初探","summary":"陈昊入秘境","word_count":%d}]}`, simChapterTarget[ch-1])},
 		{tool: "get_item_occurrences", args: `{"item_id":3}`, result: `{"occurrences":[{"chapter_id":1,"action":"获得玉佩"},{"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"陈昊获得玉佩"}]}`},
 		{tool: "get_character_relations", args: `{}`, result: `{"relations":[{"a":"陈昊","b":"林雪","relation":"师姐弟"}]}`},
 		{tool: "search_lore", args: `{"query":"秘境"}`, result: `{"matches":[{"title":"青云秘境","category":"地点","content":"宗门试炼之地"}]}`},
@@ -1068,7 +1096,7 @@ func chapterList(ch int) string {
 		if i > 1 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"num":%d,"title":"%s","word_count":%d}`, i, chapterTitle(i), simTargetWords)
+		fmt.Fprintf(&b, `{"num":%d,"title":"%s","word_count":%d}`, i, chapterTitle(i), simMeanWords)
 	}
 	b.WriteString(`]}`)
 	return b.String()
@@ -1083,13 +1111,13 @@ func longContext(n int) string {
 	b.WriteString(`{"chapter":{"num":`)
 	fmt.Fprintf(&b, "%d", n)
 	b.WriteString(`,"title":"第二章","word_count":`)
-	fmt.Fprintf(&b, "%d", simTargetWords)
+	fmt.Fprintf(&b, "%d", simMeanWords)
 	b.WriteString(`},"recent_chapters":[`)
 	for i := 1; i <= n; i++ {
 		if i > 1 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"num":%d,"title":"章","word_count":%d}`, i, simTargetWords)
+		fmt.Fprintf(&b, `{"num":%d,"title":"章","word_count":%d}`, i, simMeanWords)
 	}
 	b.WriteString(`],"scenes":[{`)
 	for i := 0; i < 8; i++ {
@@ -1160,8 +1188,8 @@ func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, tu
 
 	// 子 agent 内部工具调用（读正文 + 查状态），结果量级与真实一致
 	subPlays := []play{
-		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBody[0] + chapterBody[1]},
-		{tool: "read", args: `{"path":"chapters/007.md","start_line":100,"end_line":200}`, result: chapterBody[2] + chapterBody[3]},
+		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBodies[6][0] + chapterBodies[6][1]},
+		{tool: "read", args: `{"path":"chapters/007.md","start_line":100,"end_line":200}`, result: chapterBodies[6][2] + chapterBodies[6][3]},
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"},{"id":2,"name":"林雪","relation":"师姐"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},

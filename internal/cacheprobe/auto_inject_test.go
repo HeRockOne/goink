@@ -39,7 +39,7 @@ func TestSubagentHistory(t *testing.T) {
 		req := append(append([]map[string]any{}, history...), cur...)
 		h, m := cacheA.Step(req)
 		resultsA = append(resultsA, apair{h, m})
-		cur = append(cur, asstToolCall(fmt.Sprintf("e%d", turn), "edit", fmt.Sprintf(`{"path":"chapters/%03d.md"}`, turn+1)), toolMsg(fmt.Sprintf("e%d", turn), "edit", chapterBody[0]))
+		cur = append(cur, asstToolCall(fmt.Sprintf("e%d", turn), "edit", fmt.Sprintf(`{"path":"chapters/%03d.md"}`, turn+1)), toolMsg(fmt.Sprintf("e%d", turn), "edit", chapterBodies[0][0]))
 		// 子代理：fork 完整主历史（现状）
 		sub := append(append([]map[string]any{}, history...), cur...)
 		sub = append(sub, sysMsg(agentcfg.AgentIdentity(agentcfg.ReviewAgent)))
@@ -49,7 +49,7 @@ func TestSubagentHistory(t *testing.T) {
 		h, m = cacheA.StepRaw(sub)
 		resultsA = append(resultsA, apair{h, m})
 		// 子代理工具调用
-		sub = append(sub, asstToolCall("s1", "read", `{"path":"chapters/007.md"}`), toolMsg("s1", "read", chapterBody[0]))
+		sub = append(sub, asstToolCall("s1", "read", `{"path":"chapters/007.md"}`), toolMsg("s1", "read", chapterBodies[0][0]))
 		h, m = cacheA.StepRaw(sub)
 		resultsA = append(resultsA, apair{h, m})
 		sub = append(sub, asstText("审稿完成"))
@@ -86,7 +86,7 @@ func TestSubagentHistory(t *testing.T) {
 		req := append(append([]map[string]any{}, historyB...), curB...)
 		h, m := cacheB.Step(req)
 		resultsB = append(resultsB, apair{h, m})
-		curB = append(curB, asstToolCall(fmt.Sprintf("e%d", turn), "edit", fmt.Sprintf(`{"path":"chapters/%03d.md"}`, turn+1)), toolMsg(fmt.Sprintf("e%d", turn), "edit", chapterBody[0]))
+		curB = append(curB, asstToolCall(fmt.Sprintf("e%d", turn), "edit", fmt.Sprintf(`{"path":"chapters/%03d.md"}`, turn+1)), toolMsg(fmt.Sprintf("e%d", turn), "edit", chapterBodies[0][0]))
 		// 子代理：精简历史（只带固定前缀 + NS + 正文，不加完整主历史）
 		sub := []map[string]any{}
 		sub = append(sub, fixedSystem()...) // 固定前缀（identity+always+catalog）
@@ -97,7 +97,7 @@ func TestSubagentHistory(t *testing.T) {
 		sub = append(sub, userMsg("审稿"))
 		h, m = cacheB.StepRaw(sub)
 		resultsB = append(resultsB, apair{h, m})
-		sub = append(sub, asstToolCall("s1", "read", `{"path":"chapters/007.md"}`), toolMsg("s1", "read", chapterBody[0]))
+		sub = append(sub, asstToolCall("s1", "read", `{"path":"chapters/007.md"}`), toolMsg("s1", "read", chapterBodies[0][0]))
 		h, m = cacheB.StepRaw(sub)
 		resultsB = append(resultsB, apair{h, m})
 		sub = append(sub, asstText("审稿完成"))
