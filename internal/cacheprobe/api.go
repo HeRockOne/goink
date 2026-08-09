@@ -60,7 +60,12 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 
 	// 混合对话窗口场景（真实使用方式）
 	sc := runTriple(fmt.Sprintf("对话窗口（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章）", gateRounds, shortQARounds, batchChapters), cleanRetain, func(mode string, c *TokenCache) [][2]int64 {
-		return buildMixedSession(mode, c, gateRounds, shortQARounds, batchChapters)
+		// auto = 当前自动注入行为, now = 旧 read_required 行为, clean = 实验方案
+		actualMode := mode
+		if mode == "now" {
+			actualMode = "auto"
+		}
+		return buildMixedSession(actualMode, c, gateRounds, shortQARounds, batchChapters)
 	})
 	res.Scenarios = append(res.Scenarios, sc)
 
@@ -751,10 +756,16 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
-	// init 开书
+	// auto 模式：init 技能直接注入
 	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
 	cur = append(cur, sysMsg(novelState(0)))
+	if mode == "auto" {
+		cur = append(cur, sysMsg(initInject))
+	}
 	for i, p := range initScript() {
+		if mode == "auto" && p.tool == "read_required" {
+			continue
+		}
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
@@ -764,6 +775,11 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		)
 		if p.tool == "set_phase" {
 			cur = append(cur, phaseReminder(p.args, true))
+			if mode == "auto" {
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+			}
 		}
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
@@ -795,6 +811,9 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		cur = append(cur, sysMsg(novelState(turn)))
 		plays := gateScript(turn)
 		for i, p := range plays {
+			if mode == "auto" && p.tool == "read_required" {
+				continue
+			}
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
@@ -806,6 +825,11 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 			cur = append(cur, toolMsg(fmt.Sprintf("call_t%d_p%d", turn, i), p.tool, p.result))
 			if p.tool == "set_phase" {
 				cur = append(cur, phaseReminder(p.args, true))
+				if mode == "auto" {
+					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+						cur = append(cur, sysMsg(sk))
+					}
+				}
 			}
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
@@ -825,6 +849,9 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		cur = append(cur, sysMsg(novelState(gateRounds + 1)))
 		plays := batchGatePlays(batchChapters)
 		for i, p := range plays {
+			if mode == "auto" && p.tool == "read_required" {
+				continue
+			}
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
@@ -836,6 +863,11 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 			cur = append(cur, toolMsg(fmt.Sprintf("call_b_p%d", i), p.tool, p.result))
 			if p.tool == "set_phase" {
 				cur = append(cur, phaseReminder(p.args, true))
+				if mode == "auto" {
+					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+						cur = append(cur, sysMsg(sk))
+					}
+				}
 			}
 		}
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
