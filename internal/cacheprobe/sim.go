@@ -1113,9 +1113,24 @@ func batchFullCycle(chapters, every int) []play { return batchCore(chapters, 3, 
 func batchEndReview(chapters int) []play { return batchCore(chapters, 4, 0) }
 
 // batchLightEndReview 批量 + 业界标准组合（轻量高频 + 重型低频）：
-// 每 3 章轻量自检（selfReviewPlays，对应白金"三章一轮"节奏）+ 批末全批审稿
-// （子代理覆盖全批）。零阶段切换。
+// 每 3 章轻量状态对照自检（batchLightCheckPlays，一致性向——普通用户抓不住文笔，
+// 但设定矛盾一眼穿帮）+ 批末全批审稿（子代理覆盖全批）。零阶段切换。
 func batchLightEndReview(chapters int) []play { return batchCore(chapters, 5, 3) }
+
+// batchLightCheckPlays 每 N 章轻量状态对照自检（一致性向，替代文笔向 selfReviewPlays）：
+// 调 get_* 查询读取角色/伏笔/快照状态，对照最近 N 章正文检查设定矛盾
+// （角色状态不符、时间线错乱、伏笔状态不一致、章节衔接断裂），edit 修复。
+// 门禁：get_* 在 write 白名单 ✓；edit 事前技能强制（write 4 必读已在阶段入口注入）✓。
+// 与业界 check_consistency（对照状态数据检查一致性）同模式。
+func batchLightCheckPlays(chStart, chEnd int) []play {
+	return []play{
+		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"},{"id":2,"name":"林雪","desc":"师姐","relation":"师姐弟"}]}`},
+		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
+		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, chEnd)},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
+		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "一致性修复：角色状态/时间线/伏笔与 DB 状态对齐。"), result: "已修复一致性矛盾"},
+	}
+}
 
 // batchCore 批量门禁流程核心构造器（内部实现，外部用上面的语义化入口）。
 // checkKind: 0=无自检 / 1=轻量自检(selfReviewPlays) / 2=批内检查(子代理审最近 N 章) / 3=完整门禁循环(review+maintain)
@@ -1153,9 +1168,13 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 		} else {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
-		// 批次检查（checkKind=1/5）：write 循环内按节奏插入轻量自检，不跳阶段
-		if (checkKind == 1 || checkKind == 5) && checkEvery > 0 && ch%checkEvery == 0 {
+		// 批次检查（checkKind=1）：write 循环内按节奏插入文笔向轻量自检，不跳阶段
+		if checkKind == 1 && checkEvery > 0 && ch%checkEvery == 0 {
 			plays = append(plays, selfReviewPlays(ch)...)
+		}
+		// 批次检查（checkKind=5）：write 循环内按节奏插入一致性向状态对照自检，不跳阶段
+		if checkKind == 5 && checkEvery > 0 && ch%checkEvery == 0 {
+			plays = append(plays, batchLightCheckPlays(ch-checkEvery+1, ch)...)
 		}
 		// 批次检查（checkKind=2）：write 循环内按节奏插入，走阶段切换
 		if checkKind == 2 && checkEvery > 0 && ch%checkEvery == 0 {

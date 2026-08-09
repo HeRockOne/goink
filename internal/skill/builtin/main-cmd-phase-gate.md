@@ -39,11 +39,13 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
 > 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
 
-> **批量质量节奏（每 3 章轻量自检 + 批末全批审稿）**：write 循环每写 3 章停笔轻量自检一次
-> （read main-tech-revision-pass + sub-tech-anti-ai-grade，检查最近 3 章节奏/AI 味并立即修复，不攒批末，
-> 不调 run_subagent 不 set_phase——write 阶段白名单无 run_subagent）；批末 review 阶段 run_subagent
-> 审读**本批全部 N 章**（子代理 fork 完整主历史可见全部正文），逐章 read 自查 + edit 修复 + 字数复查，
-> 不要只审第 1 章。
+> **批量质量节奏（每 3 章状态对照自检 + 批末全批审稿）**：write 循环每写 3 章停笔自检一次——
+> 调 get_characters / get_timeline / get_writing_snapshot 读取状态，对照最近 3 章正文检查
+> **设定一致性**（角色状态/时间线/伏笔/章节衔接/重复），发现问题立即 edit 修复，不攒批末；
+> 重点是**一致性而非文笔**（普通读者抓不住文笔，但设定矛盾一眼穿帮——AI 写作常见翻车是
+> 前文死了的角色后文又出现、章节重复）。不调 run_subagent 不 set_phase（write 阶段白名单
+> 无 run_subagent）。批末 review 阶段 run_subagent 审读**本批全部 N 章**（子代理 fork 完整
+> 主历史可见全部正文），逐章 read 自查 + edit 修复 + 字数复查，不要只审第 1 章。
 > **注意：同阶段 set_phase 会重复注入技能全文**（SetPhase 同阶段直接成功 + injectPhaseSkills 无条件注入），
 > write 循环内禁止重复 set_phase("write")——只有阶段真正切换才需要 set_phase。
 
