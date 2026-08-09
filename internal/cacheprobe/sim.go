@@ -1162,14 +1162,18 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	}
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`})
 
-	// write：循环 N 章正文。read_required/技能只在循环开头加载一次
-	// （门禁 auto_skill_injection 按阶段计，write 阶段只进入一次；后续章复用上下文）。
+	// write：循环 N 章正文，每章一个显式 write 阶段边界（set_phase("write") 同阶段幂等成功，
+	// 产生阶段记录；注入去重后不重复注入技能——技能只在第 1 章完整注入，后续章复用上下文）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	// 批次检查插在 write 循环内，checkKind=2 走阶段切换（门禁白名单约束：run_subagent 仅在 review 阶段）。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
+			// 第 2+ 章：显式 write 阶段边界（去注入，同阶段 set_phase 幂等成功）
+			plays = append(plays,
+				play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
+			)
 			plays = append(plays, writePlaysLean(ch)...)
 		}
 		// 批次检查（checkKind=1）：write 循环内按节奏插入文笔向轻量自检，不跳阶段

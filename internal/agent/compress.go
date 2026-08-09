@@ -127,6 +127,14 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	clear(runningTokens)
 	maps.Copy(runningTokens, newTokens)
 
+	// 注入的技能 system 消息已被压缩掉，清空门禁技能读取记录，
+	// 否则 injectPhaseSkills 去重会跳过重新注入（技能衰减）。
+	// 清空后：下次 set_phase 重新注入 + 事前技能强制引导 LLM 补读。
+	if pg := a.getPG(); pg != nil {
+		pg.ResetReads()
+		a.logger.Info("压缩后已清空门禁技能读取记录，允许重新注入", "session_id", opts.SessionID)
+	}
+
 	a.emitCompression(ctx, opts.TurnID, "done", summary, "")
 
 	a.logger.Info("上下文压缩完成",

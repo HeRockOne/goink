@@ -171,6 +171,18 @@ func (g *PhaseGate) OnSkillInjected(skillName string) {
 	g.readsByPhase[g.currentPhase][skillName] = true
 }
 
+// ResetReads 清空所有阶段的技能读取记录。上下文压缩后调用：
+// 注入的技能 system 消息已被压缩掉，记录必须清空，否则 injectPhaseSkills
+// 去重会误判"已注入"而跳过重新注入，导致必读技能在上下文中缺失（衰减）。
+// 清空后 missingInjections 恢复非空：下次 set_phase 重新注入，且事前技能
+// 强制（edit/update 前置检查）会引导 LLM 主动补读。
+func (g *PhaseGate) ResetReads() {
+	if g == nil {
+		return
+	}
+	g.readsByPhase = make(map[string]map[string]bool)
+}
+
 // SetWordCountOK 设置字数校验结果。get_chapter_list 工具调用后由 agent 注入。
 func (g *PhaseGate) SetWordCountOK(ok bool) {
 	if g == nil || !g.active {

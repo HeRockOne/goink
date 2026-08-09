@@ -46,8 +46,12 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > 不攒批末、不调 run_subagent 不 set_phase（write 阶段白名单无 run_subagent）。批末 review 阶段
 > run_subagent 审读**本批全部 N 章**（子代理 fork 完整主历史可见全部正文），一致性优先，
 > 逐章 read 自查 + edit 修复 + 字数复查，不要只审第 1 章。
-> **注意：同阶段 set_phase 会重复注入技能全文**（SetPhase 同阶段直接成功 + injectPhaseSkills 无条件注入），
-> write 循环内禁止重复 set_phase("write")——只有阶段真正切换才需要 set_phase。
+> **批量 write 显式循环 + 注入去重**：每章写完后调 set_phase("write") 声明下一章边界
+> （同阶段切换幂等成功，只产生显式阶段记录，不重置校验状态）。系统自动注入**已去重**：
+> 只注入本阶段缺失的必读技能（injectPhaseSkills 按 missingInjections 计算），已注入过或
+> LLM 已读过的技能不重复注入——每章 set_phase("write") 不再有重复注入成本。
+> 自检/修复/迷你维护不需要 set_phase；**上下文压缩后门禁清空技能记录**（技能已不在上下文），
+> 需按需补读（auto_skill_injection 或下次 set_phase 自动注入），不要因"技能读过"而跳过补读。
 
 ## require 清单（必须成功调用，失败不算）
 

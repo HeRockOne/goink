@@ -16,7 +16,7 @@ mode: always
 ## 流程
 
 单章：prepare → outline → write → review → maintain → prepare
-批量：prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
+批量：prepare → outline（一次出 N 章大纲）→ write（显式循环 N 章：每章动笔前 read 本章大纲，每章结束 set_phase("write") 声明章边界，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
 
 > 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
 > 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
@@ -39,9 +39,15 @@ mode: always
 >   （子代理 fork 完整主历史，正文已在上下文中，无需重复 read 注入）；审稿重点同样是
 >   **一致性优先**（设定矛盾、章节衔接、伏笔状态），其次节奏与 AI 味；根据审稿意见
 >   **逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，**不要只审第 1 章**。
-> - **write 循环内禁止重复 set_phase("write")**：阶段入口已注入本阶段必读技能，循环中每
->   set_phase 一次系统会重复注入技能全文（浪费 token 且挤占注意力）。只有阶段真正切换
->   （outline→write、write→review）才需要 set_phase；自检、修复、迷你维护都不需要它。
+
+> **批量 write 显式循环（每章一个阶段边界）**：批量循环中**每章写完后调 set_phase("write") 声明下一章开始**
+> ——同阶段切换幂等成功，不重置任何校验状态，只产生显式阶段记录（UI/审计逐章可见、LLM 获得"本章完成
+> 下一章开始"的明确信号，防止连写多章越写越敷衍）。
+> **技能注入已去重**：系统只在阶段**首次**进入时注入必读技能全文，后续同阶段 set_phase 不再重复注入
+> （技能已在上下文中，重复注入浪费 token 且挤占注意力——这正是注入去重的意义）。
+> 自检、修复、迷你维护**不需要** set_phase；只有阶段真正切换（outline→write、write→review）
+> 或声明章边界时才调用。**上下文压缩后技能记录被清空**，需按需补读（auto_skill_injection 或
+> 下次 set_phase 自动注入），不要因为"技能读过"就跳过补读。
 
 ## 卷结构（长篇必建）
 

@@ -212,6 +212,10 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 // injectPhaseSkills 自动注入指定阶段的必读技能（auto_skill_injection）为 system 消息。
 // 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
 // 模型无需再调 auto_skill_injection——技能是创作指导，系统保证其在创作动作前就绪。
+// 注入去重：只注入本阶段缺失的必读技能（missingInjections）——已注入过或 LLM 已
+// 主动读取过的技能不再重复注入，避免批量循环中每章 set_phase("write") 重复注入
+// 技能全文（浪费 token 且挤占注意力）。压缩成功后门禁清空 readsByPhase
+// （技能已不在上下文），下次进入阶段会重新注入/补读。
 func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	pg := a.getPG()
 	if pg == nil || !pg.Active() {
@@ -221,7 +225,11 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	if pc == nil || len(pc.AutoSkillInjection) == 0 {
 		return
 	}
-	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
+	missing := pg.missingInjections(pc)
+	if len(missing) == 0 {
+		return
+	}
+	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, missing)
 	if err != nil {
 		a.logger.Warn("自动注入必读技能失败", "phase", phase, "err", err)
 		return
@@ -230,12 +238,12 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 		return
 	}
 	a.appendMsg("system", content, "", nil, opts, nil)
-	for _, name := range pc.AutoSkillInjection {
+	for _, name := range missing {
 		if !strings.Contains(name, "*") {
 			pg.OnSkillInjected(name)
 		}
 	}
-	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.AutoSkillInjection)
+	a.logger.Info("自动注入必读技能", "phase", phase, "skills", missing)
 }
 
 // agentTypeFromString 将字符串转为 AgentType。

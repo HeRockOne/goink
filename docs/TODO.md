@@ -118,23 +118,15 @@ batchFullCycle(5, 3)       // 每 3 章完整门禁流程（review+maintain 阶�
 
 ---
 
-### P4. 技能注入去重（可选优化，待真机确认后评估）
+### P4. 技能注入去重（✅ 已落地 2026-08-09，待真机验证）
 
-**现状**：internal/agent/agent.go:215-239 `injectPhaseSkills` 每次 set_phase 无条件注入（每章重复注入相同技能全文 ~9.2K miss/章，占 miss 约 10%）。
+**实现**（与批量 write 显式循环联动，用户设计：第一个 write 完整注入，后续 write 去注入）：
+1. agent.go `injectPhaseSkills`（215-239）：改为只注入 `missingInjections(pc)` 缺失的必读技能——已注入过或 LLM 已读过的技能不重复注入（首次注入语义不变，事前技能强制 phase_gate.go:491-496 不破坏）
+2. 压缩联动：`Compress` 成功后调用 `pg.ResetReads()`（compress.go）——注入的技能 system 消息已被压缩掉，必须清空 readsByPhase，否则去重会误判"已注入"而跳过重新注入（技能衰减）；清空后 missingInjections 恢复非空，下次 set_phase 重新注入 + 事前技能强制引导补读
+3. 批量 write 显式循环：batchCore 每章加 `set_phase("write")` 显式边界 play（N-1 次，同阶段幂等成功，零校验开销）；模拟成本 ¥0.1003→¥0.1027/章（+2.4% 为 set_phase 边界 token），性价比 87.7 仍全场第一
+4. 技能文档反转：kernel/main-cmd-phase-gate/门禁配置示例 从"write 循环内禁止重复 set_phase"改为"每章结束 set_phase('write') 声明章边界（去注入零成本）"；压缩后需按需补读
 
-**技术实现**：
-1. internal/agent/phase_gate.go 已有技能状态：`OnSkillInjected(skillName)`（phase_gate.go:164）、`missingInjections`（phase_gate.go:202，按 AutoSkillInjection 配置查缺失）——先读这两个函数确认 injectedSkills 的存储与查询
-2. agent.go injectPhaseSkills（215-239）注入前检查：
-   ```go
-   // 伪代码：已注入过则跳过（同阶段重复 set_phase 不重复注入）
-   if pg.HasInjected(phase) { return }
-   ```
-   需要 PhaseGate 加 `HasInjected(phase string) bool`（检查该阶段 AutoSkillInjection 的技能是否都已注入，注意通配符 `*` 技能名，对齐 missingInjections 的匹配逻辑）
-3. 风险：门禁 require 依赖技能注入状态（missingInjections 用于 set_phase 阻塞 + 事前技能强制）——去重不能破坏"必读技能未加载前禁止创作动作"的语义（phase_gate.go:491-496），只跳过"已注入过的重复注入"，不跳过首次注入
-
-**模拟器对照**：internal/cacheprobe/sim.go phaseInjectSkills 注入逻辑（batchGatePlaysWith set_phase 分支），加"已注入跳过"后对比 miss（预期每章省 ~9.2K）
-
-**完成标准**：真机前后对照（P1 数据 vs 去重后数据），确认 miss 下降且创作质量不降（技能内容在上下文中仍存在）。
+**完成标准**（待真机）：P1 批量跑一轮，确认 (a) 每章 set_phase("write") 不触发重复注入（日志只出现 1 次 write 技能注入）；(b) 批量中途压缩后 LLM 能补读技能（事前技能强制 + 下次 set_phase 自动注入）；(c) 技能内容在上下文中持续有效（创作质量不降）。
 
 ---
 
