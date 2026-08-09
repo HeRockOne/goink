@@ -256,3 +256,63 @@ func TestDiagBatchSelfReview(t *testing.T) {
 			md.name, h, m, out, rate(h, m), c, c/5, save)
 	}
 }
+
+// 诊断:批量大小 × 三章一轮的权衡——批内章数越大固定成本摊得越薄（越便宜），
+// 但连续多批引入批次边界（新窗口 prepare 重来 = 额外 miss）。
+// 回答"批量上限应该设多少、三章一轮是否影响"。
+func TestDiagBatchSizeTradeoff(t *testing.T) {
+	initTools()
+
+	// 连续 batches 批 × chapters 章（批次边界 = 新窗口，历史保留），三章一轮自检
+	runBatches := func(chapters, every, batches int) (hit, miss, out int64) {
+		cache := NewTokenCache()
+		for b := 0; b < batches; b++ {
+			plays := batchGatePlaysWith(chapters, every)
+			history := append([]map[string]any{}, fixedSystem()...)
+			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章（第 %d 批）。", chapters, b+1))}
+			cur = append(cur, sysMsg(novelState(b*chapters)))
+			for i, p := range plays {
+				cache.Step(append(append([]map[string]any{}, history...), cur...))
+				id := fmt.Sprintf("call_b%d_p%d", b, i)
+				if p.tool == "set_phase" {
+					simPhase = p.args
+					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+						cur = append(cur, sysMsg(sk))
+					}
+					cur = append(cur, phaseReminder(p.args, true))
+				}
+				cur = append(cur, asstToolCall(id, p.tool, p.args))
+				if p.tool == "run_subagent" {
+					simulateSubagent(cache, history, cur, b*chapters+chapters)
+				}
+				cur = append(cur, toolMsg(id, p.tool, p.result))
+			}
+			cur = append(cur, asstText("本批创作完成"))
+			cache.Step(append(append([]map[string]any{}, history...), cur...))
+		}
+		return cache.hit, cache.miss, cache.output
+	}
+
+	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
+	rate := func(h, m int64) float64 { return 100 * float64(h) / float64(h+m) }
+
+	cases := []struct {
+		name     string
+		ch, every, batches int
+	}{
+		{"单批3章(三章一轮)", 3, 3, 1},
+		{"单批5章(三章一轮)", 5, 3, 1},
+		{"单批6章(三章一轮)", 6, 3, 1},
+		{"单批10章(三章一轮)", 10, 3, 1},
+		{"2批×3章(三章一轮,批边界)", 3, 3, 2},
+		{"2批×5章(三章一轮,批边界)", 5, 3, 2},
+	}
+	fmt.Printf("\n批量大小 × 三章一轮（now 协议, DeepSeek 价）:\n")
+	for _, c := range cases {
+		h, m, out := runBatches(c.ch, c.every, c.batches)
+		totalCh := c.ch * c.batches
+		per := cost(h, m, out) / float64(totalCh)
+		fmt.Printf("  %-28s: %2d章 hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章)\n",
+			c.name, totalCh, h, m, out, rate(h, m), cost(h, m, out), per)
+	}
+}
