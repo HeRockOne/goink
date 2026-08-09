@@ -158,15 +158,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - 每个阶段有 tools 列表（只允许使用这些工具）和 require 列表（必须调用后才能切换阶段）
 - set_phase({"phase":"目标阶段名"}) 切换阶段。require 未满足会阻塞。
 - **不自动推进，必须主动调 set_phase**。查看配置用 get_phase_gate_config，编辑用 update_phase_gate_config。
-
-| 阶段 | 完成条件 | 必须调用 |
-|------|---------|---------|
-| init | 开书：查询 7 项确认现状（新书写全书总纲到 book-outline.md、建角色/世界观/卷） | set_phase("prepare") |
-| prepare | 用 get_writing_context 一次获取全量上下文（角色、时间线、弧线、读者认知、伏笔、设定、物品、场景），**必须检查 volume_entities（本卷涉及的实体清单）**，确认本卷设定约束、伏笔状态、物品流转，再按需补充细节。**同时必须读取返回的 outline（全书总纲摘要）与 progress（当前章号+本卷范围）**：本章创作只展开本卷情节、服务于总纲方向，后续卷设定不得提前使用。发现有异常（如角色断档、设定前后矛盾）用 get_entity_appearances 反查确认，然后 set_phase("outline") |
-| outline | 大纲写入文件 | set_phase("write") |
-| write | 正文写入+字数达标（字数由 get_chapter_list 代码校验，默认 2400-4000，设置中可调） | set_phase("review") |
-| review | 必须调用 run_subagent(agent_type="review") 且无致命问题 | set_phase("maintain") |
-| maintain | 所有数据更新完毕（清单见 kernel，15 项逐项执行） | 自动推进到 prepare |
+- 各阶段完成条件与必读技能见常驻技能 main-core-writing-kernel（已在上下文中)。
 
 【文件路径】
 
