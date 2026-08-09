@@ -203,19 +203,15 @@ func TestDiagMissBreakdown(t *testing.T) {
 		msgTokens(sysMsg(phaseInjectSkills["maintain"])))
 }
 
-// 诊断:批量模式补齐"每章自审"（对齐单章 gateScript 的 write 后 selfReview）的成本增量。
-// 回答"批量省钱的同时把质量拉近单章，代价是多少"。
+// 诊断:批量模式质量自检节奏的成本对比（白金方法论"三章一轮"对照）。
+// 方案:0=现状(攒批统一审)/1=每章自审/3=三章一轮(每 3 章批次自检)。
+// 单章 5 轮作基准。回答"批量省钱的同时把质量节奏拉近单章，代价是多少"。
 func TestDiagBatchSelfReview(t *testing.T) {
 	initTools()
 
-	runBatch := func(selfReview bool) (hit, miss, out int64) {
+	runBatch := func(selfReviewEvery int) (hit, miss, out int64) {
 		cache := NewTokenCache()
-		var plays []play
-		if selfReview {
-			plays = batchGatePlaysWith(5, true)
-		} else {
-			plays = batchGatePlays(5)
-		}
+		plays := batchGatePlaysWith(5, selfReviewEvery)
 		history := append([]map[string]any{}, fixedSystem()...)
 		cur := []map[string]any{userMsg("请批量创作 5 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。")}
 		cur = append(cur, sysMsg(novelState(0)))
@@ -240,14 +236,23 @@ func TestDiagBatchSelfReview(t *testing.T) {
 		return cache.hit, cache.miss, cache.output
 	}
 
-	baseH, baseM, baseOut := runBatch(false)
-	enhH, enhM, enhOut := runBatch(true)
 	rate := func(h, m int64) float64 { return 100 * float64(h) / float64(h+m) }
 	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
 
-	fmt.Printf("\n批量 5 章 vs 批量+每章自审（now 协议, DeepSeek 价）:\n")
-	fmt.Printf("  当前批量    : hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章)\n", baseH, baseM, baseOut, rate(baseH, baseM), cost(baseH, baseM, baseOut), cost(baseH, baseM, baseOut)/5)
-	fmt.Printf("  批量+自审   : hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章)\n", enhH, enhM, enhOut, rate(enhH, enhM), cost(enhH, enhM, enhOut), cost(enhH, enhM, enhOut)/5)
-	fmt.Printf("  成本增量    : +¥%.4f/章 (+%.1f%%)\n", (cost(enhH, enhM, enhOut)-cost(baseH, baseM, baseOut))/5, (cost(enhH, enhM, enhOut)-cost(baseH, baseM, baseOut))/cost(baseH, baseM, baseOut)*100)
-	fmt.Printf("  对比单章 5 轮（¥0.2751/章）: 批量+自审仍省 %.1f%%\n", (1-cost(enhH, enhM, enhOut)/5/0.2751)*100)
+	modes := []struct {
+		name string
+		every int
+	}{
+		{"现状(攒批统一审)", 0},
+		{"每章自审", 1},
+		{"三章一轮(第3章批次自检)", 3},
+	}
+	fmt.Printf("\n批量 5 章质量节奏对比（now 协议, DeepSeek 价, 单章 5 轮基准 ¥0.2751/章）:\n")
+	for _, md := range modes {
+		h, m, out := runBatch(md.every)
+		c := cost(h, m, out)
+		save := (1 - c/5/0.2751) * 100
+		fmt.Printf("  %-22s: hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章) 比单章省 %.1f%%\n",
+			md.name, h, m, out, rate(h, m), c, c/5, save)
+	}
 }
