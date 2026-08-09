@@ -1153,15 +1153,20 @@ func batchGatePlaysWith(chapters int, checkKind int, checkEvery int) []play {
 	return plays
 }
 
-// batchCheckPlays 批次完整检查（checkKind=2）：子代理审读最近一个批次（chStart..chEnd 章）
-// + 修复 + 字数复查。不 set_phase（保持 write 阶段，避免技能重复注入）。
+// batchCheckPlays 批次完整检查（checkKind=2）：走阶段切换（门禁白名单约束）——
+// set_phase("review")（write→review 为 next 推进，review 白名单含 run_subagent）
+// → 子代理审最近一个批次（chStart..chEnd）+ 修复 + 字数复查
+// → set_phase("write") 回 write 继续（review→write 为回退到已访问阶段，phase_gate.go:380）。
+// batch review 段配置无 auto_skill_injection（不注入）；回 write 时注入 write 技能（重复注入成本）。
 func batchCheckPlays(chStart, chEnd int) []play {
 	return []play{
+		{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`},
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chEnd)},
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：调整对话节奏，去除 AI 味，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：伏笔衔接，强化章末悬念。"), result: "已修复问题 2"},
 		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
+		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 	}
 }
 
