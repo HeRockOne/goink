@@ -205,8 +205,11 @@ func TestDiagMissBreakdown(t *testing.T) {
 
 // 诊断:批量模式质量自检节奏的成本对比（白金方法论"三章一轮"对照）。
 // 实现方式：outline 一次出全批大纲，write 循环内每 N 章插入批次检查（不跳阶段）。
-// checkKind: 0=无 / 1=轻量自检(selfReviewPlays) / 2=完整批次检查(子代理审最近 N 章+修复)
-// 单章 5 轮作基准。回答"批量省钱的同时把质量节奏拉近单章，代价是多少"。
+// checkKind: 0=无 / 1=轻量自检(selfReviewPlays) / 2=完整批次检查(子代理审最近 N 章+修复) /
+//            3=完整门禁流程(每批 review+maintain)
+// 质量维度（白金方法论可量化环节，0-10）：
+//   写后自检(三章一轮制度) 3 分 / 审稿覆盖 3 分(被审章节占比×3) / 状态实时 2 分(miniMaintain) /
+//   写前对齐 1 分 / 章纲+防串章 1 分
 func TestDiagBatchSelfReview(t *testing.T) {
 	initTools()
 
@@ -237,26 +240,107 @@ func TestDiagBatchSelfReview(t *testing.T) {
 		return cache.hit, cache.miss, cache.output
 	}
 
+	// 单章 5 轮基准
+	runSingle := func() (hit, miss, out int64) {
+		cache := NewTokenCache()
+		history := append([]map[string]any{}, fixedSystem()...)
+		cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
+		cur = append(cur, sysMsg(novelState(0)))
+		if true {
+			cur = append(cur, sysMsg(initInject))
+		}
+		for i, p := range initScript() {
+			if p.tool == "read_required" {
+				continue
+			}
+			cache.Step(append(append([]map[string]any{}, history...), cur...))
+			if p.tool == "set_phase" {
+				simPhase = p.args
+				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+					cur = append(cur, sysMsg(sk))
+				}
+				cur = append(cur, phaseReminder(p.args, true))
+			}
+			cur = append(cur, asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args), toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result))
+		}
+		commitCur("auto", &history, cur)
+		for turn := 1; turn <= 5; turn++ {
+			cur = []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章，继续推进剧情。", turn+1))}
+			cur = append(cur, sysMsg(novelState(turn)))
+			plays := gateScript(turn)
+			for i, p := range plays {
+				if p.tool == "read_required" {
+					continue
+				}
+				cache.Step(append(append([]map[string]any{}, history...), cur...))
+				id := fmt.Sprintf("call_t%d_p%d", turn, i)
+				if p.tool == "set_phase" {
+					simPhase = p.args
+					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+						cur = append(cur, sysMsg(sk))
+					}
+					cur = append(cur, phaseReminder(p.args, true))
+				}
+				cur = append(cur, asstToolCall(id, p.tool, p.args))
+				if p.tool == "run_subagent" {
+					simulateSubagent(cache, history, cur, turn)
+				}
+				cur = append(cur, toolMsg(id, p.tool, p.result))
+			}
+			cur = append(cur, asstText(finalAssistant(turn)))
+			cache.Step(append(append([]map[string]any{}, history...), cur...))
+			commitCur("auto", &history, cur)
+		}
+		return cache.hit, cache.miss, cache.output
+	}
+
 	rate := func(h, m int64) float64 { return 100 * float64(h) / float64(h+m) }
+	_ = rate
 	cost := func(h, m, out int64) float64 { return float64(h)*0.02/1e6 + float64(m)*1.0/1e6 + float64(out)*2.0/1e6 }
 
+	sh, sm, sout := runSingle()
+	singlePer := cost(sh, sm, sout) / 5
+
 	modes := []struct {
-		name     string
+		name      string
 		kind, every int
+		// 质量维度（白金方法论可量化环节，0-10）
+		postCheck float64 // 写后自检(三章一轮制度): 3=每章 2.5=每3章 0=无
+		covered   float64 // 审稿覆盖: 被子代理审过的章数/5
+		realtime  float64 // 状态实时: 2=miniMaintain每章 1=章末maintain
+		preAlign  float64 // 写前对齐: 1=每章prepare 0.5=仅首章
 	}{
-		{"现状(攒批统一审)", 0, 0},
-		{"每章轻量自检", 1, 1},
-		{"三章一轮·轻量自检", 1, 3},
-		{"三章一轮·完整批次检查", 2, 3},
-		{"三章一轮·完整门禁流程(review+maintain)", 3, 3},
+		{"单章 5 轮（基准）", -1, 0, 3, 1.0, 1, 1},
+		{"批量现状（攒批统一审）", 0, 0, 0, 0.2, 2, 0.5},
+		{"批量+每章轻量自检", 1, 1, 3, 0.0, 2, 0.5},
+		{"批量+三章一轮·轻量自检", 1, 3, 2.5, 0.0, 2, 0.5},
+		{"批量+三章一轮·批内检查", 2, 3, 2.5, 0.6, 2, 0.5},
+		{"批量+三章一轮·完整门禁流程", 3, 3, 2.5, 1.0, 2, 0.5},
 	}
-	fmt.Printf("\n批量 5 章质量节奏对比（now 协议, DeepSeek 价, 单章 5 轮基准 ¥0.2751/章）:\n")
+
+	fmt.Printf("\n批量 5 章 质量 × 成本 全方案对比（now 协议, DeepSeek 价, 单章 ¥%.4f/章）:\n", singlePer)
+	fmt.Printf("%-32s %10s %8s %10s %10s %8s %10s\n", "方案", "成本¥/章", "省vs单章", "审稿覆盖", "自检节奏", "质量分", "质量/成本")
+	fmt.Println(strings.Repeat("-", 100))
 	for _, md := range modes {
-		h, m, out := runBatch(md.kind, md.every)
-		c := cost(h, m, out)
-		save := (1 - c/5/0.2751) * 100
-		fmt.Printf("  %-24s: hit=%d miss=%d out=%d 命中率=%.1f%% 成本=¥%.4f (¥%.4f/章) 比单章省 %.1f%%\n",
-			md.name, h, m, out, rate(h, m), c, c/5, save)
+		var h, m, out int64
+		if md.kind < 0 {
+			h, m, out = sh, sm, sout
+		} else {
+			h, m, out = runBatch(md.kind, md.every)
+		}
+		per := cost(h, m, out) / 5
+		save := (1 - per/singlePer) * 100
+		// 质量分 = 写后自检 + 审稿覆盖×3 + 状态实时 + 写前对齐 + 章纲/防串章(全部1)
+		score := md.postCheck + md.covered*3 + md.realtime + md.preAlign + 1
+		qpc := score / per
+		cadence := "无"
+		if md.every > 0 {
+			cadence = fmt.Sprintf("每%d章", md.every)
+		} else if md.kind < 0 {
+			cadence = "每章"
+		}
+		fmt.Printf("%-32s %10.4f %7.1f%% %9.0f%% %10s %8.1f %10.1f\n",
+			md.name, per, save, md.covered*100, cadence, score, qpc)
 	}
 }
 
