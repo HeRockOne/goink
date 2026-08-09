@@ -5,6 +5,14 @@
 
 ---
 
+## 待办清单
+
+| 文档 | 说明 |
+|------|------|
+| [TODO.md](TODO.md) | 待落地清单：真机验证（P1）、批量三章一轮批内检查（P2）、批量大小建议（P3）、技能注入去重评估（P4）、模拟器差异收敛（P5） |
+
+---
+
 ## architecture/ — 系统设计（长存，随代码更新）
 
 | 文档 | 说明 |
@@ -99,3 +107,4 @@
 > 2026-08-09：批内三章自检实现与粒度验证——实现 = outline 一次出全批大纲，write 循环内每 N 章插入批次检查（不跳阶段，避免 set_phase 技能重复注入与大纲分批；批内 maintain 不需要，每章 miniMaintain 已实时结算）；batchGatePlaysWith(chapters, checkKind, checkEvery) 支持两种粒度：checkKind=1 轻量自检（selfReviewPlays 2 技能+1 修改，+0.3%）/ checkKind=2 完整批次检查（batchCheckPlays：run_subagent 审最近 N 章+修复+字数复查，+4.9%）；批量 5 章实测：现状 ¥0.0915、三章一轮轻量 ¥0.0918、三章一轮完整 ¥0.0960（仍比单章 5 轮 ¥0.2751 省 65.1%）
 > 2026-08-09：批内完整批次检查修正为走阶段切换（门禁白名单约束，用户指出的建模漏洞）——write 阶段白名单无 run_subagent（CheckToolAllowed 一律拦截），run_subagent 只能在 review 阶段；修正 batchCheckPlays = set_phase("review")（write→review next 推进 + write require 满足 + 字数校验通过）→ 子代理审最近 N 章+修复+字数复查 → set_phase("write")（review→write 回退到 visited 阶段，phase_gate.go:380）；batch review 段配置无 auto_skill_injection（切 review 不注入），回 write 注入 write 技能（重复注入成本计入）；修正后三章一轮完整检查 ¥0.0971/章（+6.1%，仍省 64.7%）；无需修改门禁配置
 > 2026-08-09：批内检查 vs 完整门禁流程对比（用户论点验证）——checkKind=3 完整门禁流程（每批 review+maintain，2 次 maintain）¥0.1110/章，比批内检查（统一 maintain×1）¥0.0971 贵 14.3%：maintain 固定成本（13 项+技能注入 2.6K）重复 ×2、write/maintain 技能重复注入 ×2、阶段切换减半；且每章 miniMaintain 已实时结算状态，批末 maintain 只是收尾，重复做是纯浪费（真实中分次 maintain 还重复查询累计状态，更贵）；结论：批内检查 + 统一 maintain 最优（质量节奏对齐白金 + 成本 +6.1%）
+> 2026-08-09：新增 docs/TODO.md 待落地清单（P1 真机验证/P2 批量三章一轮批内检查/P3 批量大小建议/P4 技能注入去重评估/P5 模拟器差异收敛），防止上下文丢失；README 顶部加待办索引
