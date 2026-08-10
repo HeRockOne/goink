@@ -162,6 +162,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - 各阶段完成条件与必读技能见常驻技能 main-core-writing-kernel（已在上下文中)。
 
 【省 token 总纲】（省 token 绝不损害创作质量——状态数据缺失才会损害创作）
+- 无依赖的工具调用**并行发出**（一次请求多个工具调用，模型原生支持并行 tool_calls）——有依赖才串行（后一个需要前一个的结果）。同一阶段查询/写入批（如 prepare 9 项必查、maintain 查询批、迷你维护 6 项）一次并行发出，不要一次一个
 - 查询工具默认返回最近 N 条（最近的优先）——写作只需近期状态，旧数据按需用 get_entity_appearances / search_* 反查
 - 写作上下文以 get_writing_context 为准（一次拿本章树状全量），不要用多个 get_* 拼凑重复数据
 - 范围/过滤参数优先：get_characters 用 brief（状态由 get_writing_context 提供）、get_timeline/get_story_arcs 传 current_chapter、get_scenes 传 chapter_id、search_* 按关键词检索

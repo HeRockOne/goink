@@ -221,7 +221,9 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 
 	// 9. inject 维护提醒（章节全量替换且 >500 字时）
 	var injects []InjectMessage
-	if approvalFeedback != "" {
+	// auto 模式（approval.Feedback 固定为 "auto"）时反馈零信息量，不注入；
+	// 只有真实用户反馈才告知 LLM（真机日志验证：每次 edit 一条 74 字符冗余消息）
+	if approvalFeedback != "" && approvalFeedback != "auto" {
 		injects = append(injects, InjectMessage{Role: "user", Content: "用户通过了审批并反馈：" + approvalFeedback})
 	}
 	if a.ChangeType == "full_replace" && isChapterPath(a.Path) && len([]rune(proposed)) > 500 {

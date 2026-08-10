@@ -560,10 +560,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							if ok {
 								// 成功：自动注入新阶段必读技能
 								a.injectPhaseSkills(targetPhase, &opts)
-								// 发送状态
-								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
-								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
-								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+								// 不注入成功 reminder——工具结果已含 success+phase，
+								// StatusString（require/字数状态）是冗余信息（真机日志验证，
+								// 每阶段切换一次多余 user 消息）；失败分支保留（"缺什么"必须告知）。
 								ps := a.getPG().Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": a.getPG().CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
