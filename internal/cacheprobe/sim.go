@@ -362,7 +362,7 @@ func missCatOf(m map[string]any) string {
 	if strings.HasPrefix(name, "get_") || strings.HasPrefix(name, "search_") {
 		return "query"
 	}
-	if strings.HasPrefix(name, "create_") || strings.HasPrefix(name, "update_") || name == "set_phase" || name == "read" || name == "read_required" {
+	if strings.HasPrefix(name, "create_") || strings.HasPrefix(name, "update_") || name == "set_phase" || name == "read" || name == "read_required" || name == "auto_skill_injection" {
 		return "update"
 	}
 	return "other"
@@ -706,9 +706,13 @@ func openRealDB() (*gorm.DB, error) {
 		if path == "" {
 			path = filepath.Join(platform.DataDir(), "novel-agent.db")
 		}
-		realDB, _ = gorm.Open(sqlite.Open(path), &gorm.Config{
+		db, err := gorm.Open(sqlite.Open(path), &gorm.Config{
 			Logger: gormlogger.Default.LogMode(gormlogger.Silent),
 		})
+		if err != nil {
+			return // 打开失败：realDB 保持 nil，调用方 fallback 默认值
+		}
+		realDB = db
 	})
 	if realDB == nil {
 		return nil, fmt.Errorf("open real db failed")
@@ -867,11 +871,12 @@ func readSkill(name string) play {
 	}
 }
 
-// readRequired 模拟门禁 auto_skill_injection 的 read_required 工具调用（2026-08-08 起各阶段必读技能用此加载）。
+// readRequired 模拟门禁 auto_skill_injection 工具调用（2026-08-08 起各阶段必读技能用此加载，
+// 工具名与真实业务一致：auto_skill_injection，args 为逗号分隔技能名列表）。
 func readRequired(names ...string) play {
 	skills := strings.Join(names, ",")
 	return play{
-		tool:   "read_required",
+		tool:   "auto_skill_injection",
 		args:   fmt.Sprintf(`{"skills":"%s"}`, skills),
 		result: readFilesText(names),
 	}
@@ -913,11 +918,11 @@ func injectSkillsPlays(plays []play) ([]play, []string) {
 	return out, injects
 }
 
-// initScript 开书（init）流程：read_required 加载 5 个必读技能 + 建世界观/角色/弧线 + 写总纲 + 建卷
-// （对照门禁 init auto_skill_injection + main-core-writing-kernel 阶段技能表 init 行 + 卷结构规则）
+// initScript 开书（init）流程：read_required 加载必读技能（门禁配置 auto_skill_injection 驱动）
+// + 建世界观/角色/弧线 + 写总纲 + 建卷
 func initScript() []play {
 	return []play{
-		readRequired("main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"),
+		readRequired(skillsFor("single", "init")...),
 		{tool: "create_location", args: `{"name":"青云宗","type":"门派","desc":"主角所在宗门"}`, result: `{"id":1}`},
 		{tool: "create_character", args: `{"name":"陆沉","desc":"主角","location_id":1}`, result: `{"id":1}`},
 		{tool: "create_character", args: `{"name":"柳雪","desc":"师姐","location_id":1}`, result: `{"id":2}`},
@@ -962,7 +967,7 @@ func preparePlays(ch int) []play {
 		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, ch-1)},
 		{tool: "get_scenes", args: fmt.Sprintf(`{"chapter_id":%d}`, ch-1), result: `{"scenes":[{"id":9,"title":"入门测验","summary":"陈昊通过测验","word_count":1200}]}`},
 		{tool: "get_preferences", args: `{}`, result: `{"preferences":[{"category":"style","content":"快节奏、斗法细节"},{"category":"taboo","content":"禁止主角圣母"}]}`},
-		readRequired("main-tech-common-sense-logic"),
+		readRequired(skillsFor("single", "prepare")...),
 		readSkill("main-tech-genre-templates"),
 		readSkill("main-tech-book-outline"),
 		{tool: "get_lore", args: `{}`, result: `{"lore":[{"id":1,"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}]}`},
@@ -971,12 +976,12 @@ func preparePlays(ch int) []play {
 	}
 }
 
-// outlinePlays 阶段 outline：auto_skill_injection 必读（hook-enhanced + title-design）+ 类型专精 1 个。
+// outlinePlays 阶段 outline：auto_skill_injection 必读（门禁配置驱动）+ 类型专精 1 个。
 // 常备技能（book-outline/chapter-opening/maliang-method/dialogue-subtext/emotional-arc/emotion-injection）
 // 首次会话加载一次，后续章节历史中已有则直接引用，不重复 read。
 func outlinePlays(ch int) []play {
 	return []play{
-		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
+		readRequired(skillsFor("single", "outline")...),
 		readSkill("main-type-xuanhuan-cultivation"),
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 		{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
@@ -984,7 +989,7 @@ func outlinePlays(ch int) []play {
 	}
 }
 
-// writePlays 阶段 write：auto_skill_injection 必读（show-dont-tell + anti-ai-writing + pov-purity + info-density）
+// writePlays 阶段 write：auto_skill_injection 必读（门禁配置驱动）
 // + read 本章大纲（kernel write 阶段第 2 步：read(required) 读 outlines/NNN.md，门禁 require 强制——
 // 批量循环写多章时靠它锁定本章大纲，防止把别的章的大纲内容串进本章正文）+ 分段写正文。
 // 情景技能（climax/shuangdian/foreshadow/emotion/pacing）仅本章涉及该情景时读，普通章不读；
@@ -992,7 +997,7 @@ func outlinePlays(ch int) []play {
 // 不含阶段切换（由调用方决定何时转 review：single 每章转、batch 整批循环完才转）。
 func writePlays(ch int) []play {
 	plays := []play{
-		readRequired("main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density"),
+		readRequired(skillsFor("single", "write")...),
 		play{tool: "read", args: fmt.Sprintf(`{"path":"outlines/%03d.md"}`, ch), result: outlineText(ch)},
 	}
 	plays = append(plays, writeBodyPlays(ch)...)
@@ -1059,7 +1064,7 @@ func reviewPlays(ch int) []play {
 // 注意：readRequired 必须在维护操作之前（门禁事前强制：必读技能未加载时 create_*/update_* 被拦）。
 func maintainPlays(ch int, nextPhase string) []play {
 	return []play{
-		readRequired("main-tech-anti-repetition", "main-tech-foreshadow-cycle"),
+		readRequired(skillsFor("single", "maintain")...),
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
@@ -1145,7 +1150,7 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 
 	// outline：一次性出 N 章大纲（连续 edit，require 只查 edit 存在）
 	plays = append(plays,
-		readRequired("main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"),
+		readRequired(skillsFor("batch", "outline")...),
 		readSkill("main-tech-book-outline"),
 		readSkill("main-tech-chapter-opening"),
 		readSkill("main-tech-maliang-method"),

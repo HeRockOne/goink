@@ -196,6 +196,30 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 			r.sc.name, r.m,
 			get("thinking"), get("skill_inject"), get("update"), get("query"), get("fixed"), get("body"), get("outline"), get("other"))
 	}
+
+	// 门禁配置一致性校验（plays 工具调用 vs 门禁配置白名单）
+	fmt.Printf("\n## 门禁配置一致性（plays vs 门禁配置示例.md 白名单）\n\n")
+	gc := cacheprobe.GateConfigLoaded()
+	if gc == "" {
+		fmt.Println("门禁配置未加载（未找到 门禁配置示例.md / GOINK_PHASE_CONFIG），跳过校验")
+		return
+	}
+	fmt.Printf("门禁配置来源: %s\n", gc)
+	for _, sc := range scenarios {
+		mode := "single"
+		if sc.b > 0 {
+			mode = "batch"
+		}
+		warns := cacheprobe.ValidatePlays(sc.g, sc.q, sc.b, mode)
+		if len(warns) == 0 {
+			fmt.Printf("- %s：✓ 全部工具调用在阶段白名单内\n", sc.name)
+			continue
+		}
+		fmt.Printf("- %s：⚠ %d 处不一致\n", sc.name, len(warns))
+		for _, w := range warns {
+			fmt.Printf("    %s\n", w)
+		}
+	}
 }
 
 func pct(hit, miss int64) float64 {

@@ -36,6 +36,10 @@ DeepSeek/商汤的磁盘缓存按"请求的公共前缀"匹配（官方文档：
 ```powershell
 # 设置数据目录（读真实 DB 书名/简介 + goink.md 指纹；默认 exe 目录或 ~/Goink）
 $env:GOINK_DATA_DIR = "D:\Goink"
+# 真机环境：直接指定真实 DB 文件（可指向复制出来的 Goink 目录，如 test-goink-for-real\Goink\novel-agent.db）
+$env:GOINK_DB_PATH = "D:\Goink\novel-agent.db"
+# 门禁配置：默认找项目根 门禁配置示例.md（技能清单 + 白名单校验），可用环境变量覆盖
+$env:GOINK_PHASE_CONFIG = "门禁配置示例.md"
 go run ./cmd/cacheprobe            # 默认：单章 5 轮 + 短对话穿插 5 轮 + 批量 5 章
 go run ./cmd/cacheprobe 5 3        # 单章 5 轮 + 短对话穿插 3 轮 + 批量 5 章
 go run ./cmd/cacheprobe 5 3 5      # 显式指定批量 5 章
@@ -55,8 +59,11 @@ go run ./cmd/cacheprobe table   # 跑 8 个常用工作负载场景，输出 Mar
 每行含输入 hit/miss、输出 out、命中率、总成本、每章成本（now 协议，价格同上可调）。
 主表之后输出 miss 构成表（按消息来源分类：thinking 思考/技能注入/工具结果/查询/固定与NS/正文/大纲/其他，
 与 TokenCache miss 计算同路径，首轮全量与 tools 计入"固定/NS"列）。
+最后输出**门禁配置一致性校验**：8 个场景的 plays 工具调用逐一对照门禁配置阶段白名单
+（set_phase 永远放行，场景开头未进入阶段前跳过），不一致即报告——发现模拟器与真实
+门禁配置漂移（如 2026-08-09 修复的 read_required 虚构工具 → auto_skill_injection 真实工具）。
 
-2026-08-09 实测（DeepSeek 价 0.02/1/2）：
+2026-08-09 实测（DeepSeek 价 0.02/1/2，真实 DB + 门禁配置驱动）：
 
 | 场景 | 单章 | 短对话 | 批量 | 输入 hit | 输入 miss | 输出 out | 命中率 | 成本 ¥ | 每章 ¥ |
 |------|-----|-------|------|---------|----------|---------|--------|--------|--------|
