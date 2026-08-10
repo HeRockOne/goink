@@ -534,9 +534,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 										a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 									}
 								}
-								// 发送状态
-								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
-								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
+								// 发送状态（静态确认，禁止动态 StatusString）：
+								// StatusString 含 called 工具列表（"已调用: get_characters(x1)..."），
+								// 每次 set_phase 后内容随工具调用增长而变化——注入到历史中段后，
+								// 后续所有请求的前缀包含这条动态消息，前缀缓存每次失效。
+								// 8/9 批量每章 set_phase("write") 后每条都不同 → 命中率 89-93% 掉到 86%。
+								// 工具结果已返回 phase，LLM 不需要 StatusString 细节。
+								injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段，继续执行该阶段任务。\n</system-reminder>", a.getPG().CurrentPhase())
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
 								ps := a.getPG().Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
