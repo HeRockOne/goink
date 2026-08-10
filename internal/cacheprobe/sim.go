@@ -865,6 +865,17 @@ func playResult(p play) string {
 	return realToolResult(p.tool, p.args, p.result)
 }
 
+// phaseOfArgs 从 set_phase 参数 JSON 中提取纯阶段名（{"phase":"write"} → "write"）。
+func phaseOfArgs(args string) string {
+	var a struct {
+		Phase string `json:"phase"`
+	}
+	if json.Unmarshal([]byte(args), &a) == nil && a.Phase != "" {
+		return a.Phase
+	}
+	return args
+}
+
 // runPlays 执行 plays 序列：按 set_phase/run_subagent 断开分组，组内并行（一次请求多条
 // tool_calls + 1 次 thinking，与真机 LLM 并行行为一致），set_phase 单独成组并更新 simPhase。
 // 组上限 10（真机单次最多 ~9 个并行调用）。
@@ -899,11 +910,15 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 		for k, p := range group {
 			switch p.tool {
 			case "set_phase":
-				simPhase = p.args
+				// 解析 {"phase":"xxx"} 得到纯阶段名：simPhase（thinking 长度）与 onPhase
+				// 技能注入（phaseInjectSkills key 是纯阶段名）都依赖它——旧代码直接传
+				// p.args JSON，导致 injectPhaseOn 永远查不到 key，阶段技能注入从未生效
+				// （真实 agent.go 每次 set_phase 无条件注入技能全文，成本被低估）。
+				simPhase = phaseOfArgs(p.args)
 				if onPhase != nil {
-					cur = onPhase(cur, p.args)
+					cur = onPhase(cur, simPhase)
 				}
-				cur = appendPhase(cur, p.args, true)
+				cur = appendPhase(cur, simPhase, true)
 			case "read", "read_required":
 				if onRead != nil {
 					onRead(ids[k])
@@ -1385,16 +1400,18 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`})
 
 	// write：循环 N 章正文，每章一个显式 write 阶段边界（set_phase("write") 同阶段幂等成功，
-	// 产生阶段记录；注入去重后不重复注入技能——技能只在第 1 章完整注入，后续章复用上下文）。
+	// 产生阶段记录；注入无去重——回退 01:53 门禁后 agent.go 每次 set_phase 成功都无条件注入
+	// 技能全文，与 03:43 去重版不同。每章边界都重注入 write 技能，对应真实行为）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	// 批次检查插在 write 循环内，checkKind=2 走阶段切换（门禁白名单约束：run_subagent 仅在 review 阶段）。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
-			// 第 2+ 章：显式 write 阶段边界（去注入，同阶段 set_phase 幂等成功）
+			// 第 2+ 章：显式 write 阶段边界（无去重注入，每次 set_phase 都重注入技能全文）
 			plays = append(plays,
 				play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
+				readRequired(skillsFor("batch", "write")...),
 			)
 			plays = append(plays, writePlaysLean(ch)...)
 		}
