@@ -57,6 +57,38 @@ func TestRdListActive(t *testing.T) {
 	}
 }
 
+func TestRdListActiveFiltered(t *testing.T) {
+	db := openRdDB(t)
+	s := NewStore(db, testRdLogger())
+	ctx := context.Background()
+
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", Content: "玉佩来历", PlantedChapter: 2, RevealedChapter: 0})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", Content: "陆尘身世", PlantedChapter: 8, RevealedChapter: 0})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "misconception", Content: "凶手是王五", PlantedChapter: 10, RevealedChapter: 0})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", Content: "玉佩旧主", PlantedChapter: 6, RevealedChapter: 3}) // 已揭示
+
+	// search 定向
+	got, _ := s.ListActiveFiltered(ctx, 1, "玉佩", 0, 0)
+	if len(got) != 1 || got[0].Content != "玉佩来历" {
+		t.Errorf("search filter: expected 1 (玉佩来历), got %+v", got)
+	}
+	// 种植章节范围
+	got, _ = s.ListActiveFiltered(ctx, 1, "", 8, 10)
+	if len(got) != 2 {
+		t.Errorf("planted range 8-10: expected 2, got %d", len(got))
+	}
+	// search + 范围组合（玉佩来历 planted 2 在 1-7 内且未揭示 → 1 条；玉佩旧主已揭示被排除）
+	got, _ = s.ListActiveFiltered(ctx, 1, "玉佩", 1, 7)
+	if len(got) != 1 || got[0].Content != "玉佩来历" {
+		t.Errorf("search+range: expected 1 (玉佩来历), got %d", len(got))
+	}
+	// search + 范围无交集
+	got, _ = s.ListActiveFiltered(ctx, 1, "玉佩", 4, 7)
+	if len(got) != 0 {
+		t.Errorf("search+range 4-7: expected 0, got %d", len(got))
+	}
+}
+
 func TestRdListByNovel_Pagination(t *testing.T) {
 	db := openRdDB(t)
 	s := NewStore(db, testRdLogger())

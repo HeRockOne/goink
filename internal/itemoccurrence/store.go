@@ -46,6 +46,27 @@ func (s *Store) ListAllByItem(ctx context.Context, novelID, itemID int64) ([]Ite
 	return items, nil
 }
 
+// ListByItemRange 返回某物品在指定章节号范围内（含边界）的出现记录，按章号倒序。
+// 范围通过 join chapters 表换算（item_occurrences.chapter_id 是 chapters.id 外键）。
+func (s *Store) ListByItemRange(ctx context.Context, novelID, itemID int64, fromChapter, toChapter int) ([]ItemOccurrence, error) {
+	var items []ItemOccurrence
+	q := s.DB.WithContext(ctx).
+		Table("item_occurrences").
+		Select("item_occurrences.*").
+		Joins("JOIN chapters ON chapters.id = item_occurrences.chapter_id AND chapters.novel_id = item_occurrences.novel_id").
+		Where("item_occurrences.novel_id = ? AND item_occurrences.item_id = ?", novelID, itemID)
+	if fromChapter > 0 {
+		q = q.Where("chapters.chapter_number >= ?", fromChapter)
+	}
+	if toChapter > 0 {
+		q = q.Where("chapters.chapter_number <= ?", toChapter)
+	}
+	if err := q.Order("chapters.chapter_number DESC").Limit(50).Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("itemoccurrence list by item range: %w", err)
+	}
+	return items, nil
+}
+
 // ListByChapter 返回某章节的全部物品出现记录。
 func (s *Store) ListByChapter(ctx context.Context, novelID, chapterID int64) ([]ItemOccurrence, error) {
 	var items []ItemOccurrence

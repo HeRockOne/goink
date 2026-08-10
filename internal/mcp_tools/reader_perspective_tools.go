@@ -16,8 +16,11 @@ import (
 
 // GetReaderPerspectiveArgs 支持按类型过滤和计数模式。
 type GetReaderPerspectiveArgs struct {
-	Type       string `json:"type" jsonschema:"description=过滤类型：known/suspense/misconception，空=返回全部"`
-	CountsOnly bool   `json:"counts_only" jsonschema:"description=true=只返回各类型条目数，不返回具体内容（省token）"`
+	Type         string `json:"type" jsonschema:"description=过滤类型：known/suspense/misconception，空=返回全部"`
+	CountsOnly   bool   `json:"counts_only" jsonschema:"description=true=只返回各类型条目数，不返回具体内容（省token）"`
+	Search       string `json:"search" jsonschema:"description=按内容关键词定向查找条目（如角色名/事件），只返回匹配条目（省token）"`
+	PlantedFrom  int    `json:"planted_from,omitempty" jsonschema:"description=种植章节起始（含），限定条目范围（省token）" validate:"omitempty,min=1"`
+	PlantedTo    int    `json:"planted_to,omitempty" jsonschema:"description=种植章节结束（含），限定条目范围（省token）" validate:"omitempty,min=1"`
 }
 
 // GetReaderPerspectiveTool 返回读者当前认知状态的三段式摘要。
@@ -30,7 +33,8 @@ func (t *GetReaderPerspectiveTool) Description() string {
 		"每条条目末尾的 `[entry_id:X]` 是该条目的唯一标识，更新或回收时填入 entry_id。" +
 		"尽量合并同类信息到已有条目，减少重复创建。只记录读者一定会在意，后续创作需要考虑的条目。" +
 		"【省token指令】counts_only=true 只返回各类型数量，不返回具体内容。" +
-		"【省token指令】type=known/suspense/misconception 只获取需要的类型。"
+		"【省token指令】type=known/suspense/misconception 只获取需要的类型。" +
+		"【省token指令】search=关键词 / planted_from~planted_to=种植章节范围 定向查目标条目——禁止无过滤全量拉取活跃条目（上限 100 条）。"
 }
 func (t *GetReaderPerspectiveTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -63,19 +67,38 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 	var suspenses []reader.ReaderPerspective
 	var misconceptions []reader.ReaderPerspective
 	if !hasFilter || a.Type == "suspense" || a.Type == "misconception" {
-		active, err := rs.ListActive(ctx, tc.NovelID)
-		if err != nil {
-			return nil, fmt.Errorf("query active perspectives: %w", err)
-		}
-		for _, e := range active {
-			if hasFilter && e.Type != a.Type {
-				continue
+		// 定向过滤（search/planted 范围）优先：替代全量拉取后自己筛，省 token
+		if a.Search != "" || a.PlantedFrom > 0 || a.PlantedTo > 0 {
+			active, err := rs.ListActiveFiltered(ctx, tc.NovelID, a.Search, a.PlantedFrom, a.PlantedTo)
+			if err != nil {
+				return nil, fmt.Errorf("query active perspectives: %w", err)
 			}
-			switch e.Type {
-			case reader.TypeSuspense:
-				suspenses = append(suspenses, e)
-			case reader.TypeMisconception:
-				misconceptions = append(misconceptions, e)
+			for _, e := range active {
+				if hasFilter && e.Type != a.Type {
+					continue
+				}
+				switch e.Type {
+				case reader.TypeSuspense:
+					suspenses = append(suspenses, e)
+				case reader.TypeMisconception:
+					misconceptions = append(misconceptions, e)
+				}
+			}
+		} else {
+			active, err := rs.ListActive(ctx, tc.NovelID)
+			if err != nil {
+				return nil, fmt.Errorf("query active perspectives: %w", err)
+			}
+			for _, e := range active {
+				if hasFilter && e.Type != a.Type {
+					continue
+				}
+				switch e.Type {
+				case reader.TypeSuspense:
+					suspenses = append(suspenses, e)
+				case reader.TypeMisconception:
+					misconceptions = append(misconceptions, e)
+				}
 			}
 		}
 	}

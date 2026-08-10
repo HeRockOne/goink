@@ -12,15 +12,18 @@ import (
 // ── get_item_occurrences ────────────────────────────────
 
 type GetItemOccurrencesArgs struct {
-	ItemID int64 `json:"item_id" jsonschema:"required,description=物品ID" validate:"required,min=1"`
+	ItemID       int64 `json:"item_id" jsonschema:"required,description=物品ID" validate:"required,min=1"`
+	ChapterFrom  int   `json:"chapter_from,omitempty" jsonschema:"description=起始章节号（含），限定查询范围。写第 N 章前查最近几章用 chapter_from=N-5" validate:"omitempty,min=1"`
+	ChapterTo    int   `json:"chapter_to,omitempty" jsonschema:"description=结束章节号（含），限定查询范围" validate:"omitempty,min=1"`
 }
 
 type GetItemOccurrencesTool struct{}
 
 func (t *GetItemOccurrencesTool) Name() string { return "get_item_occurrences" }
 func (t *GetItemOccurrencesTool) Description() string {
-	return "获取某物品在所有章节中的出现/流转记录（最近 50 条，按章倒序）。返回格式：{occurrences: [{id, item_id, chapter_id, action, description, created_at}]}。action 取值：acquired/used/lost/destroyed/mentioned。每次物品易主、使用、丢失时用 create_item_occurrence 记录。" +
-		"【关联场景】写作前调用此工具查物品历史，可避免物品位置/持有人前后矛盾。"
+	return "获取某物品在章节中的出现/流转记录。返回格式：{occurrences: [{id, item_id, chapter_id, chapter_number, action, description}]}。action 取值：acquired/used/lost/destroyed/mentioned。每次物品易主、使用、丢失时用 create_item_occurrence 记录。" +
+		"【关联场景】写作前调用此工具查物品历史，可避免物品位置/持有人前后矛盾。" +
+		"【省token指令】必须限定范围：查最近几章用 chapter_from/chapter_to（如 chapter_from=8,chapter_to=10），不要无范围拉全量——不传范围只返回最近 50 条（按章倒序）。"
 }
 func (t *GetItemOccurrencesTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 func (t *GetItemOccurrencesTool) JSONSchema() json.RawMessage { return SchemaOf(GetItemOccurrencesArgs{}) }
@@ -30,6 +33,13 @@ func (t *GetItemOccurrencesTool) NewArgs() any                { return &GetItemO
 func (t *GetItemOccurrencesTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*GetItemOccurrencesArgs)
 	store := itemoccurrence.NewStore(tc.DB, slog.Default())
+	if a.ChapterFrom > 0 || a.ChapterTo > 0 {
+		items, err := store.ListByItemRange(ctx, tc.NovelID, a.ItemID, a.ChapterFrom, a.ChapterTo)
+		if err != nil {
+			return nil, fmt.Errorf("get item occurrences: %w", err)
+		}
+		return &ToolResult{Success: true, Data: map[string]any{"occurrences": items}}, nil
+	}
 	items, err := store.ListByItem(ctx, tc.NovelID, a.ItemID)
 	if err != nil {
 		return nil, fmt.Errorf("get item occurrences: %w", err)

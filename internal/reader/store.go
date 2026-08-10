@@ -67,3 +67,24 @@ func (s *Store) ListActive(ctx context.Context, novelID int64) ([]ReaderPerspect
 	}
 	return items, nil
 }
+
+// ListActiveFiltered 返回未回收的读者认知条目，支持定向过滤（search 关键词 + 种植章节范围），
+// 硬上限 100 条。定向查询替代"全量拉取后自己筛"——省 token 且不丢目标信息。
+func (s *Store) ListActiveFiltered(ctx context.Context, novelID int64, search string, plantedFrom, plantedTo int) ([]ReaderPerspective, error) {
+	q := s.DB.WithContext(ctx).
+		Where("novel_id = ? AND revealed_chapter = 0", novelID)
+	if search != "" {
+		q = q.Where("content LIKE ?", "%"+search+"%")
+	}
+	if plantedFrom > 0 {
+		q = q.Where("planted_chapter >= ?", plantedFrom)
+	}
+	if plantedTo > 0 {
+		q = q.Where("planted_chapter <= ?", plantedTo)
+	}
+	var items []ReaderPerspective
+	if err := q.Order("type, planted_chapter ASC").Limit(100).Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("reader store: list active filtered: %w", err)
+	}
+	return items, nil
+}
