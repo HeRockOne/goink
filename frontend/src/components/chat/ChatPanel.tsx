@@ -946,6 +946,12 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     activeCountRef.current++
     if (activeCountRef.current > 1) {
       app.CancelChat(sessionId)
+      // 中途插入对话：立即把正在 streaming 的旧 turn 标记为 stopped，
+      // 否则旧 turn 永远停在 streaming（finally 只处理本次 turnId），
+      // 事件流混乱导致后续消息不渲染
+      setTurns(prev => prev.map(t =>
+        t.status === 'streaming' ? { ...t, status: 'stopped' as const } : t
+      ))
     }
     setIsLoading(true)
 
