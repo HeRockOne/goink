@@ -15,7 +15,8 @@ import (
 // 2. 初始阶段为配置中的第一个阶段
 // 3. 每次工具调用后，记录调用成功次数
 // 4. set_phase 切换阶段时检查 require，未满足则阻塞
-// 5. 不自动推进——用户/LLM 必须主动调 set_phase 切换阶段
+// 5. 自动推进：回合收尾时 require 已满足则自动 set_phase（agent.go 循环后兜底），
+//    阶段内仍支持 LLM 主动 set_phase 立即切换
 type PhaseGate struct {
 	phases          []PhaseConfig
 	currentPhase    string

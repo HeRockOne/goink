@@ -17,7 +17,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 核心机制：
 
 - 硬拦截：门禁检查在工具执行之前（`registry.Execute` 之前），被拦截的工具不会执行，AI 收到错误结果
-- 主动推进：require 满足后**必须主动调 `set_phase` 切换阶段**，系统不自动推进
+- 自动推进：require 满足后系统在回合收尾时自动推进到下一阶段并注入必读技能；也可主动调 `set_phase` 立即切换
 - 跨 turn 持久化：当前阶段和已调用工具记录存在 sessions 表，断点续作自动恢复
 - 两种模式：单章（single）和批量（batch，支持 outline⇄write 多章循环）
 - 回退修正：单轮内可回退到本轮已访问过的阶段（如 write 发现大纲问题回 outline 修改）
