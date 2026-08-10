@@ -158,7 +158,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - 每个阶段有 tools 列表（只允许使用这些工具）和 require 列表（必须调用后才能切换阶段）
 - set_phase({"phase":"目标阶段名"}) 切换阶段。require 未满足会阻塞。
 - **不自动推进，必须主动调 set_phase**。查看配置用 get_phase_gate_config，编辑用 update_phase_gate_config。
-- **批量循环**：批量模式 write 阶段每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，只产生显式阶段记录；技能注入已去重，不会重复注入）。自检、修复、迷你维护不需要 set_phase；只有阶段真正切换或声明章边界时才调用。上下文压缩后技能记录被清空，需按需补读（auto_skill_injection 或下次 set_phase 自动注入），不要因"技能读过"就跳过补读。
+- **批量循环**：批量模式 write 阶段每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，只产生显式阶段记录；技能注入无去重——每次 set_phase 都会重新注入该阶段必读技能全文，批量循环的注入成本已计入上下文）。自检、修复、迷你维护不需要 set_phase；只有阶段真正切换或声明章边界时才调用。上下文压缩后技能记录被清空，需按需补读（auto_skill_injection 或下次 set_phase 自动注入），不要因"技能读过"就跳过补读。
 - 各阶段完成条件与必读技能见常驻技能 main-core-writing-kernel（已在上下文中)。
 
 【省 token 总纲】（省 token 绝不损害创作质量——状态数据缺失才会损害创作）
