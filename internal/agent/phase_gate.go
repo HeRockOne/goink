@@ -412,6 +412,14 @@ func (g *PhaseGate) wasVisited(name string) bool {
 	return false
 }
 
+// VisitedCount 返回本轮已访问的阶段数（判断完整流程是否走完）。
+func (g *PhaseGate) VisitedCount() int {
+	if g == nil {
+		return 0
+	}
+	return len(g.visited)
+}
+
 // CheckEditPath 检查 edit 工具的目标路径是否在当前阶段允许的范围内。
 // 返回 (allowed, warningMessage)。
 func (g *PhaseGate) CheckEditPath(filePath string) (bool, string) {

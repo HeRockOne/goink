@@ -288,6 +288,17 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			if a.getPG() != nil {
 				phase, toolsJSON := a.getPG().SaveState()
 				a.session.SavePhaseGateState(opts.SessionID, phase, toolsJSON)
+				// 持久化门禁模式：批量会话跨 turn 必须保持 batch（防退化 single）
+				mode := opts.PhaseMode
+				if mode == "" {
+					mode = "single"
+				}
+				// batch 完整流程走完回到 prepare（一轮结束），清除模式标记，
+				// 避免后续单章会话误继承 batch 白名单
+				if phase == "prepare" && a.getPG().wasVisited("prepare") && a.getPG().VisitedCount() > 1 {
+					mode = ""
+				}
+				a.session.SavePhaseGateMode(opts.SessionID, mode)
 			}
 		}()
 	}
@@ -513,6 +524,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 技能已在上下文中，重复注入纯浪费；真切换（from != target）才注入。
 								if from := a.getPG().CurrentPhase(); from != targetPhase {
 									a.injectPhaseSkills(targetPhase, &opts)
+								}
+								// 批量 write 章边界：强制每章字数校验（真机验证：LLM 整批写完才
+								// 在转出 review 时被字数拦截，被迫一次性扩写全部正文）。
+								// wordCountOK 为 nil 或未达标时注入提醒，要求先 get_chapter_list。
+								if a.getPG().mode == "batch" && targetPhase == "write" {
+									if wc := a.getPG().WordCountCheck(); wc == nil || !*wc {
+										wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。\n</system-reminder>"
+										a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
+									}
 								}
 								// 发送状态
 								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())

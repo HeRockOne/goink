@@ -260,9 +260,14 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		Broadcast:            a.BroadcastChatEvent, // 双端同步：agent 事件广播到移动端
 	}
 	// 批量创作意图 → batch 门禁模式（outline 一次出 N 章大纲，write 循环 + 每章迷你维护）
+	// 优先从 session 恢复已持久化的模式（批量会话跨 turn 不能退化 single——真机验证：
+	// turn=1 batch 写完 outline 后用户发"继续"，turn=2 按当前消息判断退化成 single，
+	// write 阶段白名单缺迷你维护工具，create_scene/update_timeline_entry 全被拦截）。
 	if isBatchCreationIntent(input.Message) {
 		runOpts.PhaseMode = "batch"
-		a.logger.Info("检测到批量创作意图，启用 batch 门禁模式", "session_id", sess.SessionID)
+		a.session.SavePhaseGateMode(sess.SessionID, "batch")
+	} else if sess.PhaseMode == "batch" {
+		runOpts.PhaseMode = "batch"
 	}
 
 	// API 模式需要 EventCallback 转发事件；Wails 模式让 agent.go 自己 emit 到 "agent:${turnID}"

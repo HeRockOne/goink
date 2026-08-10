@@ -309,6 +309,16 @@ func (s *Store) SavePhaseGateState(sessionID, currentPhase, calledToolsJSON stri
 	}
 }
 
+// SavePhaseGateMode 持久化门禁模式（single/batch）。跨 turn 必须恢复，
+// 否则批量会话第二条消息后 chat.go 只按当前消息判断批量意图，退化成 single。
+func (s *Store) SavePhaseGateMode(sessionID, mode string) {
+	if err := s.DB.Model(&Session{}).
+		Where("session_id = ?", sessionID).
+		Update("phase_mode", mode).Error; err != nil {
+		s.logger.Warn("保存门禁模式失败", "session_id", sessionID, "err", err)
+	}
+}
+
 // UpsertModelUsage 更新或插入模型级 token 消耗累计。
 func (s *Store) UpsertModelUsage(ctx context.Context, sessionID, modelID string, hit, miss, comp float64) error {
 	var existing ModelUsage

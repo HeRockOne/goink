@@ -23,6 +23,7 @@ type Session struct {
 	Usage           string    `gorm:"column:usage"                                                 json:"usage,omitempty"`            // JSON，最近一次 LLM 调用的 token 用量
 	CurrentPhase    string    `gorm:"column:current_phase;not null;default:''"                    json:"current_phase,omitempty"`    // 阶段门禁：当前阶段名（空=未激活）
 	CalledTools     string    `gorm:"column:called_tools"                                         json:"called_tools,omitempty"`     // 阶段门禁：已调用工具的 JSON 计数 {"tool_name": count}
+	PhaseMode       string    `gorm:"column:phase_mode;not null;default:''"                       json:"phase_mode,omitempty"`        // 阶段门禁：模式 "single" | "batch"（跨 turn 持久化，防批量会话退化单章）
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"                            json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime;index:idx_sessions_novel"   json:"updated_at"`
 }
