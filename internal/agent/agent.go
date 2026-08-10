@@ -238,6 +238,9 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	if pc.InjectDedup {
 		missing := pg.missingInjections(pc)
 		if len(missing) == 0 {
+			// 去重命中：技能已就绪（已注入或 LLM 已读），跳过重复注入
+			// （批量循环每章 set_phase("write") 时验证：write 技能全文只注入 1 次）
+			a.logger.Debug("技能注入跳过（已就绪，去重命中）", "phase", phase)
 			return
 		}
 		names = missing
@@ -458,6 +461,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		}
 
 		callOpts := &llm.CallOptions{CacheKey: opts.SessionID}
+		// 请求轮次标记：同一轮内多个 tool executed 日志之间无此标记 = 并行工具调用
+		// （真机并行验证 + 模拟器对照：数一轮内工具数即可得并行度）
+		phaseName := ""
+		if a.getPG() != nil {
+			phaseName = a.getPG().CurrentPhase()
+		}
+		a.logger.Info("LLM 请求", "loop", loopCount, "msgs", len(opts.Messages),
+			"est_tokens", usedTokens, "phase", phaseName, "agent_type", opts.AgentType)
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
@@ -554,9 +565,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							}
 						}
 						if a.getPG() != nil {
+							from := a.getPG().CurrentPhase()
 							ok, warning := a.getPG().SetPhase(targetPhase)
 							// 记录调用（按实际结果记账：失败不计成功，避免 require 语义错误）
 							a.getPG().OnToolCall("set_phase", ok)
+							a.logger.Info("阶段切换", "from", from, "to", targetPhase, "ok", ok, "warning", warning)
 							if ok {
 								// 成功：自动注入新阶段必读技能
 								a.injectPhaseSkills(targetPhase, &opts)
