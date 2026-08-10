@@ -53,13 +53,15 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	return storage.NewPageResult(items, total, pp.Page, pp.Size), nil
 }
 
-// ListActive 返回全部未回收（revealed_chapter=0）的读者认知条目。
-// 全量返回——活跃集合天然小，context builder 和 MCP 工具需要完整快照。
+// ListActive 返回未回收（revealed_chapter=0）的读者认知条目。
+// 硬上限 100 条（按种植章节升序）——悬念只种不收会随章节线性增长，
+// 全量返回会撑爆上下文；最近的条目优先保留（counts 用 Count 查询，不受截断影响）。
 func (s *Store) ListActive(ctx context.Context, novelID int64) ([]ReaderPerspective, error) {
 	var items []ReaderPerspective
 	if err := s.DB.WithContext(ctx).
 		Where("novel_id = ? AND revealed_chapter = 0", novelID).
 		Order("type, planted_chapter ASC").
+		Limit(100).
 		Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("reader store: list active: %w", err)
 	}

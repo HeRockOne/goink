@@ -19,7 +19,7 @@ type GetItemOccurrencesTool struct{}
 
 func (t *GetItemOccurrencesTool) Name() string { return "get_item_occurrences" }
 func (t *GetItemOccurrencesTool) Description() string {
-	return "获取某物品在所有章节中的出现/流转记录。返回格式：{occurrences: [{id, item_id, chapter_id, action, description, created_at}]}。action 取值：acquired/used/lost/destroyed/mentioned。每次物品易主、使用、丢失时用 create_item_occurrence 记录。" +
+	return "获取某物品在所有章节中的出现/流转记录（最近 50 条，按章倒序）。返回格式：{occurrences: [{id, item_id, chapter_id, action, description, created_at}]}。action 取值：acquired/used/lost/destroyed/mentioned。每次物品易主、使用、丢失时用 create_item_occurrence 记录。" +
 		"【关联场景】写作前调用此工具查物品历史，可避免物品位置/持有人前后矛盾。"
 }
 func (t *GetItemOccurrencesTool) Category() ToolCategory { return CategoryMemoryRetrieval }

@@ -18,7 +18,7 @@ type GetScenesArgs struct {
 	type GetScenesTool struct{}
 
 	func (t *GetScenesTool) Name() string { return "get_scenes" }
-	func (t *GetScenesTool) Description() string { return "获取场景列表。传入chapter_id按章节查，不传返回全部场景（含规划场景）。brief=true 只返回id/title/chapter_id。" }
+	func (t *GetScenesTool) Description() string { return "获取场景列表。传入chapter_id按章节查（推荐，最省token）；不传只返回最近100个场景（按章倒序，旧场景用 get_writing_context 的卷实体索引查）。brief=true 只返回id/title/chapter_id。" }
 	func (t *GetScenesTool) Category() ToolCategory { return CategoryNovelManagement }
 	func (t *GetScenesTool) JSONSchema() json.RawMessage { return SchemaOf(GetScenesArgs{}) }
 	func (t *GetScenesTool) ExposeToLLM() bool { return true }

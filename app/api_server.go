@@ -565,7 +565,7 @@ func (s *apiServer) handleItemOccurrences(w http.ResponseWriter, r *http.Request
 	}
 	store := itemoccurrence.NewStore(s.app.db, s.logger)
 	if itemID > 0 {
-		items, err := store.ListByItem(r.Context(), novelID, itemID)
+		items, err := store.ListAllByItem(r.Context(), novelID, itemID)
 		if err != nil {
 			writeError(w, err)
 			return

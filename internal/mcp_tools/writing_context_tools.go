@@ -296,21 +296,15 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		result["timeline"] = map[string]any{"pending": []any{}, "resolved": []any{}, "overdue": []any{}}
 	}
 
-	// ── 6. 读者认知计数 ──
+	// ── 6. 读者认知计数（Count 查询，不受 ListActive 截断影响） ──
 	var knownCount int64
 	db.WithContext(ctx).Model(&reader.ReaderPerspective{}).Where("novel_id = ? AND type = ?", nid, "known").Count(&knownCount)
-	rs := reader.NewStore(db, log)
-	activeEntries, _ := rs.ListActive(ctx, nid)
-	suspenseCount, misconceptionCount := 0, 0
-	for _, e := range activeEntries {
-		switch e.Type {
-		case "suspense":
-			suspenseCount++
-		case "misconception":
-			misconceptionCount++
-		}
-	}
-	result["reader"] = map[string]int{"known": int(knownCount), "suspense": suspenseCount, "misconception": misconceptionCount}
+	var suspenseCount, misconceptionCount int64
+	db.WithContext(ctx).Model(&reader.ReaderPerspective{}).
+		Where("novel_id = ? AND type = ? AND revealed_chapter = 0", nid, "suspense").Count(&suspenseCount)
+	db.WithContext(ctx).Model(&reader.ReaderPerspective{}).
+		Where("novel_id = ? AND type = ? AND revealed_chapter = 0", nid, "misconception").Count(&misconceptionCount)
+	result["reader"] = map[string]int64{"known": knownCount, "suspense": suspenseCount, "misconception": misconceptionCount}
 
 	// ── 7. 写作快照 ──
 	if snap != nil {

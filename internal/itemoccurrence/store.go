@@ -19,14 +19,29 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 	return &Store{DB: db, logger: logger}
 }
 
-// ListByItem 返回某物品的全部出现记录，按章节号升序。
+// ListByItem 返回某物品的出现记录，按章节号倒序（最近的优先），硬上限 50 条——
+// 核心道具每章出现时记录随章节线性增长，全量返回会撑爆上下文（MCP 工具路径）；
+// 旧记录按需翻页。
 func (s *Store) ListByItem(ctx context.Context, novelID, itemID int64) ([]ItemOccurrence, error) {
+	var items []ItemOccurrence
+	if err := s.DB.WithContext(ctx).
+		Where("novel_id = ? AND item_id = ?", novelID, itemID).
+		Order("chapter_id DESC").
+		Limit(50).
+		Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("itemoccurrence list by item: %w", err)
+	}
+	return items, nil
+}
+
+// ListAllByItem 返回某物品的全部出现记录（无上限）——仅前端/API 展示用（非 LLM 上下文）。
+func (s *Store) ListAllByItem(ctx context.Context, novelID, itemID int64) ([]ItemOccurrence, error) {
 	var items []ItemOccurrence
 	if err := s.DB.WithContext(ctx).
 		Where("novel_id = ? AND item_id = ?", novelID, itemID).
 		Order("chapter_id ASC").
 		Find(&items).Error; err != nil {
-		return nil, fmt.Errorf("itemoccurrence list by item: %w", err)
+		return nil, fmt.Errorf("itemoccurrence list all by item: %w", err)
 	}
 	return items, nil
 }
