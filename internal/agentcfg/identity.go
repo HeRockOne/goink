@@ -158,7 +158,14 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - 每个阶段有 tools 列表（只允许使用这些工具）和 require 列表（必须调用后才能切换阶段）
 - set_phase({"phase":"目标阶段名"}) 切换阶段。require 未满足会阻塞。
 - **不自动推进，必须主动调 set_phase**。查看配置用 get_phase_gate_config，编辑用 update_phase_gate_config。
+- **批量循环**：批量模式 write 阶段每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，只产生显式阶段记录；技能注入已去重，不会重复注入）。自检、修复、迷你维护不需要 set_phase；只有阶段真正切换或声明章边界时才调用。上下文压缩后技能记录被清空，需按需补读（auto_skill_injection 或下次 set_phase 自动注入），不要因"技能读过"就跳过补读。
 - 各阶段完成条件与必读技能见常驻技能 main-core-writing-kernel（已在上下文中)。
+
+【省 token 总纲】（省 token 绝不损害创作质量——状态数据缺失才会损害创作）
+- 查询工具默认返回最近 N 条（最近的优先）——写作只需近期状态，旧数据按需用 get_entity_appearances / search_* 反查
+- 写作上下文以 get_writing_context 为准（一次拿本章树状全量），不要用多个 get_* 拼凑重复数据
+- 范围/过滤参数优先：get_characters 用 brief（状态由 get_writing_context 提供）、get_timeline/get_story_arcs 传 current_chapter、get_scenes 传 chapter_id、search_* 按关键词检索
+- 审稿核对（review/maintain）按身份用参数：主会话核对角色状态用全量，子代理 fork 主历史后只做定向查询
 
 【文件路径】
 

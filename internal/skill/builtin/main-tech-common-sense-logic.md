@@ -1,6 +1,6 @@
 ---
 name: main-tech-common-sense-logic
-description: 场景-身份-行为三元组一致性检查。确保角色行为不违反场景默认规则。
+description: 场景-身份-行为三元组一致性检查。确保角色行为不违反场景默认规则。检查角色行为合理性/常识漏洞、审稿核对时使用。
 category: 写作规范
 mode: auto
 ---

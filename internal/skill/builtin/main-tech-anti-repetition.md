@@ -1,6 +1,6 @@
 ---
 name: main-tech-anti-repetition
-description: 跨章节重复检测。写作前读指纹，写作中自检，写作后写指纹。
+description: 跨章节重复检测。写作前读指纹，写作中自检，写作后写指纹。避免章节内容/词汇/句式与历史重复、长篇连载防复读时使用。
 category: 写作规范
 mode: auto
 ---

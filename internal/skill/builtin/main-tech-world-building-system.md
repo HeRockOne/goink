@@ -1,6 +1,6 @@
 ---
 name: main-tech-world-building-system
-description: 世界观构建与力量体系设计。
+description: 世界观构建与力量体系设计。开书构建世界观/修炼体系/势力格局、剧情需要扩展设定时使用。
 category: 写作技巧
 mode: auto
 ---

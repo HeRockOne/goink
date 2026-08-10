@@ -1,6 +1,6 @@
 ---
 name: main-tech-genre-templates
-description: 12种类型写作模板。
+description: 12种类型写作模板（玄幻/都市/悬疑/历史/末世等，含各类型核心爽点、章节节奏、禁忌）。开书选题材、写作中需要题材规则（爽点节奏/禁忌/平台适配）时使用。
 category: 写作技巧
 mode: auto
 ---

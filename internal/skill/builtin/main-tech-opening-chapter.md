@@ -1,6 +1,6 @@
 ---
 name: main-tech-opening-chapter
-description: 第一章开篇设计。5种开篇策略。
+description: 第一章开篇设计。5种开篇策略。写第一章开篇、用户要求"开头抓人/黄金三章"时使用。
 category: 结构
 mode: auto
 ---

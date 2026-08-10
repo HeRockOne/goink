@@ -1,6 +1,6 @@
 ---
 name: main-tech-word-count-calibration
-description: 字数感知。创作前按节分配，创作中每段计数，确保一次性达标。
+description: 字数感知。创作前按节分配，创作中每段计数，确保一次性达标。字数不足/超限、需要精准控制章节字数时使用。写正文前分配字数、字数不达标需要补写时使用（字数规则由 get_chapter_list 代码校验，本技能用于写作过程中的字数分配意识）。
 category: 写作规范
 mode: auto
 ---
