@@ -482,16 +482,18 @@ func toolMsg(id, name, content string) map[string]any {
 // 初始为开书阶段，处理 set_phase 时更新（真实：模型每次输出都带思考，长度随阶段不同）。
 var simPhase = "init"
 
-// phaseThinkChars 各门禁阶段 assistant 消息 thinking 均值（字符），
-// 统计自真实 DB messages.thinking_content，按 set_phase 边界分阶段
-// （2026-08-09，D:\Goink\novel-agent.db 全会话聚合）。
+// phaseThinkChars 各门禁阶段 assistant 消息 thinking 均值（字符，reasoning low 口径）。
+// 基线：统计自真实 DB messages.thinking_content 按 set_phase 边界分阶段（全会话聚合偏高，
+// 含高推理会话）；按 2026-08-08 真机窗口实测校准（mimo-v2.5 reasoning low：
+// 单章 1 章 AI 输出 16.5K token - 正文 ~2.5K - 工具调用参数 ~2.3K ≈ thinking 11K / 46 次
+// ≈ 240 字符/次，全会话均值 ~573 → 系数 0.45）。
 var phaseThinkChars = map[string]int{
-	"init":     556,
-	"prepare":  822,
-	"outline":  971,
-	"write":    322,
-	"review":   1558,
-	"maintain": 364,
+	"init":     250,
+	"prepare":  370,
+	"outline":  437,
+	"write":    145,
+	"review":   701,
+	"maintain": 164,
 }
 
 // thinkingForPhase 返回某阶段的推理长度（字符），未知阶段回退 write。
