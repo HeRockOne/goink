@@ -1060,24 +1060,24 @@ func gateScript(turn int) []play {
 }
 
 // preparePlays 阶段 prepare：9 项必查（门禁 require 强制）+ 加载 prepare 技能。
-// 查询参数对齐真机 LLM 省 token 调用（工具 Description 省 token 指令 + 8/8 真机日志实测：
-// get_characters {brief,size:15}、get_reader_perspective {counts_only}、get_timeline/get_story_arcs 传 current_chapter 窗口切分）。
+// 查询参数对齐 8/8 真机实测（窗口 1 写第 13 章，sess_1_18c9cd85fdd3d85c 18:25）：
+// get_characters 精简 721 字符（brief 格式）、get_scenes 精简 2,545/47 场景（brief）、
+// get_reader_perspective 全量 8,108、get_timeline/get_story_arcs current_chapter 窗口 2.7-2.9K、
+// get_writing_context 全量 14.9K、get_chapter_list 4.2K。
 func preparePlays(ch int) []play {
 	return []play{
 		{tool: "get_writing_context", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: longContext(ch)},
 		{tool: "get_chapter_list", args: `{}`, result: chapterList(ch)},
-		{tool: "get_characters", args: `{"brief":true,"size":15}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3},{"id":2,"name":"林雪","desc":"师姐","location_id":3}]}`},
+		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3},{"id":2,"name":"林雪","desc":"师姐","location_id":3}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"arcs":[{"id":1,"name":"登天之路","type_zh":"主线","nodes_done":2,"nodes_total":10}]}`},
-		{tool: "get_reader_perspective", args: `{"counts_only":true}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
 		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, ch-1)},
 		{tool: "get_scenes", args: `{"brief":true}`, result: `{"scenes":[{"id":9,"title":"入门测验","summary":"陈昊通过测验","word_count":1200}]}`},
 		{tool: "get_preferences", args: `{}`, result: `{"preferences":[{"category":"style","content":"快节奏、斗法细节"},{"category":"taboo","content":"禁止主角圣母"}]}`},
 		readRequired(skillsFor("single", "prepare")...),
 		readSkill("main-tech-genre-templates"),
 		readSkill("main-tech-book-outline"),
-		{tool: "get_lore", args: `{"mode":"list","size":10}`, result: `{"lore":[{"id":1,"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}]}`},
-		{tool: "get_items", args: `{"mode":"list","size":10}`, result: `{"items":[{"id":3,"name":"聚气丹","owner":"陆沉","narrative_role":"道具"}]}`},
 		{tool: "set_phase", args: `{"phase":"outline"}`, result: `{"success":true,"phase":"outline"}`},
 	}
 }
@@ -1171,10 +1171,10 @@ func reviewPlays(ch int) []play {
 func maintainPlays(ch int, nextPhase string) []play {
 	return []play{
 		readRequired(skillsFor("single", "maintain")...),
-		{tool: "get_characters", args: `{"brief":true,"size":15}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"}]}`},
+		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
-		{tool: "get_reader_perspective", args: `{"counts_only":true}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
 		{tool: "get_scenes", args: `{"brief":true}`, result: fmt.Sprintf(`{"scenes":[{"id":10,"title":"秘境初探","summary":"陈昊入秘境","word_count":%d}]}`, simChapterTarget[ch-1])},
 		{tool: "get_item_occurrences", args: `{"item_id":3}`, result: `{"occurrences":[{"chapter_id":1,"action":"获得玉佩"},{"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"陈昊获得玉佩"}]}`},
 		{tool: "get_character_relations", args: `{}`, result: `{"relations":[{"a":"陈昊","b":"林雪","relation":"师姐弟"}]}`},
@@ -1238,7 +1238,7 @@ func batchLightCheckPlays(chStart, chEnd int) []play {
 	return []play{
 		readSkill("main-tech-revision-pass"),
 		readSkill("sub-tech-anti-ai-grade"),
-		{tool: "get_characters", args: `{"brief":true,"size":15}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"},{"id":2,"name":"林雪","desc":"师姐","relation":"师姐弟"}]}`},
+		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","status":"突破金丹"},{"id":2,"name":"林雪","desc":"师姐","relation":"师姐弟"}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, chEnd), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_writing_snapshot", args: `{}`, result: fmt.Sprintf(`{"last_chapter_num":%d,"current_arc_id":1,"current_location":"青云宗","active_chars":["陈昊","林雪"]}`, chEnd)},
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
@@ -1517,10 +1517,10 @@ func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, tu
 	subPlays := []play{
 		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBodies[6][0] + chapterBodies[6][1]},
 		{tool: "read", args: `{"path":"chapters/007.md","start_line":100,"end_line":200}`, result: chapterBodies[6][2] + chapterBodies[6][3]},
-		{tool: "get_characters", args: `{"brief":true,"size":15}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"},{"id":2,"name":"林雪","relation":"师姐"}]}`},
+		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"},{"id":2,"name":"林雪","relation":"师姐"}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
-		{tool: "get_reader_perspective", args: `{"counts_only":true}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
 	}
 	for i, sp := range subPlays {
 		hit, miss := cache.StepRaw(sub)
