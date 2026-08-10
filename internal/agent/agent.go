@@ -508,8 +508,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							// 记录调用
 							a.getPG().OnToolCall("set_phase", true)
 							if ok {
-								// 成功：自动注入新阶段必读技能
-								a.injectPhaseSkills(targetPhase, &opts)
+								// 成功：自动注入新阶段必读技能。
+								// 去重只针对同阶段 set_phase（批量 write 循环每章声明章边界）：
+								// 技能已在上下文中，重复注入纯浪费；真切换（from != target）才注入。
+								if from := a.getPG().CurrentPhase(); from != targetPhase {
+									a.injectPhaseSkills(targetPhase, &opts)
+								}
 								// 发送状态
 								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
 								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)

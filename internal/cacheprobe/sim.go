@@ -912,12 +912,14 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 			case "set_phase":
 				// 解析 {"phase":"xxx"} 得到纯阶段名：simPhase（thinking 长度）与 onPhase
 				// 技能注入（phaseInjectSkills key 是纯阶段名）都依赖它——旧代码直接传
-				// p.args JSON，导致 injectPhaseOn 永远查不到 key，阶段技能注入从未生效
-				// （真实 agent.go 每次 set_phase 无条件注入技能全文，成本被低估）。
-				simPhase = phaseOfArgs(p.args)
-				if onPhase != nil {
-					cur = onPhase(cur, simPhase)
+				// p.args JSON，导致 injectPhaseOn 永远查不到 key，阶段技能注入从未生效。
+				// 同步真实 agent.go：只真切换（from != to）注入技能，同阶段 set_phase
+				// （批量 write 章边界）跳过——技能已在上下文，重复注入纯浪费。
+				phase := phaseOfArgs(p.args)
+				if phase != simPhase && onPhase != nil {
+					cur = onPhase(cur, phase)
 				}
+				simPhase = phase
 				cur = appendPhase(cur, simPhase, true)
 			case "read", "read_required":
 				if onRead != nil {
@@ -1400,18 +1402,17 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`})
 
 	// write：循环 N 章正文，每章一个显式 write 阶段边界（set_phase("write") 同阶段幂等成功，
-	// 产生阶段记录；注入无去重——回退 01:53 门禁后 agent.go 每次 set_phase 成功都无条件注入
-	// 技能全文，与 03:43 去重版不同。每章边界都重注入 write 技能，对应真实行为）。
+	// 产生阶段记录；同阶段 set_phase 不重注入技能——与真实 agent.go 一致：去重只针对同阶段，
+	// 真切换（outline→write）才注入。每章边界技能已在上下文，无需重复注入）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	// 批次检查插在 write 循环内，checkKind=2 走阶段切换（门禁白名单约束：run_subagent 仅在 review 阶段）。
 	for ch := 1; ch <= chapters; ch++ {
 		if ch == 1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
-			// 第 2+ 章：显式 write 阶段边界（无去重注入，每次 set_phase 都重注入技能全文）
+			// 第 2+ 章：显式 write 阶段边界（同阶段幂等成功，无重复注入）
 			plays = append(plays,
 				play{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
-				readRequired(skillsFor("batch", "write")...),
 			)
 			plays = append(plays, writePlaysLean(ch)...)
 		}
