@@ -86,7 +86,7 @@ func TestDiagTokenBreakdown(t *testing.T) {
 		}
 		cur = append(cur, asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args), toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result))
 		if p.tool == "set_phase" {
-			cur = append(cur, phaseReminder(p.args, true))
+			cur = appendPhase(cur, p.args, true)
 		}
 	}
 	commitCur("now", &history, cur)
@@ -114,7 +114,7 @@ func TestDiagTokenBreakdown(t *testing.T) {
 		}
 		cur = append(cur, toolMsg(fmt.Sprintf("call_g_p%d", i), p.tool, p.result))
 		if p.tool == "set_phase" {
-			cur = append(cur, phaseReminder(p.args, true))
+			cur = appendPhase(cur, p.args, true)
 		}
 	}
 
@@ -241,7 +241,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
-				cur = append(cur, phaseReminder(p.args, true))
+				cur = appendPhase(cur, p.args, true)
 			}
 			cur = append(cur, asstToolCall(id, p.tool, p.args))
 			if p.tool == "run_subagent" {
@@ -273,7 +273,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
-				cur = append(cur, phaseReminder(p.args, true))
+				cur = appendPhase(cur, p.args, true)
 			}
 			cur = append(cur, asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args), toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result))
 		}
@@ -293,7 +293,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 						cur = append(cur, sysMsg(sk))
 					}
-					cur = append(cur, phaseReminder(p.args, true))
+					cur = appendPhase(cur, p.args, true)
 				}
 				cur = append(cur, asstToolCall(id, p.tool, p.args))
 				if p.tool == "run_subagent" {
@@ -385,7 +385,7 @@ func TestDiagBatchCheckCoverage(t *testing.T) {
 				if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 					cur = append(cur, sysMsg(sk))
 				}
-				cur = append(cur, phaseReminder(p.args, true))
+				cur = appendPhase(cur, p.args, true)
 			}
 			cur = append(cur, asstToolCall(id, p.tool, p.args))
 			if p.tool == "run_subagent" {
@@ -455,7 +455,7 @@ func TestDiagBatchSizeTradeoff(t *testing.T) {
 					if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
 						cur = append(cur, sysMsg(sk))
 					}
-					cur = append(cur, phaseReminder(p.args, true))
+					cur = appendPhase(cur, p.args, true)
 				}
 				cur = append(cur, asstToolCall(id, p.tool, p.args))
 				if p.tool == "run_subagent" {

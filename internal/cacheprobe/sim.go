@@ -463,6 +463,24 @@ func asstToolCall(id, name, args string) map[string]any {
 	}
 }
 
+// asstToolCalls 构造一次请求多个并行工具调用的 assistant 消息（1 次 thinking 覆盖全部调用，
+// 与真机 LLM 并行 tool_calls 行为一致——8/8 日志 19:24 一批 9 个查询 2 次请求）。
+func asstToolCalls(ids, names, argsList []string) map[string]any {
+	calls := make([]any, 0, len(ids))
+	for i := range ids {
+		calls = append(calls, map[string]any{
+			"id": ids[i], "type": "function",
+			"function": map[string]any{"name": names[i], "arguments": argsList[i]},
+		})
+	}
+	return map[string]any{
+		"role":              "assistant",
+		"content":           "",
+		"reasoning_content": thinkingText(thinkingForPhase(simPhase)),
+		"tool_calls":        calls,
+	}
+}
+
 // asstText 构造 assistant 纯文本消息（思考模式开启时同样带 reasoning_content）。
 func asstText(content string) map[string]any {
 	return map[string]any{
@@ -845,6 +863,86 @@ func wrapResult(fallback string) string {
 // playResult 生成 play 的工具结果内容（真实执行优先，fallback 包装兜底）。
 func playResult(p play) string {
 	return realToolResult(p.tool, p.args, p.result)
+}
+
+// runPlays 执行 plays 序列：按 set_phase/run_subagent 断开分组，组内并行（一次请求多条
+// tool_calls + 1 次 thinking，与真机 LLM 并行行为一致），set_phase 单独成组并更新 simPhase。
+// 组上限 10（真机单次最多 ~9 个并行调用）。
+// 回调：onSubagent 在 run_subagent play 后插入子代理请求序列；onRead 记录 read 调用 ID；
+// onPhase 在阶段切换时触发（返回新 cur，用于 auto 模式技能注入/read 清理等）。
+func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, results *[][2]int64,
+	onSubagent func(cur []map[string]any) [][2]int64, onRead func(id string), onPhase func(cur []map[string]any, phase string) []map[string]any) []map[string]any {
+	const maxGroup = 10
+	for i := 0; i < len(plays); {
+		j := i
+		for j < len(plays) && j-i < maxGroup && plays[j].tool != "set_phase" && plays[j].tool != "run_subagent" {
+			j++
+		}
+		if j == i {
+			j = i + 1 // set_phase / run_subagent 单独一组
+		}
+		group := plays[i:j]
+
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		*results = append(*results, [2]int64{hit, miss})
+
+		ids := make([]string, len(group))
+		names := make([]string, len(group))
+		argsList := make([]string, len(group))
+		for k, p := range group {
+			ids[k] = fmt.Sprintf("call_p%d_%d", i, k)
+			names[k] = p.tool
+			argsList[k] = p.args
+		}
+		cur = append(cur, asstToolCalls(ids, names, argsList))
+		for k, p := range group {
+			switch p.tool {
+			case "set_phase":
+				simPhase = p.args
+				if onPhase != nil {
+					cur = onPhase(cur, p.args)
+				}
+				cur = appendPhase(cur, p.args, true)
+			case "read", "read_required":
+				if onRead != nil {
+					onRead(ids[k])
+				}
+			}
+			if p.tool == "run_subagent" && onSubagent != nil {
+				subResults := onSubagent(cur)
+				*results = append(*results, subResults...)
+			}
+			cur = append(cur, toolMsg(ids[k], p.tool, playResult(p)))
+		}
+		i = j
+	}
+	return cur
+}
+
+// filterReadRequired auto 模式下过滤 read_required play（技能已在 set_phase 时注入）。
+func filterReadRequired(plays []play, mode string) []play {
+	if mode != "auto" {
+		return plays
+	}
+	out := make([]play, 0, len(plays))
+	for _, p := range plays {
+		if p.tool == "read_required" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// injectPhaseOn auto 模式阶段切换时注入阶段技能 system 消息（返回新 cur）。
+func injectPhaseOn(mode string, cur []map[string]any, phase string) []map[string]any {
+	if mode == "auto" {
+		if sk, ok := phaseInjectSkills[phase]; ok && sk != "" {
+			cur = append(cur, sysMsg(sk))
+		}
+	}
+	return cur
 }
 
 // ---- 短问答场景 ----
