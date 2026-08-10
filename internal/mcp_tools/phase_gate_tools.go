@@ -28,6 +28,8 @@ func (t *SetPhaseTool) Description() string {
 require 未满足：返回 success=false，提示缺少哪些工具调用。
 未知阶段名：返回 success=false。
 
+【批量循环】批量模式每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，只产生阶段记录；技能注入已去重，不会重复注入）。自检/修复/迷你维护不需要 set_phase。
+
 门禁关闭时（设置中已关）此工具无操作，可忽略。`
 }
 

@@ -31,9 +31,9 @@ type GetEntityAppearancesTool struct{}
 
 func (t *GetEntityAppearancesTool) Name() string { return "get_entity_appearances" }
 func (t *GetEntityAppearancesTool) Description() string {
-	return "反查指定实体出现在哪些章节（历史回溯）。" +
-		"用于：确认角色最后一次出场（避免写死角色复活的错误）、物品流转史、设定揭示章、伏笔埋/收章。" +
-		"返回按章节号升序的出场记录。"
+	return "反查指定实体出现在哪些章节（历史回溯，最多返回 limit 条，默认 20 上限 100）。返回按章节号升序的出场记录。" +
+		"【使用时机】①确认角色最后一次出场（防写死角色复活的错误）；②物品流转史核对；③设定揭示章/伏笔埋收章反查。" +
+		"【省token】limit 默认 20 足够定位最近出场，不要传 100 拉全量——历史出场用 search_story_memory 或按需扩大 limit。"
 }
 func (t *GetEntityAppearancesTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 func (t *GetEntityAppearancesTool) JSONSchema() json.RawMessage {
@@ -269,7 +269,9 @@ func (t *CheckStoryConsistencyTool) Description() string {
 		"2. character_vanished：近30章未出场但有历史戏份的角色（出场断档，疑似被遗忘）\n" +
 		"3. item_conflict：已销毁/丢失的物品在之后章节又出现（硬错误）\n" +
 		"4. dead_appeared：已死亡（status=dead）的角色在死亡章节之后又被写入章节出场列表（硬错误，死者复出）\n" +
-		"review 阶段调用，作为审稿的硬数据支撑。"
+		"review 阶段调用，作为审稿的硬数据支撑。" +
+		"【使用时机】审稿/每 3 章自检时调用（自动核对，输出问题条目）；发现问题后按条目定位修复。" +
+		"【注意】检查是程序化 SQL 核对，不含文笔/节奏判断——文笔问题仍需人工审读。"
 }
 func (t *CheckStoryConsistencyTool) Category() ToolCategory { return CategoryConsistencyCheck }
 func (t *CheckStoryConsistencyTool) JSONSchema() json.RawMessage {

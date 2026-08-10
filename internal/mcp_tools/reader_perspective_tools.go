@@ -273,8 +273,10 @@ type UpdateReaderPerspectiveEntryTool struct{}
 func (t *UpdateReaderPerspectiveEntryTool) Name() string { return "update_reader_perspective_entry" }
 func (t *UpdateReaderPerspectiveEntryTool) Description() string {
 	return "更新一条读者认知条目。常见用途：\n" +
-		"- 回收悬念：设置 revealed_chapter\n" +
-		"- 揭露误知：设置 revealed_chapter"
+		"- 回收悬念：设置 revealed_chapter（悬念在剧情中解答后必须回收，否则读者认知滞后）\n" +
+		"- 揭露误知：设置 revealed_chapter\n" +
+		"【使用时机】每章维护阶段：悬念回收/误知揭露/已知信息更新时同步。" +
+		"【注意】只记录读者实际会感知的信息——不要用作者全知视角污染 known 条目（信息越界会破坏反转设计）。"
 }
 func (t *UpdateReaderPerspectiveEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
 

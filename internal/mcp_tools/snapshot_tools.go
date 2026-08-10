@@ -17,7 +17,8 @@ type GetWritingSnapshotTool struct{}
 
 func (t *GetWritingSnapshotTool) Name() string { return "get_writing_snapshot" }
 func (t *GetWritingSnapshotTool) Description() string {
-	return "获取当前写作进度快照：最新章节号、当前弧线、活跃角色、待处理剧情线索、一句话状态摘要。在开始写新章节前调用，快速了解当前进展。"
+	return "获取当前写作进度快照：最新章节号、当前弧线、活跃角色、待处理剧情线索、一句话状态摘要。在开始写新章节前调用，快速了解当前进展。" +
+		"【注意】这是轻量进度卡——需要完整创作上下文（角色状态/伏笔/场景）用 get_writing_context，不要用本工具替代。"
 }
 func (t *GetWritingSnapshotTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 func (t *GetWritingSnapshotTool) JSONSchema() json.RawMessage {
@@ -58,7 +59,8 @@ type UpdateWritingSnapshotTool struct{}
 
 func (t *UpdateWritingSnapshotTool) Name() string { return "update_writing_snapshot" }
 func (t *UpdateWritingSnapshotTool) Description() string {
-	return "更新写作进度快照。PATCH 语义。写完一章后调用此工具更新进度。"
+	return "更新写作进度快照。PATCH 语义。写完一章后调用此工具更新进度（last_chapter_num/summary/active_chars 等）。" +
+		"【使用时机】每章完成（含批量每章迷你维护）必须更新——下一章 get_writing_context 读快照判断进度，漏更新会导致连续写错章节号。"
 }
 func (t *UpdateWritingSnapshotTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *UpdateWritingSnapshotTool) JSONSchema() json.RawMessage {

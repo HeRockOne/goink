@@ -60,8 +60,8 @@ type CreateItemOccurrenceTool struct{}
 
 func (t *CreateItemOccurrenceTool) Name() string { return "create_item_occurrence" }
 func (t *CreateItemOccurrenceTool) Description() string {
-	return "记录物品在指定章节中的出现或状态变化。每次物品易主、使用、丢失、销毁时都应记录，便于 AI 追踪物品流向。" +
-		"【关联场景】每次更新 item 的 owner_id 时，应同时用此工具记录一条 action=acquired/lost 的记录。" +
+	return "记录物品在指定章节中的出现或状态变化（used/lost/destroyed/mentioned 等），便于 AI 追踪物品流向。" +
+		"【关联场景】物品**使用/丢失/销毁/提及**时手动记录；**持有者变更不需要手动调用**——update_item 的 owner_id 变化会自动写入 acquired/lost 流转记录，手动重复记录会造成重复。" +
 		"action 必填：acquired（获得）、used（使用）、lost（丢失）、destroyed（销毁）、mentioned（提及）。"
 }
 func (t *CreateItemOccurrenceTool) Category() ToolCategory { return CategoryWritingAssistant }

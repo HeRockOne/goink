@@ -31,7 +31,8 @@ type GetChapterListTool struct{}
 func (t *GetChapterListTool) Name() string { return "get_chapter_list" }
 func (t *GetChapterListTool) Description() string {
 	return "获取小说的章节列表，支持分页。按章节号降序排列（最新的在前）。返回每章的 id、章节号、标题、字数、摘要。字数校验针对最近编辑的章节（非章节号最大的），批量写作时不会误查空占位章节。可通过 chapter_number 指定检查特定章节。" +
-		"\n【省token指令】用 size 参数限制返回数量：检查字数用 size=1，浏览用 size=5，不要传 size=9999"
+		"\n【省token指令】用 size 参数限制返回数量：检查字数用 size=1，浏览用 size=5，不要传 size=9999" +
+		"\n【边界】本工具管**章节列表/字数校验**——需要写作上下文（角色/伏笔/场景）用 get_writing_context。"
 }
 func (t *GetChapterListTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -165,7 +166,9 @@ type GetPreferencesTool struct{}
 
 func (t *GetPreferencesTool) Name() string { return "get_preferences" }
 func (t *GetPreferencesTool) Description() string {
-	return "获取所有创作偏好，包括全局偏好（所有小说生效）和当前小说的专属偏好。返回格式化文本，按全局→小说专属分组展示。当需要确认长期创作规则、风格约束、用户指令时调用。"
+	return "获取所有创作偏好，包括全局偏好（所有小说生效）和当前小说的专属偏好。返回格式化文本，按全局→小说专属分组展示。当需要确认长期创作规则、风格约束、用户指令时调用。" +
+		"【使用时机】prepare 阶段必查（确认禁忌/风格/用户规则后再动笔）；写作中不确定规则约束时复查。" +
+		"【注意】偏好是长期规则（用户定制），不要因个人判断绕过——写作冲突时以偏好为准并告知用户。"
 }
 func (t *GetPreferencesTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -208,7 +211,9 @@ func (t *CreatePreferenceTool) Name() string { return "create_preference" }
 func (t *CreatePreferenceTool) Description() string {
 	return "批量创建创作偏好（1-5个）。保证原子性，失败时返回具体条目原因。" +
 		"偏好按自由文本 Category 归类，同 Category 即为同类条目。" +
-		"如果已存在相似分类的偏好，应优先调用 update_preference 对已有条目做增量合并（在原文基础上追加），而非创建重复条目。"
+		"如果已存在相似分类的偏好，应优先调用 update_preference 对已有条目做增量合并（在原文基础上追加），而非创建重复条目。" +
+		"【使用时机】用户给出新的创作规则/禁忌/风格要求时（开书设定、中途补充规则）。" +
+		"【注意】偏好直接影响后续全部创作，写入前确认是用户的长期规则而非一次性要求（一次性要求直接执行即可，不必入库）。"
 }
 func (t *CreatePreferenceTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -268,7 +273,8 @@ type UpdatePreferenceTool struct{}
 func (t *UpdatePreferenceTool) Name() string { return "update_preference" }
 func (t *UpdatePreferenceTool) Description() string {
 	return "更新已有的创作偏好条目。只需传入要修改的字段（PATCH 语义），未传入的字段保持原值。" +
-		"增量合并时，先读取现有内容，再拼接新内容后传入 content 字段。"
+		"增量合并时，先读取现有内容，再拼接新内容后传入 content 字段。" +
+		"【使用时机】用户补充/调整创作规则时；同分类已有条目时优先合并而非新建。"
 }
 func (t *UpdatePreferenceTool) Category() ToolCategory { return CategoryWritingAssistant }
 

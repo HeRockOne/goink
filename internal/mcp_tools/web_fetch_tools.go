@@ -20,7 +20,8 @@ func (t *WebFetchTool) Category() ToolCategory { return CategoryWritingAssistant
 func (t *WebFetchTool) ExposeToLLM() bool      { return true }
 
 func (t *WebFetchTool) Description() string {
-	return "抓取指定网页的正文内容（返回 {url, title=页面标题, text=清洗后的markdown文本}），返回清洗后的 markdown 文本。适用于需要查看某个来源原文、深入了解细节或验证 web_search 结果时使用。一次只能抓取一个 URL。"
+	return "抓取指定网页的正文内容（返回 {url, title=页面标题, text=清洗后的markdown文本}），返回清洗后的 markdown 文本。适用于需要查看某个来源原文、深入了解细节或验证 web_search 结果时使用。一次只能抓取一个 URL。" +
+		"【注意】长网页正文无截断，抓取大页面会占用大量上下文——先抓页面确认长度，或只在确需原文细节时使用；仅需概要用 web_search 即可。"
 }
 
 func (t *WebFetchTool) JSONSchema() json.RawMessage {

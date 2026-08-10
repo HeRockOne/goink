@@ -33,7 +33,9 @@ func (t *AutoSkillInjectionTool) Description() string {
 参数：
 - skills: 逗号分隔的技能名列表（不含 .md），如 "main-tech-anti-ai-writing,main-tech-show-dont-tell"
 
-返回：每个技能的完整 Markdown 内容。技能不存在时返回失败。`
+返回：每个技能的完整 Markdown 内容。技能不存在时返回失败。
+
+【注意】技能是创作指导（世界观分类/伏笔节奏/悬念设计等方法论），压缩后必须补读再动笔——不要因为"读过一次"就跳过补读；门禁会在创作动作前强制检查。`
 }
 
 func (t *AutoSkillInjectionTool) JSONSchema() json.RawMessage { return SchemaOf(AutoSkillInjectionArgs{}) }

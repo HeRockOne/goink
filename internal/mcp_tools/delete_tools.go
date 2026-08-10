@@ -27,7 +27,7 @@ table 可选值与对应工具映射：
   character_relation        — update_character_relationship / get_character_relations
   location                  — create_location / get_locations / update_location
   location_relation         — create_location_relation / update_location_relation
-  timeline_entry            — create_timeline_entry / get_timeline_entries / update_timeline_entry
+  timeline_entry            — create_timeline_entry / get_timeline / update_timeline_entry
   story_arc                 — create_story_arc / get_story_arcs / update_story_arc
   arc_node                  — create_arc_node
   reader_perspective_entry  — create_reader_perspective_entry

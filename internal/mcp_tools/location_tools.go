@@ -30,9 +30,11 @@ type GetLocationsTool struct{}
 func (t *GetLocationsTool) Name() string { return "get_locations" }
 func (t *GetLocationsTool) Description() string {
 	return "获取当前小说的地点信息，支持三种模式：\n" +
-		"- list：分页列表，支持按类型和名称搜索\n" +
-		"- detail：地点详情，含子地点列表和内部连通关系\n" +
-		"- network：大地图——只显示根节点之间的连通关系，用于宏观空间感知"
+		"- list：分页列表（默认 50 条/页，支持按类型和名称搜索，description 截断 100 字）\n" +
+		"- detail：地点详情（location_id 必填），含子地点列表和内部连通关系\n" +
+		"- network：大地图——只显示根节点之间的连通关系，用于宏观空间感知\n" +
+		"【使用时机】写作涉及地点移动/空间关系时查 network 或 detail；浏览地点结构用 list。" +
+		"【省token】list 用 size 缩小（如 size=10），不要翻页拉全量；只要单点详情用 detail 不要 list。"
 }
 func (t *GetLocationsTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -223,7 +225,9 @@ func (t *CreateLocationTool) Name() string { return "create_location" }
 func (t *CreateLocationTool) Description() string {
 	return "批量创建地点（1-10个）。保证原子性，失败时返回具体条目原因。" +
 		"name 必填，location_type 自由文本。" +
-		"parent_location_id 可接入已有层级树，如创建'大殿'时设为'王宫'的 ID。"
+		"parent_location_id 可接入已有层级树，如创建'大殿'时设为'王宫'的 ID。" +
+		"【使用时机】开书建地图、剧情推进到新场景地点时（先建地点档案再让场景引用）。" +
+		"【注意】已有地点不要重复创建（先 get_locations 确认）；背景板地点用一句话带过，不必建档案。"
 }
 func (t *CreateLocationTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -312,7 +316,8 @@ type UpdateLocationTool struct{}
 func (t *UpdateLocationTool) Name() string { return "update_location" }
 func (t *UpdateLocationTool) Description() string {
 	return "更新已有地点的设定。只需传入要修改的字段，未传入的保持不变。" +
-		"parent_location_id 传入 null 可将地点从树中移除变为根节点。"
+		"parent_location_id 传入 null 可将地点从树中移除变为根节点。" +
+		"【使用时机】地点状态在剧情中变化时（宗门被毁、新据点建立、地图扩张）同步更新。"
 }
 func (t *UpdateLocationTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -387,7 +392,8 @@ type CreateLocationRelationTool struct{}
 func (t *CreateLocationRelationTool) Name() string { return "create_location_relation" }
 func (t *CreateLocationRelationTool) Description() string {
 	return "批量创建地点间的空间连通关系（1-10个）。保证原子性，失败时返回具体条目原因。" +
-		"关系为无向边（A-B 等价 B-A），已存在边时返回错误，需修改已有边请用 update_location_relation。"
+		"关系为无向边（A-B 等价 B-A），已存在边时返回错误，需修改已有边请用 update_location_relation。" +
+		"【使用时机】地点间通路/距离在剧情中确定时（相邻区域、可直达的据点）建边；改动已有关系用 update_location_relation。"
 }
 func (t *CreateLocationRelationTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -507,8 +513,8 @@ type UpdateLocationRelationTool struct{}
 
 func (t *UpdateLocationRelationTool) Name() string { return "update_location_relation" }
 func (t *UpdateLocationRelationTool) Description() string {
-	return "更新已有的地点空间连通关系。只需传入要修改的字段，未传入的保持不变。" +
-		"通过 relation_id 定位要修改的边。"
+	return "更新已有的地点空间连通关系（PATCH 语义，只传要修改的字段，如 update_location_relation {relation_id: 5, relation_type: 密道}）。通过 relation_id 定位要修改的边（relation_id 来自 get_locations network 模式返回）。" +
+		"【使用时机】地点间通路/距离在剧情中变化时（新开密道、道路被毁）同步更新。"
 }
 func (t *UpdateLocationRelationTool) Category() ToolCategory { return CategoryWritingAssistant }
 

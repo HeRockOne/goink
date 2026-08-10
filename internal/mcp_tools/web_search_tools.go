@@ -18,8 +18,9 @@ func (t *WebSearchTool) Category() ToolCategory { return CategoryWritingAssistan
 func (t *WebSearchTool) ExposeToLLM() bool      { return true }
 
 func (t *WebSearchTool) Description() string {
-	return "联网搜索真实信息（返回 {queries=搜索词列表, summary=综合答案, sources=[{title, url, snippet}]}），返回综合答案和参考来源。适用于需要实时数据、新闻、技术文档或超出模型知识范围的内容。" +
-		"搜索结果已由 AI 综合分析，可直接引用返回的 summary；sources 为来源 URL 列表。如需查看某个来源的原文细节，可用 web_fetch 抓取。"
+	return "联网搜索真实信息（返回 {queries=搜索词列表, summary=综合答案, sources=[{title, url, snippet}]}），返回综合答案和参考来源（数量由搜索服务决定，一般数个到十几个）。适用于需要实时数据、新闻、技术文档或超出模型知识范围的内容。" +
+		"搜索结果已由 AI 综合分析，可直接引用返回的 summary；sources 为来源 URL 列表。如需查看某个来源的原文细节，可用 web_fetch 抓取。" +
+		"【注意】创作场景只在确需外部事实（真实地名/历史/专业知识）时使用，不要用搜索结果替代故事设定。"
 }
 
 func (t *WebSearchTool) JSONSchema() json.RawMessage {

@@ -23,7 +23,9 @@ type GetLoreTool struct{}
 
 func (t *GetLoreTool) Name() string { return "get_lore" }
 func (t *GetLoreTool) Description() string {
-	return "获取当前小说的世界观设定条目。list：按分类查看所有设定；detail：查看单条完整内容。设定包括力量体系、社会构成、历史事件、核心冲突等。"
+	return "获取当前小说的世界观设定条目（力量体系、社会构成、历史事件、核心冲突等）。list：按分类/关键词浏览（默认 50 条/页，只返回 id/title/category/summary/tags，不含 content 全文）；detail：按 lore_id 获取单条完整内容。" +
+		"【使用时机】写作涉及某设定时用 detail 取完整内容；浏览设定结构用 list 或 category 过滤；不确定名称用 search。" +
+		"【省token】list 默认 50 条/页，用 size 缩小；要单条完整内容用 detail 不要 list 拉全量自己筛。不要用它替代 get_writing_context 的 global_lore 索引（索引只给 ID 列表，本工具给内容）。"
 }
 func (t *GetLoreTool) Category() ToolCategory { return CategoryNovelManagement }
 func (t *GetLoreTool) JSONSchema() json.RawMessage { return SchemaOf(GetLoreArgs{}) }
@@ -90,7 +92,9 @@ func (t *CreateLoreTool) Description() string {
 	return "创建世界观设定条目。创建后自动绑定到当前小说。与 update_lore 保持独立，新建用此工具，修改用 update_lore。" +
 		"category 可选值：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述。" +
 		"arc_id 关联此设定所属的弧线；reveal_chapter_id 填入读者首次得知此设定的章节ID（控制信息投放节奏）；" +
-		"is_public=true 表示读者已知的公开设定，false 表示秘密（未来反转用）。"
+		"is_public=true 表示读者已知的公开设定，false 表示秘密（未来反转用）。" +
+		"【使用时机】开书建世界观、剧情扩展新设定时；已有设定不要重复创建（先 get_lore/search_lore 确认）。" +
+		"【注意】reveal_chapter_id 与 is_public 控制读者信息边界——秘密设定的揭示时机是反转的关键，创建时务必准确。"
 }
 func (t *CreateLoreTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *CreateLoreTool) JSONSchema() json.RawMessage { return SchemaOf(CreateLoreArgs{}) }
@@ -132,7 +136,9 @@ type UpdateLoreTool struct{}
 
 func (t *UpdateLoreTool) Name() string { return "update_lore" }
 func (t *UpdateLoreTool) Description() string {
-	return "更新世界观设定条目。PATCH 语义，只传需要修改的字段。version 自动递增。"
+	return "更新世界观设定条目。PATCH 语义，只传需要修改的字段（如 update_lore {lore_id: 3, content: 新内容}）。version 自动递增。" +
+		"【使用时机】设定在剧情中演进时（修炼体系补充、势力格局变化、秘密被揭示）同步更新。" +
+		"【注意】揭示类设定（is_public/reveal_chapter_id）变更会影响读者信息边界，确认剧情需要再改。"
 }
 func (t *UpdateLoreTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *UpdateLoreTool) JSONSchema() json.RawMessage { return SchemaOf(UpdateLoreArgs{}) }
@@ -169,7 +175,10 @@ type DeleteLoreArgs struct {
 type DeleteLoreTool struct{}
 
 func (t *DeleteLoreTool) Name() string { return "delete_lore" }
-func (t *DeleteLoreTool) Description() string { return "删除世界观设定条目。" }
+func (t *DeleteLoreTool) Description() string {
+	return "删除世界观设定条目（不可恢复）。" +
+		"【注意】删除前确认该设定没有被当前剧情/伏笔引用（被引用的设定应保留并标记废弃，而不是删除）；误删会导致后续章节设定悬空。"
+}
 func (t *DeleteLoreTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *DeleteLoreTool) JSONSchema() json.RawMessage { return SchemaOf(DeleteLoreArgs{}) }
 func (t *DeleteLoreTool) ExposeToLLM() bool           { return true }
@@ -192,7 +201,9 @@ type SearchLoreArgs struct {
 type SearchLoreTool struct{}
 
 func (t *SearchLoreTool) Name() string { return "search_lore" }
-func (t *SearchLoreTool) Description() string { return "全文搜索所有世界观设定条目。返回格式：{lore: [{id, title, category, content, arc_id}]}。匹配 title/category/content/tags 字段。当需要查找特定概念、规则、历史时使用。" }
+func (t *SearchLoreTool) Description() string { return "全文搜索世界观设定条目（匹配 title/category/content/tags，最多返回 10 条）。返回格式：{items: [{id, title, category, content, arc_id}]}。" +
+	"【使用时机】写设定相关情节前查特定概念/规则/历史；不确定条目名称时用它替代 get_lore 的 list 浏览。" +
+	"【省token】返回上限 10 条，命中按相关度排序——足够定位目标，命中后按需 get_lore detail 取完整内容。" }
 func (t *SearchLoreTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 func (t *SearchLoreTool) JSONSchema() json.RawMessage { return SchemaOf(SearchLoreArgs{}) }
 func (t *SearchLoreTool) ExposeToLLM() bool           { return true }

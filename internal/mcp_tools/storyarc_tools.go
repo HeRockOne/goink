@@ -31,7 +31,8 @@ func (t *GetStoryArcsTool) Description() string {
 	return "获取叙事弧线和节点链。两种用法：\n" +
 		"- 传入 current_chapter：活跃弧线做窗口切分（近期/异常/未来），暂停弧线显示断点+恢复条件，已完成/废弃弧线仅显示元数据，不要传分页/过滤 参数\n" +
 		"- 不传 current_chapter：分页查看所有弧线含完整节点链，需要传分页/过滤 参数" +
-		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部"
+		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部" +
+		"\n【边界】本工具管**弧线/节点进度**——需要伏笔状态用 get_timeline，需要本章树状全量状态用 get_writing_context。"
 }
 func (t *GetStoryArcsTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -164,7 +165,9 @@ func (t *CreateStoryArcTool) Name() string { return "create_story_arc" }
 func (t *CreateStoryArcTool) Description() string {
 	return "批量创建叙事弧线（1-5个）。保证原子性，失败时返回具体条目原因。" +
 		"弧线类型：main（主线）/ sub（支线）/ character（角色线）/ background（背景线）/ volume（卷纲）。" +
-		"弧线是跨越多章节的故事线容器，内部节点通过 create_arc_node 添加。"
+		"弧线是跨越多章节的故事线容器，内部节点通过 create_arc_node 添加。" +
+		"【使用时机】开书规划主线/支线、开新卷（arc_type=volume 必须填 start_chapter/end_chapter 卷边界）时。" +
+		"【注意】volume 卷纲必须覆盖连续章节范围且不与其他卷重叠；叙事弧线（main/sub/character）与卷（volume）是不同维度——卷管章节范围，弧线管故事线。"
 }
 func (t *CreateStoryArcTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -256,7 +259,8 @@ func (t *UpdateStoryArcTool) Name() string { return "update_story_arc" }
 func (t *UpdateStoryArcTool) Description() string {
 	return "更新叙事弧线的元数据。只需传入要修改的字段。" +
 		"常用：暂停弧线（status=paused + reactivate_at）、完成弧线（status=completed）、废弃弧线（status=abandoned）。" +
-		"卷结束时：用 detail_json 字段写入 volume_summary，格式：{\"volume_summary\":\"本卷核心事件概括（50-120字）\"}"
+		"卷结束时：用 detail_json 字段写入 volume_summary，格式：{\"volume_summary\":\"本卷核心事件概括（50-120字）\"}" +
+		"【使用时机】弧线推进/暂停/完成、卷结束时（写 volume_summary 供后续卷的 get_writing_context 读取跨卷连续性）。"
 }
 func (t *UpdateStoryArcTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -310,9 +314,10 @@ type CreateArcNodeTool struct{}
 
 func (t *CreateArcNodeTool) Name() string { return "create_arc_node" }
 func (t *CreateArcNodeTool) Description() string {
-	return "批量向弧线添加节点（1-10个）。保证原子性，失败时返回具体条目原因。" +
+	return "批量向弧线添加节点（1-10个），保证原子性，失败时返回具体条目原因。节点按 target_chapter 排序构成弧线演进链。" +
 		"target_chapter 为预计发生的章节号（不准确不要紧，后续可通过 update_arc_node 调整）。" +
-		"节点按 target_chapter 排序构成弧线演进链。"
+		"【使用时机】规划弧线阶段（大纲/卷纲时）为后续章节建立节点；写作推进到新节点时更新状态用 update_arc_node。" +
+		"【注意】不要为每个场景/每章都建节点——节点代表弧线的关键转折点（里程碑），粒度太细会让弧线进度失去意义。"
 }
 func (t *CreateArcNodeTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -395,7 +400,8 @@ type UpdateArcNodeTool struct{}
 func (t *UpdateArcNodeTool) Name() string { return "update_arc_node" }
 func (t *UpdateArcNodeTool) Description() string {
 	return "更新已有的弧线节点。只需传入要修改的字段。" +
-		"标记完成时填 actual_chapter + status=completed。调整 target_chapter 可改变节点在弧线链中的顺序。"
+		"标记完成时填 actual_chapter + status=completed。调整 target_chapter 可改变节点在弧线链中的顺序。" +
+		"【使用时机】写作推进到弧线节点（里程碑事件发生）时标记 completed；规划调整时改 target_chapter。"
 }
 func (t *UpdateArcNodeTool) Category() ToolCategory { return CategoryWritingAssistant }
 

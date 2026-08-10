@@ -31,7 +31,8 @@ func (t *GetTimelineTool) Description() string {
 	return "获取故事时间线总览：章节计划（next/near/far）+ 伏笔和用户指令。两种用法：\n" +
 		"- 传入 current_chapter：自动收集附近条目（近期历史+未来+异常标记），不要传分页/过滤 参数\n" +
 		"- 不传 current_chapter：分页浏览条目（不含计划），可用 category/status 过滤，需要传分页/过滤 参数" +
-		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部"
+		"\n【省token指令】传入 current_chapter 自动限制范围，不要传 page=9999 获取全部" +
+		"\n【边界】本工具管**伏笔/用户指令/章节计划**——需要本章树状全量状态用 get_writing_context，需要读者认知（悬念/误知）用 get_reader_perspective，需要弧线节点用 get_story_arcs。"
 }
 func (t *GetTimelineTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -216,7 +217,8 @@ func (t *UpdateTimelineEntryTool) Name() string { return "update_timeline_entry"
 func (t *UpdateTimelineEntryTool) Description() string {
 	return "更新已有的伏笔或用户指令。只需传入要修改的字段。" +
 		"常见用途：回收伏笔（status=resolved + resolved_chapter_id）、调整 target_chapter、修改内容。" +
-		"category 和 source_chapter_id 创建后不可变。"
+		"category 和 source_chapter_id 创建后不可变。" +
+		"【使用时机】伏笔在剧情中回收/调整时（每章维护阶段核对伏笔台账：该回收的必须标记 resolved，否则 get_writing_context 会报超期伏笔）。"
 }
 func (t *UpdateTimelineEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -277,7 +279,8 @@ func (t *UpdateChapterPlanTool) Description() string {
 		"- next：下一章的写作计划\n" +
 		"- near：近期的写作计划\n" +
 		"- far：远期的写作方向\n" +
-		"同一 scope 重复调用会覆盖旧值。写新章前应更新计划以反映最新进展。"
+		"同一 scope 重复调用会覆盖旧值。写新章前应更新计划以反映最新进展。" +
+		"【使用时机】大纲规划时写 near/far，写新章前更新 next（get_writing_context 的章节计划会读取这三个槽位）。"
 }
 func (t *UpdateChapterPlanTool) Category() ToolCategory { return CategoryWritingAssistant }
 

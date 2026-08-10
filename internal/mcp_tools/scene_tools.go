@@ -65,7 +65,9 @@ type CreateSceneArgs struct {
 	type CreateSceneTool struct{}
 
 	func (t *CreateSceneTool) Name() string { return "create_scene" }
-	func (t *CreateSceneTool) Description() string { return "创建一个场景条目。规划阶段 chapter_id 可不填，写完后用 update_scene 回填。" }
+	func (t *CreateSceneTool) Description() string { return "创建一个场景条目（场景 = 章节内的叙事单元，含地点/出场角色/字数/摘要）。规划阶段 chapter_id 可不填，写完后用 update_scene 回填。" +
+		"【使用时机】大纲/细纲规划本章场景时建条目；写作完成回填 chapter_id 与字数。" +
+		"【注意】character_ids 是出场角色 ID 数组——场景是 get_writing_context 推断本章出场角色的数据源，漏填会导致写作上下文缺角色。" }
 	func (t *CreateSceneTool) Category() ToolCategory { return CategoryWritingAssistant }
 	func (t *CreateSceneTool) JSONSchema() json.RawMessage { return SchemaOf(CreateSceneArgs{}) }
 	func (t *CreateSceneTool) ExposeToLLM() bool { return true }
@@ -103,7 +105,7 @@ type UpdateSceneArgs struct {
 	type UpdateSceneTool struct{}
 
 	func (t *UpdateSceneTool) Name() string { return "update_scene" }
-	func (t *UpdateSceneTool) Description() string { return "更新场景信息。PATCH 语义。写完后用 chapter_id 回填规划场景。" }
+	func (t *UpdateSceneTool) Description() string { return "更新场景信息。PATCH 语义。写完后用 chapter_id 回填规划场景；章节写作中场景发生变化（换地点/换出场角色）时同步。" }
 	func (t *UpdateSceneTool) Category() ToolCategory { return CategoryWritingAssistant }
 	func (t *UpdateSceneTool) JSONSchema() json.RawMessage { return SchemaOf(UpdateSceneArgs{}) }
 	func (t *UpdateSceneTool) ExposeToLLM() bool { return true }
@@ -133,7 +135,7 @@ type DeleteSceneArgs struct {
 }
 type DeleteSceneTool struct{}
 func (t *DeleteSceneTool) Name() string { return "delete_scene" }
-func (t *DeleteSceneTool) Description() string { return "删除场景条目。" }
+func (t *DeleteSceneTool) Description() string { return "删除场景条目（不可恢复）。【注意】删除前确认场景不是本章情节的关键节点（场景承载角色出场/事件推进）——误删会导致该章场景信息缺失，后续写作无法核对出场角色。" }
 func (t *DeleteSceneTool) Category() ToolCategory { return CategoryWritingAssistant }
 func (t *DeleteSceneTool) JSONSchema() json.RawMessage { return SchemaOf(DeleteSceneArgs{}) }
 func (t *DeleteSceneTool) ExposeToLLM() bool { return true }

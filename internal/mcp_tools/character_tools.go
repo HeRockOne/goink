@@ -98,7 +98,9 @@ type GetCharacterRelationsTool struct{}
 func (t *GetCharacterRelationsTool) Name() string { return "get_character_relations" }
 func (t *GetCharacterRelationsTool) Description() string {
 	return "获取指定角色之间的关系边（子图）。只返回两端都在 character_ids 中的关系，不限方向。" +
-		"通常先通过 get_characters 获取角色列表，然后传入你关心的角色 ID 查询它们之间的关系。"
+		"通常先通过 get_characters 获取角色列表，然后传入你关心的角色 ID 查询它们之间的关系。" +
+		"【省token】character_ids 只传本章相关角色（3-8 个），不要传全量角色 ID——子图按传入集合裁剪。" +
+		"【边界】需要角色状态/位置/物品用 get_characters 或 get_writing_context；本工具只查关系边。"
 }
 func (t *GetCharacterRelationsTool) Category() ToolCategory { return CategoryMemoryRetrieval }
 
@@ -193,6 +195,8 @@ func (t *CreateCharacterTool) Description() string {
 	return "批量创建角色（1-10个）。保证原子性，失败时返回具体条目原因。" +
 		"name 必填；personality 为自由 JSON，建议包含 role/traits/background/motivation；" +
 		"abilities 为 JSON 数组。创建后可用 get_characters 查看。" +
+		"【使用时机】开书设定角色阵容、新角色首次登场前（先建档案再让角色出场）。" +
+		"【注意】已有角色不要重复创建（先 get_characters 确认）；只建有戏份的角色，路人用一句话带过。" +
 		"【关联指令】如果角色有明确的当前所在地点，请传入 location_id 将角色关联到地点。之后 get_locations 查地点时可直接看到该地点有哪些角色。"
 }
 func (t *CreateCharacterTool) Category() ToolCategory { return CategoryNovelManagement }
@@ -260,7 +264,9 @@ type UpdateCharacterTool struct{}
 func (t *UpdateCharacterTool) Name() string { return "update_character" }
 func (t *UpdateCharacterTool) Description() string {
 	return "更新已有角色的设定。只需传入要修改的字段，未传入的保持不变。" +
-		"personality 和 abilities 会完全替换旧值，不是合并。"
+		"personality 和 abilities 会完全替换旧值，不是合并。" +
+		"【使用时机】角色状态/性格/能力/所在地变化时（突破、重伤、死亡、换地图）——每章维护阶段同步角色状态。" +
+		"【注意】status 变更（含 dead 终态）必须传 status_changed_chapter_id；dead 是终态，不允许直接复活（需情节交代 + 人工确认）。"
 }
 func (t *UpdateCharacterTool) Category() ToolCategory { return CategoryNovelManagement }
 
@@ -347,7 +353,8 @@ func (t *UpdateCharacterRelationshipTool) Description() string {
 	return "更新角色关系。两种用法：" +
 		"1) 编辑已有关系——提供 relation_id，修改描述措辞；" +
 		"2) 关系演变——提供 source_character_id + target_character_id，旧关系自动保留为历史，新关系设为当前。" +
-		"relation_describe 用自然语言描述，如'师徒但暗中互相提防'，不要用简单枚举词。"
+		"relation_describe 用自然语言描述，如'师徒但暗中互相提防'，不要用简单枚举词。" +
+		"【使用时机】关系在剧情中演变时（结盟/决裂/师徒确立）同步更新（每章维护阶段核对）。"
 }
 func (t *UpdateCharacterRelationshipTool) Category() ToolCategory { return CategoryWritingAssistant }
 
