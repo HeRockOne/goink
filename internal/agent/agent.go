@@ -436,6 +436,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
+		// 待注入阶段（P0-2：技能注入移到本轮工具结果落库之后，避免 11K system
+		// 夹在 assistant(tool_calls) 之前导致 mimo 把回合收尾——真机对照：
+		// 18:39:51 切换+注入即停，18:40:03 不注入继续）
+		pendingPhaseInject := ""
 		// token 预算检查：每轮开始时，超限触发压缩
 		threshold := opts.CompressionThreshold
 		if threshold <= 0 || threshold >= 1 {
@@ -571,11 +575,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							a.getPG().OnToolCall("set_phase", ok)
 							a.logger.Info("阶段切换", "from", from, "to", targetPhase, "ok", ok, "warning", warning)
 							if ok {
-								// 成功：自动注入新阶段必读技能
-								a.injectPhaseSkills(targetPhase, &opts)
-								// 不注入成功 reminder——工具结果已含 success+phase，
-								// StatusString（require/字数状态）是冗余信息（真机日志验证，
-								// 每阶段切换一次多余 user 消息）；失败分支保留（"缺什么"必须告知）。
+								// 真正阶段切换才注入必读技能（同阶段 set_phase = 批量章边界声明，
+								// 技能已在上下文中，绝不注入——真机验证：11K system 注入紧随工具结果
+								// 导致 mimo 把回合收尾 + 批量循环每章重复注入膨胀上下文）。
+								// 注入延迟到本轮工具结果落库之后（P0-2，见 for 尾部 pendingPhaseInject）。
+								if from != targetPhase {
+									pendingPhaseInject = targetPhase
+								}
+								// 成功确认 reminder（精简）：真机验证发现删除后 LLM 把 set_phase
+								// 当回合终点直接收尾（8/8 旧版有完整 StatusString reminder，LLM 收到后
+								// 继续执行阶段任务）。保留极简确认 + 下一步提示，省掉 StatusString 大段。
+								injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段，继续执行该阶段任务。\n</system-reminder>", a.getPG().CurrentPhase())
+								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
 								ps := a.getPG().Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": a.getPG().CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
@@ -813,11 +824,19 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 		}
 
+		// 4. 延迟技能注入（P0-2）：本轮工具结果全部落库后追加 system 注入——
+		// 消息顺序 assistant(tool_calls) → tool(结果) → system(注入)，
+		// AI 读到注入时工具循环上下文完整，不会把回合收尾
+		if pendingPhaseInject != "" {
+			a.injectPhaseSkills(pendingPhaseInject, &opts)
+			pendingPhaseInject = ""
+		}
+
 		if interrupted {
 			break
 		}
 
-		// 4. 死循环检测
+		// 5. 死循环检测
 		patterns := append(recentPatterns, toolPattern(toolOutputs))
 		if len(patterns) > 6 {
 			patterns = patterns[1:]
