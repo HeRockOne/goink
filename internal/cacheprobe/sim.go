@@ -1156,7 +1156,20 @@ func selfReviewPlays(ch int) []play {
 func reviewPlays(ch int) []play {
 	return []play{
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(ch)},
-		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBodies[ch-1][0] + chapterBodies[ch-1][1]},
+		// 审稿核对（真机 8/8 窗口 1 实测 18:30-18:32 序列：读正文核对 + 全套状态核对——
+		// timeline/arcs/reader 与 prepare 相同参数重复调用，每次都是新消息 miss；
+		// characters 用全量核对 status、items/locations 补查、check_story_consistency 自动核对）
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md","start_line":1,"end_line":100}`, ch), result: chapterBodies[ch-1][0] + chapterBodies[ch-1][1]},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md","start_line":100,"end_line":200}`, ch), result: chapterBodies[ch-1][2] + chapterBodies[ch-1][3]},
+		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md","start_line":200,"end_line":300}`, ch), result: chapterBodies[ch-1][4] + chapterBodies[ch-1][5]},
+		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
+		{tool: "get_character_relations", args: `{}`, result: `{"relations":[{"a":"陈昊","b":"林雪","relation":"师姐弟"}]}`},
+		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
+		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"],"misconception":[]}`},
+		{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
+		{tool: "get_items", args: `{"mode":"list","size":10}`, result: `{"items":[{"id":3,"name":"聚气丹"}]}`},
+		{tool: "get_locations", args: `{"mode":"list","size":10}`, result: `{"locations":[{"id":5,"name":"青云宗"}]}`},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：调整对话节奏，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：前文伏笔在此回收，强化悬念。"), result: "已修复问题 2"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：删减冗余描写，收紧节奏。"), result: "已修复问题 3"},
@@ -1329,6 +1342,12 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 func reviewPlaysBatch(chapters int) []play {
 	plays := []play{
 		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chapters)},
+		// 审稿核对（真机批量会话 8/8 实测序列：全套状态核对 + 一致性检查）
+		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
+		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
+		{tool: "get_story_arcs", args: `{}`, result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
+		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
+		{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
 	}
 	for ch := 1; ch <= chapters; ch++ {
 		plays = append(plays,
@@ -1513,14 +1532,14 @@ func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, tu
 		map[string]any{"role": "user", "content": "请审阅最新章节：检查结构、逻辑、伏笔回收、AI 味，输出审读报告与修改建议。"},
 	)
 
-	// 子 agent 内部工具调用（读正文 + 查状态），结果量级与真实一致
+	// 子 agent 内部工具调用：fork 完整主历史（正文/writing_context 已在上下文中），
+	// 只需少量定向核对（真机 8/8 实测：审稿子代理查询 ~200-700 字符/次）+
+	// check_story_consistency 自动核对 + 输出审读报告
 	subPlays := []play{
 		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBodies[6][0] + chapterBodies[6][1]},
-		{tool: "read", args: `{"path":"chapters/007.md","start_line":100,"end_line":200}`, result: chapterBodies[6][2] + chapterBodies[6][3]},
-		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"},{"id":2,"name":"林雪","relation":"师姐"}]}`},
+		{tool: "get_characters", args: `{"brief":true,"size":10}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
-		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"arcs":[{"id":1,"name":"登天之路","nodes_done":3,"nodes_total":10}]}`},
-		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
+		{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
 	}
 	for i, sp := range subPlays {
 		hit, miss := cache.StepRaw(sub)

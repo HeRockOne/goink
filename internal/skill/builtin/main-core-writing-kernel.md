@@ -67,12 +67,12 @@ mode: always
 **必读技能在动笔前已由系统就绪**（门禁 auto_skill_injection 阶段会在 set_phase 时自动注入）。然后执行：
 1. **get_writing_context**（required）— 一次获取树状全量状态。**必须检查返回的 volume_entities（本卷涉及的实体清单）**，确认本卷设定约束、伏笔状态、物品流转
 2. **get_chapter_list**（required）— 确认章节编号连续
-3. **get_characters**（required）— 确认角色阵容
-4. **get_timeline**（required）— 确认伏笔状态
-5. **get_story_arcs**（required）— 确认弧线进度
-6. **get_reader_perspective**（required）— 确认读者认知
+3. **get_characters**（required）— 确认角色阵容。**传 brief=true**（角色概览只需 id/name/location/item_count；角色生死等状态已由 get_writing_context 的 characters 段提供——不要全量拉取 description/personality 大字段）
+4. **get_timeline**（required）— 确认伏笔状态。**传 current_chapter**（窗口切分：近期历史+未来+异常，不要分页翻全量）
+5. **get_story_arcs**（required）— 确认弧线进度。**传 current_chapter**（窗口切分同上）
+6. **get_reader_perspective**（required）— 确认读者认知。**全量返回**（写作必须知道活跃悬念/误知的具体内容，counts_only 只给数量不够用）
 7. **get_writing_snapshot**（required）— 确认写作进度
-8. **get_scenes**（required）— 确认本章场景
+8. **get_scenes**（required）— 确认本章场景。**传 chapter_id 按章查**（不传只返回最近 100 个场景）
 9. **get_preferences**（required）— 确认创作偏好
 10. 按需技能（不强制，按场景读）：main-tech-genre-templates、main-tech-book-outline（看卷纲时）、main-tech-brainstorm-composer（卡情节时构思）
 11. 发现有异常（如角色断档、设定前后矛盾）用 **get_entity_appearances** 反查确认
@@ -126,6 +126,9 @@ mode: always
 ### review
 
 1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章
+2. **审稿核对（身份差异：主会话核对全量，子代理定向）**：
+   - 主会话（作家视角）按意见修复前，先核对状态：**get_characters 全量**（核对角色 status：alive/dead 与正文一致性——brief 无 status 会漏检）、**get_timeline/get_story_arcs 传 current_chapter**（核对伏笔/弧线进度）、**get_reader_perspective 全量**、**check_story_consistency**（自动 DB 核对，输出问题条目）；读本章正文分段核对（read start_line/end_line）
+   - 审稿子代理（fork 完整主历史，正文+writing_context 已在上下文）：只做**少量定向核对**（get_characters brief+size 小、get_timeline current_chapter），加 check_story_consistency 自动核对，然后输出审读报告——不要重复拉全量
 2. 根据意见修复（**批量模式：逐章 read 自查 + edit 修复 + 字数复查**，查 N 修 N）
 3. **set_phase("maintain")**
 
