@@ -15,6 +15,7 @@ package cacheprobe
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -372,12 +373,16 @@ func missCatOf(m map[string]any) string {
 
 var toolDefs []map[string]any
 
+// simRegistry 全局工具注册表（initTools 构造），真实工具执行（realToolResult）用。
+var simRegistry *mcp_tools.Registry
+
 // simStore 全局技能存储（loadSystemTexts 构造），readSkill/readRequired 从它取技能正文。
 var simStore *skill.Store
 
 func initTools() {
 	r := mcp_tools.NewRegistry(slog.New(slog.DiscardHandler))
 	mcp_tools.RegisterAllTools(r)
+	simRegistry = r
 	toolDefs = r.OpenAI(nil)
 	initBody()
 	loadSystemTexts()
@@ -741,6 +746,103 @@ func readRealGoinkFingerprint() string {
 		return string(b)
 	}
 	return ""
+}
+
+// ---- 真实工具执行（用户要求：模拟真机数据行为）----
+
+// realNovelIDOnce 真实 DB 第一本小说的 ID（工具执行的 NovelID）。
+var (
+	realNovelOnce sync.Once
+	realNovelID   int64
+)
+
+func realNovel() int64 {
+	realNovelOnce.Do(func() {
+		db, err := openRealDB()
+		if err != nil {
+			return
+		}
+		var n novel.Novel
+		if err := db.First(&n).Error; err == nil {
+			realNovelID = n.ID
+		}
+	})
+	return realNovelID
+}
+
+// realToolResult 生成工具结果消息内容：
+// 只读工具（get_*/search_*/read）走真实 Registry.Execute 读真实 DB 副本，
+// 返回与真机 resultJSON 等价的 content（{"success":true,"data":{...}}）；
+// 写工具（edit/update/create/delete/run_subagent/set_phase/auto_skill_injection）
+// 或真实执行失败时，把 fallback 内容包装成真机格式（不污染副本、保持可复现）。
+func realToolResult(name, args, fallback string) string {
+	if isReadonlyTool(name) {
+		if out, ok := execRealTool(name, args); ok {
+			return out
+		}
+	}
+	return wrapResult(fallback)
+}
+
+// isReadonlyTool 判定只读工具（无副作用，可安全真实执行）。
+func isReadonlyTool(name string) bool {
+	if name == "read" {
+		return true
+	}
+	return strings.HasPrefix(name, "get_") || strings.HasPrefix(name, "search_")
+}
+
+// execRealTool 用真实工具注册表执行只读工具（读真实 DB）。
+func execRealTool(name, args string) (string, bool) {
+	id := realNovel()
+	if id == 0 || simRegistry == nil {
+		return "", false
+	}
+	db, err := openRealDB()
+	if err != nil {
+		return "", false
+	}
+	res := simRegistry.Execute(context.Background(), name, json.RawMessage(args), mcp_tools.ToolContext{
+		DB:         db,
+		NovelID:    id,
+		SkillStore: simStore,
+	}, nil)
+	if res == nil || !res.Success {
+		return "", false
+	}
+	return resultJSON(res), true
+}
+
+// resultJSON 对齐真实 agent 工具结果格式（agent/safety.go toolOutput.resultJSON）。
+func resultJSON(res *mcp_tools.ToolResult) string {
+	payload := map[string]any{}
+	if res != nil {
+		payload["success"] = res.Success
+		if res.Error != "" {
+			payload["error"] = res.Error
+		}
+		if res.Data != nil {
+			payload["data"] = res.Data
+		}
+	}
+	b, _ := json.Marshal(payload)
+	return string(b)
+}
+
+// wrapResult 把 fallback 内容包装成真机 resultJSON 格式（写工具/真实执行失败时用）。
+func wrapResult(fallback string) string {
+	var data any
+	if json.Unmarshal([]byte(fallback), &data) == nil {
+		payload := map[string]any{"success": true, "data": data}
+		b, _ := json.Marshal(payload)
+		return string(b)
+	}
+	return fmt.Sprintf(`{"success":true,"data":%q}`, fallback)
+}
+
+// playResult 生成 play 的工具结果内容（真实执行优先，fallback 包装兜底）。
+func playResult(p play) string {
+	return realToolResult(p.tool, p.args, p.result)
 }
 
 // ---- 短问答场景 ----
@@ -1421,7 +1523,7 @@ func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, tu
 		results = append(results, [2]int64{hit, miss})
 		sub = append(sub,
 			asstToolCall(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, sp.args),
-			toolMsg(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, sp.result),
+			toolMsg(fmt.Sprintf("sub_t%d_p%d", turn, i), sp.tool, playResult(sp)),
 		)
 	}
 	// 子 agent 最终回复（审读报告）

@@ -359,7 +359,7 @@ func buildGatePhaseClean(cache *TokenCache, rounds int) [][2]int64 {
 		}
 		cur = append(cur,
 			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
 		)
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
@@ -400,7 +400,7 @@ func buildGatePhaseClean(cache *TokenCache, rounds int) [][2]int64 {
 				subResults := simulateSubagent(cache, history, cur, turn)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
+			cur = append(cur, toolMsg(id, p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -439,7 +439,7 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 		}
 		cur = append(cur,
 			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
 		)
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
@@ -483,7 +483,7 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 				subResults := simulateSubagent(cache, history, cur, turn)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
+			cur = append(cur, toolMsg(id, p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -551,7 +551,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 			}
 			continue
 		}
-		cur = append(cur, asstToolCall("init", p.tool, p.args), toolMsg("init", p.tool, p.result))
+		cur = append(cur, asstToolCall("init", p.tool, p.args), toolMsg("init", p.tool, playResult(p)))
 	}
 	cur = append(cur, asstText("开书完成"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -587,7 +587,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 				}
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(fmt.Sprintf("t%d", turn), p.tool, p.result))
+			cur = append(cur, toolMsg(fmt.Sprintf("t%d", turn), p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -618,7 +618,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 				}
 				cur = append(cur,
 					asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-					toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+					toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
 				)
 			}
 		} else {
@@ -642,7 +642,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 				subResults := simulateSubagent(cache, history, cur, batch*chapters+chapters)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
+			cur = append(cur, toolMsg(id, p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", chapters)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -709,12 +709,12 @@ func qaRound(cache *TokenCache, history, cur []map[string]any, results *[][2]int
 	step()
 	cur = append(cur,
 		asstToolCall(fmt.Sprintf("call_qa%d_p0", turn), "get_writing_context", `{"current_chapter":1}`),
-		toolMsg(fmt.Sprintf("call_qa%d_p0", turn), "get_writing_context", longContext(1)),
+		toolMsg(fmt.Sprintf("call_qa%d_p0", turn), "get_writing_context", realToolResult("get_writing_context", `{"current_chapter":1}`, longContext(1))),
 	)
 	step()
 	cur = append(cur,
 		asstToolCall(fmt.Sprintf("call_qa%d_p1", turn), "get_characters", `{}`),
-		toolMsg(fmt.Sprintf("call_qa%d_p1", turn), "get_characters", `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3}]}`),
+		toolMsg(fmt.Sprintf("call_qa%d_p1", turn), "get_characters", realToolResult("get_characters", `{}`, `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3}]}`)),
 	)
 	step()
 	cur = append(cur, asstText("当前设定：主角陈昊，青云宗弟子；世界观为东方玄幻，灵气修炼体系。"))
@@ -725,9 +725,9 @@ func qaRound(cache *TokenCache, history, cur []map[string]any, results *[][2]int
 	step()
 	cur = append(cur,
 		asstToolCall(fmt.Sprintf("call_qa%d_p2", turn), "update_item", `{"item_id":1,"name":"墨玉剑","owner_id":1}`),
-		toolMsg(fmt.Sprintf("call_qa%d_p2", turn), "update_item", "已更新"),
+		toolMsg(fmt.Sprintf("call_qa%d_p2", turn), "update_item", wrapResult("已更新")),
 		asstToolCall(fmt.Sprintf("call_qa%d_p3", turn), "update_character", `{"character_id":1,"personality":"沉稳内敛"}`),
-		toolMsg(fmt.Sprintf("call_qa%d_p3", turn), "update_character", "已更新"),
+		toolMsg(fmt.Sprintf("call_qa%d_p3", turn), "update_character", wrapResult("已更新")),
 	)
 	step()
 	cur = append(cur, asstText("已更新：主角兵器改为墨玉剑，性格改为沉稳内敛。"))
@@ -822,7 +822,7 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		}
 		cur = append(cur,
 			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, p.result),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
 		)
 	}
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
@@ -875,7 +875,7 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 				subResults := simulateSubagent(cache, history, cur, turn)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
+			cur = append(cur, toolMsg(id, p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -915,7 +915,7 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 				subResults := simulateSubagent(cache, history, cur, gateRounds+1)
 				results = append(results, subResults...)
 			}
-			cur = append(cur, toolMsg(id, p.tool, p.result))
+			cur = append(cur, toolMsg(id, p.tool, playResult(p)))
 		}
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
 		req := append(append([]map[string]any{}, history...), cur...)
