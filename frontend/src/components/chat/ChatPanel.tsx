@@ -162,7 +162,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
   // 监听移动端对话完成事件，自动刷新会话列表
   useEffect(() => {
-    const cleanup = EventsOn('chat:api_done', (data: { session_id: string }) => {
+    const refreshOnDone = (data: { session_id: string }) => {
       if (!novelId) return
       // 刷新会话列表
       app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
@@ -174,8 +174,11 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           if (msgs) setTurns(rebuildTurns(msgs))
         }).catch(() => {})
       }
-    })
-    return () => { cleanup() }
+    }
+    // 桌面端 Wails 模式对话完成发 "chat:done"；API/移动端模式发 "chat:api_done"
+    const cleanup1 = EventsOn('chat:done', refreshOnDone)
+    const cleanup2 = EventsOn('chat:api_done', refreshOnDone)
+    return () => { cleanup1(); cleanup2() }
   }, [app, novelId, activeSessionId])
 
   // 监听移动端对话实时流事件，实现双端同步
