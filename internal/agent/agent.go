@@ -857,11 +857,27 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		loopCount++
 	}
 
-	// 门禁不自动推进阶段——阶段切换必须由 LLM 主动 set_phase（设计契约，
-	// 见 phase_gate.go SetPhase 注释与 main-cmd-phase-gate 文档）。
-	// 曾有过"require 满足即自动推进"的实现（失败时 SetPhase 返回值被忽略、
-	// 注入假成功 reminder、技能记错阶段），已删除：自动推进会误导 LLM
-	// 对当前阶段的判断，且与批量显式循环（每章 set_phase 声明边界）冲突。
+	// 门禁自动推进：require 已满足时自动 set_phase（不再等 LLM 调）。
+	// 恢复自 01:53 备份（03:43 删除后真机回归：LLM 在阶段边界停下问用户
+	// "是否进入 X"而非主动 set_phase——19:36:09 prepare→outline 被拒、
+	// 大纲写完不 set_phase(write) 收尾）。修正原实现 bug：
+	// SetPhase 返回值不再忽略，失败不发假成功 reminder。
+	if a.getPG() != nil && a.getPG().Active() {
+		ready, next := a.getPG().CheckTransitionReady()
+		if ready && next != "" {
+			current := a.getPG().CurrentPhase()
+			if ok, warning := a.getPG().SetPhase(next); ok {
+				a.injectPhaseSkills(next, &opts)
+				a.logger.Info("门禁自动推进", "from", current, "to", next)
+				reminder := fmt.Sprintf(
+					"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]，继续执行该阶段任务。\n</system-reminder>",
+					current, next)
+				a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+			} else {
+				a.logger.Warn("门禁自动推进失败", "from", current, "to", next, "warning", warning)
+			}
+		}
+	}
 
 	if interrupted {
 		return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
