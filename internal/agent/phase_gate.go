@@ -28,8 +28,7 @@ type PhaseGate struct {
 	readsByPhase    map[string]map[string]bool // 阶段 → 已成功读取的技能集合（auto_skill_injection 用，阶段切换后从零开始）
 }
 
-// PhaseConfig 是单个阶段的配置。行为开关字段显式声明（缺省 = 全局默认策略，
-// 存量配置不写新字段时行为与之前一致；写 false 可关闭该行为）。
+// PhaseConfig 是单个阶段的配置。
 type PhaseConfig struct {
 	Name      string   // 阶段名称
 	Mode      string   // 所属模式："single" | "batch"（空=两种模式都适用）
@@ -37,16 +36,9 @@ type PhaseConfig struct {
 	Require   []string // 必须调用过的工具（完成条件）
 	AutoSkillInjection []string // 必须读取过的技能名（完成条件，如 main-tech-show-dont-tell）
 	Next      string   // 满足条件后可进入的下一阶段
-	Loop      bool     // batch 模式下是否允许循环回退到上一阶段（如 write → outline）
+	FailNext  string   // require 不满足时的回退阶段
+	Loop      bool     // batch 模式下是否循环（write → outline）
 	EditPaths string   // edit 工具的路径范围（如 "outlines/*, goink.md"，"*" = 不限制）
-
-	// ---- 行为开关（缺省 = 当前默认策略，显式 false 关闭）----
-	Inject          bool  // 进入阶段时自动注入必读技能（默认 true）
-	InjectDedup     bool  // 同阶段重复进入时去重注入（已注入过不重复，默认 true）
-	SamePhase       bool  // 同阶段 set_phase 幂等成功（默认 true，批量"章边界打卡"语义）
-	WordCountCheck  *bool // 转出阶段时强制 get_chapter_list 字数校验。nil=legacy 规则（仅 write 阶段检查）；显式 true/false 覆盖
-	WordCountReset  *bool // 进入阶段时重置字数状态。nil=legacy 规则（仅进 write 时重置）；显式 true/false 覆盖
-	MutatingGuard   bool  // 事前技能强制：必读技能未加载前禁止创作/维护动作（默认 true）
 }
 
 // ParsePhaseGateConfig 从 markdown 内容中解析 <!-- phase-gate-config --> 块。
@@ -90,15 +82,8 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 }
 
 // parsePhaseBlock 解析单个阶段配置块的键值对。
-// 行为开关缺省开启（与全局默认策略一致，WordCount* 三态 nil=legacy 规则），
-// 配置行显式写 false 才关闭。
 func parsePhaseBlock(block string) PhaseConfig {
-	pc := PhaseConfig{
-		Inject:        true,
-		InjectDedup:   true,
-		SamePhase:     true,
-		MutatingGuard: true,
-	}
+	pc := PhaseConfig{}
 	for _, line := range strings.Split(block, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -124,24 +109,12 @@ func parsePhaseBlock(block string) PhaseConfig {
 			pc.AutoSkillInjection = parseToolList(val)
 		case "next":
 			pc.Next = val
+		case "fail_next":
+			pc.FailNext = val
 		case "loop":
 			pc.Loop = val == "true"
 		case "edit_paths":
 			pc.EditPaths = val
-		case "inject":
-			pc.Inject = val == "true"
-		case "inject_dedup":
-			pc.InjectDedup = val == "true"
-		case "same_phase":
-			pc.SamePhase = val == "true"
-		case "word_count_check":
-			v := val == "true"
-			pc.WordCountCheck = &v
-		case "word_count_reset":
-			v := val == "true"
-			pc.WordCountReset = &v
-		case "mutating_guard":
-			pc.MutatingGuard = val == "true"
 		}
 	}
 	return pc
@@ -196,18 +169,6 @@ func (g *PhaseGate) OnSkillInjected(skillName string) {
 		g.readsByPhase[g.currentPhase] = make(map[string]bool)
 	}
 	g.readsByPhase[g.currentPhase][skillName] = true
-}
-
-// ResetReads 清空所有阶段的技能读取记录。上下文压缩后调用：
-// 注入的技能 system 消息已被压缩掉，记录必须清空，否则 injectPhaseSkills
-// 去重会误判"已注入"而跳过重新注入，导致必读技能在上下文中缺失（衰减）。
-// 清空后 missingInjections 恢复非空：下次 set_phase 重新注入，且事前技能
-// 强制（edit/update 前置检查）会引导 LLM 主动补读。
-func (g *PhaseGate) ResetReads() {
-	if g == nil {
-		return
-	}
-	g.readsByPhase = make(map[string]map[string]bool)
 }
 
 // SetWordCountOK 设置字数校验结果。get_chapter_list 工具调用后由 agent 注入。
@@ -363,28 +324,19 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		return false, fmt.Sprintf("未知阶段: %s", targetPhase)
 	}
 
-	// 同阶段切换：same_phase 开关（默认 true 幂等成功，批量"章边界打卡"语义，
-	// 不检查 require；显式 false 时禁止同阶段 set_phase）
+	// 同阶段切换：直接成功，不检查 require
 	if g.currentPhase == targetPhase {
-		if !target.SamePhase {
-			return false, fmt.Sprintf("阶段 [%s] 配置 same_phase: false，不允许同阶段重复 set_phase", targetPhase)
-		}
 		return true, ""
 	}
 
-	current := g.findPhase(g.currentPhase)
-
-	// 进入阶段时重置字数校验状态（word_count_reset 开关；nil=legacy 规则仅进 write 时重置）：
-	// 上一阶段的字数检查结果不能带到新阶段，转出必须用本阶段 get_chapter_list 的结果
-	resetWC := target.Name == "write"
-	if target.WordCountReset != nil {
-		resetWC = *target.WordCountReset
-	}
-	if resetWC {
+	// 进入 write 阶段时重置字数校验状态：上一章的字数检查结果（word_count_ok）
+	// 不能带到本章，write 转出必须用本章 get_chapter_list 的结果
+	if targetPhase == "write" {
 		g.wordCountOK = nil
 	}
 
 	// 检查当前阶段的 require 是否满足（不满足则阻塞）
+	current := g.findPhase(g.currentPhase)
 	if current != nil && len(current.Require) > 0 {
 		var missing []string
 		for _, req := range current.Require {
@@ -406,20 +358,13 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
-	// 当前阶段转出时强制检查字数（word_count_check 开关；nil=legacy 规则仅 write 阶段检查，
-	// 替代原 "write" 阶段名硬编码——任何配置了该开关的阶段都生效）
-	if current != nil {
-		checkWC := current.Name == "write"
-		if current.WordCountCheck != nil {
-			checkWC = *current.WordCountCheck
+	// write 阶段转出时强制检查字数
+	if g.currentPhase == "write" && targetPhase != "write" {
+		if g.wordCountOK == nil {
+			return false, fmt.Sprintf("阶段 [write] 转出前必须调用 get_chapter_list 校验字数，请先调用该工具")
 		}
-		if checkWC {
-			if g.wordCountOK == nil {
-				return false, fmt.Sprintf("阶段 [%s] 转出前必须调用 get_chapter_list 校验字数，请先调用该工具", current.Name)
-			}
-			if !*g.wordCountOK {
-				return false, fmt.Sprintf("阶段 [%s] 最新章节字数不达标，请扩写后再检查", current.Name)
-			}
+		if !*g.wordCountOK {
+			return false, fmt.Sprintf("阶段 [write] 最新章节字数不达标，请扩写后再检查")
 		}
 	}
 
@@ -541,10 +486,9 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 	// 当前阶段 tools 列表中的工具允许
 	for _, t := range current.Tools {
 		if t == toolName {
-			// 事前技能强制（mutating_guard 开关，默认 true）：必读技能未加载前，
-			// 禁止执行创作/维护动作。技能是创作指导，必须先读再动笔，
-			// 不允许"干完活再补读解锁阶段"。
-			if current.MutatingGuard && isMutatingTool(toolName) {
+			// 事前技能强制：必读技能未加载前，禁止执行创作/维护动作。
+			// 技能是创作指导，必须先读再动笔，不允许"干完活再补读解锁阶段"。
+			if isMutatingTool(toolName) {
 				if missing := g.missingInjections(current); len(missing) > 0 {
 					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 auto_skill_injection 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
 					return false, warning
@@ -688,6 +632,14 @@ func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 	return g.currentPhase, string(b)
 }
 
+// SaveWordCount 返回字数校验状态的 JSON 片段。
+func (g *PhaseGate) SaveWordCount() string {
+	if g == nil || g.wordCountOK == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", *g.wordCountOK)
+}
+
 // LoadState 从持久化数据恢复门禁状态。
 // 兼容两种格式：新格式 {"tools":{...},"visited":[...]} 与旧格式 {tool: count}。
 func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
@@ -731,5 +683,19 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	}
 	if len(g.visited) == 0 {
 		g.visited = []string{g.currentPhase}
+	}
+}
+
+// LoadWordCount 从持久化数据恢复字数校验状态。
+func (g *PhaseGate) LoadWordCount(okStr string) {
+	if g == nil || !g.active || okStr == "" {
+		return
+	}
+	if okStr == "true" {
+		v := true
+		g.wordCountOK = &v
+	} else if okStr == "false" {
+		v := false
+		g.wordCountOK = &v
 	}
 }

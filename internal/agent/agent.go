@@ -16,7 +16,6 @@ import (
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"gorm.io/gorm"
-	"path"
 
 	"novel/internal/agentcfg"
 	"novel/internal/approval"
@@ -211,16 +210,8 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 }
 
 // injectPhaseSkills 自动注入指定阶段的必读技能（auto_skill_injection）为 system 消息。
-// 在 set_phase 成功时调用，技能以 system 消息追加到上下文，
+// 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
 // 模型无需再调 auto_skill_injection——技能是创作指导，系统保证其在创作动作前就绪。
-// 行为由阶段配置开关控制：
-//   inject: false        —— 该阶段不自动注入（LLM 需手动 auto_skill_injection）
-//   inject_dedup: false  —— 同阶段重复进入也重新注入（默认去重）
-// 注入去重（inject_dedup，默认 true）：只注入本阶段缺失的必读技能（missingInjections）
-// ——已注入过或 LLM 已主动读取过的技能不再重复注入，避免批量循环中每章
-// set_phase("write") 重复注入技能全文（浪费 token 且挤占注意力）。
-// 通配符（如 "main-tech-*"）：展开为技能库实际存在的技能名再注入。
-// 压缩成功后门禁清空 readsByPhase（技能已不在上下文），下次进入阶段会重新注入/补读。
 func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	pg := a.getPG()
 	if pg == nil || !pg.Active() {
@@ -230,29 +221,7 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	if pc == nil || len(pc.AutoSkillInjection) == 0 {
 		return
 	}
-	if !pc.Inject {
-		return
-	}
-	// 注入集合：inject_dedup（默认 true）时只注入缺失技能；显式 false 时每次全部注入
-	var names []string
-	if pc.InjectDedup {
-		missing := pg.missingInjections(pc)
-		if len(missing) == 0 {
-			// 去重命中：技能已就绪（已注入或 LLM 已读），跳过重复注入
-			// （批量循环每章 set_phase("write") 时验证：write 技能全文只注入 1 次）
-			a.logger.Debug("技能注入跳过（已就绪，去重命中）", "phase", phase)
-			return
-		}
-		names = missing
-	} else {
-		names = pc.AutoSkillInjection
-	}
-	// 通配符展开为具体技能名（missingInjections 按 * 匹配统计缺失，注入需具体名）
-	names = a.expandSkillNames(names, opts.NovelID)
-	if len(names) == 0 {
-		return
-	}
-	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, names)
+	content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
 	if err != nil {
 		a.logger.Warn("自动注入必读技能失败", "phase", phase, "err", err)
 		return
@@ -261,34 +230,12 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 		return
 	}
 	a.appendMsg("system", content, "", nil, opts, nil)
-	for _, name := range names {
+	for _, name := range pc.AutoSkillInjection {
 		if !strings.Contains(name, "*") {
 			pg.OnSkillInjected(name)
 		}
 	}
-	a.logger.Info("自动注入必读技能", "phase", phase, "skills", names)
-}
-
-// expandSkillNames 将技能列表中的通配符（如 "main-tech-*"）展开为技能库实际存在的技能名，
-// 非通配符名原样保留。技能库为空或通配符匹配不到时丢弃该模式。
-func (a *Agent) expandSkillNames(patterns []string, novelID int64) []string {
-	if a.skillStore == nil {
-		return patterns
-	}
-	metas := a.skillStore.ListMeta(novelID)
-	var result []string
-	for _, pattern := range patterns {
-		if !strings.Contains(pattern, "*") {
-			result = append(result, pattern)
-			continue
-		}
-		for _, meta := range metas {
-			if ok, _ := path.Match(pattern, meta.Name); ok {
-				result = append(result, meta.Name)
-			}
-		}
-	}
-	return result
+	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.AutoSkillInjection)
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
@@ -436,10 +383,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
-		// 待注入阶段（P0-2：技能注入移到本轮工具结果落库之后，避免 11K system
-		// 夹在 assistant(tool_calls) 之前导致 mimo 把回合收尾——真机对照：
-		// 18:39:51 切换+注入即停，18:40:03 不注入继续）
-		pendingPhaseInject := ""
 		// token 预算检查：每轮开始时，超限触发压缩
 		threshold := opts.CompressionThreshold
 		if threshold <= 0 || threshold >= 1 {
@@ -465,14 +408,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		}
 
 		callOpts := &llm.CallOptions{CacheKey: opts.SessionID}
-		// 请求轮次标记：同一轮内多个 tool executed 日志之间无此标记 = 并行工具调用
-		// （真机并行验证 + 模拟器对照：数一轮内工具数即可得并行度）
-		phaseName := ""
-		if a.getPG() != nil {
-			phaseName = a.getPG().CurrentPhase()
-		}
-		a.logger.Info("LLM 请求", "loop", loopCount, "msgs", len(opts.Messages),
-			"est_tokens", usedTokens, "phase", phaseName, "agent_type", opts.AgentType)
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
@@ -569,23 +504,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							}
 						}
 						if a.getPG() != nil {
-							from := a.getPG().CurrentPhase()
 							ok, warning := a.getPG().SetPhase(targetPhase)
-							// 记录调用（按实际结果记账：失败不计成功，避免 require 语义错误）
-							a.getPG().OnToolCall("set_phase", ok)
-							a.logger.Info("阶段切换", "from", from, "to", targetPhase, "ok", ok, "warning", warning)
+							// 记录调用
+							a.getPG().OnToolCall("set_phase", true)
 							if ok {
-								// 真正阶段切换才注入必读技能（同阶段 set_phase = 批量章边界声明，
-								// 技能已在上下文中，绝不注入——真机验证：11K system 注入紧随工具结果
-								// 导致 mimo 把回合收尾 + 批量循环每章重复注入膨胀上下文）。
-								// 注入延迟到本轮工具结果落库之后（P0-2，见 for 尾部 pendingPhaseInject）。
-								if from != targetPhase {
-									pendingPhaseInject = targetPhase
-								}
-								// 成功确认 reminder（精简）：真机验证发现删除后 LLM 把 set_phase
-								// 当回合终点直接收尾（8/8 旧版有完整 StatusString reminder，LLM 收到后
-								// 继续执行阶段任务）。保留极简确认 + 下一步提示，省掉 StatusString 大段。
-								injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段，继续执行该阶段任务。\n</system-reminder>", a.getPG().CurrentPhase())
+								// 成功：自动注入新阶段必读技能
+								a.injectPhaseSkills(targetPhase, &opts)
+								// 发送状态
+								resultJSON := fmt.Sprintf(`{"success":true,"phase":"%s","status":"%s"}`, a.getPG().CurrentPhase(), a.getPG().StatusString())
+								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
 								ps := a.getPG().Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
@@ -824,19 +751,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 		}
 
-		// 4. 延迟技能注入（P0-2）：本轮工具结果全部落库后追加 system 注入——
-		// 消息顺序 assistant(tool_calls) → tool(结果) → system(注入)，
-		// AI 读到注入时工具循环上下文完整，不会把回合收尾
-		if pendingPhaseInject != "" {
-			a.injectPhaseSkills(pendingPhaseInject, &opts)
-			pendingPhaseInject = ""
-		}
-
 		if interrupted {
 			break
 		}
 
-		// 5. 死循环检测
+		// 4. 死循环检测
 		patterns := append(recentPatterns, toolPattern(toolOutputs))
 		if len(patterns) > 6 {
 			patterns = patterns[1:]
@@ -857,25 +776,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		loopCount++
 	}
 
-	// 门禁自动推进：require 已满足时自动 set_phase（不再等 LLM 调）。
-	// 恢复自 01:53 备份（03:43 删除后真机回归：LLM 在阶段边界停下问用户
-	// "是否进入 X"而非主动 set_phase——19:36:09 prepare→outline 被拒、
-	// 大纲写完不 set_phase(write) 收尾）。修正原实现 bug：
-	// SetPhase 返回值不再忽略，失败不发假成功 reminder。
+	// 门禁自动推进：require 已满足时自动 set_phase（不再等 LLM 调）
 	if a.getPG() != nil && a.getPG().Active() {
 		ready, next := a.getPG().CheckTransitionReady()
 		if ready && next != "" {
 			current := a.getPG().CurrentPhase()
-			if ok, warning := a.getPG().SetPhase(next); ok {
-				a.injectPhaseSkills(next, &opts)
-				a.logger.Info("门禁自动推进", "from", current, "to", next)
-				reminder := fmt.Sprintf(
-					"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]，继续执行该阶段任务。\n</system-reminder>",
-					current, next)
-				a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
-			} else {
-				a.logger.Warn("门禁自动推进失败", "from", current, "to", next, "warning", warning)
-			}
+			a.getPG().SetPhase(next)
+			a.injectPhaseSkills(next, &opts)
+			a.logger.Info("门禁自动推进", "from", current, "to", next)
+			reminder := fmt.Sprintf(
+				"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
+				current, next)
+			a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
 		}
 	}
 

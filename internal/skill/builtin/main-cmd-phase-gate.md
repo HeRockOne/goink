@@ -27,7 +27,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 ```
 单章：prepare → outline → write → review → maintain → prepare
-批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
+批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
 ```
 
 > 批量模式 `[outline ⇄ write × N 章]` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
@@ -38,20 +38,6 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
 > 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
 > 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
-
-> **批量质量节奏（每 3 章自检 + 批末全批审稿）**：write 循环每写 3 章停笔自检一次——
-> **一致性（重点）**：调 get_characters / get_timeline / get_writing_snapshot 读取状态，对照最近 3 章
-> 正文检查设定矛盾（角色状态/时间线/伏笔/章节衔接/重复），发现问题立即 edit 修复；
-> **文笔（次重点）**：read main-tech-revision-pass + sub-tech-anti-ai-grade 检查节奏/AI 味。
-> 不攒批末、不调 run_subagent 不 set_phase（write 阶段白名单无 run_subagent）。批末 review 阶段
-> run_subagent 审读**本批全部 N 章**（子代理 fork 完整主历史可见全部正文），一致性优先，
-> 逐章 read 自查 + edit 修复 + 字数复查，不要只审第 1 章。
-> **批量 write 显式循环 + 注入去重**：每章写完后调 set_phase("write") 声明下一章边界
-> （同阶段切换幂等成功，只产生显式阶段记录，不重置校验状态）。系统自动注入**已去重**：
-> 只注入本阶段缺失的必读技能（injectPhaseSkills 按 missingInjections 计算），已注入过或
-> LLM 已读过的技能不重复注入——每章 set_phase("write") 不再有重复注入成本。
-> 自检/修复/迷你维护不需要 set_phase；**上下文压缩后门禁清空技能记录**（技能已不在上下文），
-> 需按需补读（auto_skill_injection 或下次 set_phase 自动注入），不要因"技能读过"而跳过补读。
 
 ## require 清单（必须成功调用，失败不算）
 
@@ -90,20 +76,12 @@ next: outline
 | phase | 是 | 阶段名称 |
 | tools | 是 | 该阶段允许使用的工具列表 |
 | require | 是 | 必须调用过的工具列表 |
-| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符（展开为技能库实际存在的技能再注入）。注入去重：已注入过或已读过的技能不重复注入 |
+| auto_skill_injection | 否 | 该阶段必读技能名列表（如 `main-tech-show-dont-tell, main-tech-anti-ai-writing`）。**系统在 set_phase 进入该阶段时自动注入**，模型无需手动调 auto_skill_injection 工具。支持 `*` 通配符 |
 | next | 是 | require 满足后可进入的下一阶段（旧字段名 main-cmd-next 已废弃，只解析 next） |
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
-| inject | 否 | 进入该阶段是否自动注入必读技能（默认 true；false=需手动 auto_skill_injection） |
-| inject_dedup | 否 | 同阶段重复进入是否去重注入（默认 true，已注入过不重复；false=每次全量注入） |
-| same_phase | 否 | 同阶段 set_phase 是否幂等成功（默认 true，批量"每章声明边界"语义；false=禁止同阶段重复 set_phase） |
-| word_count_check | 否 | 转出该阶段是否强制 get_chapter_list 字数校验（缺省=仅 write 阶段强制；true=任何阶段都强制；false=不强制） |
-| word_count_reset | 否 | 进入该阶段是否重置字数状态（缺省=仅进 write 时重置；true/false 显式覆盖） |
-| mutating_guard | 否 | 事前技能强制：必读技能未加载前禁止创作/维护动作（默认 true；false=放行） |
 
 配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（系统在 set_phase 进入该阶段时自动注入，技能名从门禁配置读取，不硬编码）。
-
-> **行为开关缺省即 legacy 行为**：存量配置不写新字段时，行为与历史版本完全一致（字数校验仍只对 write 阶段生效）。新字段的意义是显式化——自定义阶段名、按阶段关闭注入/强制等场景不再需要改代码。
 
 ## 配置设计指南（怎么配一套门禁）
 
