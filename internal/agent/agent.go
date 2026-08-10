@@ -798,12 +798,35 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		responseBuffer = ""
 		fullResponse = ""
 		loopCount++
+
+		// 门禁自动推进（每轮检查）：require 满足即自动 set_phase 进入下一阶段。
+		// 不能只放在循环后——LLM 在 write 阶段会持续调维护工具（create_scene/update_*）
+		// 不输出收尾文本，循环永不 break，循环后的推进永远不会执行，卡死在 write
+		// （真机：批量写完后 LLM 反复调 get_chapter_list/维护工具，不调 set_phase("review")，
+		// 状态栏显示 review 但实际 phase=write，run_subagent 被 write 白名单拦截）。
+		if a.getPG() != nil && a.getPG().Active() {
+			ready, next := a.getPG().CheckTransitionReady()
+			if ready && next != "" {
+				current := a.getPG().CurrentPhase()
+				if ok, _ := a.getPG().SetPhase(next); ok {
+					a.injectPhaseSkills(next, &opts)
+					a.logger.Info("门禁自动推进", "from", current, "to", next)
+					reminder := fmt.Sprintf(
+						"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
+						current, next)
+					a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+					ps := a.getPG().Status()
+					emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
+				}
+			}
+		}
 	}
 
-	// 门禁自动推进：require 已满足时自动 set_phase（不再等 LLM 调）
+	// 门禁自动推进（循环后兜底）：LLM 收尾 break 场景下，require 满足仍推进。
+	// 循环内已推进过的（current==next）跳过，避免同阶段重复注入技能。
 	if a.getPG() != nil && a.getPG().Active() {
 		ready, next := a.getPG().CheckTransitionReady()
-		if ready && next != "" {
+		if ready && next != "" && a.getPG().CurrentPhase() != next {
 			current := a.getPG().CurrentPhase()
 			a.getPG().SetPhase(next)
 			a.injectPhaseSkills(next, &opts)
