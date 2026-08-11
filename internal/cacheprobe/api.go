@@ -883,9 +883,9 @@ func RunNSOnDemand() (*LayeredResult, error) {
 	return r, nil
 }
 
-// RunSkillDedup 技能注入去重对照：同阶段技能全文只注入一次（history 中已有则跳过）。
+// RunSkillDedup 技能注入去重对照：模型视野（history+cur）中已有同阶段技能全文则跳过。
 // 真机收益：技能注入占 miss 构成 26%（单章模式每章 5 次真切换重复注入全文）。
-// 模拟器用注入记录 map 近似（单章多轮场景与真机"history 查重"等价）。
+// 判定与真机一致：全文比对（visibleIn），压缩/清理后全文消失会自动重新注入。
 func RunSkillDedup() (*LayeredResult, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
@@ -894,12 +894,9 @@ func RunSkillDedup() (*LayeredResult, error) {
 	cNow := NewTokenCache()
 	resNow := buildMixedSession("auto", cNow, 5, 0, 0)
 
-	// 去重：同阶段技能只注入一次
+	// 去重：模型视野中已有相同全文则跳过
 	skillDedupSim = true
-	defer func() {
-		skillDedupSim = false
-		injectedPhases = map[string]bool{}
-	}()
+	defer func() { skillDedupSim = false }()
 	cLay := NewTokenCache()
 	resLay := buildMixedSession("auto", cLay, 5, 0, 0)
 
@@ -1065,7 +1062,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 	}
 	cur = runPlays(cache, history, cur, filterReadRequired(initScript(), mode), &results,
 		nil, nil, func(c []map[string]any, phase string) []map[string]any {
-			return injectPhaseOn(mode, c, phase)
+			return injectPhaseOn(mode, history, c, phase)
 		})
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, history...), cur...)
@@ -1103,7 +1100,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 				return simulateSubagent(cache, history, subCur, turn)
 			},
 			nil, func(c []map[string]any, phase string) []map[string]any {
-				return injectPhaseOn(mode, c, phase)
+				return injectPhaseOn(mode, history, c, phase)
 			})
 		cur = append(cur, asstText(finalAssistant(turn)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -1136,7 +1133,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 					return simulateSubagent(cache, history, subCur, base+batchChapters)
 				},
 				nil, func(c []map[string]any, phase string) []map[string]any {
-					return injectPhaseOn(mode, c, phase)
+					return injectPhaseOn(mode, history, c, phase)
 				})
 			cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
 			req := append(append([]map[string]any{}, history...), cur...)
