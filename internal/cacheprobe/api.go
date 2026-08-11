@@ -331,13 +331,13 @@ func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64)
 }
 
 // appendPhase 模拟 set_phase 后的 system-reminder 注入（与真机 agent.go 对齐：
-// A 改动后成功不再注入 reminder——工具结果已含 success+phase，StatusString 冗余；
-// 失败分支保留"缺什么"信息）。
+// 成功注入静态确认"已切换到 [X] 阶段"（600aa8c 起静态化，禁止动态 StatusString——
+// 动态内容注入历史中段会让整条前缀缓存失效）；失败分支保留"缺什么"信息。
 func appendPhase(cur []map[string]any, phase string, ok bool) []map[string]any {
 	if !ok {
 		return append(cur, userMsg("<system-reminder>\n{\"success\":false,\"error\":\"require 未满足\",\"current_phase\":\""+phase+"\"}\n</system-reminder>"))
 	}
-	return cur
+	return append(cur, userMsg(fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段，继续执行该阶段任务。\n</system-reminder>", phase)))
 }
 
 // buildGatePhaseClean 单章门禁 + 阶段切换清理：

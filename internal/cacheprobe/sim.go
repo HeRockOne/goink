@@ -750,6 +750,7 @@ func loadSystemTexts() {
 	if err != nil {
 		store = nil
 	}
+	simStore = store // 全局技能存储：realToolResult 的 ToolContext.SkillStore 与 skillContent 三层查找共用
 	var meta []skill.SkillMeta
 	if store != nil {
 		meta = store.ListMeta(0)
