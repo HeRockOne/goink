@@ -977,10 +977,11 @@ func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 //   single：一个窗口内每章走完整单章门禁逐章累积（~40K/章，1M 窗口约 25 章）
 //   batch：一个窗口内每 perBatch 章走完整批量门禁批次循环（~50K/批，1M 约 20 批）
 //   mixed：混合会话（开书 → 短对话 → 单章 → 短对话 → 批量 → 短对话），
-//          按用户配置的轮数跑一次（窗口大小由输入决定，刻度能打到哪算哪）
+//          批量部分按 batchRounds 批次循环（章号偏移，不覆盖前批），
+//          按用户配置的轮数跑（窗口大小由输入决定，刻度能打到哪算哪）
 // 历史增长过程中首次跨过 128K/256K/512K/1024K 时记录累计 hit/miss/out/请求数/章数。
 // 返回：刻度快照 + 最终汇总（成本由调用方按设置页价格估算）。
-func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters int) (*WindowCostResult, error) {
+func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds int) (*WindowCostResult, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
 
@@ -1015,7 +1016,10 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters int) (*
 		if gateRounds <= 0 && shortQARounds <= 0 && batchChapters <= 0 {
 			gateRounds, shortQARounds, batchChapters = 3, 5, 5
 		}
-		res = buildMixedSession("auto", c, gateRounds, shortQARounds, batchChapters)
+		if batchRounds < 1 {
+			batchRounds = 1
+		}
+		res = buildMixedSessionLoop("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds)
 	}
 
 	r := &WindowCostResult{
@@ -1036,6 +1040,16 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters int) (*
 // → 短对话 → 批量创作 → 短对话……全部发生在同一条历史里，短对话穿插在创作轮之间。
 // 这比"短对话独立场景"更贴近真实使用：用户不会开一个窗口纯聊天，再开一个窗口纯创作。
 func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters int) [][2]int64 {
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, 1)
+}
+
+// buildMixedSessionLoop 同 buildMixedSession，但批量部分批次循环 batchRounds 次
+// （每批 batchChapters 章，章号按批偏移，不覆盖前批）——混合会话也能跑到 1M 窗口。
+func buildMixedSessionLoop(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds int) [][2]int64 {
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds)
+}
+
+func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds int) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
@@ -1093,24 +1107,30 @@ func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, bat
 		doQA(turn)
 	}
 
-	// 批量创作（短对话过渡 → 批量 → 短对话收尾）
+	// 批量创作（短对话过渡 → 批量批次循环 → 短对话收尾）
 	if batchChapters > 0 {
-		doQA(gateRounds + 1)
-		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", batchChapters))}
-		cur = append(cur, sysMsg(novelState(gateRounds + 1)))
-		cur = runPlays(cache, history, cur, filterReadRequired(batchAsIs(batchChapters), mode), &results,
-			func(subCur []map[string]any) [][2]int64 {
-				return simulateSubagent(cache, history, subCur, gateRounds+1)
-			},
-			nil, func(c []map[string]any, phase string) []map[string]any {
-				return injectPhaseOn(mode, c, phase)
-			})
-		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
-		req := append(append([]map[string]any{}, history...), cur...)
-		hit, miss := cache.Step(req)
-		results = append(results, [2]int64{hit, miss})
-		commitCur(mode, &history, cur)
-		doQA(gateRounds + 2)
+		if batchRounds < 1 {
+			batchRounds = 1
+		}
+		for r := 0; r < batchRounds; r++ {
+			base := r * batchChapters
+			doQA(gateRounds + r + 1)
+			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", batchChapters))}
+			cur = append(cur, sysMsg(novelState(gateRounds + base)))
+			cur = runPlays(cache, history, cur, filterReadRequired(batchAsIsBase(batchChapters, base), mode), &results,
+				func(subCur []map[string]any) [][2]int64 {
+					return simulateSubagent(cache, history, subCur, gateRounds+base)
+				},
+				nil, func(c []map[string]any, phase string) []map[string]any {
+					return injectPhaseOn(mode, c, phase)
+				})
+			cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", batchChapters)))
+			req := append(append([]map[string]any{}, history...), cur...)
+			hit, miss := cache.Step(req)
+			results = append(results, [2]int64{hit, miss})
+			commitCur(mode, &history, cur)
+		}
+		doQA(gateRounds + batchRounds + 1)
 	}
 
 	return results

@@ -54,20 +54,20 @@ type WindowSimMark struct {
 
 // StartCacheSimulation 异步启动写书成本模拟（用户手动触发）。
 // 立即返回，模拟在后台 goroutine 运行，完成后推送事件 cachesim:done。
-// mode: single=单章逐章累积 / batch=批量批次循环 / mixed=混合会话。
-func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds int, batchChapters int) error {
+// mode: single=单章逐章累积 / batch=批量批次循环 / mixed=混合会话（批量可多轮）。
+func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int) error {
 	go func() {
 		simMu.Lock()
 		defer simMu.Unlock()
-		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters)
+		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds)
 		wails.EventsEmit(a.ctx, "cachesim:done", res)
 	}()
 	return nil
 }
 
 // runCacheSimulationSync 同步执行模拟并附带价格估算与窗口刻度（供 StartCacheSimulation 后台调用）。
-func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int) *CacheSimResult {
-	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters)
+func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int) *CacheSimResult {
+	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds)
 	if err != nil {
 		return &CacheSimResult{Cost: -1} // 失败标记
 	}

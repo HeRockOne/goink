@@ -52,6 +52,56 @@ const modeDefs: Record<Mode, { label: string; hint: string }> = {
   mixed: { label: '混合', hint: '短对话穿插在单章/批量创作之间（真实使用方式）' },
 }
 
+// NumInput 数字输入框：允许清空后直接输入（本地字符串 state），blur 时校验回填。
+function NumInput(props: {
+  value: number
+  onChange: (n: number) => void
+  min?: number
+  max?: number
+  label: string
+  hint?: string
+}) {
+  const { value, onChange, min = 0, max = 999, label, hint } = props
+  const [text, setText] = useState(String(value))
+
+  // 外部值变化（切换模式/重置）时同步
+  useEffect(() => { setText(String(value)) }, [value])
+
+  const commit = () => {
+    const n = Number(text)
+    if (text === '' || Number.isNaN(n)) {
+      setText(String(value))
+      return
+    }
+    const clamped = Math.max(min, Math.min(max, n))
+    setText(String(clamped))
+    onChange(clamped)
+  }
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={text}
+        onChange={e => {
+          setText(e.target.value)
+          const n = Number(e.target.value)
+          if (e.target.value !== '' && !Number.isNaN(n)) {
+            onChange(Math.max(min, Math.min(max, n)))
+          }
+        }}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit() }}
+        className="w-24 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
+      />
+      {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
+    </label>
+  )
+}
+
 // 缓存模拟 Tab：估算一个真实对话窗口写书的 token 消耗与费用。
 // 模式 = 窗口内的工作负载：单章逐章 / 批量批次循环 / 混合会话。
 // 每个模式输出：该窗口总成本 + 上下文窗口刻度（历史增长到 128K/256K/512K/1024K
@@ -64,6 +114,7 @@ export default function CacheSimTab() {
   const [gateRounds, setGateRounds] = useState(3)
   const [qaRounds, setQaRounds] = useState(5)
   const [mixedBatch, setMixedBatch] = useState(5)
+  const [batchRounds, setBatchRounds] = useState(3)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<CacheSimResult | null>(null)
   const [error, setError] = useState('')
@@ -88,31 +139,26 @@ export default function CacheSimTab() {
     setError('')
     try {
       if (mode === 'single') {
-        await StartCacheSimulation('single', singleChapters, 0, 0)
+        await StartCacheSimulation('single', singleChapters, 0, 0, 1)
       } else if (mode === 'batch') {
-        await StartCacheSimulation('batch', 0, 0, batchChapters)
+        await StartCacheSimulation('batch', 0, 0, batchChapters, 1)
       } else {
-        await StartCacheSimulation('mixed', gateRounds, qaRounds, mixedBatch)
+        await StartCacheSimulation('mixed', gateRounds, qaRounds, mixedBatch, batchRounds)
       }
     } catch (e) {
       setError(String(e))
       setRunning(false)
     }
-  }, [mode, singleChapters, batchChapters, gateRounds, qaRounds, mixedBatch])
+  }, [mode, singleChapters, batchChapters, gateRounds, qaRounds, mixedBatch, batchRounds])
 
-  const input = (value: number, setValue: (n: number) => void, min = 0, max = 200, label: string, hint?: string) => (
-    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-      {label}
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={e => setValue(Math.max(min, Math.min(max, Number(e.target.value) || min)))}
-        className="w-28 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
-      />
-      {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
-    </label>
+  const modeBtn = (m: Mode) => (
+    <button
+      key={m}
+      onClick={() => setMode(m)}
+      className={`px-3 py-1.5 rounded border text-sm transition-colors ${mode === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+    >
+      {modeDefs[m].label}
+    </button>
   )
 
   return (
@@ -132,30 +178,27 @@ export default function CacheSimTab() {
         </p>
       </div>
 
-      <div className="flex items-end gap-4">
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          模式
-          <div className="flex gap-1">
-            {(Object.keys(modeDefs) as Mode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-3 py-1.5 rounded border text-sm transition-colors ${mode === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
-              >
-                {modeDefs[m].label}
-              </button>
-            ))}
-          </div>
-          <span className="text-[10px] text-muted-foreground/70">{modeDefs[mode].hint}</span>
-        </div>
+      {/* 模式选择行 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground mr-1">模式</span>
+        {(Object.keys(modeDefs) as Mode[]).map(modeBtn)}
+        <span className="text-[10px] text-muted-foreground/70 ml-1">{modeDefs[mode].hint}</span>
+      </div>
 
-        {mode === 'single' && input(singleChapters, setSingleChapters, 1, 200, '章数', '默认 26（≈1M 窗口）')}
-        {mode === 'batch' && input(batchChapters, setBatchChapters, 6, 400, '章数', '默认 120（≈1M 窗口）')}
+      {/* 参数行（按模式变化） */}
+      <div className="flex flex-wrap items-end gap-3">
+        {mode === 'single' && (
+          <NumInput value={singleChapters} onChange={setSingleChapters} min={1} max={200} label="章数" hint="默认 26（≈1M 窗口）" />
+        )}
+        {mode === 'batch' && (
+          <NumInput value={batchChapters} onChange={setBatchChapters} min={6} max={400} label="章数" hint="默认 120（≈1M 窗口）" />
+        )}
         {mode === 'mixed' && (
           <>
-            {input(gateRounds, setGateRounds, 0, 20, '单章轮数', '0 = 不跑')}
-            {input(qaRounds, setQaRounds, 0, 20, '短对话轮数', '穿插在创作轮之间')}
-            {input(mixedBatch, setMixedBatch, 0, 20, '批量章数', '0 = 不跑')}
+            <NumInput value={gateRounds} onChange={setGateRounds} min={0} max={20} label="单章轮数" hint="0 = 不跑" />
+            <NumInput value={qaRounds} onChange={setQaRounds} min={0} max={20} label="短对话轮数" hint="穿插在创作轮之间" />
+            <NumInput value={mixedBatch} onChange={setMixedBatch} min={0} max={20} label="每批章数" hint="每批完整批量门禁" />
+            <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量轮数" hint="批次循环，章号顺延" />
           </>
         )}
 
@@ -252,8 +295,8 @@ export default function CacheSimTab() {
             </table>
             <p className="text-[10px] text-muted-foreground/70 mt-2">
               单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
-              混合模式窗口大小由输入决定（如单章 3 · 短对话 5 · 批量 5 约 250K 历史，
-              只能到达 128K 刻度）；单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）。
+              混合模式窗口大小由输入决定（单章轮数 + 短对话轮数 + 每批章数 × 批量轮数）；
+              单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）。
               未到达的刻度说明该模式在当前输入下到不了这个上下文规模。
             </p>
           </div>
