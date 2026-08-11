@@ -99,3 +99,35 @@ func BuildSkillsContent(store *skill.Store, novelID int64, names []string) (stri
 	}
 	return strings.TrimSpace(b.String()), nil
 }
+
+// BuildSkillsReminder 生成阶段技能短提醒（技能名 + description 要点，~百 token）。
+// 用于技能全文已在上下文（首次注入常驻历史）时，每次进入同阶段追加的"唤起注意"消息：
+// 解决 Lost in the Middle——全文保证可见，短提醒紧跟请求尾部保证被注意。
+// 与 BuildSkillsContent 共享技能读取逻辑；description 缺失时回退技能名。
+func BuildSkillsReminder(store *skill.Store, novelID int64, names []string) (string, error) {
+	if store == nil || len(names) == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	b.WriteString("【当前阶段技能提醒】")
+	for i, name := range names {
+		sk, ok := store.Get(novelID, name)
+		if !ok {
+			continue
+		}
+		if i > 0 {
+			b.WriteString("；")
+		}
+		b.WriteString(sk.Name)
+		if sk.Description != "" {
+			b.WriteString("（")
+			b.WriteString(sk.Description)
+			b.WriteString("）")
+		}
+	}
+	if b.Len() <= len("【当前阶段技能提醒】") {
+		return "", nil
+	}
+	b.WriteString("。请按以上技能要点创作，勿偏离。")
+	return b.String(), nil
+}

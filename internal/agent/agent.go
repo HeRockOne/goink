@@ -222,9 +222,12 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 // injectPhaseSkills 自动注入指定阶段的必读技能（auto_skill_injection）为 system 消息。
 // 在 set_phase 成功或门禁自动推进时调用，技能以 system 消息追加到上下文，
 // 模型无需再调 auto_skill_injection——技能是创作指导，系统保证其在创作动作前就绪。
-// 去重：历史中已有相同技能全文（同 session 未压缩）则跳过重复注入——
-// 技能已在上下文中，重复注入 = 每阶段切换固定 miss 全文（占 miss 构成 26%）。
-// 压缩重建历史后技能消息被清掉，后续 set_phase 时历史中无该内容，自动恢复注入。
+// 注入策略（解决 Lost in the Middle——全文可见 ≠ 被注意）：
+//   - 全文不在上下文 → 注入技能全文（首次进入阶段，学习内容，常驻历史始终可见）
+//   - 全文已在上下文（同 session 未压缩）→ 注入短提醒（技能名+要点，~百 token）：
+//     全文在历史靠前位置，注意力随上下文增长衰减（1M 窗口时技能可能被挤到头部）；
+//     短提醒紧跟本轮请求尾部（注意力最强位置），每轮进入阶段唤起模型遵循技能。
+// 压缩重建历史后技能消息被清掉，后续 set_phase 时历史中无该内容，自动恢复注入全文。
 func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	pg := a.getPG()
 	if pg == nil || !pg.Active() {
@@ -242,11 +245,17 @@ func (a *Agent) injectPhaseSkills(phase string, opts *RunOptions) {
 	if content == "" {
 		return
 	}
-	// 去重：opts.Messages 已含相同技能全文 → 跳过落库（门禁状态照常标记）
+	// 去重：opts.Messages 已含相同技能全文 → 注入短提醒唤起注意（门禁状态照常标记）
 	for _, m := range opts.Messages {
 		if role, _ := m["role"].(string); role == "system" {
 			if c, ok := m["content"].(string); ok && c == content {
-				a.logger.Debug("技能已在上下文中，跳过重复注入", "phase", phase, "skills", pc.AutoSkillInjection)
+				reminder, rerr := mcp_tools.BuildSkillsReminder(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
+				if rerr == nil && reminder != "" {
+					a.appendMsg("system", reminder, "", nil, opts, nil)
+					a.logger.Debug("技能全文已在上下文，注入短提醒唤起注意", "phase", phase, "skills", pc.AutoSkillInjection)
+				} else {
+					a.logger.Debug("技能已在上下文中，跳过重复注入", "phase", phase, "skills", pc.AutoSkillInjection)
+				}
 				for _, name := range pc.AutoSkillInjection {
 					if !strings.Contains(name, "*") {
 						pg.OnSkillInjected(name)
