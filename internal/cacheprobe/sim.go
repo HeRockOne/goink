@@ -225,7 +225,12 @@ var simCurrentChapter int
 
 // markWindow 检查本次请求输入是否跨过未到达的刻度，记录快照。
 // 调用点：step() 累计更新后。
+// 只有挂了 marks（simWindowThresholds 非空时 runTriple 给 now cache 初始化）的 cache 打点；
+// legacy/clean cache 的 marks 为 nil，直接跳过（刻度表只反映 now 协议）。
 func (c *TokenCache) markWindow(total int64) {
+	if c.marks == nil {
+		return
+	}
 	for i, th := range simWindowThresholds {
 		if !c.marks[i].Reached && total >= th {
 			c.marks[i] = WindowMark{
