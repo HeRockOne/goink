@@ -132,6 +132,8 @@ export default function CacheSimTab() {
   const [qaRounds, setQaRounds] = useState(5)
   const [mixedBatch, setMixedBatch] = useState(5)
   const [batchRounds, setBatchRounds] = useState(3)
+  // 模拟上下文窗口（token，0 = 按设置选中模型推断；覆盖压缩触发阈值 0.7×窗口）
+  const [simWindow, setSimWindow] = useState(0)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<CacheSimResult | null>(null)
   const [error, setError] = useState('')
@@ -156,17 +158,17 @@ export default function CacheSimTab() {
     setError('')
     try {
       if (mode === 'single') {
-        await StartCacheSimulation('single', singleChapters, 0, 0, 1)
+        await StartCacheSimulation('single', singleChapters, 0, 0, 1, simWindow)
       } else if (mode === 'batch') {
-        await StartCacheSimulation('batch', 0, 0, batchChapters, 1)
+        await StartCacheSimulation('batch', 0, 0, batchChapters, 1, simWindow)
       } else {
-        await StartCacheSimulation('mixed', gateRounds, qaRounds, mixedBatch, batchRounds)
+        await StartCacheSimulation('mixed', gateRounds, qaRounds, mixedBatch, batchRounds, simWindow)
       }
     } catch (e) {
       setError(String(e))
       setRunning(false)
     }
-  }, [mode, singleChapters, batchChapters, gateRounds, qaRounds, mixedBatch, batchRounds])
+  }, [mode, singleChapters, batchChapters, gateRounds, qaRounds, mixedBatch, batchRounds, simWindow])
 
   const modeBtn = (m: Mode) => (
     <button
@@ -218,6 +220,8 @@ export default function CacheSimTab() {
             <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量轮数" hint="章号顺延" />
           </>
         )}
+
+        <NumInput value={simWindow} onChange={setSimWindow} min={0} max={2000000} label="模拟窗口 K" hint="0=按选中模型，如 128/1000" />
 
         <button
           onClick={run}

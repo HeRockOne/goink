@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -73,24 +74,28 @@ type WindowSimMark struct {
 // StartCacheSimulation 异步启动写书成本模拟（用户手动触发）。
 // 立即返回，模拟在后台 goroutine 运行，完成后推送事件 cachesim:done。
 // mode: single=单章逐章累积 / batch=批量批次循环 / mixed=混合会话（批量可多轮）。
-func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int) error {
+// contextWindow: 模拟的模型上下文窗口（token），<=0 时按设置选中模型推断（默认 1M）。
+func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int, contextWindow int) error {
 	go func() {
 		simMu.Lock()
 		defer simMu.Unlock()
-		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds)
+		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 		wails.EventsEmit(a.ctx, "cachesim:done", res)
 	}()
 	return nil
 }
 
 // runCacheSimulationSync 同步执行模拟并附带价格估算与窗口刻度（供 StartCacheSimulation 后台调用）。
-func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int) *CacheSimResult {
-	// 上下文窗口：从设置选中模型的内置定义取（对齐真机压缩触发），
-	// 未匹配时默认 1M（DeepSeek），mimo/GLM 等小窗口模型自动生效压缩建模
-	contextWindow := 1_000_000
-	if s, err := config.LoadSettings(a.db); err == nil && s.SelectedModelKey != "" {
-		if w := modelContextWindow(s.SelectedModelKey); w > 0 {
-			contextWindow = w
+func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int, contextWindow int) *CacheSimResult {
+	// 上下文窗口：前端传入 >0 用传入值；否则按设置选中模型推断
+	// （SelectedModelKey 格式 provider/modelID，解析后匹配内置定义），
+	// 仍匹配不到默认 1M（DeepSeek）。
+	if contextWindow <= 0 {
+		contextWindow = 1_000_000
+		if s, err := config.LoadSettings(a.db); err == nil && s.SelectedModelKey != "" {
+			if w := modelContextWindow(s.SelectedModelKey); w > 0 {
+				contextWindow = w
+			}
 		}
 	}
 	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
@@ -203,11 +208,16 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 }
 
 // modelContextWindow 按模型 key 查内置定义的上下文窗口（token）。
-// 遍历 llm.Builtin 所有 provider 的模型表，找到匹配返回窗口大小；未找到返回 0。
+// SelectedModelKey 格式为 "provider/modelID"（如 "deepseek/deepseek-v4-flash"），
+// 解析出 modelID 后匹配 llm.Builtin 各 provider 的模型表；未找到返回 0。
 func modelContextWindow(modelKey string) int {
+	modelID := modelKey
+	if idx := strings.IndexByte(modelKey, '/'); idx > 0 {
+		modelID = modelKey[idx+1:]
+	}
 	for _, p := range llm.Builtin {
 		for _, m := range p.Models {
-			if m.ID == modelKey {
+			if m.ID == modelID {
 				return m.ContextWindow
 			}
 		}
