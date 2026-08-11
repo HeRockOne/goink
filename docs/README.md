@@ -46,7 +46,7 @@
 
 | 工具 | 说明 |
 |------|------|
-| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数，2026-08-09 起含精确输出统计 + 分阶段思考模拟 + 正文真实波动）：模拟一个真实对话窗口——短对话（查/改设定）与单章/批量创作交替、一条历史贯穿；成本 = hit×缓存价 + miss×输入价 + out×输出价（默认 0.02/1/2，CLI 可调）；`table` 子命令输出 8 个常用工作负载 Markdown 成本表（实测批量 5 章 ¥0.10/章、单章 ¥0.24-0.28/章，与真实日志吻合）；正文长度读真实设置、小说信息读真实 DB；核心逻辑在 internal/cacheprobe 库，设置面板「写书成本模拟」Tab 可手动触发，`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]` |
+| [cacheprobe](../../cmd/cacheprobe/README.md) | 缓存命中率探针（tiktoken 精确计数，2026-08-09 起含精确输出统计 + 分阶段思考模拟 + 正文真实波动；2026-08-11 重构为模式驱动 + 9 倍性能）：模拟一个真实对话窗口——短对话（查/改设定）与单章/批量创作交替、一条历史贯穿；成本 = hit×缓存价 + miss×输入价 + out×输出价（默认 0.02/1/2，CLI 可调）；`table` 子命令输出 14 个常用工作负载 Markdown 成本表 + miss 构成 + 门禁白名单校验；`window` 子命令输出上下文刻度（128K/256K/512K/1024K 快照 + 最省区间）；正文长度读真实设置、小说信息读真实 DB；核心逻辑在 internal/cacheprobe 库，设置面板「写书成本模拟」Tab 可手动触发（模式驱动：单章/批量/混合，混合输出阶段轮次成本表），`go run ./cmd/cacheprobe [单章轮数] [短对话穿插轮数] [批量章数]` |
 
 ## adr/ — 决策记录（长存，不可变）
 
@@ -147,3 +147,14 @@
 > 2026-08-11 扩写挤牙膏修复（ea17bbc）：word-count-calibration 加"一次扩到位"（缺口×1.2 目标 + 一次 read 一次 edit + 禁挤牙膏循环 + 集中扩写≥300字/点 + 缺口>30% 加段 + 扩写须信息增量）；kernel 原"无需读 word-count-calibration"改为"扩写时必须按一次扩到位规则执行"（原规则 AI 看不到是根因）。15-57 部署。
 > 2026-08-11 NS 按需注入（36ebd0c，通用缓存优化）：NS 字节与上轮相同（进度/指纹未变，如维护轮）时不落库新 NS——新消息即使字节重复也计入 miss 尾部（所有 OpenAI 兼容模型通用）；写章轮正常注入。主 agent（chat.go）+ 子代理 fork（agent.go）双处。模拟器对照（cacheprobe nsondemand 子命令）：miss 降幅 4.8%（短对话 2 轮省 8K；真机 8 维护轮收益约 2 倍）。16-40 部署。
 > 2026-08-11 技能注入去重（e15dc94）：injectPhaseSkills 注入前检查 opts.Messages 已含相同技能全文则跳过（仅标记 OnSkillInjected）；压缩重建历史后技能消息被清，后续 set_phase 自动恢复注入。业界对照（websearch：Claude Code 技能 cap 5K/skill+25K 总上限、Manus/Kun 的稳定前缀纪律）：技能注入占 miss 构成 26%（单章模式每章 5 次真切换重复注入全文）。模拟器对照（cacheprobe skilldedup）：miss 降幅 18.1%（506K→415K）+ 总输入降 17%。17-19 部署。
+> 2026-08-11 缓存模拟器重构为模式驱动（a411a5a→14ce8f0 系列）：
+> - **窗口刻度模拟**（a411a5a/ad24acc）：CLI `window` 子命令 + 设置面板「上下文窗口刻度」——单窗口历史增长到 128K/256K/512K/1024K 的累计成本快照 + 区间每章成本 + 最省区间；single（26 章≈1M）/batch（120 章≈1M）两模式
+> - **合并进写书成本模拟**（f633c98/278f97c）：删独立 StartWindowSimulation，改为模式驱动 `StartCacheSimulation(mode, gateRounds, shortQARounds, batchChapters, batchRounds)`——single=每章完整门禁逐章累积 / batch=每批 6 章批次循环 / mixed=混合会话（批量可多轮循环、章号顺延）；`RunWindowMode` 单一入口，`cacheprobe.Run` 三方对照恢复原样；修复 marks 未到达元素 Threshold=0 显示"0K"、nil marks panic（5cd8fd5）、批末审稿回改 chapters/001.md 导致刻度章号反序（adb4f72，取最大章）
+> - **混合模式批量轮次 + 章号连续**（b65128d/64c1ab3）：批量部分按 batchRounds 批次循环，base 偏移接在单章轮之后（不再从第 1 章重写、刻度不挤在单章轮）；label 显示"批量 5 章 × 3 轮"
+> - **阶段轮次成本表**（14ce8f0）：mixed 模式改用阶段打点（`StageMark`：开书/短对话 N/单章 N/批量轮 N 每阶段结束的累计成本 + 区间增量 + 每章成本），替代上下文刻度——混合窗口大小由输入决定，刻度到不了大档位且反映不出工作负载结构
+> - **性能 9 倍**（a11a7e0）：缓存 key 从 json.Marshal 结果改为轻量 msgFingerprint（拼接字段不序列化，原实现对全部历史消息每次请求重复 marshal 占 CPU 28.5%）；step 增量路径（lcp 覆盖上次请求末尾时直接复用 prevMsgsN + 上次字节，只处理新增消息；子代理 fork/legacy 剔除 NS/transform 时回退全量）；结果零变化（single 26 章 hit/miss 完全一致），60s+→6.9s
+> - **UI**（563020d）：hint 移到 label 行、输入框可清空重输（NumInput 本地字符串 state）、按钮与输入框同一水平线
+> 2026-08-11 技能注入短提醒（aeed97c→cdbdbc3，用户质疑"可见≠被注意"后业界验证落地）：
+> - **可见性判定**（aeed97c）：模拟器去重判定从 injectedPhases 记录改为 `visibleIn` 全文比对（history+cur 中 role=system 且 content 相同）——压缩清理历史后判定失败自动重新注入，杜绝"记录还在内容没了"的误判；真机 agent.go 遍历 opts.Messages 同标准
+> - **短提醒注入**（2a798b6 模拟器 + cdbdbc3 真机）：首次进入阶段注入全文（学习内容常驻历史）；再次进入同阶段注入 `BuildSkillsReminder` 短提醒（技能名+description 要点，~300 字符 vs 全文 8K，紧跟请求尾部注意力最强位置）——解决 Lost in the Middle（单章 5 轮时技能全文在历史 24.6% 位置，注意力衰减）；业界对照：Anthropic skills #591 index-page / hermes-agent system-reminder / autogen 300-token 修复；模拟 miss 降 13.8%（506,703→436,595）命中率 97.4% 不变
+> 2026-08-12 文档审计：cache-simulation.md/cmd-cacheprobe-README/phase-gate.md/TODO-P4 同步上述全部变更（模式驱动、阶段表、性能、技能可见性 + 短提醒）。

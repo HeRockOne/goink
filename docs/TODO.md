@@ -118,15 +118,27 @@ batchFullCycle(5, 3)       // 每 3 章完整门禁流程（review+maintain 阶�
 
 ---
 
-### P4. 技能注入去重（✅ 已落地 2026-08-09，待真机验证）
+### P4. 技能注入去重 + 短提醒（✅ 已落地 2026-08-11，真机短提醒效果待观察）
 
-**实现**（与批量 write 显式循环联动，用户设计：第一个 write 完整注入，后续 write 去注入）：
-1. agent.go `injectPhaseSkills`（215-239）：改为只注入 `missingInjections(pc)` 缺失的必读技能——已注入过或 LLM 已读过的技能不重复注入（首次注入语义不变，事前技能强制 phase_gate.go:491-496 不破坏）
-2. 压缩联动：`Compress` 成功后调用 `pg.ResetReads()`（compress.go）——注入的技能 system 消息已被压缩掉，必须清空 readsByPhase，否则去重会误判"已注入"而跳过重新注入（技能衰减）；清空后 missingInjections 恢复非空，下次 set_phase 重新注入 + 事前技能强制引导补读
-3. 批量 write 显式循环：batchCore 每章加 `set_phase("write")` 显式边界 play（N-1 次，同阶段幂等成功，零校验开销）；模拟成本 ¥0.1003→¥0.1027/章（+2.4% 为 set_phase 边界 token），性价比 87.7 仍全场第一
-4. 技能文档反转：kernel/main-cmd-phase-gate/门禁配置示例 从"write 循环内禁止重复 set_phase"改为"每章结束 set_phase('write') 声明章边界（去注入零成本）"；压缩后需按需补读
+**演进**：最初"全文去重跳过"（e15dc94）→ 用户质疑"可见 ≠ 被注意"（Lost in the Middle）→
+业界验证（Anthropic skills #591 index-page / hermes-agent system-reminder / autogen 300-token 修复）
+→ 改为**全文一次 + 短提醒每轮**（2a798b6 模拟器 + cdbdbc3 真机）：
 
-**完成标准**（待真机）：P1 批量跑一轮，确认 (a) 每章 set_phase("write") 不触发重复注入（日志只出现 1 次 write 技能注入）；(b) 批量中途压缩后 LLM 能补读技能（事前技能强制 + 下次 set_phase 自动注入）；(c) 技能内容在上下文中持续有效（创作质量不降）。
+1. **可见性判定**（aeed97c）：模拟器 `visibleIn(history+cur, 全文)` 全文比对，替代 injectedPhases
+   记录——压缩清理历史后判定失败自动重新注入全文，杜绝"记录还在内容没了"的误判
+2. **注入策略**（cdbdbc3）：首次进入阶段注入全文（学习内容常驻历史）；再次进入同阶段注入
+   `BuildSkillsReminder` 短提醒（技能名 + description 要点，~300 字符 vs 全文 8K，
+   紧跟请求尾部注意力最强位置）——全文保证可见，提醒保证被注意
+3. 压缩联动（e15dc94 保留）：压缩成功后 `pg.ResetReads()`（compress.go）——注入的技能 system
+   消息已被压缩掉，清空 readsByPhase 防误判跳过；下次 set_phase 重新注入全文
+4. 批量 write 显式循环：batchCore 每章 `set_phase("write")` 显式边界（N-1 次，同阶段幂等成功）
+
+**模拟数据**：单章 5 轮 miss 降 13.8%（506,703→436,595），命中率 97.4% 不变；
+write 提醒在 5 轮历史出现 5 次（每轮一次，紧跟请求尾部）。
+
+**真机观察点**（待验证）：(a) 每章 set_phase("write") 只注入提醒不重复全文（日志确认）；
+(b) 批量中途压缩后 LLM 能补读技能（事前技能强制 + 下次 set_phase 自动注入全文）；
+(c) 短提醒是否足以维持创作质量（write 技能要点被遵循，无白开水文）。
 
 ---
 

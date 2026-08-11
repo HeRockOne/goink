@@ -119,6 +119,20 @@
 - **工具调用详情**：执行中不再显示“处理中”徽章；set_phase（门禁阶段推进）不再显示
 - **写审分离保持**：子 agent 身份/NS/指令在尾部，不污染主会话固定前缀
 
+### 缓存模拟（2026-08-11 重构）
+
+- **模式驱动重构**：`StartCacheSimulation(mode, gateRounds, shortQARounds, batchChapters, batchRounds)`——single（每章完整门禁逐章累积）/ batch（每批 6 章批次循环）/ mixed（混合会话，批量可多轮循环、章号顺延不重叠）；`cacheprobe.RunWindowMode` 单一入口；`cacheprobe.Run` 三方对照恢复原样
+- **上下文刻度**：single/batch 长窗口输出 128K/256K/512K/1024K 累计成本快照 + 区间每章成本 + 最省区间；修复批末审稿回改 chapters/001.md 导致刻度章号反序（取最大章）、未到达刻度 Threshold=0 显示"0K"
+- **混合模式阶段轮次表**：按创作阶段打点（开书/短对话/单章轮/批量轮每阶段结束快照 + 区间增量 + 每章成本）替代上下文刻度——混合窗口大小由输入决定，刻度到不了大档位且反映不出工作负载结构
+- **性能 9 倍**：缓存 key 改轻量 msgFingerprint（不 marshal）+ step 增量路径（前缀连续时只处理新增消息），结果零变化（60s+→6.9s）
+- **UI**：模式选择行 + 参数行分离、输入框可清空重输、按钮与输入框同一水平线
+
+### 技能注入（2026-08-11）
+
+- **可见性判定**：去重判定从"是否注入过"记录改为全文比对（history+cur 中 role=system 且 content 相同）——压缩清理历史后自动重新注入全文，杜绝误判跳过
+- **短提醒注入**：首次进入阶段注入全文（学习内容常驻历史）；再次进入同阶段注入短提醒（`BuildSkillsReminder`：技能名 + description 要点，~300 字符 vs 全文 ~8K，紧跟请求尾部注意力最强位置）——解决 Lost in the Middle（全文可见 ≠ 被注意），业界对照 Anthropic skills #591 / hermes-agent / autogen
+- 模拟验证：miss 降 13.8%（506,703→436,595），命中率 97.4% 不变
+
 ---
 
 ## Fork 以来的完整变更

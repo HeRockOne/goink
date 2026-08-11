@@ -237,7 +237,7 @@ writing_snapshots.novel_id → novels.id (primaryKey)
 |------|------|--------------|
 | `read` | GET | path(R) |
 | `edit` | WRITE | path(R), change_type(R) |
-| `read_required` | GET | skills(R)（门禁 auto_skill_injection 强制的技能加载入口，按名读技能，零硬编码） |
+| `auto_skill_injection` | GET | skills(R)（门禁 auto_skill_injection 强制的技能加载入口，按名读技能，零硬编码；正常由系统在 set_phase 时自动注入，仅压缩后手动刷新用） |
 
 #### 搜索/辅助（7 个）
 | 工具 | 类型 | required 字段 |

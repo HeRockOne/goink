@@ -19,6 +19,10 @@ DeepSeek/商汤的磁盘缓存按"请求的公共前缀"匹配（官方文档：
    与输入侧同源，覆盖正文（edit arguments）/文本回答/子代理报告/思考
 5. **消息级缓存**（2026-08-08）：消息 token 数/序列化字节/toolDefs 均缓存，完整门禁
    5 轮模拟 365s → **13.8s**（26 倍加速）
+6. **增量计算**（2026-08-11）：缓存 key 用轻量 `msgFingerprint`（拼接字段，不 marshal——
+   原实现对全部历史消息每次请求重新序列化生成 key，profile 占 CPU 28.5%）；`step` 在字节
+   前缀连续（lcp 覆盖上次请求末尾）时直接复用上次累计值，只处理新增消息——单章 26 章
+   模拟 60s+ → **6.9s**（再 9 倍）
 
 关键前提（已在代码中验证）：provider 缓存作用于**解析后的 token 前缀**（tools 定义
 转 system 前缀在最前、消息按序追加在末尾），而非原始 JSON body 的字节顺序。
@@ -40,11 +44,16 @@ $env:GOINK_DATA_DIR = "D:\Goink"
 $env:GOINK_DB_PATH = "D:\Goink\novel-agent.db"
 # 门禁配置：默认找项目根 门禁配置示例.md（技能清单 + 白名单校验），可用环境变量覆盖
 $env:GOINK_PHASE_CONFIG = "门禁配置示例.md"
-go run ./cmd/cacheprobe            # 默认：单章 5 轮 + 短对话穿插 5 轮 + 批量 5 章
+go run ./cmd/cacheprobe            # 默认：单章 5 轮 + 短对话穿插 5 轮 + 批量 5 章（三协议对照）
 go run ./cmd/cacheprobe 5 3        # 单章 5 轮 + 短对话穿插 3 轮 + 批量 5 章
 go run ./cmd/cacheprobe 5 3 5      # 显式指定批量 5 章
 # 价格参数（元/百万 token，默认 DeepSeek：缓存 0.02 / 输入 1 / 输出 2）
 go run ./cmd/cacheprobe -cache 0.02 -input 1 -output 2 5 5 5
+# 模式驱动（与设置面板「写书成本模拟」Tab 同源，RunWindowMode）：
+go run ./cmd/cacheprobe window     # 上下文刻度（single 26 章 / batch 120 章，128K→1024K 快照 + 最省区间）
+go run ./cmd/cacheprobe table      # 14 个常用工作负载 Markdown 成本表
+go run ./cmd/cacheprobe skilldedup # 技能注入去重对照
+go run ./cmd/cacheprobe nsondemand # NS 按需注入对照
 ```
 
 CLI 参数：`go run ./cmd/cacheprobe [-cache ¥] [-input ¥] [-output ¥] [单章轮数] [短对话穿插轮数] [批量章数]`
@@ -146,9 +155,18 @@ init(开书) → 短对话(查设定/改设定，AI 调工具) → 单章创作 
 
 ## 集成（设置面板）
 
-「设置 → 缓存模拟」Tab：可调单章轮数/短对话穿插轮数/批量章数（0=不跑），异步运行（`StartCacheSimulation` +
+「设置 → 写书成本模拟」Tab（2026-08-11 重构）：模式选择（单章 / 批量 / 混合）+ 参数输入，
+异步运行（`StartCacheSimulation(mode, gateRounds, shortQARounds, batchChapters, batchRounds)` +
 `cachesim:done` 事件，不卡 UI），按设置页模型价格估算成本（输入/输出/缓存命中单价，
-与 ContextRing 同源）。约 20 秒出结果（5+5+5）。
+与 ContextRing 同源）。
+
+- **单章模式**：每章完整门禁逐章累积，默认 26 章 ≈ 1M 窗口，输出上下文刻度表
+- **批量模式**：每批 6 章批次循环，默认 120 章 ≈ 1M 窗口，输出上下文刻度表
+- **混合模式**：单章轮数 + 短对话轮数 + 每批章数 × 批量轮数，章号连续顺延，
+  输出**阶段轮次成本表**（开书/短对话/单章轮/批量轮每阶段结束快照——混合窗口大小由输入
+  决定，上下文刻度到不了大档位且反映不出工作负载结构，故用阶段打点替代）
+
+单章 5+5+5 混合约 20 秒出结果。
 
 ## 测试
 

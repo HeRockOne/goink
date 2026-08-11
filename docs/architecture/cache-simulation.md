@@ -17,6 +17,7 @@ LLM 的 Prompt Caching 是"字节精确前缀匹配"——如果本次请求与�
 6. **思考模拟**（2026-08-09）：assistant 消息带 reasoning_content，长度按门禁阶段均值生成（init 556 / prepare 822 / outline 971 / write 322 / review 1558 / maintain 364 字符，统计自真实 DB thinking_content 按 set_phase 边界分阶段）
 7. **正文真实波动**（2026-08-09）：每章正文独立生成，目标字数 = 设置的 (min+max)/2 + 正态波动×386 字符（真实 std，实测 19 章均值 3319/范围 2652-4073），clamp 到设置范围，固定 seed 可复现
 8. **set_phase 顺序对齐真实**（2026-08-09）：技能注入 + reminder 在 assistant 落库前（对齐 agent.go:512-516）
+9. **性能优化**（2026-08-11）：缓存 key 从 `json.Marshal(m)` 结果改为轻量 `msgFingerprint`（直接拼接 role/content/tool_calls 字段，不序列化——原实现对全部历史消息每次请求重新 marshal 生成 key，profile 显示占 CPU 28.5%）；`step` 增量路径：字节前缀连续（lcp 覆盖上次请求末尾）时直接复用 `prevMsgsN` + 上次字节，只对新增消息做 token 统计与字节拼接；前缀断裂（子代理 fork / legacy 剔除 NS / transform）时回退全量。完整单章 26 章模拟 60s+ → 6.9s（约 9 倍）
 
 ## 架构
 
@@ -24,37 +25,38 @@ LLM 的 Prompt Caching 是"字节精确前缀匹配"——如果本次请求与�
 设置面板「写书成本模拟」Tab / CLI
     │
     ▼
-StartCacheSimulation(gateRounds, shortQARounds, batchChapters)  /  cmd/cacheprobe
+StartCacheSimulation(mode, gateRounds, shortQARounds, batchChapters, batchRounds)
     │
     ▼
-cacheprobe.Run()
+cacheprobe.RunWindowMode(mode, ...)   ← 模式驱动：single / batch / mixed
     │
     ▼
-buildMixedSession("auto", cache, ...)  ← 当前实际行为（auto-inject）
-buildMixedSession("now", cache, ...)    ← 旧 read_required 行为（对比基线）
-buildMixedSession("clean", cache, ...)  ← 实验方案（clean 清理）
+single: buildMixedSession("auto", c, gateRounds, 0, 0)          ← 每章完整门禁逐章累积
+batch:  buildBatchLoop("now", c, perBatch=6, batches)            ← 批次循环到章数上限
+mixed:  buildMixedSessionLoop("auto", c, g, q, b, batchRounds)   ← 混合会话 + 批量多轮
 ```
 
-CLI 子命令：`go run ./cmd/cacheprobe [轮数]`（单场景三协议对照）、`table`（8 个常用工作负载 Markdown 成本表）、`matrix`（clean 边界矩阵）、`compare`（模式对比）。价格 `-cache/-input/-output` 可调。
+CLI 子命令：`go run ./cmd/cacheprobe`（默认混合会话三协议对照）、`table`（14 个常用工作负载 Markdown 成本表）、`window`（上下文刻度）、`matrix`（clean 边界矩阵）、`compare`（模式对比）、`nsondemand` / `skilldedup`（对照实验）。价格 `-cache/-input/-output` 可调。
 
-## 三种协议
+## 模式（设置面板「写书成本模拟」Tab）
 
-| 模式 | 含义 | 当前用途 |
-|------|------|---------|
-| `auto` | auto-inject 自动注入技能 + NS 落库缓存 | 当前实际行为（设置面板「当前版」） |
-| `now` | read_required 工具调用 + NS 落库缓存 | 旧行为基线（设置面板「旧版」） |
-| `legacy` | NS 不落库，每轮重发全部历史 | 仅用于对比研究，面板不展示 |
-| `clean` | 发送前清理已读 skill 全文 | 实验方案，已从运行时移除 |
+| 模式 | 输入 | 窗口行为 | 结果展示 |
+|------|------|---------|---------|
+| `single` 单章 | 章数（默认 26 ≈ 1M 窗口） | 每章完整门禁逐章累积 | 上下文刻度表（128K/256K/512K/1024K 到达快照 + 最省区间） |
+| `batch` 批量 | 章数（默认 120 ≈ 1M 窗口） | 每批 6 章完整批量门禁批次循环，章号按批偏移 | 上下文刻度表 |
+| `mixed` 混合 | 单章轮数 + 短对话轮数 + 每批章数 + 批量轮数 | 开书 → 短对话 → 单章轮 → 批量轮循环，章号连续顺延 | 阶段轮次成本表 |
 
-## 场景
+三协议对照（now/legacy/clean）在 CLI 默认命令保留，设置面板只展示 now（当前实际行为）。
 
-`buildMixedSession` 模拟一个真实对话窗口：
-1. **init 开书** — 创建世界观、角色、总纲
-2. **短对话穿插** — 查设定、微调（qaRounds 参数控制）
-3. **单章创作轮** — prepare → outline → write → review → maintain（gateRounds 参数控制）
-4. **批量创作** — 一次性出大纲 → 循环写正文 → 统一审稿维护（batchChapters 参数控制）
+## 混合模式阶段打点（2026-08-11）
 
-三种创作模式交替发生在同一条历史里，真实反映用户写作流程。正文长度/章节字数/小说信息均读真实 DB 与设置。
+mixed 模式不用上下文刻度（混合窗口大小由输入决定，刻度可能到不了大档位且反映不出工作负载结构），改为**阶段轮次打点**：每个创作阶段结束记录累计快照（`StageMark`：阶段名/累计章/历史/请求数/hit/miss/out），前端渲染阶段轮次成本表：
+
+```
+开书完成 → 短对话 1..N → 单章 1..N（每轮一章）→ 批量轮 1..N（每轮 batchChapters 章，章号顺延）
+```
+
+回答"混合模式每个阶段花了多少钱、写了多少章"。开书/短对话不产章，区间每章显示 -。
 
 ## 为什么选择这个实现
 
@@ -79,6 +81,25 @@ Go map 的 encoding/json 序列化行为与真实请求的 JSON 序列化一致�
 | set_phase 自动推进 | 增量省 2.8% | 已实施 |
 | 子代理完整历史 fork | 精简后成本更高(1.4x)，保持现状 | 已排除 |
 | NS 缩短到 800 字符 | 防重复检查不够(需 3 章，800 只够 2 章) | 已排除 |
+| 技能注入去重（全文比对） | miss 降 14-18%，命中率不变 | 已实施（真机 + 模拟器） |
+| 技能短提醒注入 | 全文一次常驻 + 每阶段 ~300 字符提醒唤起注意 | 已实施（真机 + 模拟器） |
+| NS 按需注入 | miss 降 4.8%（短对话 2 轮省 8K） | 已实施（真机 + 模拟器） |
+
+## 技能注入与注意力（2026-08-11）
+
+### 可见性判定标准
+
+"AI 能不能看到 skill"的唯一判定 = 模型每轮收到的完整 messages 数组（history+cur）里，存在 `role=system` 且 content 与该技能全文完全相同的消息（`visibleIn` 全文比对）。模拟器与真机（agent.go `injectPhaseSkills` 遍历 opts.Messages）同标准。
+
+### 注入策略（解决 Lost in the Middle）
+
+全文可见 ≠ 被注意：单章 5 轮时 write 技能全文在历史 24.6% 位置（48696/197885 token），模型创作时注意力未必覆盖（上下文增长后早期 token 权重衰减，业界称 Lost in the Middle）。
+
+策略：**首次进入阶段注入全文（学习内容，常驻历史始终可见）；再次进入同阶段注入短提醒**（`BuildSkillsReminder`：技能名 + description 要点，~300 字符 vs 全文 8K，26 倍压缩，紧跟请求尾部注意力最强位置）。压缩重建后全文消失 → 可见性判定失败 → 自动恢复注入全文。
+
+### 模拟器与真机一致
+
+模拟器 `skillDedupSim` 开关控制注入策略（对照实验用），真机 agent.go 直接实现；两者都用全文比对判定可见性，不用"是否注入过"记录（避免压缩后记录残留导致误判跳过）。
 
 ## 成本估算（2026-08-09 实测，now 协议）
 

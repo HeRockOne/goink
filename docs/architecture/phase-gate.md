@@ -70,12 +70,12 @@ init → prepare → outline（一次出 N 章大纲）→ [write → 迷你维�
 
 | 阶段 | 允许的工具（简化） | 阻止的工具（简化） |
 |------|-------------------|-------------------|
-| init | read_required, edit(book-outline.md, goink.md), create_*, get_*, set_phase | update_*, delete_*, run_subagent |
-| prepare | get_*, read, read_required, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
-| outline | read, read_required, edit(outlines/*, goink.md, book-outline.md), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
-| write | read, read_required, edit(chapters/*), create_item_occurrence, update_writing_snapshot, search_story_memory, get_*, set_phase | update_*, create_*（除迷你维护 6 个）, delete_*, run_subagent |
-| review | read, read_required, edit(chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
-| maintain | read, read_required, edit(goink.md, chapters/*, outlines/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
+| init | auto_skill_injection, edit(book-outline.md, goink.md), create_*, get_*, set_phase | update_*, delete_*, run_subagent |
+| prepare | get_*, read, auto_skill_injection, search_story_memory, web_search, web_fetch, set_phase | edit, update_*, create_*, delete_*, run_subagent |
+| outline | read, auto_skill_injection, edit(outlines/*, goink.md, book-outline.md), get_*, set_phase | update_*, create_*, delete_*, run_subagent |
+| write | read, auto_skill_injection, edit(chapters/*), create_item_occurrence, update_writing_snapshot, search_story_memory, get_*, set_phase | update_*, create_*（除迷你维护 6 个）, delete_*, run_subagent |
+| review | read, auto_skill_injection, edit(chapters/*), run_subagent, get_*, set_phase | update_*, create_*, delete_* |
+| maintain | read, auto_skill_injection, edit(goink.md, chapters/*, outlines/*), update_*, create_*, delete_*, get_*, set_phase | run_subagent |
 
 > **注意**：get_lore、get_items、get_scenes、get_stats、get_writing_snapshot 属于 get_*，在全部阶段可用。
 > create_lore、create_item、create_scene、update_lore、update_item、update_scene、delete_lore、delete_item、delete_scene、update_writing_snapshot 属于 create_*/update_*/delete_*，仅在 init 和 maintain 阶段可用（即新建/修改设定的操作集中在开书与维护阶段）。
@@ -144,7 +144,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 
 | 工具角色 | 工具名 | 放哪些阶段 |
 |---------|--------|-----------|
-| 技能加载 | read_required | 所有阶段（该阶段有必读技能才需要） |
+| 技能加载 | auto_skill_injection | 所有阶段（该阶段有必读技能才需要） |
 | 文件读取 | read | 需要读正文/大纲/文件的阶段（outline/write/review/maintain） |
 | 查询 | get_*、search_*、check_story_consistency、get_stats | 所有阶段（随时查状态，宁可多查不可漏） |
 | 网络 | web_search、web_fetch | 需要查资料/考据的阶段（prepare） |
@@ -165,7 +165,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | init | 7 个查询（characters/locations/story_arcs/lore/items/timeline/preferences） | 开书前必须确认世界观现状 |
 | prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） | 全量状态必须加载才能动笔 |
 | outline | edit | 大纲必须写入文件 |
-| write | edit、get_chapter_list、read、read_required | 正文必须写入 + 字数校验 + 读大纲 + 读技能 |
+| write | edit、get_chapter_list、read、auto_skill_injection | 正文必须写入 + 字数校验 + 读大纲 + 读技能 |
 | review | run_subagent | 审稿必须启动 |
 | maintain | 13 项（edit 指纹 + 3 更新 + 2 搜索 + 7 查询） | 设定/伏笔/关系全量维护 |
 
@@ -185,6 +185,22 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
 
 按需技能（情景类）不进 auto_skill_injection，由 kernel 措辞引导模型按需 read。
+
+### auto_skill_injection 注入策略（2026-08-11 更新）
+
+系统在 set_phase 进入阶段时注入技能，采用**全文一次 + 短提醒每轮**策略（`internal/agent/agent.go` `injectPhaseSkills`）：
+
+1. **首次进入阶段**：注入技能**全文**（`BuildSkillsContent`，学习内容，常驻历史始终可见）
+2. **再次进入同阶段**（历史中已有相同全文，`visibleIn` 全文比对判定）：不再重复全文，
+   注入**短提醒**（`BuildSkillsReminder`：技能名 + description 要点，~300 字符 vs 全文 ~8K，
+   紧跟请求尾部注意力最强位置）——全文保证可见，短提醒保证被注意
+3. **压缩重建后**：技能消息被清出历史，可见性判定失败 → 自动恢复注入全文
+
+> 背景：全文重复注入 = 每阶段切换固定 miss 全文（单章模式占 miss 构成 26%，模拟验证 miss 降
+> 13.8%）；但"全文在历史里"≠"模型注意到"（Lost in the Middle——单章 5 轮时技能全文在历史
+> 24.6% 位置，上下文增长后注意力衰减）。短提醒是业界标准解法（Anthropic skills #591 index-page
+> 模式 / hermes-agent system-reminder / autogen 300-token 修复），模拟器与真机同标准
+> （`skillDedupSim` 开关 + `visibleIn` 全文比对）。
 
 ### 常见设计错误
 
