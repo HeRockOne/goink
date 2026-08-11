@@ -1393,7 +1393,11 @@ func maintainPlays(ch int, nextPhase string) []play {
 // 批量 <6 章建议 batchFullCycle（覆盖 100%），≥6 章建议 batchInCheck（覆盖 100% 且 maintain 只 1 次）。
 
 // batchAsIs 批量现状：outline 一次出 N 章 → write 循环（无自检）→ 统一 review（只审第 1 章）+ 统一 maintain。
-func batchAsIs(chapters int) []play { return batchCore(chapters, 0, 0) }
+func batchAsIs(chapters int) []play { return batchCore(chapters, 0, 0, 0) }
+
+// batchAsIsBase 批次循环变体：baseChapter 为本章批的起始章号偏移
+// （多批循环时每批写 chapters/{base+1}..{base+chapters}，避免覆盖前批）。
+func batchAsIsBase(chapters, baseChapter int) []play { return batchCore(chapters, 0, 0, baseChapter) }
 
 // batchLightSelfCheck 批量 + 轻量自检：每 every 章插入 selfReviewPlays（2 技能 + 1 修改），不跳阶段。
 func batchLightSelfCheck(chapters, every int) []play { return batchCore(chapters, 1, every) }
@@ -1441,7 +1445,11 @@ func batchLightCheckPlays(chStart, chEnd int) []play {
 // batchCore 批量门禁流程核心构造器（内部实现，外部用上面的语义化入口）。
 // checkKind: 0=无自检 / 1=轻量自检(selfReviewPlays) / 2=批内检查(子代理审最近 N 章) / 3=完整门禁循环(review+maintain)
 // checkEvery: 自检节奏（章数，0=不检查；3 的倍数对齐白金"三章一轮"）
-func batchCore(chapters int, checkKind int, checkEvery int) []play {
+func batchCore(chapters int, checkKind int, checkEvery int, baseChapter ...int) []play {
+	base := 0
+	if len(baseChapter) > 0 {
+		base = baseChapter[0]
+	}
 	var plays []play
 	plays = append(plays, preparePlays(1)...)
 
@@ -1456,7 +1464,8 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 		readSkill("main-tech-emotion-injection"),
 		readSkill("main-type-xuanhuan-cultivation"),
 	)
-	for ch := 1; ch <= chapters; ch++ {
+	for i := 1; i <= chapters; i++ {
+		ch := base + i
 		plays = append(plays,
 			play{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), outlineText(ch)), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
 			play{tool: "edit", args: editArgs(fmt.Sprintf("outlines/%03d.md", ch), "## 关键事件\n1. 主角闯入秘境\n2. 遭遇袭击\n3. 突破瓶颈\n\n## 章末钩子\n屋外传来脚步声"), result: fmt.Sprintf("写入 outlines/%03d.md", ch)},
@@ -1469,8 +1478,9 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	// 真切换（outline→write）才注入。每章边界技能已在上下文，无需重复注入）。
 	// 每章 write 后紧跟迷你维护（只写不查，状态实时结算），下一章能读到最新状态。
 	// 批次检查插在 write 循环内，checkKind=2 走阶段切换（门禁白名单约束：run_subagent 仅在 review 阶段）。
-	for ch := 1; ch <= chapters; ch++ {
-		if ch == 1 {
+	for i := 1; i <= chapters; i++ {
+		ch := base + i
+		if ch == base+1 {
 			plays = append(plays, writePlays(ch)...)
 		} else {
 			// 第 2+ 章：显式 write 阶段边界（同阶段幂等成功，无重复注入）
@@ -1480,20 +1490,20 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 			plays = append(plays, writePlaysLean(ch)...)
 		}
 		// 批次检查（checkKind=1）：write 循环内按节奏插入文笔向轻量自检，不跳阶段
-		if checkKind == 1 && checkEvery > 0 && ch%checkEvery == 0 {
+		if checkKind == 1 && checkEvery > 0 && i%checkEvery == 0 {
 			plays = append(plays, selfReviewPlays(ch)...)
 		}
 		// 批次检查（checkKind=5）：write 循环内按节奏插入一致性向状态对照自检，不跳阶段
-		if checkKind == 5 && checkEvery > 0 && ch%checkEvery == 0 {
+		if checkKind == 5 && checkEvery > 0 && i%checkEvery == 0 {
 			plays = append(plays, batchLightCheckPlays(ch-checkEvery+1, ch)...)
 		}
 		// 批次检查（checkKind=2）：write 循环内按节奏插入，走阶段切换
-		if checkKind == 2 && checkEvery > 0 && ch%checkEvery == 0 {
+		if checkKind == 2 && checkEvery > 0 && i%checkEvery == 0 {
 			plays = append(plays, batchCheckPlays(ch-checkEvery+1, ch)...)
 		}
 		// 批次完整流程（checkKind=3）：每个批次边界（含末尾剩余章）都走 review+maintain，
 		// 替代统一 review/maintain 收尾——即"三章一批"的完整门禁循环。
-		if checkKind == 3 && (ch%checkEvery == 0 || ch == chapters) {
+		if checkKind == 3 && (i%checkEvery == 0 || i == chapters) {
 			plays = append(plays, batchFullCheckPlays(ch-checkEvery+1, ch)...)
 		}
 		plays = append(plays, miniMaintainPlays(ch)...)
@@ -1504,14 +1514,15 @@ func batchCore(chapters int, checkKind int, checkEvery int) []play {
 	}
 	plays = append(plays, play{tool: "set_phase", args: `{"phase":"review"}`, result: `{"success":true,"phase":"review"}`})
 
-	// review：整批统一一次。checkKind=4/5 覆盖全批（查 N 修 N），其余只审第 1 章
+	// review：整批统一一次。checkKind=4/5 覆盖全批（查 N 修 N），其余只审第 1 章。
+	// 章号用 base+1（批次循环打点：reviewPlays(1) 的 edit chapters/001.md 会污染 simCurrentChapter）
 	if checkKind == 4 || checkKind == 5 {
 		plays = append(plays, reviewPlaysBatch(chapters)...)
 	} else {
-		plays = append(plays, reviewPlays(1)...)
+		plays = append(plays, reviewPlays(base+1)...)
 	}
 	// maintain：整批统一一次（13 项清单收尾核对），batch 出口回 prepare（done 已移除）
-	plays = append(plays, maintainPlays(chapters, "prepare")...)
+	plays = append(plays, maintainPlays(base+chapters, "prepare")...)
 	return plays
 }
 

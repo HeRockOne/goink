@@ -628,6 +628,46 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 	return results
 }
 
+// buildBatchLoop 用户定义的批量模式：单窗口内，每 perBatch 章走一次完整批量门禁
+// （首批 init + 每批 prepare→outline(perBatch 章大纲)→write→review→maintain），
+// 批次循环、上下文累积，直到刻度/窗口上限。章号按批偏移，不覆盖前批。
+func buildBatchLoop(mode string, cache *TokenCache, perBatch, batches int) [][2]int64 {
+	results := [][2]int64{}
+	history := append([]map[string]any{}, fixedSystem()...)
+
+	for b := 0; b < batches; b++ {
+		base := b * perBatch
+		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", perBatch))}
+		cur = append(cur, sysMsg(novelState(base)))
+		if b == 0 {
+			cur = runPlays(cache, history, cur, initScript(), &results, nil, nil, nil)
+		} else {
+			req := append(append([]map[string]any{}, history...), cur...)
+			hit, miss := cache.Step(req)
+			results = append(results, [2]int64{hit, miss})
+		}
+
+		plays := batchAsIsBase(perBatch, base)
+		cur = runPlays(cache, history, cur, plays, &results,
+			func(subCur []map[string]any) [][2]int64 {
+				return simulateSubagent(cache, history, subCur, base+perBatch)
+			}, nil, nil)
+		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", perBatch)))
+		req := append(append([]map[string]any{}, history...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+
+		if mode == "now" {
+			history = append(history, cur...)
+		} else {
+			legacyCur := append([]map[string]any{}, cur[0])
+			legacyCur = append(legacyCur, cur[2:]...)
+			history = append(history, legacyCur...)
+		}
+	}
+	return results
+}
+
 // buildShortQAWithRounds 按指定轮数跑短对话场景。
 func buildShortQAWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 {
 	results := [][2]int64{}
@@ -890,9 +930,10 @@ type WindowCostResult struct {
 }
 
 // RunWindowCost 单窗口"上下文规模刻度"打点：
-// mode=batch 跑批量 chapters 章（大纲一次出全）；mode=single 跑单章 chapters 轮（每章全门禁流程）。
+// mode=single：一个窗口内每章走完整单章门禁（gateRounds 轮），上下文累积；
+// mode=batch：一个窗口内每 perBatch 章走完整批量门禁（buildBatchLoop 批次循环），上下文累积。
 // 历史增长过程中首次跨过 128K/256K/512K/1024K 时记录累计 hit/miss/out/请求数/章数，
-// 回答"单窗口内到达各上下文大小时的成本"与"最省区间"。
+// 回答"单窗口内到达各上下文大小时的成本"与"最省区间"。章数上限由调用方控制（1M 窗口内）。
 func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
@@ -906,7 +947,13 @@ func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 	if mode == "single" {
 		res = buildMixedSession("auto", c, chapters, 0, 0)
 	} else {
-		res = buildMixedSession("auto", c, 0, 0, chapters)
+		// 批量：每批 6 章，批次循环直到章数上限（每批 ~40-60K 历史，1M 需 ~20 批）
+		perBatch := 6
+		batches := chapters / perBatch
+		if batches < 1 {
+			batches = 1
+		}
+		res = buildBatchLoop("now", c, perBatch, batches)
 	}
 
 	r := &WindowCostResult{
