@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -62,6 +63,9 @@ type TokenCache struct {
 	// missCat 诊断钩子：非 nil 时按分类累计 miss token（与 miss 计算同路径）。
 	missCat   func(m map[string]any) string
 	MissByCat map[string]int64
+	// 窗口刻度打点（RunWindowCost 用）
+	marks    []WindowMark
+	reqCount int
 }
 
 // SetMissCat 启用 miss 分类统计（诊断用，不影响模拟结果）。
@@ -201,6 +205,41 @@ func (c *TokenCache) StepRaw(messages []map[string]any) (int64, int64) {
 	return c.step(messages, false)
 }
 
+// WindowMark 上下文规模刻度快照：单窗口内历史首次达到 threshold 时的累计成本。
+type WindowMark struct {
+	Threshold int64   // 刻度（token）：128K/256K/512K/1024K
+	Reached   bool    // 是否到达（批量不够大可能到不了大刻度）
+	Hit       int64   // 到达时的累计 hit
+	Miss      int64   // 到达时的累计 miss
+	Out       int64   // 到达时的累计 output
+	Requests  int     // 到达时的请求数
+	Chapter   int     // 到达时写到的章节号
+}
+
+// simWindowThresholds 打点刻度（RunWindowCost 设置，单线程）。
+var simWindowThresholds []int64
+
+// simCurrentChapter 当前处理章节号（批量场景每章循环更新，打点记录用）。
+var simCurrentChapter int
+
+// markWindow 检查本次请求输入是否跨过未到达的刻度，记录快照。
+// 调用点：step() 累计更新后。
+func (c *TokenCache) markWindow(total int64) {
+	for i, th := range simWindowThresholds {
+		if !c.marks[i].Reached && total >= th {
+			c.marks[i] = WindowMark{
+				Threshold: th,
+				Reached:   true,
+				Hit:       c.hit,
+				Miss:      c.miss,
+				Out:       c.output,
+				Requests:  c.reqCount,
+				Chapter:   simCurrentChapter,
+			}
+		}
+	}
+}
+
 func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64, int64) {
 	if applyTransform && c.transform != nil {
 		messages = c.transform(messages)
@@ -220,6 +259,8 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 			c.MissByCat["fixed"] += toolsN
 		}
 		c.miss += total
+		c.reqCount++
+		c.markWindow(total)
 		c.prevBytes = reqBytes
 		c.prevMsgs = append([]map[string]any{}, messages...)
 		return 0, total
@@ -274,6 +315,9 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	miss := total - hit
 	c.hit += hit
 	c.miss += miss
+	c.reqCount++
+	// 打点：本次请求输入跨过刻度时记录累计快照
+	c.markWindow(total)
 	// output 累计：相对上次请求新增的 assistant 消息 = 本次 LLM 调用的输出字节。
 	// 与输入侧同源：同一段字节既作为历史输入（前缀命中判定）也作为输出计费，
 	// 覆盖正文（edit arguments）、文本回答、子代理报告、thinking（reasoning_content）。
@@ -860,6 +904,9 @@ func wrapResult(fallback string) string {
 	return fmt.Sprintf(`{"success":true,"data":%q}`, fallback)
 }
 
+// chapterNumRe 匹配 edit 参数中的章节号（chapters/025.md）。
+var chapterNumRe = regexp.MustCompile(`chapters/(\d+)\.md`)
+
 // playResult 生成 play 的工具结果内容（真实执行优先，fallback 包装兜底）。
 func playResult(p play) string {
 	return realToolResult(p.tool, p.args, p.result)
@@ -905,6 +952,12 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 			ids[k] = fmt.Sprintf("call_p%d_%d", i, k)
 			names[k] = p.tool
 			argsList[k] = p.args
+			// 批量场景章号推进（打点记录用）：edit chapters/NNN.md 即进入第 N 章
+			if p.tool == "edit" {
+				if m := chapterNumRe.FindStringSubmatch(p.args); m != nil {
+					fmt.Sscanf(m[1], "%d", &simCurrentChapter)
+				}
+			}
 		}
 		cur = append(cur, asstToolCalls(ids, names, argsList))
 		for k, p := range group {
@@ -1001,8 +1054,9 @@ var chapterBodies [][]string
 // simChapterTarget 每章目标字数（波动后），与 chapterBodies 同索引。
 var simChapterTarget []int
 
-// maxSimChapters 预生成章节数（覆盖单章轮 + 批量 + 子代理读取的最大章号）。
-const maxSimChapters = 16
+// maxSimChapters 预生成章节数（覆盖单章轮 + 批量 + 子代理读取的最大章号；
+// 批量 256 章 ≈ 1M 历史，覆盖 1024K 刻度）。
+const maxSimChapters = 256
 
 // realWordStdDev 真实章节字数标准差（字符，D:\Goink\novels 19 章实测：
 // 均值 3319、std 386、范围 2652-4073，设置范围 2500-4000）。

@@ -879,6 +879,53 @@ func RunSkillDedup() (*LayeredResult, error) {
 	return r, nil
 }
 
+// WindowCostResult 上下文刻度对照结果。
+type WindowCostResult struct {
+	Marks      []WindowMark // 各刻度到达时的累计快照
+	FinalHit   int64
+	FinalMiss  int64
+	FinalOut   int64
+	FinalReqs  int
+	FinalTotal int64 // 最后请求的输入大小（历史到达的最终规模）
+}
+
+// RunWindowCost 单窗口"上下文规模刻度"打点：
+// mode=batch 跑批量 chapters 章（大纲一次出全）；mode=single 跑单章 chapters 轮（每章全门禁流程）。
+// 历史增长过程中首次跨过 128K/256K/512K/1024K 时记录累计 hit/miss/out/请求数/章数，
+// 回答"单窗口内到达各上下文大小时的成本"与"最省区间"。
+func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	initTools()
+
+	simWindowThresholds = []int64{128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024}
+	simCurrentChapter = 0
+	c := NewTokenCache()
+	c.marks = make([]WindowMark, len(simWindowThresholds))
+
+	var res [][2]int64
+	if mode == "single" {
+		res = buildMixedSession("auto", c, chapters, 0, 0)
+	} else {
+		res = buildMixedSession("auto", c, 0, 0, chapters)
+	}
+
+	r := &WindowCostResult{
+		Marks:     c.marks,
+		FinalHit:  c.hit,
+		FinalMiss: c.miss,
+		FinalOut:  c.output,
+		FinalReqs: c.reqCount,
+	}
+	if len(res) > 0 {
+		last := res[len(res)-1]
+		r.FinalTotal = last[0] + last[1]
+	}
+	// 清理包级状态，避免污染后续 Run
+	simWindowThresholds = nil
+	simCurrentChapter = 0
+	return r, nil
+}
+
 // buildMixedSession 模拟一个真实对话窗口：开书 → 短对话（查/改设定）→ 单章创作
 // → 短对话 → 批量创作 → 短对话……全部发生在同一条历史里，短对话穿插在创作轮之间。
 // 这比"短对话独立场景"更贴近真实使用：用户不会开一个窗口纯聊天，再开一个窗口纯创作。

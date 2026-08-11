@@ -39,6 +39,10 @@ func main() {
 		runSkillDedup(*cachePrice, *inputPrice, *outputPrice)
 		return
 	}
+	if len(args) > 0 && args[0] == "window" {
+		runWindow(*cachePrice, *inputPrice, *outputPrice)
+		return
+	}
 	if len(args) > 0 && args[0] == "table" {
 		runTable(*cachePrice, *inputPrice, *outputPrice)
 		return
@@ -164,6 +168,93 @@ func runSkillDedup(cachePrice, inputPrice, outputPrice float64) {
 		res.MissSavePct(), res.NowMiss, res.LayeredMiss)
 }
 
+// modelPrice 模型价格档（元/百万 token）：cache hit / input miss / output。
+type modelPrice struct {
+	name        string
+	cache, in, out float64
+	note        string
+}
+
+// runWindow 上下文规模刻度测试：单窗口内历史增长到 128K/256K/512K/1024K 时的成本快照。
+// 矩阵：模型（价格档）× 模式（批量/单章）× 刻度。区间成本 = 相邻刻度累计成本之差，找最省区间。
+func runWindow(cachePrice, inputPrice, outputPrice float64) {
+	models := []modelPrice{
+		{"deepseek-v4-flash", 0.02, 1.0, 2.0, "1M 窗口"},
+		{"deepseek-v4-pro", 0.026, 3.13, 6.26, "1M 窗口"},
+	}
+	modes := []struct {
+		key, name string
+		chapters  int
+	}{
+		{"single", "单章模式（每章全门禁流程，每章历史 ~20-40K）", 80},
+		{"batch", "批量模式（大纲一次出全 + 循环写章，每章历史 ~4K）", 256},
+	}
+
+	fmt.Println("================================================================")
+	fmt.Println(" 单窗口上下文规模刻度（不压缩理想模型，0.7×窗口为真机压缩参考线）")
+	fmt.Println(" 刻度 = 单窗口内历史（请求输入）增长到 128K/256K/512K/1024K 的时刻")
+	fmt.Println("================================================================")
+
+	for _, m := range models {
+		fmt.Printf("\n### 模型 %s（hit ¥%.3f/M · miss ¥%.3f/M · out ¥%.3f/M，%s）\n\n", m.name, m.cache, m.in, m.out, m.note)
+		for _, md := range modes {
+			fmt.Printf("**%s**\n\n", md.name)
+			res, err := cacheprobe.RunWindowCost(md.key, md.chapters)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "窗口刻度模拟失败:", err)
+				os.Exit(1)
+			}
+			fmt.Printf("| 刻度 | 到达时 | 累计成本¥ | 累计 miss | 累计 hit | 请求数 | 命中率 |\n")
+			fmt.Printf("|------|--------|----------|-----------|----------|--------|--------|\n")
+			prevCost := 0.0
+			prevMiss := int64(0)
+			prevCh := 0
+			prevTh := int64(0)
+			prevReached := false
+			bestName := ""
+			bestPerCh := 1e18
+			for _, mk := range res.Marks {
+				label := fmt.Sprintf("%dK", mk.Threshold/1024)
+				if !mk.Reached {
+					fmt.Printf("| %s | 未到达 | - | - | - | - | - |\n", label)
+					continue
+				}
+				c := cost(mk.Hit, mk.Miss, mk.Out, m.cache, m.in, m.out)
+				rate := 100 * float64(mk.Hit) / float64(mk.Hit+mk.Miss)
+				fmt.Printf("| %s | 第 %d 章 | %.4f | %dK | %dK | %d | %.1f%% |\n",
+					label, mk.Chapter, c, mk.Miss/1000, mk.Hit/1000, mk.Requests, rate)
+				if prevReached {
+					intervalCost := c - prevCost
+					perCh := 0.0
+					if mk.Chapter-prevCh > 0 {
+						perCh = intervalCost / float64(mk.Chapter-prevCh)
+					}
+					if perCh < bestPerCh {
+						bestPerCh = perCh
+						bestName = fmt.Sprintf("%dK→%dK", prevTh/1024, mk.Threshold/1024)
+					}
+					fmt.Printf("| 区间 %dK→%dK | %d 章 | +%.4f | +%dK | - | - | 每章 ¥%.4f |\n",
+						prevTh/1024, mk.Threshold/1024, mk.Chapter-prevCh, intervalCost, (mk.Miss-prevMiss)/1000, perCh)
+				}
+				prevCost = c
+				prevMiss = mk.Miss
+				prevCh = mk.Chapter
+				prevTh = mk.Threshold
+				prevReached = true
+			}
+			if bestName != "" {
+				fmt.Printf("> 最省区间：%s（每章 ¥%.4f）\n\n", bestName, bestPerCh)
+			}
+			// 终点（最终历史大小）
+			fc := cost(res.FinalHit, res.FinalMiss, res.FinalOut, m.cache, m.in, m.out)
+			frate := 100 * float64(res.FinalHit) / float64(res.FinalHit+res.FinalMiss)
+			fmt.Printf("| 终点（历史 %dK） | %d 请求 | %.4f | %dK | %dK | - | %.1f%% |\n",
+				res.FinalTotal/1000, res.FinalReqs, fc, res.FinalMiss/1000, res.FinalHit/1000, frate)
+			fmt.Println()
+		}
+	}
+}
+
 // runCompare 同章数不同模式对比：单章/批量 × 是否清理。
 func runCompare(cachePrice, inputPrice, outputPrice float64) {
 	res, err := cacheprobe.CompareModes()
@@ -189,6 +280,8 @@ type tableScenario struct {
 }
 
 // runTable 跑一组常用工作负载场景，输出 Markdown 表格（now 协议，含输出计费 + miss 构成）。
+// 含"上下文规模维度"：批量 5/10/20/30/40/50/60 章，观察每章成本随对话窗口累积的变化。
+// 标注 1M 窗口 × 0.7 压缩阈值 ≈ 700K token 的位置（模拟器不建模压缩，阈值后真机每章成本会跳升）。
 func runTable(cachePrice, inputPrice, outputPrice float64) {
 	scenarios := []tableScenario{
 		{1, 0, 0, "单章 1 轮"},
@@ -199,6 +292,12 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 		{0, 2, 5, "批量 5 章 + 短对话 2"},
 		{3, 2, 3, "混合 3+2+3"},
 		{5, 5, 5, "混合 5+5+5"},
+		{0, 0, 10, "批量 10 章"},
+		{0, 0, 20, "批量 20 章"},
+		{0, 0, 30, "批量 30 章"},
+		{0, 0, 40, "批量 40 章（≈1M×0.7 压缩阈值边缘）"},
+		{0, 0, 50, "批量 50 章（超阈值，真机需压缩）"},
+		{0, 0, 60, "批量 60 章（超阈值，真机需压缩）"},
 	}
 
 	type row struct {
