@@ -368,7 +368,7 @@ export default function CacheSimTab() {
                   </tr>
                 ))}
                 <tr className="border-t border-border/50 text-muted-foreground">
-                  <td className="py-1.5">终点（历史 {(result.final_total / 1000).toFixed(0)}K）</td>
+                  <td className="py-1.5">终点（历史峰值 {(result.final_total / 1000).toFixed(0)}K）</td>
                   <td className="py-1.5 text-right">{result.final_reqs} 请求</td>
                   <td className="py-1.5 text-right tabular-nums">{result.final_cost.toFixed(4)}</td>
                   <td className="py-1.5 text-right tabular-nums">-</td>
@@ -386,7 +386,13 @@ export default function CacheSimTab() {
               {result.compresses > 0 && (
                 <span className="text-amber-600/80">
                   {' '}上下文压缩触发 {result.compresses} 次（0.7×模型窗口，压缩后整链重置、下轮首请求全 miss，
-                  刻度表从压缩点起成本会跳升）。
+                  刻度表从压缩点起成本会跳升，历史峰值停在压缩点附近）。
+                </span>
+              )}
+              {!result.marks.some(m => m.threshold >= 1048576 && m.reached) && (
+                <span className="text-muted-foreground/70">
+                  {' '}1024K 刻度未到达：压缩阈值 = 0.7×模拟窗口，历史峰值被压在阈值附近
+                  （1M 窗口约 700K）。想测 1024K 刻度，请把模拟窗口 K 调到 1500 以上。
                 </span>
               )}
             </p>

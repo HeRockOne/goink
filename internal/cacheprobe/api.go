@@ -1069,6 +1069,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		c.stageMarks = make([]StageMark, 0, 12)
 		res = buildMixedSessionCompress("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 	}
+	_ = res
 
 	r := &WindowCostResult{
 		Marks:      c.marks,
@@ -1079,9 +1080,10 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		FinalReqs:  c.reqCount,
 		Compresses: c.compressCount,
 	}
-	if len(res) > 0 {
-		last := res[len(res)-1]
-		r.FinalTotal = last[0] + last[1]
+	// 终点历史用峰值：压缩重建后 lastTotal 缩回骨架，峰值才反映窗口真实增长上限
+	r.FinalTotal = c.peakTotal
+	if r.FinalTotal <= 0 {
+		r.FinalTotal = c.lastTotal
 	}
 	return r, nil
 }

@@ -73,6 +73,7 @@ type TokenCache struct {
 	marks     []WindowMark
 	reqCount  int
 	lastTotal int64 // 最近一次请求的输入大小（最终历史规模，刻度表终点用）
+	peakTotal int64 // 窗口内历史峰值（跨压缩单调不减，刻度打点用：压缩重建不清零）
 	// 阶段打点（混合模式用）：按创作阶段边界记录，非阈值
 	stageMarks []StageMark
 	// 上下文压缩建模（真机 agent.go:434-455 对齐）：每轮开始时
@@ -318,16 +319,21 @@ var simWindowThresholds []int64
 // simCurrentChapter 当前处理章节号（批量场景每章循环更新，打点记录用）。
 var simCurrentChapter int
 
-// markWindow 检查本次请求输入是否跨过未到达的刻度，记录快照。
+// markWindow 检查本次请求输入（历史规模）是否跨过未到达的刻度，记录快照。
 // 调用点：step() 累计更新后。
+// 用 peakTotal（历史峰值）打点：压缩重建后历史缩回骨架，但窗口内曾到达的
+// 峰值保留——刻度表如实反映"这个窗口内历史最长到过多大"。
 // 只有挂了 marks（simWindowThresholds 非空时 runTriple 给 now cache 初始化）的 cache 打点；
 // legacy/clean cache 的 marks 为 nil，直接跳过（刻度表只反映 now 协议）。
 func (c *TokenCache) markWindow(total int64) {
 	if c.marks == nil {
 		return
 	}
+	if total > c.peakTotal {
+		c.peakTotal = total
+	}
 	for i, th := range simWindowThresholds {
-		if !c.marks[i].Reached && total >= th {
+		if !c.marks[i].Reached && c.peakTotal >= th {
 			c.marks[i] = WindowMark{
 				Threshold: th,
 				Reached:   true,
