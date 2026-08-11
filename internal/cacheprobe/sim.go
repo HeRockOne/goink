@@ -50,9 +50,14 @@ import (
 type TokenCache struct {
 	prevBytes []byte // 上次请求的完整字节（连续性判定）
 	prevMsgs  []map[string]any
-	hit       int64 // token
-	miss      int64 // token
-	output    int64 // LLM 输出 token（新增 assistant 消息，与输入侧同源）
+	// 增量复用：上次请求的消息 token 累计与消息数组字节截止位置
+	// （消息 append-only 是模拟器不变量：output diff 同样依赖它；
+	// transform 是唯一破坏者，增量路径已排除）
+	prevMsgsN   int64
+	prevMsgEnd  int
+	hit         int64 // token
+	miss        int64 // token
+	output      int64 // LLM 输出 token（新增 assistant 消息，与输入侧同源）
 	// transform 发送前变换（clean 方案用）：每次 Step 前对完整消息序列做处理，
 	// 如把已消费的 skill 全文替换为占位符。变换后字节才参与前缀判定——
 	// 这样"滑出保留窗口"是唯一前缀断裂点，连续性好。
@@ -85,17 +90,58 @@ func (c *TokenCache) MarkCleared(ids ...string) {
 	}
 }
 
+// msgFingerprint 消息的轻量稳定指纹（缓存 key 用）。
+// 消息字段全集：role/content/name/tool_call_id/reasoning_content/tool_calls。
+// 不 marshal——直接拼接字符串；内容不同则指纹必不同（content 完整拼入）。
+// 旧实现用 json.Marshal 结果做 key，导致每次请求即使缓存命中也要对全部历史消息
+// 重新序列化（600 请求 × 300+ 历史消息 = 18 万次 marshal，profile 显示占 28% CPU）。
+func msgFingerprint(m map[string]any) string {
+	var b strings.Builder
+	if v, ok := m["role"].(string); ok {
+		b.WriteString(v)
+	}
+	b.WriteByte(0)
+	if v, ok := m["content"].(string); ok {
+		b.WriteString(v)
+	}
+	b.WriteByte(0)
+	if v, ok := m["name"].(string); ok {
+		b.WriteString(v)
+	}
+	b.WriteByte(0)
+	if v, ok := m["tool_call_id"].(string); ok {
+		b.WriteString(v)
+	}
+	b.WriteByte(0)
+	if v, ok := m["reasoning_content"].(string); ok {
+		b.WriteString(v)
+	}
+	if tcs, ok := m["tool_calls"].([]any); ok {
+		for _, tc := range tcs {
+			if tcm, ok := tc.(map[string]any); ok {
+				b.WriteByte(0)
+				if fn, ok := tcm["function"].(map[string]any); ok {
+					if v, ok := fn["name"].(string); ok {
+						b.WriteString(v)
+					}
+					b.WriteByte(0)
+					if v, ok := fn["arguments"].(string); ok {
+						b.WriteString(v)
+					}
+				}
+			}
+		}
+	}
+	return b.String()
+}
+
 // msgTokens 计算单条消息的精确 token 数（tool_calls/tool_call_id/reasoning 计入）。
 // 消息内容不变则 token 数不变——用缓存避免每条历史消息被重复 tiktoken 编码（性能关键：
 // 400+ 次请求 × 上千条历史消息，不缓存约 8 万次 Encode，缓存后每个唯一消息只算一次）。
-var msgTokenCache sync.Map // key: 消息 JSON 字符串 → int token 数
+var msgTokenCache sync.Map // key: msgFingerprint → int token 数
 
 func msgTokens(m map[string]any) int {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return 0
-	}
-	key := string(b)
+	key := msgFingerprint(m)
 	if v, ok := msgTokenCache.Load(key); ok {
 		return v.(int)
 	}
@@ -184,14 +230,23 @@ func phaseCleanVersion(messages []map[string]any, cleared map[string]bool) []map
 
 
 // requestTokens 计算完整请求的 token 数：tools 前缀（固定 system 消息）+ 各消息。
+// 全量遍历（仅首轮/前缀断裂时使用；正常请求走 TokenCache.step 的增量路径）。
 func requestTokens(messages []map[string]any) (int64, int64) {
 	_, toolsN := cachedToolsJSON()
+	return toolsN, requestMsgsTokens(messages)
+}
+
+// requestMsgsTokens 各消息 token 和（msgTokens 内部有指纹缓存，重复消息只编码一次）。
+func requestMsgsTokens(messages []map[string]any) int64 {
 	var msgsN int64
 	for _, m := range messages {
 		msgsN += int64(msgTokens(m))
 	}
-	return toolsN, msgsN
+	return msgsN
 }
+
+// requestTail 请求体固定尾部（promptBytes 结构的一部分，增量字节拼接定位用）。
+var requestTail = []byte(`],"model":"goink-sim","stream":true,"stream_options":{"include_usage":true},"temperature":0.7}`)
 
 // Step 每次 LLM 调用。返回 (hit, miss) token 数。
 // 连续性判定用字节公共前缀；token 统计按消息级精确计数。
@@ -247,17 +302,18 @@ func (c *TokenCache) markWindow(total int64) {
 }
 
 func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64, int64) {
+	transformed := false
 	if applyTransform && c.transform != nil {
 		messages = c.transform(messages)
+		transformed = true
 	}
-	toolsN, msgsN := requestTokens(messages)
-	total := toolsN + msgsN
-
-	// 与真实 buildPayload 一致：完整请求体字节用于连续性判定
-	reqBytes := promptBytes(messages)
+	_, toolsN := cachedToolsJSON()
 
 	if c.prevBytes == nil {
-		// 首轮全 miss：消息按分类统计，tools 计入 fixed（固定前缀）
+		// 首轮全量：token 累计 + 完整字节构建
+		msgsN := requestMsgsTokens(messages)
+		total := toolsN + msgsN
+		reqBytes := promptBytes(messages)
 		if c.missCat != nil {
 			for _, m := range messages {
 				c.MissByCat[c.missCat(m)] += int64(msgTokens(m))
@@ -270,10 +326,65 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 		c.markWindow(total)
 		c.prevBytes = reqBytes
 		c.prevMsgs = append([]map[string]any{}, messages...)
+		c.prevMsgsN = msgsN
+		c.prevMsgEnd = len(reqBytes) - len(requestTail)
 		return 0, total
 	}
 
+	// 与真实 buildPayload 一致：完整请求体字节用于连续性判定
+	reqBytes := promptBytes(messages)
 	lcp := longestCommonPrefix(c.prevBytes, reqBytes)
+
+	// 增量路径：新请求字节完整包含上次请求（lcp 覆盖到 prevBytes 末尾）→
+	// 历史消息全部命中，只对新增消息做 token 统计与字节拼接。
+	// 此前每次请求都对 300+ 条历史消息重复做指纹/marshal，是 60 秒耗时的根源。
+	if !transformed && lcp >= len(c.prevBytes) && len(messages) > len(c.prevMsgs) {
+		newMsgs := messages[len(c.prevMsgs):]
+		var msgsN int64 = c.prevMsgsN
+		for _, m := range newMsgs {
+			msgsN += int64(msgTokens(m))
+		}
+		total := toolsN + msgsN
+		// 字节增量：历史部分复用 prevBytes，只在消息数组尾部插入新增消息
+		var buf []byte
+		buf = append(buf, c.prevBytes[:c.prevMsgEnd]...)
+		for i, m := range newMsgs {
+			if i > 0 || len(c.prevMsgs) > 0 {
+				buf = append(buf, ',')
+			}
+			buf = append(buf, msgJSON(m)...)
+		}
+		buf = append(buf, c.prevBytes[c.prevMsgEnd:]...)
+
+		// 命中：tools + 全部历史消息（字节前缀一致），新增消息全 miss
+		hit := toolsN + c.prevMsgsN
+		miss := total - hit
+		if c.missCat != nil {
+			for _, m := range newMsgs {
+				c.MissByCat[c.missCat(m)] += int64(msgTokens(m))
+			}
+		}
+		c.hit += hit
+		c.miss += miss
+		c.reqCount++
+		c.lastTotal = total
+		c.markWindow(total)
+		for _, m := range newMsgs {
+			if role, _ := m["role"].(string); role == "assistant" {
+				c.output += int64(msgTokens(m))
+			}
+		}
+		c.prevBytes = buf
+		c.prevMsgs = append([]map[string]any{}, messages...)
+		c.prevMsgsN = msgsN
+		c.prevMsgEnd = len(buf) - len(requestTail)
+		return hit, miss
+	}
+
+	// 全量路径（首轮之外：前缀断裂——子代理 fork/auto 剔除 NS/transform 内容替换）
+	msgsN := requestMsgsTokens(messages)
+	total := toolsN + msgsN
+
 	// 工具定义在最前（固定前缀）：只要 lcp 覆盖到 tools 前缀，tools 即命中。
 	// 前缀：{"tools":<toolsJSON>,"model":"goink-sim","messages":[
 	toolsJSON, _ := json.Marshal(toolDefs)
@@ -296,12 +407,8 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 		// tools 已计入，消息不命中
 	} else {
 		for idx, m := range messages {
-			b, err := json.Marshal(m)
-			if err != nil {
-				missFrom = idx
-				break
-			}
-			acc += 1 + len(b) // 逗号 + 消息体
+			b := msgJSON(m) // 复用消息 JSON 缓存（避免重复 marshal）
+			acc += 1 + len(b)
 			if acc > lcp {
 				missFrom = idx
 				break
@@ -339,6 +446,8 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	}
 	c.prevBytes = reqBytes
 	c.prevMsgs = append([]map[string]any{}, messages...)
+	c.prevMsgsN = msgsN
+	c.prevMsgEnd = len(reqBytes) - len(requestTail)
 	return hit, miss
 }
 
@@ -346,6 +455,8 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 func (c *TokenCache) Reset() {
 	c.prevBytes = nil
 	c.prevMsgs = nil
+	c.prevMsgsN = 0
+	c.prevMsgEnd = 0
 	c.hit = 0
 	c.miss = 0
 	c.output = 0
@@ -460,16 +571,16 @@ func skillContent(name string) string {
 // tools 定义（转 system 前缀）→ 各消息顺序追加。新增消息在末尾，
 // 前缀连续（与 DeepSeek/OpenAI 的 KV cache 前缀匹配语义一致）。
 // msgJSONCache 缓存单条消息的序列化结果（历史消息 marshal 结果不变，避免重复序列化）。
-var msgJSONCache sync.Map // key: 消息 JSON 字符串 → []byte
+var msgJSONCache sync.Map // key: msgFingerprint → []byte（marshal 结果）
 
 func msgJSON(m map[string]any) []byte {
+	key := msgFingerprint(m)
+	if v, ok := msgJSONCache.Load(key); ok {
+		return v.([]byte)
+	}
 	b0, err := json.Marshal(m)
 	if err != nil {
 		panic(err)
-	}
-	key := string(b0)
-	if v, ok := msgJSONCache.Load(key); ok {
-		return v.([]byte)
 	}
 	msgJSONCache.Store(key, b0)
 	return b0
