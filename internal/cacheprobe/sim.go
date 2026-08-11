@@ -1071,10 +1071,16 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 			ids[k] = fmt.Sprintf("call_p%d_%d", i, k)
 			names[k] = p.tool
 			argsList[k] = p.args
-			// 批量场景章号推进（打点记录用）：edit chapters/NNN.md 即进入第 N 章
+			// 章节进度推进（打点记录用）：edit chapters/NNN.md 即进入第 N 章。
+			// 取最大章：批量批末统一审稿 reviewPlays(1) 会回改 chapters/001.md，
+			// 若直接覆盖会把进度拽回 1（刻度反序 bug：256K 显示第 1 章 < 128K 第 3 章）。
 			if p.tool == "edit" {
 				if m := chapterNumRe.FindStringSubmatch(p.args); m != nil {
-					fmt.Sscanf(m[1], "%d", &simCurrentChapter)
+					var n int
+					fmt.Sscanf(m[1], "%d", &n)
+					if n > simCurrentChapter {
+						simCurrentChapter = n
+					}
 				}
 			}
 		}
