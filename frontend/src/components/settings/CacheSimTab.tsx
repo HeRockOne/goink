@@ -185,27 +185,27 @@ export default function CacheSimTab() {
         <span className="text-[10px] text-muted-foreground/70 ml-1">{modeDefs[mode].hint}</span>
       </div>
 
-      {/* 参数行（按模式变化） */}
-      <div className="flex flex-wrap items-end gap-3">
+      {/* 参数行（按模式变化，与开始模拟按钮同一水平线） */}
+      <div className="flex items-end gap-3 flex-nowrap overflow-x-auto pb-1">
         {mode === 'single' && (
-          <NumInput value={singleChapters} onChange={setSingleChapters} min={1} max={200} label="章数" hint="默认 26（≈1M 窗口）" />
+          <NumInput value={singleChapters} onChange={setSingleChapters} min={1} max={200} label="章数" hint="默认 26 ≈ 1M" />
         )}
         {mode === 'batch' && (
-          <NumInput value={batchChapters} onChange={setBatchChapters} min={6} max={400} label="章数" hint="默认 120（≈1M 窗口）" />
+          <NumInput value={batchChapters} onChange={setBatchChapters} min={6} max={400} label="章数" hint="默认 120 ≈ 1M" />
         )}
         {mode === 'mixed' && (
           <>
-            <NumInput value={gateRounds} onChange={setGateRounds} min={0} max={20} label="单章轮数" hint="0 = 不跑" />
-            <NumInput value={qaRounds} onChange={setQaRounds} min={0} max={20} label="短对话轮数" hint="穿插在创作轮之间" />
-            <NumInput value={mixedBatch} onChange={setMixedBatch} min={0} max={20} label="每批章数" hint="每批完整批量门禁" />
-            <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量轮数" hint="批次循环，章号顺延" />
+            <NumInput value={gateRounds} onChange={setGateRounds} min={0} max={20} label="单章轮数" hint="0=不跑" />
+            <NumInput value={qaRounds} onChange={setQaRounds} min={0} max={20} label="短对话轮数" hint="穿插创作间" />
+            <NumInput value={mixedBatch} onChange={setMixedBatch} min={0} max={20} label="每批章数" hint="每批完整门禁" />
+            <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量轮数" hint="章号顺延" />
           </>
         )}
 
         <button
           onClick={run}
           disabled={running}
-          className="px-4 py-1.5 rounded bg-primary text-primary-foreground text-sm flex items-center gap-1.5 disabled:opacity-50 hover:opacity-90 transition-opacity"
+          className="shrink-0 px-4 py-1.5 rounded bg-primary text-primary-foreground text-sm flex items-center gap-1.5 disabled:opacity-50 hover:opacity-90 transition-opacity"
         >
           {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           {running ? '模拟中...' : '开始模拟'}
@@ -295,8 +295,8 @@ export default function CacheSimTab() {
             </table>
             <p className="text-[10px] text-muted-foreground/70 mt-2">
               单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
-              混合模式窗口大小由输入决定（单章轮数 + 短对话轮数 + 每批章数 × 批量轮数）；
-              单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）。
+              单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）；混合模式窗口大小由输入决定
+              （单章轮数 + 短对话轮数 + 每批章数 × 批量轮数），刻度能打到哪算哪。
               未到达的刻度说明该模式在当前输入下到不了这个上下文规模。
             </p>
           </div>

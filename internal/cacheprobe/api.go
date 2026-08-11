@@ -1107,19 +1107,24 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 		doQA(turn)
 	}
 
-	// 批量创作（短对话过渡 → 批量批次循环 → 短对话收尾）
+	// 批量创作（短对话过渡 → 批量批次循环 → 短对话收尾）。
+	// 章号连续性：单章轮 gateScript(turn) 写第 turn+1 章（2..gateRounds+1），
+	// 批量每批从 base+1 起写——base 必须接在单章轮之后（base0 = gateRounds），
+	// 否则批量又从第 1 章重写，章号重叠、刻度打点全挤在单章轮（混合模式"看起来"没批量）。
 	if batchChapters > 0 {
 		if batchRounds < 1 {
 			batchRounds = 1
 		}
 		for r := 0; r < batchRounds; r++ {
-			base := r * batchChapters
+			// 单章轮 gateScript(turn) 写第 turn+1 章（2..gateRounds+1），
+			// 批量接在后面：base+1 = gateRounds+2 起，章号连续不重叠
+			base := gateRounds + 1 + r*batchChapters
 			doQA(gateRounds + r + 1)
 			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", batchChapters))}
-			cur = append(cur, sysMsg(novelState(gateRounds + base)))
+			cur = append(cur, sysMsg(novelState(base)))
 			cur = runPlays(cache, history, cur, filterReadRequired(batchAsIsBase(batchChapters, base), mode), &results,
 				func(subCur []map[string]any) [][2]int64 {
-					return simulateSubagent(cache, history, subCur, gateRounds+base)
+					return simulateSubagent(cache, history, subCur, base+batchChapters)
 				},
 				nil, func(c []map[string]any, phase string) []map[string]any {
 					return injectPhaseOn(mode, c, phase)

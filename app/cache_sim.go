@@ -93,7 +93,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	case "batch":
 		label = fmt.Sprintf("批量模式（%d 章，每批 6 章批次循环）", batchChapters)
 	default:
-		label = fmt.Sprintf("混合会话（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章）", gateRounds, shortQARounds, batchChapters)
+		label = fmt.Sprintf("混合会话（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章 × %d 轮）", gateRounds, shortQARounds, batchChapters, batchRounds)
 	}
 
 	res := &CacheSimResult{
