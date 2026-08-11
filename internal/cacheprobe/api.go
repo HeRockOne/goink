@@ -921,7 +921,8 @@ func RunSkillDedup() (*LayeredResult, error) {
 
 // WindowCostResult 上下文刻度对照结果。
 type WindowCostResult struct {
-	Marks      []WindowMark // 各刻度到达时的累计快照
+	Marks      []WindowMark // 各刻度到达时的累计快照（single/batch 模式）
+	StageMarks []StageMark  // 阶段打点（mixed 模式，按创作阶段边界）
 	FinalHit   int64
 	FinalMiss  int64
 	FinalOut   int64
@@ -1019,15 +1020,18 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		if batchRounds < 1 {
 			batchRounds = 1
 		}
+		// 阶段打点（混合模式专用）：按创作阶段边界记录，替代阈值刻度
+		c.stageMarks = make([]StageMark, 0, 12)
 		res = buildMixedSessionLoop("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds)
 	}
 
 	r := &WindowCostResult{
-		Marks:     c.marks,
-		FinalHit:  c.hit,
-		FinalMiss: c.miss,
-		FinalOut:  c.output,
-		FinalReqs: c.reqCount,
+		Marks:      c.marks,
+		StageMarks: c.stageMarks,
+		FinalHit:   c.hit,
+		FinalMiss:  c.miss,
+		FinalOut:   c.output,
+		FinalReqs:  c.reqCount,
 	}
 	if len(res) > 0 {
 		last := res[len(res)-1]
@@ -1068,9 +1072,11 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 	hit, miss := cache.Step(req)
 	results = append(results, [2]int64{hit, miss})
 	commitCur(mode, &history, cur)
+	cache.RecordStage("开书完成")
 
 	// 短对话配额：穿插在各创作轮之间（开头 1 轮 + 每轮单章后 1 轮 + 批量前/后）
 	qaBudget := qaRounds
+	qaNo := 0
 	doQA := func(turn int) bool {
 		if qaBudget <= 0 {
 			return false
@@ -1078,6 +1084,8 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 		cur := qaRound(cache, history, []map[string]any{}, &results, turn)
 		commitCur(mode, &history, cur)
 		qaBudget--
+		qaNo++
+		cache.RecordStage(fmt.Sprintf("短对话 %d", qaNo))
 		return true
 	}
 
@@ -1102,6 +1110,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 		hit, miss := cache.Step(req)
 		results = append(results, [2]int64{hit, miss})
 		commitCur(mode, &history, cur)
+		cache.RecordStage(fmt.Sprintf("单章 %d", turn))
 
 		// 单章完成后穿插短对话（查看/微调）
 		doQA(turn)
@@ -1134,6 +1143,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 			hit, miss := cache.Step(req)
 			results = append(results, [2]int64{hit, miss})
 			commitCur(mode, &history, cur)
+			cache.RecordStage(fmt.Sprintf("批量轮 %d", r+1))
 		}
 		doQA(gateRounds + batchRounds + 1)
 	}

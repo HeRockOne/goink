@@ -72,6 +72,37 @@ type TokenCache struct {
 	marks     []WindowMark
 	reqCount  int
 	lastTotal int64 // 最近一次请求的输入大小（最终历史规模，刻度表终点用）
+	// 阶段打点（混合模式用）：按创作阶段边界记录，非阈值
+	stageMarks []StageMark
+}
+
+// StageMark 阶段打点快照：混合模式每个创作阶段（开书/短对话/单章轮/批量轮）
+// 结束时记录累计状态，回答"混合模式每阶段花了多少钱、写了多少章"。
+type StageMark struct {
+	Stage    string // 阶段名："开书完成" / "短对话 N" / "单章 N" / "批量轮 N"
+	Chapter  int    // 到达时累计写到第几章
+	Hit      int64
+	Miss     int64
+	Out      int64
+	Requests int
+	Total    int64 // 当前历史大小（最后请求输入）
+}
+
+// RecordStage 阶段边界打点（buildMixedSessionCore 每阶段结束调用）。
+// stageMarks 为 nil（single/batch 模式）时跳过。
+func (c *TokenCache) RecordStage(stage string) {
+	if c.stageMarks == nil {
+		return
+	}
+	c.stageMarks = append(c.stageMarks, StageMark{
+		Stage:    stage,
+		Chapter:  simCurrentChapter,
+		Hit:      c.hit,
+		Miss:     c.miss,
+		Out:      c.output,
+		Requests: c.reqCount,
+		Total:    c.lastTotal,
+	})
 }
 
 // SetMissCat 启用 miss 分类统计（诊断用，不影响模拟结果）。

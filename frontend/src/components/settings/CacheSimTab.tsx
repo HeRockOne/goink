@@ -19,6 +19,19 @@ interface WindowSimMark {
   interval_per_chapter: number
 }
 
+// 阶段打点快照（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束）
+interface CacheSimStage {
+  stage: string
+  chapter: number
+  total: number
+  requests: number
+  cost: number
+  hit_rate: number
+  interval_cost: number
+  interval_chapters: number
+  interval_per_chapter: number
+}
+
 interface CacheSimResult {
   mode: string
   label: string
@@ -34,6 +47,7 @@ interface CacheSimResult {
   final_hit_rate: number
   best_interval: string
   best_per_chapter: number
+  stages: CacheSimStage[]
 }
 
 // 格式化为 M（百万）单位
@@ -242,7 +256,67 @@ export default function CacheSimTab() {
             </table>
           </div>
 
-          {/* ── 上下文窗口刻度（单窗口成本曲线）── */}
+          {/* ── 混合模式：阶段轮次表（按创作阶段边界打点）── */}
+          {result.mode === 'mixed' && result.stages && result.stages.length > 0 && (
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">阶段轮次成本（每阶段结束快照）</span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="text-left py-1 font-normal">阶段</th>
+                    <th className="text-right py-1 font-normal">累计章</th>
+                    <th className="text-right py-1 font-normal">历史</th>
+                    <th className="text-right py-1 font-normal">累计成本 ¥</th>
+                    <th className="text-right py-1 font-normal">区间增量 ¥</th>
+                    <th className="text-right py-1 font-normal">区间每章 ¥</th>
+                    <th className="text-right py-1 font-normal">请求</th>
+                    <th className="text-right py-1 font-normal">命中率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.stages.map((s, i) => (
+                    <tr key={i} className="border-t border-border/50">
+                      <td className="py-1.5">{s.stage}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {s.stage === '开书完成' || s.stage.startsWith('短对话') ? '-' : s.chapter}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{(s.total / 1000).toFixed(0)}K</td>
+                      <td className="py-1.5 text-right tabular-nums">{s.cost.toFixed(4)}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {i > 0 ? `+${s.interval_cost.toFixed(4)}` : '-'}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {s.interval_per_chapter > 0 ? `¥${s.interval_per_chapter.toFixed(4)}` : '-'}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{s.requests}</td>
+                      <td className="py-1.5 text-right tabular-nums">{s.hit_rate.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-border/50 text-muted-foreground">
+                    <td className="py-1.5">终点（共 {result.stages[result.stages.length - 1].chapter} 章）</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.stages[result.stages.length - 1].chapter}</td>
+                    <td className="py-1.5 text-right tabular-nums">{(result.final_total / 1000).toFixed(0)}K</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.final_cost.toFixed(4)}</td>
+                    <td className="py-1.5 text-right">-</td>
+                    <td className="py-1.5 text-right">-</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.final_reqs}</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.final_hit_rate.toFixed(1)}%</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-[10px] text-muted-foreground/70 mt-2">
+                按创作阶段打点：开书 → 短对话（查/改设定）→ 单章轮 → 批量轮，每阶段结束记录
+                累计成本与区间增量（区间每章 = 该阶段增量成本 ÷ 新增章数）。章号连续顺延，
+                短对话/开书不产章，区间每章显示 -。
+              </p>
+            </div>
+          )}
+
+          {/* ── 上下文窗口刻度（单窗口成本曲线，single/batch 模式）── */}
+          {result.mode !== 'mixed' && (
           <div className="rounded-lg border p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-muted-foreground" />
@@ -297,11 +371,11 @@ export default function CacheSimTab() {
             </table>
             <p className="text-[10px] text-muted-foreground/70 mt-2">
               单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
-              单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）；混合模式窗口大小由输入决定
-              （单章轮数 + 短对话轮数 + 每批章数 × 批量轮数），刻度能打到哪算哪。
-              未到达的刻度说明该模式在当前输入下到不了这个上下文规模。
+              单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）。未到达的刻度说明该模式
+              在当前输入下到不了这个上下文规模。
             </p>
           </div>
+          )}
         </div>
       )}
     </div>

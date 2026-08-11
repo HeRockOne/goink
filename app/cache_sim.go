@@ -26,7 +26,7 @@ type CacheSimResult struct {
 	TotalOut  int64   `json:"total_out"`
 	HitRate   float64 `json:"hit_rate"`
 	Cost      float64 `json:"cost"`
-	// 上下文窗口刻度（单窗口成本曲线）
+	// 上下文窗口刻度（单窗口成本曲线，single/batch 模式）
 	Marks          []WindowSimMark `json:"marks"`
 	FinalTotal     int64           `json:"final_total"` // 终点历史大小（token）
 	FinalReqs      int             `json:"final_reqs"`
@@ -34,6 +34,21 @@ type CacheSimResult struct {
 	FinalHitRate   float64         `json:"final_hit_rate"`
 	BestInterval   string          `json:"best_interval"` // 最省区间标签（如 "256K→512K"）
 	BestPerChapter float64         `json:"best_per_chapter"`
+	// 阶段打点（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束的成本快照）
+	Stages []CacheSimStage `json:"stages"`
+}
+
+// CacheSimStage 阶段打点快照（mixed 模式，按创作阶段边界记录）。
+type CacheSimStage struct {
+	Stage      string  `json:"stage"` // "开书完成" / "短对话 N" / "单章 N" / "批量轮 N"
+	Chapter    int     `json:"chapter"`
+	Total      int64   `json:"total"` // 该阶段结束时的历史大小
+	Requests   int     `json:"requests"`
+	Cost       float64 `json:"cost"` // 累计成本（元）
+	HitRate    float64 `json:"hit_rate"`
+	IntervalCost  float64 `json:"interval_cost"`  // 距上一阶段的增量成本
+	IntervalCh    int     `json:"interval_chapters"` // 距上一阶段的章数增量
+	IntervalPerCh float64 `json:"interval_per_chapter"`
 }
 
 // WindowSimMark 窗口刻度快照（单窗口成本曲线打点）。
@@ -148,6 +163,30 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	}
 	res.BestInterval = bestInterval
 	res.BestPerChapter = bestPerCh
+
+	// 阶段打点（mixed 模式）：每阶段累计成本 + 区间增量 + 每章成本
+	if mode == "mixed" {
+		prevCost := 0.0
+		prevCh := 0
+		for _, sm := range raw.StageMarks {
+			s := CacheSimStage{
+				Stage:    sm.Stage,
+				Chapter:  sm.Chapter,
+				Total:    sm.Total,
+				Requests: sm.Requests,
+				Cost:     costOf(sm.Hit, sm.Miss, sm.Out, cachePrice, inputPrice, outputPrice),
+				HitRate:  hitRate(sm.Hit, sm.Miss),
+			}
+			s.IntervalCost = s.Cost - prevCost
+			s.IntervalCh = s.Chapter - prevCh
+			if s.IntervalCh > 0 {
+				s.IntervalPerCh = s.IntervalCost / float64(s.IntervalCh)
+			}
+			prevCost = s.Cost
+			prevCh = s.Chapter
+			res.Stages = append(res.Stages, s)
+		}
+	}
 	return res
 }
 
