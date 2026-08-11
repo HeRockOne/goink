@@ -1161,11 +1161,35 @@ func filterReadRequired(plays []play, mode string) []play {
 	return out
 }
 
-// skillDedupSim 包级开关（单线程模拟器）：true 时阶段技能在"模型完整视野中已有全文"则跳过
-// （模拟真机 injectPhaseSkills 去重：opts.Messages 中已有相同全文则跳过），RunSkillDedup 对照用。
-// 判定标准与真机一致：遍历完整消息序列（history+cur）做全文比对，不依赖"是否注入过"记录——
-// 历史被压缩/清理后全文消失，比对失败会重新注入，保证 AI 始终看得到技能。
+// skillDedupSim 包级开关（单线程模拟器）：true 时阶段技能按"短提醒"策略注入——
+// 首次进入阶段注入技能全文（学习内容，进入历史常驻），后续再进入同阶段时
+// 只注入"当前阶段应遵循技能"的短提醒（技能名清单，~百 token，紧跟本轮请求尾部，
+// 注意力最强位置），不再重复注入全文。解决"全文在历史里但模型没注意"的
+// Lost in the Middle 问题：全文保证可见，短提醒保证被注意。
 var skillDedupSim bool
+
+// phaseSkillReminder 各阶段技能短提醒（技能名 + 一句要点），注入成本 ~百 token。
+func phaseSkillReminder(phase string) string {
+	names := map[string][]string{
+		"prepare":  {"common-sense-logic（现实逻辑一致性）"},
+		"outline":  {"chapter-hook-enhanced（章末钩子）、chapter-title-design（章名设计）"},
+		"write":    {"show-dont-tell（画面化）、anti-ai-writing（去 AI 味）、pov-purity（视角纯净）、info-density（信息密度）"},
+		"review":   {"revision-pass（自审修改）"},
+		"maintain": {"anti-repetition（防重复）、foreshadow-cycle（伏笔循环）"},
+	}
+	ns, ok := names[phase]
+	if !ok {
+		return ""
+	}
+	s := "【当前阶段技能提醒】"
+	for i, n := range ns {
+		if i > 0 {
+			s += "；"
+		}
+		s += n
+	}
+	return s + "。请按以上技能要点创作，勿偏离。"
+}
 
 // visibleIn 判定一段全文是否已在模型视野中（完整消息序列的 system 消息里能找到相同 content）。
 // 这是"AI 能不能看到 skill"的唯一判定标准：模型每轮收到的 messages 数组里，
@@ -1181,16 +1205,27 @@ func visibleIn(msgs []map[string]any, content string) bool {
 	return false
 }
 
-// injectPhaseOn auto 模式阶段切换时注入阶段技能 system 消息（返回新 cur）。
+// injectPhaseOn auto 模式阶段切换时注入阶段技能（返回新 cur）。
 // cur 是当轮新增消息（未落库），history 是已落库历史——模型完整视野 = history + cur。
-// 去重开启时：完整视野中已有该技能全文 → 跳过注入（模型仍看得到，只是不重复发送）。
+// 去重开启时：
+//   完整视野中无全文 → 注入全文（首次进入阶段，学习内容）；
+//   已有全文 → 只注入短提醒（技能名清单，唤起注意，不再重复全文）。
 func injectPhaseOn(mode string, history, cur []map[string]any, phase string) []map[string]any {
 	if mode == "auto" {
 		if sk, ok := phaseInjectSkills[phase]; ok && sk != "" {
 			if skillDedupSim && (visibleIn(history, sk) || visibleIn(cur, sk)) {
+				// 全文已在视野：注入短提醒（首次提醒也注入；全文+提醒都常驻历史）
+				if rm := phaseSkillReminder(phase); rm != "" {
+					cur = append(cur, sysMsg(rm))
+				}
 				return cur
 			}
 			cur = append(cur, sysMsg(sk))
+			if skillDedupSim {
+				if rm := phaseSkillReminder(phase); rm != "" {
+					cur = append(cur, sysMsg(rm))
+				}
+			}
 		}
 	}
 	return cur
