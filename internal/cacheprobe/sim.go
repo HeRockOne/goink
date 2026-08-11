@@ -952,10 +952,19 @@ func filterReadRequired(plays []play, mode string) []play {
 	return out
 }
 
+// skillDedupSim 包级开关（单线程模拟器）：true 时同阶段技能全文只注入一次
+// （模拟真机 injectPhaseSkills 去重：history 中已有相同内容则跳过），RunSkillDedup 对照用。
+var skillDedupSim bool
+var injectedPhases = map[string]bool{}
+
 // injectPhaseOn auto 模式阶段切换时注入阶段技能 system 消息（返回新 cur）。
 func injectPhaseOn(mode string, cur []map[string]any, phase string) []map[string]any {
 	if mode == "auto" {
 		if sk, ok := phaseInjectSkills[phase]; ok && sk != "" {
+			if skillDedupSim && injectedPhases[phase] {
+				return cur
+			}
+			injectedPhases[phase] = true
 			cur = append(cur, sysMsg(sk))
 		}
 	}

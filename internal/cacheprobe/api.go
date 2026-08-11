@@ -843,6 +843,42 @@ func RunNSOnDemand() (*LayeredResult, error) {
 	return r, nil
 }
 
+// RunSkillDedup 技能注入去重对照：同阶段技能全文只注入一次（history 中已有则跳过）。
+// 真机收益：技能注入占 miss 构成 26%（单章模式每章 5 次真切换重复注入全文）。
+// 模拟器用注入记录 map 近似（单章多轮场景与真机"history 查重"等价）。
+func RunSkillDedup() (*LayeredResult, error) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	initTools()
+
+	// 现状：每阶段切换注入技能全文（不查重）
+	cNow := NewTokenCache()
+	resNow := buildMixedSession("auto", cNow, 5, 0, 0)
+
+	// 去重：同阶段技能只注入一次
+	skillDedupSim = true
+	defer func() {
+		skillDedupSim = false
+		injectedPhases = map[string]bool{}
+	}()
+	cLay := NewTokenCache()
+	resLay := buildMixedSession("auto", cLay, 5, 0, 0)
+
+	r := &LayeredResult{
+		Scenario:        "技能注入去重对照（单章 5 轮）",
+		NowRequests:     len(resNow),
+		LayeredRequests: len(resLay),
+	}
+	for _, p := range resNow {
+		r.NowHit += p[0]
+		r.NowMiss += p[1]
+	}
+	for _, p := range resLay {
+		r.LayeredHit += p[0]
+		r.LayeredMiss += p[1]
+	}
+	return r, nil
+}
+
 // buildMixedSession 模拟一个真实对话窗口：开书 → 短对话（查/改设定）→ 单章创作
 // → 短对话 → 批量创作 → 短对话……全部发生在同一条历史里，短对话穿插在创作轮之间。
 // 这比"短对话独立场景"更贴近真实使用：用户不会开一个窗口纯聊天，再开一个窗口纯创作。

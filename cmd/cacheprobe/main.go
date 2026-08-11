@@ -35,6 +35,10 @@ func main() {
 		runNSOnDemand(*cachePrice, *inputPrice, *outputPrice)
 		return
 	}
+	if len(args) > 0 && args[0] == "skilldedup" {
+		runSkillDedup(*cachePrice, *inputPrice, *outputPrice)
+		return
+	}
 	if len(args) > 0 && args[0] == "table" {
 		runTable(*cachePrice, *inputPrice, *outputPrice)
 		return
@@ -137,6 +141,26 @@ func runNSOnDemand(cachePrice, inputPrice, outputPrice float64) {
 	fmt.Printf(" 按需注入 hit=%12d miss=%10d 请求=%d  命中率=%5.1f%%  成本¥%.4f\n",
 		res.LayeredHit, res.LayeredMiss, res.LayeredRequests, res.LayeredHitRate(), cost(res.LayeredHit, res.LayeredMiss, 0, cachePrice, inputPrice, outputPrice))
 	fmt.Printf("  miss 降幅 = %.1f%%（现状 %d → 按需 %d）\n",
+		res.MissSavePct(), res.NowMiss, res.LayeredMiss)
+}
+
+// runSkillDedup 技能注入去重对照（同阶段技能全文只注入一次）。
+func runSkillDedup(cachePrice, inputPrice, outputPrice float64) {
+	res, err := cacheprobe.RunSkillDedup()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "技能去重模拟失败:", err)
+		os.Exit(1)
+	}
+	fmt.Println("================================================================")
+	fmt.Printf(" 技能注入去重对照（%s）\n", res.Scenario)
+	fmt.Printf(" 价格：缓存 ¥%.3f/M · 输入 ¥%.3f/M\n", cachePrice, inputPrice)
+	fmt.Println(" 差异唯一：同阶段技能全文是否重复注入（历史中已有则跳过）")
+	fmt.Println("================================================================")
+	fmt.Printf(" 现状     hit=%12d miss=%10d 请求=%d  命中率=%5.1f%%  成本¥%.4f\n",
+		res.NowHit, res.NowMiss, res.NowRequests, res.NowHitRate(), cost(res.NowHit, res.NowMiss, 0, cachePrice, inputPrice, outputPrice))
+	fmt.Printf(" 技能去重 hit=%12d miss=%10d 请求=%d  命中率=%5.1f%%  成本¥%.4f\n",
+		res.LayeredHit, res.LayeredMiss, res.LayeredRequests, res.LayeredHitRate(), cost(res.LayeredHit, res.LayeredMiss, 0, cachePrice, inputPrice, outputPrice))
+	fmt.Printf("  miss 降幅 = %.1f%%（现状 %d → 去重 %d）\n",
 		res.MissSavePct(), res.NowMiss, res.LayeredMiss)
 }
 
