@@ -8,6 +8,7 @@ import (
 
 	"novel/internal/cacheprobe"
 	"novel/internal/config"
+	"novel/internal/llm"
 )
 
 // simMu 串行化模拟器调用（cacheprobe 包级状态单线程设计，并行会串扰）。
@@ -36,6 +37,8 @@ type CacheSimResult struct {
 	BestPerChapter float64         `json:"best_per_chapter"`
 	// 阶段打点（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束的成本快照）
 	Stages []CacheSimStage `json:"stages"`
+	// 上下文压缩触发次数（真机 0.7×窗口建模；>0 说明长窗口跑到了压缩点）
+	Compresses int `json:"compresses"`
 }
 
 // CacheSimStage 阶段打点快照（mixed 模式，按创作阶段边界记录）。
@@ -82,7 +85,15 @@ func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds in
 
 // runCacheSimulationSync 同步执行模拟并附带价格估算与窗口刻度（供 StartCacheSimulation 后台调用）。
 func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int) *CacheSimResult {
-	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds)
+	// 上下文窗口：从设置选中模型的内置定义取（对齐真机压缩触发），
+	// 未匹配时默认 1M（DeepSeek），mimo/GLM 等小窗口模型自动生效压缩建模
+	contextWindow := 1_000_000
+	if s, err := config.LoadSettings(a.db); err == nil && s.SelectedModelKey != "" {
+		if w := modelContextWindow(s.SelectedModelKey); w > 0 {
+			contextWindow = w
+		}
+	}
+	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 	if err != nil {
 		return &CacheSimResult{Cost: -1} // 失败标记
 	}
@@ -120,6 +131,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	res.TotalOut = raw.FinalOut
 	res.HitRate = hitRate(raw.FinalHit, raw.FinalMiss)
 	res.Cost = costOf(raw.FinalHit, raw.FinalMiss, raw.FinalOut, cachePrice, inputPrice, outputPrice)
+	res.Compresses = raw.Compresses
 
 	// 窗口刻度：打点快照 + 区间每章成本 + 最省区间
 	res.FinalTotal = raw.FinalTotal
@@ -188,6 +200,19 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 		}
 	}
 	return res
+}
+
+// modelContextWindow 按模型 key 查内置定义的上下文窗口（token）。
+// 遍历 llm.Builtin 所有 provider 的模型表，找到匹配返回窗口大小；未找到返回 0。
+func modelContextWindow(modelKey string) int {
+	for _, p := range llm.Builtin {
+		for _, m := range p.Models {
+			if m.ID == modelKey {
+				return m.ContextWindow
+			}
+		}
+	}
+	return 0
 }
 
 // hitRate 计算命中率（0-100）。

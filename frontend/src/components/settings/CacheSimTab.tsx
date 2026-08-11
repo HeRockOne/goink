@@ -48,6 +48,7 @@ interface CacheSimResult {
   best_interval: string
   best_per_chapter: number
   stages: CacheSimStage[]
+  compresses: number
 }
 
 // 格式化为 M（百万）单位
@@ -311,6 +312,11 @@ export default function CacheSimTab() {
                 按创作阶段打点：开书 → 短对话（查/改设定）→ 单章轮 → 批量轮，每阶段结束记录
                 累计成本与区间增量（区间每章 = 该阶段增量成本 ÷ 新增章数）。章号连续顺延，
                 短对话/开书不产章，区间每章显示 -。
+                {result.compresses > 0 && (
+                  <span className="text-amber-600/80">
+                    {' '}上下文压缩触发 {result.compresses} 次（0.7×模型窗口，压缩后整链重置、下轮首请求全 miss）。
+                  </span>
+                )}
               </p>
             </div>
           )}
@@ -373,6 +379,12 @@ export default function CacheSimTab() {
               单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
               单章/批量模式按长窗口跑（默认 26/120 章到 1M 窗口）。未到达的刻度说明该模式
               在当前输入下到不了这个上下文规模。
+              {result.compresses > 0 && (
+                <span className="text-amber-600/80">
+                  {' '}上下文压缩触发 {result.compresses} 次（0.7×模型窗口，压缩后整链重置、下轮首请求全 miss，
+                  刻度表从压缩点起成本会跳升）。
+                </span>
+              )}
             </p>
           </div>
           )}

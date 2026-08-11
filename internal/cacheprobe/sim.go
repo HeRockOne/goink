@@ -74,6 +74,14 @@ type TokenCache struct {
 	lastTotal int64 // 最近一次请求的输入大小（最终历史规模，刻度表终点用）
 	// 阶段打点（混合模式用）：按创作阶段边界记录，非阈值
 	stageMarks []StageMark
+	// 上下文压缩建模（真机 agent.go:434-455 对齐）：每轮开始时
+	// (runningTokens+toolTokens)/ContextWindow >= threshold 触发压缩重建。
+	// 触发后调用 onCompress（由会话构造方提供：重置链 + 重建消息序列），
+	// compressCount 累计触发次数（诊断/刻度表展示用）。
+	contextWindow int
+	compressTh    float64
+	onCompress    func()
+	compressCount int
 }
 
 // StageMark 阶段打点快照：混合模式每个创作阶段（开书/短对话/单章轮/批量轮）
@@ -494,6 +502,41 @@ func (c *TokenCache) Reset() {
 	if c.MissByCat != nil {
 		c.MissByCat = map[string]int64{}
 	}
+}
+
+// ResetChain 压缩链重建：只清前缀链（下轮首请求全 miss），保留累计统计
+// （hit/miss/output/reqCount——真机压缩只重建消息，usage 照常累计）。
+func (c *TokenCache) ResetChain() {
+	c.prevBytes = nil
+	c.prevMsgs = nil
+	c.prevMsgsN = 0
+	c.prevMsgEnd = 0
+}
+
+// EnableCompression 启用上下文压缩建模（对齐真机 agent.go:434-455）：
+// contextWindow = 模型上下文窗口（token），threshold = 触发比例（默认 0.7）。
+// onCompress 在触发时调用（由会话构造方重建消息序列）。
+func (c *TokenCache) EnableCompression(contextWindow int, threshold float64, onCompress func()) {
+	c.contextWindow = contextWindow
+	c.compressTh = threshold
+	if c.compressTh <= 0 || c.compressTh >= 1 {
+		c.compressTh = 0.7
+	}
+	c.onCompress = onCompress
+}
+
+// MaybeCompress 每轮开始时检查 token 预算（对齐真机：runningTokens+toolTokens 占比超阈值触发）。
+// 返回是否触发压缩。lastTotal 含 tools（requestTokens 口径），等价真机 runningTokens+toolTokens。
+func (c *TokenCache) MaybeCompress() bool {
+	if c.contextWindow <= 0 || c.onCompress == nil {
+		return false
+	}
+	if float64(c.lastTotal)/float64(c.contextWindow) < c.compressTh {
+		return false
+	}
+	c.compressCount++
+	c.onCompress()
+	return true
 }
 
 func (c *TokenCache) TotalTokens() int64 { return c.hit + c.miss }
@@ -989,14 +1032,63 @@ func realNovel() int64 {
 // 只读工具（get_*/search_*/read）走真实 Registry.Execute 读真实 DB 副本，
 // 返回与真机 resultJSON 等价的 content（{"success":true,"data":{...}}）；
 // 写工具（edit/update/create/delete/run_subagent/set_phase/auto_skill_injection）
-// 或真实执行失败时，把 fallback 内容包装成真机格式（不污染副本、保持可复现）。
+// 按工具类型生成与真机同结构的模板结果（不污染副本、保持可复现）——
+// 真机返回结构：create/update 类 {"id":N} 或 {"ids":[...],"count":N}，edit {"path","change_type","approved"}。
 func realToolResult(name, args, fallback string) string {
 	if isReadonlyTool(name) {
 		if out, ok := execRealTool(name, args); ok {
 			return out
 		}
 	}
-	return wrapResult(fallback)
+	return writeToolResult(name, args, fallback)
+}
+
+// writeToolResult 写工具结果模板：对齐真机各写工具的 Data 结构，避免 fallback 短串
+// 与真机 JSON 结构不一致导致成本口径偏差（工具结果占 miss 构成 ~38%）。
+func writeToolResult(name, args, fallback string) string {
+	switch {
+	case name == "edit":
+		// 真机 rw_tools.go:237-249：{"path","change_type","approved"}，line_range_replace 额外 before/after
+		path := ""
+		var a struct {
+			Path       string `json:"path"`
+			ChangeType string `json:"change_type"`
+		}
+		if json.Unmarshal([]byte(args), &a) == nil {
+			path = a.Path
+		}
+		if a.ChangeType == "" {
+			a.ChangeType = "full_replace"
+		}
+		data := map[string]any{"path": path, "change_type": a.ChangeType, "approved": true}
+		b, _ := json.Marshal(map[string]any{"success": true, "data": data})
+		return string(b)
+	case name == "set_phase" || name == "auto_skill_injection":
+		// 真机 agent.go:583：set_phase 工具结果 {"success":true,"data":{"phase":X}}；auto_skill_injection 返回技能清单
+		return wrapResult(fallback)
+	case strings.HasPrefix(name, "delete_"):
+		// 真机 delete_tools.go：{"approved":false} 或 {"impact":{...}}
+		return `{"success":true,"data":{"approved":true,"impact":{}}}`
+	case strings.HasPrefix(name, "create_"):
+		// 真机 create 类：{"id":N}（create_timeline_entry/location/character 等）
+		return fmt.Sprintf(`{"success":true,"data":{"id":%d}}`, simNextID())
+	case strings.HasPrefix(name, "update_"):
+		// 真机 update 类：{"id":N} 或 {"ids":[...],"count":N}
+		return fmt.Sprintf(`{"success":true,"data":{"id":%d}}`, simNextID())
+	case name == "run_subagent":
+		// 真机子代理返回审读报告（playResult 已有完整 report fallback）
+		return wrapResult(fallback)
+	default:
+		return wrapResult(fallback)
+	}
+}
+
+// simNextID 单调递增的模拟 ID（写工具模板结果用，可复现）。
+var simIDCounter int64
+
+func simNextID() int64 {
+	simIDCounter++
+	return simIDCounter
 }
 
 // isReadonlyTool 判定只读工具（无副作用，可安全真实执行）。

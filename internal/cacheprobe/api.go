@@ -632,11 +632,25 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 // （首批 init + 每批 prepare→outline(perBatch 章大纲)→write→review→maintain），
 // 批次循环、上下文累积，直到刻度/窗口上限。章号按批偏移，不覆盖前批。
 func buildBatchLoop(mode string, cache *TokenCache, perBatch, batches int) [][2]int64 {
+	return buildBatchLoopCompress(mode, cache, perBatch, batches, 0)
+}
+
+// buildBatchLoopCompress 带上下文压缩建模的批量循环（contextWindow>0 时每批开始检查）。
+func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, contextWindow int) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
+	if contextWindow > 0 {
+		cache.EnableCompression(contextWindow, 0.7, func() {
+			simCompress(cache, &history, simCurrentChapter)
+		})
+	}
+
 	for b := 0; b < batches; b++ {
 		base := b * perBatch
+		if contextWindow > 0 {
+			cache.MaybeCompress()
+		}
 		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", perBatch))}
 		cur = append(cur, sysMsg(novelState(base)))
 		if b == 0 {
@@ -765,6 +779,33 @@ func commitCur(mode string, history *[]map[string]any, cur []map[string]any) {
 		legacyCur = append(legacyCur, cur[2:]...)
 		*history = append(*history, legacyCur...)
 	}
+}
+
+// simCompress 模拟真机上下文压缩（internal/agent/compress.go Compress 对齐）：
+// 1. ResetChain：前缀链重置（下轮首请求全 miss）
+// 2. 重建消息：fixedSystem + 新 NS + compressionSummary reminder + 保留最近 maxSimRetain 条消息
+//    （真机保留最近 15 条 user 消息及之后内容，模拟简化保留历史尾部）
+// 3. 技能全文不在重建后的历史中 → 下次 set_phase 时 visibleIn 全文比对失败 → 自动重新注入全文
+//    （与真机压缩后技能衰减恢复一致，无需清注入记录）
+const maxSimRetain = 15
+
+func simCompress(cache *TokenCache, history *[]map[string]any, turn int) {
+	cache.ResetChain()
+	// 保留尾部最近 maxSimRetain 条消息（对齐真机 retainMessages 的 user 消息窗口近似）
+	retained := []map[string]any{}
+	if len(*history) > 0 {
+		start := len(*history) - maxSimRetain
+		if start < 0 {
+			start = 0
+		}
+		retained = append(retained, (*history)[start:]...)
+	}
+	// 重建：fixedSystem + 新 NS + 摘要提醒 + 保留尾部
+	newHistory := append([]map[string]any{}, fixedSystem()...)
+	newHistory = append(newHistory, sysMsg(novelState(turn)))
+	newHistory = append(newHistory, userMsg(compressionSummary()))
+	newHistory = append(newHistory, retained...)
+	*history = newHistory
 }
 
 // cleanVersion 发送前变换：把 read/read_required 的 skill 全文替换为占位符，
@@ -920,6 +961,7 @@ func RunSkillDedup() (*LayeredResult, error) {
 type WindowCostResult struct {
 	Marks      []WindowMark // 各刻度到达时的累计快照（single/batch 模式）
 	StageMarks []StageMark  // 阶段打点（mixed 模式，按创作阶段边界）
+	Compresses int          // 上下文压缩触发次数（contextWindow>0 时）
 	FinalHit   int64
 	FinalMiss  int64
 	FinalOut   int64
@@ -977,9 +1019,11 @@ func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 //   mixed：混合会话（开书 → 短对话 → 单章 → 短对话 → 批量 → 短对话），
 //          批量部分按 batchRounds 批次循环（章号偏移，不覆盖前批），
 //          按用户配置的轮数跑（窗口大小由输入决定，刻度能打到哪算哪）
+// contextWindow>0 时启用上下文压缩建模（对齐真机 agent.go:434-455：每轮开始
+// 检查 token 预算，超 0.7×窗口触发压缩重建——链重置 + fixedSystem/NS/摘要/保留尾部）。
 // 历史增长过程中首次跨过 128K/256K/512K/1024K 时记录累计 hit/miss/out/请求数/章数。
 // 返回：刻度快照 + 最终汇总（成本由调用方按设置页价格估算）。
-func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds int) (*WindowCostResult, error) {
+func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow int) (*WindowCostResult, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
 
@@ -999,7 +1043,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		if gateRounds <= 0 {
 			gateRounds = 26 // 1M 窗口约 25 章
 		}
-		res = buildMixedSession("auto", c, gateRounds, 0, 0)
+		res = buildMixedSessionCompress("auto", c, gateRounds, 0, 0, 1, contextWindow)
 	case "batch":
 		if batchChapters <= 0 {
 			batchChapters = 120
@@ -1009,7 +1053,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		if batches < 1 {
 			batches = 1
 		}
-		res = buildBatchLoop("now", c, perBatch, batches)
+		res = buildBatchLoopCompress("now", c, perBatch, batches, contextWindow)
 	default: // mixed
 		if gateRounds <= 0 && shortQARounds <= 0 && batchChapters <= 0 {
 			gateRounds, shortQARounds, batchChapters = 3, 5, 5
@@ -1019,7 +1063,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		}
 		// 阶段打点（混合模式专用）：按创作阶段边界记录，替代阈值刻度
 		c.stageMarks = make([]StageMark, 0, 12)
-		res = buildMixedSessionLoop("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds)
+		res = buildMixedSessionCompress("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 	}
 
 	r := &WindowCostResult{
@@ -1029,6 +1073,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		FinalMiss:  c.miss,
 		FinalOut:   c.output,
 		FinalReqs:  c.reqCount,
+		Compresses: c.compressCount,
 	}
 	if len(res) > 0 {
 		last := res[len(res)-1]
@@ -1041,18 +1086,37 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 // → 短对话 → 批量创作 → 短对话……全部发生在同一条历史里，短对话穿插在创作轮之间。
 // 这比"短对话独立场景"更贴近真实使用：用户不会开一个窗口纯聊天，再开一个窗口纯创作。
 func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters int) [][2]int64 {
-	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, 1)
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, 1, 0)
 }
 
 // buildMixedSessionLoop 同 buildMixedSession，但批量部分批次循环 batchRounds 次
 // （每批 batchChapters 章，章号按批偏移，不覆盖前批）——混合会话也能跑到 1M 窗口。
 func buildMixedSessionLoop(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds int) [][2]int64 {
-	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds)
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, 0)
 }
 
-func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds int) [][2]int64 {
+// buildMixedSessionCompress 带上下文压缩建模的混合会话（contextWindow>0 时启用）。
+func buildMixedSessionCompress(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int) [][2]int64 {
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow)
+}
+
+func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
+
+	// 上下文压缩建模：每轮开始时检查 token 预算（对齐真机 agent.go:434-455），
+	// 超 0.7×窗口触发压缩重建（ResetChain + 重建消息序列）
+	if contextWindow > 0 {
+		cache.EnableCompression(contextWindow, 0.7, func() {
+			simCompress(cache, &history, simCurrentChapter)
+		})
+	}
+	// 压缩检查辅助：在每轮请求前调用（本轮首个请求全 miss 或复用重建链）
+	checkCompress := func() {
+		if cache.MaybeCompress() {
+			// 压缩后首个请求全 miss（链已重置），由后续 Step 自然体现
+		}
+	}
 
 	// auto 模式：init 技能直接注入
 	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
@@ -1078,6 +1142,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 		if qaBudget <= 0 {
 			return false
 		}
+		checkCompress()
 		cur := qaRound(cache, history, []map[string]any{}, &results, turn)
 		commitCur(mode, &history, cur)
 		qaBudget--
@@ -1093,6 +1158,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 
 	// 单章创作轮（每轮之间穿插短对话）
 	for turn := 1; turn <= gateRounds; turn++ {
+		checkCompress()
 		cur := []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章，继续推进剧情。", turn+1))}
 		cur = append(cur, sysMsg(novelState(turn)))
 		cur = runPlays(cache, history, cur, filterReadRequired(gateScript(turn), mode), &results,
@@ -1125,6 +1191,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 			// 单章轮 gateScript(turn) 写第 turn+1 章（2..gateRounds+1），
 			// 批量接在后面：base+1 = gateRounds+2 起，章号连续不重叠
 			base := gateRounds + 1 + r*batchChapters
+			checkCompress()
 			doQA(gateRounds + r + 1)
 			cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", batchChapters))}
 			cur = append(cur, sysMsg(novelState(base)))
