@@ -10,17 +10,20 @@ import (
 	"novel/internal/config"
 )
 
-// simMu 串行化模拟器调用（cacheprobe 包级状态单线程设计，两个模拟并行会串扰）。
+// simMu 串行化模拟器调用（cacheprobe 包级状态单线程设计，并行会串扰）。
 var simMu sync.Mutex
 
-// CacheSimResult 缓存模拟结果（前端展示用）。
+// CacheSimResult 写书成本模拟结果（前端展示用）。
+// 一个模拟 = 一个真实对话窗口：短对话与单章/批量创作交替在一条历史里。
+// 除了三方协议（now/legacy/clean）对照，还附带上下文窗口刻度快照
+// （历史增长到 128K/256K/512K/1024K 时的累计成本，找最省区间）。
 type CacheSimResult struct {
 	Scenarios []CacheSimScenario `json:"scenarios"`
 	// 汇总
-	TotalNowHit    int64   `json:"total_now_hit"`
-	TotalNowMiss   int64   `json:"total_now_miss"`
-	TotalLegacyHit int64   `json:"total_legacy_hit"`
-	TotalLegacyMiss int64  `json:"total_legacy_miss"`
+	TotalNowHit     int64 `json:"total_now_hit"`
+	TotalNowMiss    int64 `json:"total_now_miss"`
+	TotalLegacyHit  int64 `json:"total_legacy_hit"`
+	TotalLegacyMiss int64 `json:"total_legacy_miss"`
 	// LLM 输出 token（assistant 消息字节，含 reasoning_content）
 	TotalNowOutput    int64 `json:"total_now_output"`
 	TotalLegacyOutput int64 `json:"total_legacy_output"`
@@ -30,6 +33,14 @@ type CacheSimResult struct {
 	NowHitRate    float64 `json:"now_hit_rate"`
 	LegacyHitRate float64 `json:"legacy_hit_rate"`
 	MissSavePct   float64 `json:"miss_save_pct"`
+	// 上下文窗口刻度（now 协议，单窗口成本曲线）
+	Marks          []WindowSimMark `json:"marks"`
+	FinalTotal     int64           `json:"final_total"` // 终点历史大小（token）
+	FinalReqs      int             `json:"final_reqs"`
+	FinalCost      float64         `json:"final_cost"`
+	FinalHitRate   float64         `json:"final_hit_rate"`
+	BestInterval   string          `json:"best_interval"` // 最省区间标签（如 "256K→512K"）
+	BestPerChapter float64         `json:"best_per_chapter"`
 }
 
 // CacheSimScenario 单场景结果。
@@ -50,21 +61,7 @@ type CacheSimScenario struct {
 	LegacyCost float64 `json:"legacy_cost"`
 }
 
-// StartCacheSimulation 异步启动缓存命中模拟（用户手动触发）。
-// 立即返回，模拟在后台 goroutine 运行（耗时 1-6 分钟），完成后推送事件 cachesim:done。
-// gateRounds: 单章门禁创作轮数；shortQARounds: 短对话穿插轮数（0=不穿插）；
-// batchChapters: 批量创作章数（0=不跑批量场景）。
-func (a *App) StartCacheSimulation(gateRounds int, shortQARounds int, batchChapters int) error {
-	go func() {
-		simMu.Lock()
-		defer simMu.Unlock()
-		res := a.runCacheSimulationSync(gateRounds, shortQARounds, batchChapters)
-		wails.EventsEmit(a.ctx, "cachesim:done", res)
-	}()
-	return nil
-}
-
-// WindowSimMark 窗口刻度快照（前端展示用）。
+// WindowSimMark 窗口刻度快照（单窗口成本曲线打点）。
 type WindowSimMark struct {
 	Threshold        int64   `json:"threshold"` // 刻度（token）：128K/256K/512K/1024K
 	Reached          bool    `json:"reached"`
@@ -80,104 +77,22 @@ type WindowSimMark struct {
 	IntervalPerCh    float64 `json:"interval_per_chapter"`
 }
 
-// WindowSimResult 窗口刻度模拟结果。
-type WindowSimResult struct {
-	Mode           string          `json:"mode"`
-	Marks          []WindowSimMark `json:"marks"`
-	FinalHit       int64           `json:"final_hit"`
-	FinalMiss      int64           `json:"final_miss"`
-	FinalOut       int64           `json:"final_out"`
-	FinalTotal     int64           `json:"final_total"` // 终点历史大小（token）
-	FinalReqs      int             `json:"final_reqs"`
-	FinalCost      float64         `json:"final_cost"`
-	FinalHitRate   float64         `json:"final_hit_rate"`
-	BestInterval   string          `json:"best_interval"` // 最省区间标签（如 "256K→512K"）
-	BestPerChapter float64         `json:"best_per_chapter"`
-	Err            string          `json:"err,omitempty"`
-}
-
-// StartWindowSimulation 异步启动"窗口刻度"模拟：单窗口内历史增长到 128K/256K/512K/1024K
-// 时的成本快照（mode=single 每章完整门禁 / mode=batch 每批 6 章批量门禁批次循环），
-// 完成后推送事件 windowsim:done。
-func (a *App) StartWindowSimulation(mode string, chapters int) error {
+// StartCacheSimulation 异步启动写书成本模拟（用户手动触发）。
+// 立即返回，模拟在后台 goroutine 运行（耗时 1-6 分钟），完成后推送事件 cachesim:done。
+// gateRounds: 单章门禁创作轮数；shortQARounds: 短对话穿插轮数（0=不穿插）；
+// batchChapters: 批量创作章数（0=不跑批量场景）。三者可自由组合——真实窗口
+// 可能只跑单章、只跑批量、或混合。
+func (a *App) StartCacheSimulation(gateRounds int, shortQARounds int, batchChapters int) error {
 	go func() {
 		simMu.Lock()
 		defer simMu.Unlock()
-		res := a.runWindowSimSync(mode, chapters)
-		wails.EventsEmit(a.ctx, "windowsim:done", res)
+		res := a.runCacheSimulationSync(gateRounds, shortQARounds, batchChapters)
+		wails.EventsEmit(a.ctx, "cachesim:done", res)
 	}()
 	return nil
 }
 
-// runWindowSimSync 执行窗口刻度模拟并计算成本/区间/最省区间（设置页价格）。
-func (a *App) runWindowSimSync(mode string, chapters int) *WindowSimResult {
-	raw, err := cacheprobe.RunWindowCost(mode, chapters)
-	if err != nil {
-		return &WindowSimResult{Err: err.Error()}
-	}
-
-	inputPrice, outputPrice, cachePrice := 1.0, 2.0, 0.02
-	if s, err := config.LoadSettings(a.db); err == nil {
-		if s.PriceInput > 0 {
-			inputPrice = s.PriceInput
-		}
-		if s.PriceOutput > 0 {
-			outputPrice = s.PriceOutput
-		}
-		if s.CachePrice > 0 {
-			cachePrice = s.CachePrice
-		}
-	}
-
-	res := &WindowSimResult{Mode: mode}
-	prevCost := 0.0
-	prevCh := 0
-	prevTh := int64(0)
-	prevReached := false
-	bestInterval := ""
-	bestPerCh := 1e18
-	for _, mk := range raw.Marks {
-		m := WindowSimMark{
-			Threshold: mk.Threshold,
-			Reached:   mk.Reached,
-			Hit:       mk.Hit,
-			Miss:      mk.Miss,
-			Out:       mk.Out,
-			Requests:  mk.Requests,
-			Chapter:   mk.Chapter,
-			Cost:      costOf(mk.Hit, mk.Miss, mk.Out, cachePrice, inputPrice, outputPrice),
-			HitRate:   hitRate(mk.Hit, mk.Miss),
-		}
-		if prevReached && mk.Reached {
-			m.IntervalChapters = mk.Chapter - prevCh
-			m.IntervalCost = m.Cost - prevCost
-			if m.IntervalChapters > 0 {
-				m.IntervalPerCh = m.IntervalCost / float64(m.IntervalChapters)
-			}
-			if m.IntervalPerCh > 0 && m.IntervalPerCh < bestPerCh {
-				bestPerCh = m.IntervalPerCh
-				bestInterval = fmt.Sprintf("%dK→%dK", prevTh/1024, mk.Threshold/1024)
-			}
-		}
-		prevCost = m.Cost
-		prevCh = mk.Chapter
-		prevTh = mk.Threshold
-		prevReached = mk.Reached
-		res.Marks = append(res.Marks, m)
-	}
-	res.FinalHit = raw.FinalHit
-	res.FinalMiss = raw.FinalMiss
-	res.FinalOut = raw.FinalOut
-	res.FinalTotal = raw.FinalTotal
-	res.FinalReqs = raw.FinalReqs
-	res.FinalCost = costOf(raw.FinalHit, raw.FinalMiss, raw.FinalOut, cachePrice, inputPrice, outputPrice)
-	res.FinalHitRate = hitRate(raw.FinalHit, raw.FinalMiss)
-	res.BestInterval = bestInterval
-	res.BestPerChapter = bestPerCh
-	return res
-}
-
-// runCacheSimulationSync 同步执行模拟并附带价格估算（供 StartCacheSimulation 后台调用）。
+// runCacheSimulationSync 同步执行模拟并附带价格估算与窗口刻度（供 StartCacheSimulation 后台调用）。
 func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchChapters int) *CacheSimResult {
 	raw, err := cacheprobe.Run(gateRounds, shortQARounds, batchChapters, 0) // clean 保留窗口默认 0（全清理）
 	if err != nil {
@@ -229,6 +144,48 @@ func (a *App) runCacheSimulationSync(gateRounds int, shortQARounds int, batchCha
 	res.LegacyCost = costOf(res.TotalLegacyHit, res.TotalLegacyMiss, raw.TotalLegacyOutput, cachePrice, inputPrice, outputPrice)
 	res.NowCost = costOf(res.TotalNowHit, res.TotalNowMiss, raw.TotalNowOutput, cachePrice, inputPrice, outputPrice)
 
+	// 窗口刻度：打点快照 + 区间每章成本 + 最省区间
+	res.FinalTotal = raw.FinalTotal
+	prevCost := 0.0
+	prevCh := 0
+	prevTh := int64(0)
+	prevReached := false
+	bestInterval := ""
+	bestPerCh := 1e18
+	for _, mk := range raw.NowMarks {
+		m := WindowSimMark{
+			Threshold: mk.Threshold,
+			Reached:   mk.Reached,
+			Hit:       mk.Hit,
+			Miss:      mk.Miss,
+			Out:       mk.Out,
+			Requests:  mk.Requests,
+			Chapter:   mk.Chapter,
+			Cost:      costOf(mk.Hit, mk.Miss, mk.Out, cachePrice, inputPrice, outputPrice),
+			HitRate:   hitRate(mk.Hit, mk.Miss),
+		}
+		if prevReached && mk.Reached {
+			m.IntervalChapters = mk.Chapter - prevCh
+			m.IntervalCost = m.Cost - prevCost
+			if m.IntervalChapters > 0 {
+				m.IntervalPerCh = m.IntervalCost / float64(m.IntervalChapters)
+			}
+			if m.IntervalPerCh > 0 && m.IntervalPerCh < bestPerCh {
+				bestPerCh = m.IntervalPerCh
+				bestInterval = fmt.Sprintf("%dK→%dK", prevTh/1024, mk.Threshold/1024)
+			}
+		}
+		prevCost = m.Cost
+		prevCh = mk.Chapter
+		prevTh = mk.Threshold
+		prevReached = mk.Reached
+		res.Marks = append(res.Marks, m)
+	}
+	res.FinalReqs = raw.FinalReqs
+	res.FinalCost = res.NowCost
+	res.FinalHitRate = res.NowHitRate
+	res.BestInterval = bestInterval
+	res.BestPerChapter = bestPerCh
 	return res
 }
 

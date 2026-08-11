@@ -64,8 +64,9 @@ type TokenCache struct {
 	missCat   func(m map[string]any) string
 	MissByCat map[string]int64
 	// 窗口刻度打点（RunWindowCost 用）
-	marks    []WindowMark
-	reqCount int
+	marks     []WindowMark
+	reqCount  int
+	lastTotal int64 // 最近一次请求的输入大小（最终历史规模，刻度表终点用）
 }
 
 // SetMissCat 启用 miss 分类统计（诊断用，不影响模拟结果）。
@@ -260,6 +261,7 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 		}
 		c.miss += total
 		c.reqCount++
+		c.lastTotal = total
 		c.markWindow(total)
 		c.prevBytes = reqBytes
 		c.prevMsgs = append([]map[string]any{}, messages...)
@@ -316,6 +318,7 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 	c.hit += hit
 	c.miss += miss
 	c.reqCount++
+	c.lastTotal = total
 	// 打点：本次请求输入跨过刻度时记录累计快照
 	c.markWindow(total)
 	// output 累计：相对上次请求新增的 assistant 消息 = 本次 LLM 调用的输出字节。

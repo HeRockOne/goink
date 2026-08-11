@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Activity, Play, Loader2, TrendingUp } from 'lucide-react'
-import { StartCacheSimulation, StartWindowSimulation } from '@/lib/wailsjs/go/app/App'
+import { StartCacheSimulation } from '@/lib/wailsjs/go/app/App'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 
 // 模拟结果类型（后端 app.CacheSimResult 通过事件推送，未生成 wails 模型，本地定义）
@@ -19,22 +19,7 @@ interface CacheSimScenario {
   legacy_cost: number
 }
 
-interface CacheSimResult {
-  scenarios: CacheSimScenario[]
-  total_now_hit: number
-  total_now_miss: number
-  total_legacy_hit: number
-  total_legacy_miss: number
-  total_now_output: number
-  total_legacy_output: number
-  now_cost: number
-  legacy_cost: number
-  now_hit_rate: number
-  legacy_hit_rate: number
-  miss_save_pct: number
-}
-
-// 窗口刻度模拟结果（后端 app.WindowSimResult 事件推送，本地定义）
+// 窗口刻度快照（单窗口成本曲线打点，now 协议）
 interface WindowSimMark {
   threshold: number
   reached: boolean
@@ -50,19 +35,26 @@ interface WindowSimMark {
   interval_per_chapter: number
 }
 
-interface WindowSimResult {
-  mode: string
+interface CacheSimResult {
+  scenarios: CacheSimScenario[]
+  total_now_hit: number
+  total_now_miss: number
+  total_legacy_hit: number
+  total_legacy_miss: number
+  total_now_output: number
+  total_legacy_output: number
+  now_cost: number
+  legacy_cost: number
+  now_hit_rate: number
+  legacy_hit_rate: number
+  miss_save_pct: number
   marks: WindowSimMark[]
-  final_hit: number
-  final_miss: number
-  final_out: number
   final_total: number
   final_reqs: number
   final_cost: number
   final_hit_rate: number
   best_interval: string
   best_per_chapter: number
-  err?: string
 }
 
 // 格式化为 M（百万）单位
@@ -75,7 +67,8 @@ function fmtM(tokens: number): string {
 
 // 缓存模拟 Tab：估算一个真实对话窗口写书的 token 消耗与费用——
 // 短对话（查设定/改设定）与单章/批量创作交替发生在同一条历史里。
-// 对比「历史随对话保留（当前版本）」与「每轮重发（旧版本）」的差距。
+// 同时附带单窗口成本曲线（历史增长到 128K/256K/512K/1024K 时的累计成本，
+// 找最省区间）。
 export default function CacheSimTab() {
   const [singleRounds, setSingleRounds] = useState(5)
   const [batchChapters, setBatchChapters] = useState(5)
@@ -84,13 +77,6 @@ export default function CacheSimTab() {
   const [result, setResult] = useState<CacheSimResult | null>(null)
   const [error, setError] = useState('')
   const mountedRef = useRef(true)
-
-  // 窗口刻度模拟状态
-  const [winMode, setWinMode] = useState<'single' | 'batch'>('batch')
-  const [winChapters, setWinChapters] = useState(120)
-  const [winRunning, setWinRunning] = useState(false)
-  const [winResult, setWinResult] = useState<WindowSimResult | null>(null)
-  const [winError, setWinError] = useState('')
 
   useEffect(() => {
     mountedRef.current = true
@@ -103,16 +89,7 @@ export default function CacheSimTab() {
       }
       setResult(data)
     })
-    const cleanupWin = EventsOn('windowsim:done', (data: WindowSimResult) => {
-      if (!mountedRef.current) return
-      setWinRunning(false)
-      if (data.err) {
-        setWinError(data.err)
-        return
-      }
-      setWinResult(data)
-    })
-    return () => { mountedRef.current = false; cleanup(); cleanupWin() }
+    return () => { mountedRef.current = false; cleanup() }
   }, [])
 
   const run = useCallback(async () => {
@@ -125,17 +102,6 @@ export default function CacheSimTab() {
       setRunning(false)
     }
   }, [singleRounds, qaRounds, batchChapters])
-
-  const runWindow = useCallback(async () => {
-    setWinRunning(true)
-    setWinError('')
-    try {
-      await StartWindowSimulation(winMode, winChapters)
-    } catch (e) {
-      setWinError(String(e))
-      setWinRunning(false)
-    }
-  }, [winMode, winChapters])
 
   const input = (value: number, setValue: (n: number) => void, min = 0, max = 20, label: string, hint?: string) => (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -183,17 +149,21 @@ export default function CacheSimTab() {
     )
   }
 
+  const totalChapters = singleRounds + batchChapters
+  const showWindow = !!result && result.marks && result.marks.length > 0
+
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="mb-1 pb-3 border-b">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4" />
-          <span className="text-sm font-medium">写书成本模拟</span>
+          <span className="text-sm font-medium">写书成本模拟（含窗口成本曲线）</span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           模拟一个真实对话窗口的历史 Token 消耗与费用。短对话与单章/批量创作
-          交替发生在同一条对话历史里。必读技能由系统自动注入（auto_skill_injection），
-          历史留在服务端缓存；正文长度与思考过程按真实分布生成（分阶段 thinking），
+          交替发生在同一条对话历史里（可按需组合：只跑单章、只跑批量、或混合）。
+          必读技能由系统自动注入（auto_skill_injection），历史留在服务端缓存；
+          正文长度与思考过程按真实分布生成（分阶段 thinking），
           费用 = 输入命中 × 缓存价 + 输入未命中 × 输入价 + 输出 × 输出价（设置页模型价格）。
         </p>
       </div>
@@ -216,7 +186,7 @@ export default function CacheSimTab() {
 
       {result && (
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-          {result.scenarios.map(s => renderScenario(s, singleRounds + batchChapters))}
+          {result.scenarios.map(s => renderScenario(s, totalChapters))}
 
           <div className="rounded-lg border p-3 bg-muted/30">
             <div className="text-sm font-medium mb-2">合计</div>
@@ -238,109 +208,73 @@ export default function CacheSimTab() {
                   <td className="py-1 text-right tabular-nums">{fmtM(result.total_now_output)}</td>
                   <td className="py-1 text-right tabular-nums">{result.now_hit_rate.toFixed(1)}%</td>
                   <td className="py-1 text-right tabular-nums">{result.now_cost.toFixed(4)}</td>
-                  <td className="py-1 text-right tabular-nums">{(result.now_cost / Math.max(1, singleRounds + batchChapters)).toFixed(4)}</td>
+                  <td className="py-1 text-right tabular-nums">{(result.now_cost / Math.max(1, totalChapters)).toFixed(4)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
-      )}
 
-      {/* ── 上下文窗口刻度区块 ─────────────────────────────── */}
-      <div className="mb-1 pt-4 border-t">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4" />
-          <span className="text-sm font-medium">上下文窗口刻度（单窗口成本曲线）</span>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本，
-          找最省区间。单章模式 = 每章完整门禁逐章累积（1M 窗口约 25 章）；
-          批量模式 = 每批 6 章完整批量门禁批次循环（1M 窗口约 109 章）。
-        </p>
-      </div>
-
-      <div className="flex items-end gap-4">
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          模式
-          <div className="flex gap-1">
-            {(['single', 'batch'] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => setWinMode(m)}
-                className={`px-3 py-1.5 rounded border text-sm transition-colors ${winMode === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
-              >
-                {m === 'single' ? '单章' : '批量'}
-              </button>
-            ))}
-          </div>
-        </div>
-        {input(winChapters, setWinChapters, 1, 200, winMode === 'single' ? '章数' : '章数（每批 6 章）', winMode === 'single' ? '1M 窗口约 25 章，默认 26' : '批次循环，默认 120（≈1M）')}
-        <button
-          onClick={runWindow}
-          disabled={winRunning}
-          className="px-4 py-1.5 rounded bg-primary text-primary-foreground text-sm flex items-center gap-1.5 disabled:opacity-50 hover:opacity-90 transition-opacity"
-        >
-          {winRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {winRunning ? '模拟中...' : '跑窗口刻度'}
-        </button>
-      </div>
-
-      {winError && <p className="text-xs text-red-500">{winError}</p>}
-
-      {winResult && (
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-          <div className="rounded-lg border p-3">
-            <div className="text-sm font-medium mb-2">
-              {winResult.mode === 'single' ? '单章模式' : '批量模式（每批 6 章）'}
-              {winResult.best_interval && (
-                <span className="ml-2 text-xs font-normal text-primary">
-                  最省区间：{winResult.best_interval}（每章 ¥{winResult.best_per_chapter.toFixed(4)}）
-                </span>
-              )}
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground">
-                  <th className="text-left py-1 font-normal">刻度</th>
-                  <th className="text-right py-1 font-normal">到达时</th>
-                  <th className="text-right py-1 font-normal">累计成本 ¥</th>
-                  <th className="text-right py-1 font-normal">累计 miss</th>
-                  <th className="text-right py-1 font-normal">累计 hit</th>
-                  <th className="text-right py-1 font-normal">请求</th>
-                  <th className="text-right py-1 font-normal">命中率</th>
-                  <th className="text-right py-1 font-normal">区间每章 ¥</th>
-                </tr>
-              </thead>
-              <tbody>
-                {winResult.marks.map(m => (
-                  <tr key={m.threshold} className="border-t border-border/50">
-                    <td className="py-1.5 tabular-nums">{m.threshold / 1024}K</td>
-                    <td className="py-1.5 text-right tabular-nums">
-                      {m.reached ? `第 ${m.chapter} 章` : '未到达'}
-                    </td>
-                    <td className="py-1.5 text-right tabular-nums">{m.reached ? m.cost.toFixed(4) : '-'}</td>
-                    <td className="py-1.5 text-right tabular-nums">{m.reached ? `${(m.miss / 1000).toFixed(0)}K` : '-'}</td>
-                    <td className="py-1.5 text-right tabular-nums">{m.reached ? fmtM(m.hit) : '-'}</td>
-                    <td className="py-1.5 text-right tabular-nums">{m.reached ? m.requests : '-'}</td>
-                    <td className="py-1.5 text-right tabular-nums">{m.reached ? `${m.hit_rate.toFixed(1)}%` : '-'}</td>
-                    <td className="py-1.5 text-right tabular-nums">
-                      {m.interval_per_chapter > 0 ? `¥${m.interval_per_chapter.toFixed(4)}` : '-'}
-                    </td>
+          {/* ── 上下文窗口刻度（单窗口成本曲线）── */}
+          {showWindow && (
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">上下文窗口刻度（单窗口成本曲线）</span>
+                {result.best_interval && (
+                  <span className="text-xs text-primary">
+                    最省区间：{result.best_interval}（每章 ¥{result.best_per_chapter.toFixed(4)}）
+                  </span>
+                )}
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="text-left py-1 font-normal">刻度</th>
+                    <th className="text-right py-1 font-normal">到达时</th>
+                    <th className="text-right py-1 font-normal">累计成本 ¥</th>
+                    <th className="text-right py-1 font-normal">累计 miss</th>
+                    <th className="text-right py-1 font-normal">累计 hit</th>
+                    <th className="text-right py-1 font-normal">请求</th>
+                    <th className="text-right py-1 font-normal">命中率</th>
+                    <th className="text-right py-1 font-normal">区间每章 ¥</th>
                   </tr>
-                ))}
-                <tr className="border-t border-border/50 text-muted-foreground">
-                  <td className="py-1.5">终点（历史 {(winResult.final_total / 1000).toFixed(0)}K）</td>
-                  <td className="py-1.5 text-right">{winResult.final_reqs} 请求</td>
-                  <td className="py-1.5 text-right tabular-nums">{winResult.final_cost.toFixed(4)}</td>
-                  <td className="py-1.5 text-right tabular-nums">{(winResult.final_miss / 1000).toFixed(0)}K</td>
-                  <td className="py-1.5 text-right tabular-nums">{fmtM(winResult.final_hit)}</td>
-                  <td className="py-1.5 text-right">-</td>
-                  <td className="py-1.5 text-right tabular-nums">{winResult.final_hit_rate.toFixed(1)}%</td>
-                  <td className="py-1.5 text-right">-</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {result.marks.map(m => (
+                    <tr key={m.threshold} className="border-t border-border/50">
+                      <td className="py-1.5 tabular-nums">{m.threshold / 1024}K</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {m.reached ? `第 ${m.chapter} 章` : '未到达'}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{m.reached ? m.cost.toFixed(4) : '-'}</td>
+                      <td className="py-1.5 text-right tabular-nums">{m.reached ? `${(m.miss / 1000).toFixed(0)}K` : '-'}</td>
+                      <td className="py-1.5 text-right tabular-nums">{m.reached ? fmtM(m.hit) : '-'}</td>
+                      <td className="py-1.5 text-right tabular-nums">{m.reached ? m.requests : '-'}</td>
+                      <td className="py-1.5 text-right tabular-nums">{m.reached ? `${m.hit_rate.toFixed(1)}%` : '-'}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {m.interval_per_chapter > 0 ? `¥${m.interval_per_chapter.toFixed(4)}` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t border-border/50 text-muted-foreground">
+                    <td className="py-1.5">终点（历史 {(result.final_total / 1000).toFixed(0)}K）</td>
+                    <td className="py-1.5 text-right">{result.final_reqs} 请求</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.final_cost.toFixed(4)}</td>
+                    <td className="py-1.5 text-right tabular-nums">-</td>
+                    <td className="py-1.5 text-right tabular-nums">-</td>
+                    <td className="py-1.5 text-right">-</td>
+                    <td className="py-1.5 text-right tabular-nums">{result.final_hit_rate.toFixed(1)}%</td>
+                    <td className="py-1.5 text-right">-</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-[10px] text-muted-foreground/70 mt-2">
+                单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
+                当前输入（单章 {singleRounds} 轮 · 短对话 {qaRounds} 轮 · 批量 {batchChapters} 章）
+                决定了曲线能打到哪里：只跑单章约 25 章到 1M，只跑批量每批 6 章约 109 章到 1M。
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

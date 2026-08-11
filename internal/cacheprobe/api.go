@@ -46,6 +46,10 @@ type Result struct {
 	TotalCleanOutput  int64 `json:"total_clean_output"`
 	// miss 构成（now 协议，按消息来源分类）
 	TotalNowMissByCat map[string]int64 `json:"total_now_miss_by_cat,omitempty"`
+	// 窗口刻度快照（now 协议）：历史增长跨过 128K/256K/512K/1024K 时的累计成本点
+	NowMarks   []WindowMark `json:"now_marks,omitempty"`
+	FinalTotal int64        `json:"final_total,omitempty"` // 最后请求的输入大小（历史最终规模）
+	FinalReqs  int          `json:"final_reqs,omitempty"`  // 总请求数（now 协议）
 }
 
 // Run 执行缓存模拟，三方对照：
@@ -71,9 +75,15 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 
 	res := &Result{}
 
+	// 窗口刻度打点：now 协议 cache 挂阈值（历史增长到 128K/256K/512K/1024K 时记录快照）。
+	// 与 RunWindowCost 同机制；这里打点的是整个混合会话的 now 协议历史。
+	simWindowThresholds = []int64{128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024}
+	simCurrentChapter = 0
+	defer func() { simWindowThresholds = nil; simCurrentChapter = 0 }()
+
 // 混合对话窗口场景（真实使用方式）
 	// auto = 当前自动注入行为, now = 旧 read_required 行为（两者都有 NS 缓存，差异仅 auto-inject）
-	sc := runTriple(fmt.Sprintf("对话窗口（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章）", gateRounds, shortQARounds, batchChapters), cleanRetain, func(mode string, c *TokenCache) [][2]int64 {
+	nowCache, sc := runTriple(fmt.Sprintf("对话窗口（单章 %d 轮 · 短对话 %d 轮 · 批量 %d 章）", gateRounds, shortQARounds, batchChapters), cleanRetain, func(mode string, c *TokenCache) [][2]int64 {
 		simMode := mode
 		if mode == "now" {
 			simMode = "auto" // 当前版：auto-inject
@@ -84,6 +94,9 @@ func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, er
 		return buildMixedSession(simMode, c, gateRounds, shortQARounds, batchChapters)
 	})
 	res.Scenarios = append(res.Scenarios, sc)
+	res.NowMarks = nowCache.marks
+	res.FinalTotal = nowCache.lastTotal
+	res.FinalReqs = nowCache.reqCount
 
 	for _, s := range res.Scenarios {
 		res.TotalNowHit += s.NowHit
@@ -299,9 +312,13 @@ func runPair(name string, fn func(string, *TokenCache) [][2]int64) ScenarioResul
 }
 
 // runTriple 跑 now/legacy/clean(retain) 三种协议并汇总（clean 用发送前变换的 TokenCache）。
-func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64) ScenarioResult {
+// 返回 now cache（调用方读 marks/窗口刻度），其余按值返回。
+func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64) (*TokenCache, ScenarioResult) {
 	nowCache := NewTokenCache()
 	nowCache.SetMissCat(missCatOf)
+	if len(simWindowThresholds) > 0 {
+		nowCache.marks = make([]WindowMark, len(simWindowThresholds))
+	}
 	legacyCache := NewTokenCache()
 	legacyCache.SetMissCat(missCatOf)
 	cleanCache := NewCleanCache(retain)
@@ -323,7 +340,7 @@ func runTriple(name string, retain int, fn func(string, *TokenCache) [][2]int64)
 		cH += pr[0]
 		cM += pr[1]
 	}
-	return ScenarioResult{
+	return nowCache, ScenarioResult{
 		Name: name, NowHit: nH, NowMiss: nM, LegacyHit: lH, LegacyMiss: lM, CleanHit: cH, CleanMiss: cM,
 		NowOutput: nowCache.Output(), LegacyOutput: legacyCache.Output(), CleanOutput: cleanCache.Output(),
 		NowMissByCat: nowCache.MissByCat, LegacyMissByCat: legacyCache.MissByCat, CleanMissByCat: cleanCache.MissByCat,
