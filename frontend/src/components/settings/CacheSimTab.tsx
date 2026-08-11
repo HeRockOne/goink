@@ -80,7 +80,10 @@ function NumInput(props: {
 
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-      {label}
+      <span className="flex items-center gap-1">
+        {label}
+        {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
+      </span>
       <input
         type="number"
         min={min}
@@ -97,7 +100,6 @@ function NumInput(props: {
         onKeyDown={e => { if (e.key === 'Enter') commit() }}
         className="w-24 px-2 py-1.5 rounded border bg-background text-sm text-foreground"
       />
-      {hint && <span className="text-[10px] text-muted-foreground/70">{hint}</span>}
     </label>
   )
 }
