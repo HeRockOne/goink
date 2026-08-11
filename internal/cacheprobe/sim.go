@@ -1043,38 +1043,68 @@ func realToolResult(name, args, fallback string) string {
 	return writeToolResult(name, args, fallback)
 }
 
-// writeToolResult 写工具结果模板：对齐真机各写工具的 Data 结构，避免 fallback 短串
-// 与真机 JSON 结构不一致导致成本口径偏差（工具结果占 miss 构成 ~38%）。
+// writeToolResult 写工具结果模板：对齐真机各写工具返回结构（从真实 DB messages 表
+// role=tool 消息提取校准，2026-08-12）——工具结果占 miss 构成 ~38%，结构一致才能
+// 让成本口径贴近真机。统一格式 {"success":true,"data":{...}}。
 func writeToolResult(name, args, fallback string) string {
+	ok := func(data map[string]any) string {
+		b, _ := json.Marshal(map[string]any{"success": true, "data": data})
+		return string(b)
+	}
 	switch {
 	case name == "edit":
-		// 真机 rw_tools.go:237-249：{"path","change_type","approved"}，line_range_replace 额外 before/after
+		// 真机 rw_tools.go:237-249：{"approved","change_type","path"}；append 为主（指纹账本）
 		path := ""
+		changeType := "full_replace"
 		var a struct {
 			Path       string `json:"path"`
 			ChangeType string `json:"change_type"`
 		}
 		if json.Unmarshal([]byte(args), &a) == nil {
 			path = a.Path
+			if a.ChangeType != "" {
+				changeType = a.ChangeType
+			}
 		}
-		if a.ChangeType == "" {
-			a.ChangeType = "full_replace"
+		return ok(map[string]any{"approved": true, "change_type": changeType, "path": path})
+	case name == "set_phase":
+		// 真机 agent.go:583：{"phase":X}（成功）或 {"current_phase":X,"error":...}（失败）
+		phase := phaseOfArgs(args)
+		if phase == "" {
+			return wrapResult(fallback)
 		}
-		data := map[string]any{"path": path, "change_type": a.ChangeType, "approved": true}
-		b, _ := json.Marshal(map[string]any{"success": true, "data": data})
-		return string(b)
-	case name == "set_phase" || name == "auto_skill_injection":
-		// 真机 agent.go:583：set_phase 工具结果 {"success":true,"data":{"phase":X}}；auto_skill_injection 返回技能清单
-		return wrapResult(fallback)
-	case strings.HasPrefix(name, "delete_"):
-		// 真机 delete_tools.go：{"approved":false} 或 {"impact":{...}}
-		return `{"success":true,"data":{"approved":true,"impact":{}}}`
+		return ok(map[string]any{"phase": phase})
+	case name == "update_chapter_meta" || name == "update_writing_snapshot":
+		// 真机：{"updated":true}
+		return ok(map[string]any{"updated": true})
+	case name == "update_chapter_plan":
+		// 真机：{"scope":"near"/"next"}
+		scope := "near"
+		var a struct {
+			Scope string `json:"scope"`
+		}
+		if json.Unmarshal([]byte(args), &a) == nil && a.Scope != "" {
+			scope = a.Scope
+		}
+		return ok(map[string]any{"scope": scope})
+	case name == "update_character_relationship":
+		// 真机：{"action":"evolve","id":N}
+		return ok(map[string]any{"action": "evolve", "id": simNextID()})
+	case name == "update_reader_perspective_entry":
+		// 真机：{"id":N,"revealed_chapter":N}
+		return ok(map[string]any{"id": simNextID(), "revealed_chapter": simNextID()})
+	case name == "create_timeline_entry":
+		// 真机：{"count":1,"ids":[N]}
+		return ok(map[string]any{"count": 1, "ids": []int64{simNextID()}})
+	case name == "delete_record":
+		// 真机：{"deleted":{"id":N,"name":"...","type":"..."}}
+		return ok(map[string]any{"deleted": map[string]any{"id": simNextID(), "name": "删除对象", "type": "character"}})
 	case strings.HasPrefix(name, "create_"):
-		// 真机 create 类：{"id":N}（create_timeline_entry/location/character 等）
-		return fmt.Sprintf(`{"success":true,"data":{"id":%d}}`, simNextID())
+		// 真机 create 类（scene/item_occurrence 等）：{"id":N}
+		return ok(map[string]any{"id": simNextID()})
 	case strings.HasPrefix(name, "update_"):
-		// 真机 update 类：{"id":N} 或 {"ids":[...],"count":N}
-		return fmt.Sprintf(`{"success":true,"data":{"id":%d}}`, simNextID())
+		// 真机 update 类（character/timeline_entry/arc_node 等）：{"id":N}
+		return ok(map[string]any{"id": simNextID()})
 	case name == "run_subagent":
 		// 真机子代理返回审读报告（playResult 已有完整 report fallback）
 		return wrapResult(fallback)
