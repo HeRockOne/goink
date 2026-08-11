@@ -83,7 +83,7 @@ mode: always
 ### outline
 
 **必读技能在动笔前已由系统就绪**。然后：
-1. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
+2. **先消费总纲与卷纲**：outline 阶段开始前，确认 get_writing_context 返回的：
    - `outline`（全书总纲摘要：核心矛盾/主角成长弧线/结局方向）— 本章事件必须服务于它
    - `volume`（当前卷：本卷核心事件、主角状态变化、爽点位置、收尾钩子、需回收伏笔）
    - `progress`（当前章号 + 本卷 start~end 范围）— **本章纲不得超出本卷范围，后续卷情节禁止提前展开**
@@ -119,9 +119,9 @@ mode: always
      - 情感/情绪戏 → main-tech-emotion-injection
      - 节奏紧张章 → main-tech-pacing-control
      - 关键场景现场描写 ≥300 字 → main-tech-scene-beats
-   - 字数规则由 get_chapter_list 代码校验，无需读 main-tech-word-count-calibration
+    - 字数规则由 get_chapter_list 代码校验，无需读 main-tech-word-count-calibration
 4. **edit**(chapters/NNN.md)（required）— 写正文
-5. 校验字数（2400-4000，以设置中 min/max 为准，get_chapter_list 代码校验）
+5. 校验字数（2500-4000，以设置中 min/max 为准，get_chapter_list 代码校验；默认下限 2500）
 6. 记录关键物品出现 → create_item_occurrence
 7. **set_phase("review")**
 
@@ -131,8 +131,8 @@ mode: always
 2. **审稿核对（身份差异：主会话核对全量，子代理定向）**：
    - 主会话（作家视角）按意见修复前，先核对状态：**get_characters 全量**（核对角色 status：alive/dead 与正文一致性——brief 无 status 会漏检）、**get_timeline/get_story_arcs 传 current_chapter**（核对伏笔/弧线进度）、**get_reader_perspective 全量**、**check_story_consistency**（自动 DB 核对，输出问题条目）；读本章正文分段核对（read start_line/end_line）
    - 审稿子代理（fork 完整主历史，正文+writing_context 已在上下文）：只做**少量定向核对**（get_characters brief+size 小、get_timeline current_chapter），加 check_story_consistency 自动核对，然后输出审读报告——不要重复拉全量
-2. 根据意见修复（**批量模式：逐章 read 自查 + edit 修复 + 字数复查**，查 N 修 N）
-3. **set_phase("maintain")**
+3. 根据意见修复（**批量模式：逐章 read 自查 + edit 修复 + 字数复查**，查 N 修 N）
+4. **set_phase("maintain")**
 
 ### maintain（逐项检查清单，每章必做）
 
@@ -151,6 +151,8 @@ mode: always
 | G | 查角色关系 | get_character_relations | 是否有关系变化未记录 |
 
 > 每章 maintain 必须完成以上 7 项状态查询 + 下方更新动作，门禁 require 才放行。查到有变化就执行对应更新工具（6-14 项）。
+
+> **维护一轮完成，禁止分段遗留**：进入 maintain 后必须**一轮内完整执行**——7 项状态查询**并行发出**（一次请求多个查询，勿逐条）；更新动作按依赖链聚合（互不依赖的更新工具同批并行发出，如 create_scene/update_character/update_timeline_entry 可同批；先查后更、edit 前先 read 属必要依赖链才串行）。全部更新完成后**一次性输出维护清单**（每项 done / 遗留及原因），**不得**留待用户追问"还有 X 没做"再补——用户每追加一轮都产生新上下文轮次与缓存 miss，且分散的维护轮边界增加成本。补录门槛（关键实体判定标准）只决定"某项做不做"，不决定"分几轮做"。
 
 | # | 检查项 | 条件 | 工具 |
 |---|--------|------|------|
@@ -211,9 +213,9 @@ mode: always
 | **init（开书）** | main-core-init-phase（开书流程）, main-tech-genre-templates（12类型）, main-tech-book-outline（总纲）, main-tech-character-design（角色设计）, main-tech-world-building-system（世界观） |
 | **prepare（准备）** | main-tech-common-sense-logic（一致性）, main-tech-genre-templates, main-tech-book-outline（卷纲）, main-tech-brainstorm-composer（卡情节时构思） |
 | **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-chapter-title-design（章节标题设计）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
-| **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（八条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
+| **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（九条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
 | **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
-| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（16项判定） |
+| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（22项判定） |
 | **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔） |
 | **完结** | main-tech-book-completion（完本清单） |
 
@@ -223,8 +225,9 @@ mode: always
 - 每章 at least 1 个情绪锚点；情绪浓度高时禁止讲述句
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
 - 每章至少1个爽点（对照 main-tech-shuangdian-pacing）；章末必有钩子且类型不与前2章重复
+- **一章一事**：每章围绕一个核心事件/目标展开（大纲「关键事件」多条时，主事件只取一条为主线，其余并入铺垫/推进），避免一章塞多个平级事件导致节奏失控
 - 禁止功能报告体（连续3段无感官描写）；禁止散文体
-- 每章35-55段，每段60-80字，总字数2400-4000（以设置为准）
+- 每章35-55段，每段60-80字，总字数2500-4000（以设置为准，默认下限2500）
 - 字数不足禁止转阶段
 - 大战之间必须插非战斗章（对照 main-tech-climax-scene）
 - 完结前检查伏笔回收率≥90%（对照 main-tech-foreshadow-cycle / main-tech-book-completion）

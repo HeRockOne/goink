@@ -1,13 +1,13 @@
 ---
 name: sub-tech-anti-ai-grade
-description: 反AI三级禁用词表 + 频次阈值 + 反AI三遍法 + 误杀防护。比 anti-ai-writing 八条铁律更细的用词级规则，润色去AI味时使用。
+description: 反AI三级禁用词表 + 频次阈值 + 反AI三遍法 + 误杀防护。比 anti-ai-writing 九条铁律更细的用词级规则，润色去AI味时使用。
 category: 写作技法
 mode: auto
 ---
 
 # 反AI写作·用词级规则
 
-> 与 `anti-ai-writing`（八条铁律，判定合格）互补。本 skill 提供具体到词的禁用表与频次阈值。
+> 与 `anti-ai-writing`（九条铁律，判定合格）互补。本 skill 提供具体到词的禁用表与频次阈值。
 
 ## T1 出现即换（0 容忍）
 
