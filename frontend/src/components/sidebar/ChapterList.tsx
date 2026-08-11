@@ -267,7 +267,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
               <div key={block.key}>
                 <button
                   onClick={() => toggleBlock(block.key)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50"
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50 sticky top-0 bg-sidebar z-10"
                 >
                   <ChevronRight
                     className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
