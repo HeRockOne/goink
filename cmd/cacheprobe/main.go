@@ -31,6 +31,10 @@ func main() {
 		runCompare(*cachePrice, *inputPrice, *outputPrice)
 		return
 	}
+	if len(args) > 0 && args[0] == "nsondemand" {
+		runNSOnDemand(*cachePrice, *inputPrice, *outputPrice)
+		return
+	}
 	if len(args) > 0 && args[0] == "table" {
 		runTable(*cachePrice, *inputPrice, *outputPrice)
 		return
@@ -114,6 +118,26 @@ func runMatrix(cachePrice, inputPrice float64) {
 		}
 		fmt.Println()
 	}
+}
+
+// runNSOnDemand NS 按需注入对照（非写章轮跳过重复 NS，所有模型通用收益）。
+func runNSOnDemand(cachePrice, inputPrice, outputPrice float64) {
+	res, err := cacheprobe.RunNSOnDemand()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "NS 按需注入模拟失败:", err)
+		os.Exit(1)
+	}
+	fmt.Println("================================================================")
+	fmt.Printf(" NS 按需注入对照（%s）\n", res.Scenario)
+	fmt.Printf(" 价格：缓存 ¥%.3f/M · 输入 ¥%.3f/M\n", cachePrice, inputPrice)
+	fmt.Println(" 差异唯一：非写章轮 NS 字节不变时，现状每轮重复注入 vs 按需跳过")
+	fmt.Println("================================================================")
+	fmt.Printf(" 现状     hit=%12d miss=%10d 请求=%d  命中率=%5.1f%%  成本¥%.4f\n",
+		res.NowHit, res.NowMiss, res.NowRequests, res.NowHitRate(), cost(res.NowHit, res.NowMiss, 0, cachePrice, inputPrice, outputPrice))
+	fmt.Printf(" 按需注入 hit=%12d miss=%10d 请求=%d  命中率=%5.1f%%  成本¥%.4f\n",
+		res.LayeredHit, res.LayeredMiss, res.LayeredRequests, res.LayeredHitRate(), cost(res.LayeredHit, res.LayeredMiss, 0, cachePrice, inputPrice, outputPrice))
+	fmt.Printf("  miss 降幅 = %.1f%%（现状 %d → 按需 %d）\n",
+		res.MissSavePct(), res.NowMiss, res.LayeredMiss)
 }
 
 // runCompare 同章数不同模式对比：单章/批量 × 是否清理。

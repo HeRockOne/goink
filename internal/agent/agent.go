@@ -149,8 +149,18 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 			msgs = append(msgs, map[string]any{"role": "system", "content": skills})
 		}
 	}
+	// 按需注入：主历史末尾已含最新 NS 时，若新生成 NS 字节相同（进度/指纹未变）
+	// 则跳过重复注入——重复字节的新消息同样计入 miss 尾部（所有模型通用）
 	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
+		var lastNS string
+		if err := a.db.Model(&session.Message{}).
+			Where("session_id = ? AND extra_metadata LIKE ?", parentOpts.SessionID, agentcfg.NovelStateKindLike).
+			Order("id DESC").Limit(1).Pluck("content", &lastNS).Error; err == nil && lastNS == novelState {
+			novelState = ""
+		}
+		if novelState != "" {
+			msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
+		}
 	}
 	msgs = append(msgs,
 		map[string]any{"role": "user", "content": req.Instruction},

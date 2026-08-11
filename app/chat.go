@@ -164,10 +164,22 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 	// 永不清理——上一轮完整请求（含 NS）必须是下一轮请求的前缀，
 	// 否则 MiniMax/DeepSeek 的完整前缀单元匹配失效，命中率退化为公共前缀（实测 89%）。
 	// 历史膨胀由压缩兜底：压缩重建时旧 NS 随摘要清除，只保留最新一份）
+	// 按需注入（所有 OpenAI 兼容模型通用）：NS 字节与上轮相同（进度/指纹未变，
+	// 如维护轮）时不落库新 NS——新消息即使字节重复也计入每轮 miss 尾部，
+	// 跳过注入则本轮请求只 miss 新 user 消息本身。写章轮进度/指纹变化，正常注入。
 	novelState, err := agentcfg.NovelState(a.session.DB, input.NovelID)
 	if err != nil {
 		a.logger.Warn("NovelState 构建失败，跳过注入", "novel_id", input.NovelID, "err", err)
 		novelState = ""
+	} else if !isNew && novelState != "" {
+		var lastNS string
+		if err := a.session.DB.WithContext(ctx).Model(&session.Message{}).
+			Where("session_id = ? AND extra_metadata LIKE ?", sess.SessionID, agentcfg.NovelStateKindLike).
+			Order("id DESC").Limit(1).Pluck("content", &lastNS).Error; err == nil && lastNS == novelState {
+			// 与上轮 NS 字节相同：不重复注入（历史中已有该 NS，本轮请求前缀连续且尾部更小）
+			a.logger.Debug("NS 未变化，跳过重复注入", "session_id", sess.SessionID)
+			novelState = ""
+		}
 	}
 
 	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息原子写入）

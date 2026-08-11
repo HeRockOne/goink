@@ -664,6 +664,8 @@ func qaPlay() []play {
 
 // qaRound 一轮短对话：user 查设定 → AI 查工具 → AI 回答 → user 改设定 → AI 更新 → AI 回答。
 // 追加到 cur，并执行所有请求（cache.Step）。
+// nsOnDemandSim=true 时模拟"NS 按需注入"（RunNSOnDemand 对照用）：非写章轮进度指纹未变，
+// 历史中已有同字节 NS，跳过重复注入（新消息即使字节重复也计入 miss 尾部）。
 func qaRound(cache *TokenCache, history, cur []map[string]any, results *[][2]int64, turn int) []map[string]any {
 	step := func() {
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -671,9 +673,18 @@ func qaRound(cache *TokenCache, history, cur []map[string]any, results *[][2]int
 		*results = append(*results, [2]int64{hit, miss})
 	}
 
+	ns := func() string {
+		if nsOnDemandSim {
+			return ""
+		}
+		return novelState(turn)
+	}
+
 	// 第 1 问：查看设定
 	cur = append(cur, userMsg(fmt.Sprintf("第 %d 轮：帮我看看现在的主角设定和世界观。", turn)))
-	cur = append(cur, sysMsg(novelState(turn)))
+	if s := ns(); s != "" {
+		cur = append(cur, sysMsg(s))
+	}
 	step()
 	cur = append(cur,
 		asstToolCall(fmt.Sprintf("call_qa%d_p0", turn), "get_writing_context", `{"current_chapter":1}`),
@@ -689,7 +700,9 @@ func qaRound(cache *TokenCache, history, cur []map[string]any, results *[][2]int
 
 	// 第 2 问：修改设定
 	cur = append(cur, userMsg("把主角的兵器改成墨玉剑，性格再沉稳一点。"))
-	cur = append(cur, sysMsg(novelState(turn)))
+	if s := ns(); s != "" {
+		cur = append(cur, sysMsg(s))
+	}
 	step()
 	cur = append(cur,
 		asstToolCall(fmt.Sprintf("call_qa%d_p2", turn), "update_item", `{"item_id":1,"name":"墨玉剑","owner_id":1}`),
@@ -757,6 +770,77 @@ func cleanVersion(messages []map[string]any, retain int) []map[string]any {
 		out[i] = dup
 	}
 	return out
+}
+
+// LayeredResult 对照结果：now（现状）vs 优化（按需注入等）。
+type LayeredResult struct {
+	Scenario        string `json:"scenario"`
+	NowHit          int64  `json:"now_hit"`
+	NowMiss         int64  `json:"now_miss"`
+	LayeredHit      int64  `json:"layered_hit"`
+	LayeredMiss     int64  `json:"layered_miss"`
+	NowRequests     int    `json:"now_requests"`
+	LayeredRequests int    `json:"layered_requests"`
+}
+
+// NowHitRate 现状命中率（%）。
+func (r *LayeredResult) NowHitRate() float64 {
+	if r.NowHit+r.NowMiss == 0 {
+		return 0
+	}
+	return 100 * float64(r.NowHit) / float64(r.NowHit+r.NowMiss)
+}
+
+// LayeredHitRate 优化后命中率（%）。
+func (r *LayeredResult) LayeredHitRate() float64 {
+	if r.LayeredHit+r.LayeredMiss == 0 {
+		return 0
+	}
+	return 100 * float64(r.LayeredHit) / float64(r.LayeredHit+r.LayeredMiss)
+}
+
+// MissSavePct 优化相对现状的 miss 降幅（%）。
+func (r *LayeredResult) MissSavePct() float64 {
+	if r.NowMiss == 0 {
+		return 0
+	}
+	return 100 * float64(r.NowMiss-r.LayeredMiss) / float64(r.NowMiss)
+}
+
+// nsOnDemandSim 包级开关（单线程模拟器）：true 时 qaRound 跳过 NS 注入，
+// 模拟"NS 按需注入"（非写章轮 NS 不变不重复注入），RunNSOnDemand 对照用。
+var nsOnDemandSim bool
+
+// RunNSOnDemand NS 按需注入对照：同一混合会话（批量 5 章 + 短对话 2），
+// now = 每轮注入 NS（现状）；ondemand = 非写章轮跳过重复 NS。
+// 收益来源（所有 OpenAI 兼容模型通用）：新消息即使字节与历史重复也计入 miss 尾部，
+// 跳过注入则本轮只 miss 新 user 消息本身。
+func RunNSOnDemand() (*LayeredResult, error) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	initTools()
+
+	cNow := NewTokenCache()
+	resNow := buildMixedSession("auto", cNow, 0, 2, 5)
+
+	nsOnDemandSim = true
+	defer func() { nsOnDemandSim = false }()
+	cLay := NewTokenCache()
+	resLay := buildMixedSession("auto", cLay, 0, 2, 5)
+
+	r := &LayeredResult{
+		Scenario:        "NS 按需注入对照（批量 5 章 + 短对话 2）",
+		NowRequests:     len(resNow),
+		LayeredRequests: len(resLay),
+	}
+	for _, p := range resNow {
+		r.NowHit += p[0]
+		r.NowMiss += p[1]
+	}
+	for _, p := range resLay {
+		r.LayeredHit += p[0]
+		r.LayeredMiss += p[1]
+	}
+	return r, nil
 }
 
 // buildMixedSession 模拟一个真实对话窗口：开书 → 短对话（查/改设定）→ 单章创作
