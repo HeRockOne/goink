@@ -100,6 +100,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	}
 	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 	if err != nil {
+		a.Logger().Error("cachesim failed", "mode", mode, "window", contextWindow, "err", err.Error())
 		return &CacheSimResult{Cost: -1} // 失败标记
 	}
 
@@ -204,6 +205,21 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 			res.Stages = append(res.Stages, s)
 		}
 	}
+
+	// 模拟结果写日志（goink.log），供排查 token/压缩/成本问题
+	a.Logger().Info("cachesim done",
+		"mode", mode,
+		"window", contextWindow,
+		"label", res.Label,
+		"hit_rate", res.HitRate,
+		"cost", res.Cost,
+		"total_hit", res.TotalHit,
+		"total_miss", res.TotalMiss,
+		"total_out", res.TotalOut,
+		"compresses", res.Compresses,
+		"best_interval", res.BestInterval,
+		"best_per_chapter", res.BestPerChapter,
+	)
 	return res
 }
 
