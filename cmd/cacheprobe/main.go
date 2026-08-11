@@ -168,19 +168,22 @@ func runSkillDedup(cachePrice, inputPrice, outputPrice float64) {
 		res.MissSavePct(), res.NowMiss, res.LayeredMiss)
 }
 
-// modelPrice 模型价格档（元/百万 token）：cache hit / input miss / output。
+// modelPrice 模型价格档（元/百万 token）：cache hit / input miss / output + 上下文窗口。
 type modelPrice struct {
-	name        string
-	cache, in, out float64
-	note        string
+	name              string
+	cache, in, out    float64
+	note              string
+	context           int
 }
 
 // runWindow 上下文规模刻度测试：单窗口内历史增长到 128K/256K/512K/1024K 时的成本快照。
 // 矩阵：模型（价格档）× 模式（批量/单章）× 刻度。区间成本 = 相邻刻度累计成本之差，找最省区间。
+// 含上下文压缩建模（context 窗口 0.7 阈值，对齐真机）。
 func runWindow(cachePrice, inputPrice, outputPrice float64) {
 	models := []modelPrice{
-		{"deepseek-v4-flash", 0.02, 1.0, 2.0, "1M 窗口"},
-		{"deepseek-v4-pro", 0.026, 3.13, 6.26, "1M 窗口"},
+		{"deepseek-v4-flash", 0.02, 1.0, 2.0, "1M 窗口", 1_000_000},
+		{"deepseek-v4-pro", 0.026, 3.13, 6.26, "1M 窗口", 1_000_000},
+		{"mimo-v2.5", 0.02, 1.0, 2.0, "128K 窗口（0.7×=90K，批量大章必压缩）", 128_000},
 	}
 	modes := []struct {
 		key, name string
@@ -201,7 +204,7 @@ func runWindow(cachePrice, inputPrice, outputPrice float64) {
 		fmt.Printf("\n### 模型 %s（hit ¥%.3f/M · miss ¥%.3f/M · out ¥%.3f/M，%s）\n\n", m.name, m.cache, m.in, m.out, m.note)
 		for _, md := range modes {
 			fmt.Printf("**%s**\n\n", md.name)
-			res, err := cacheprobe.RunWindowCost(md.key, md.chapters)
+			res, err := cacheprobe.RunWindowMode(md.key, 0, 0, md.chapters, 1, m.context)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "窗口刻度模拟失败:", err)
 				os.Exit(1)

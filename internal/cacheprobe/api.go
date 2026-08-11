@@ -791,6 +791,7 @@ const maxSimRetain = 15
 
 func simCompress(cache *TokenCache, history *[]map[string]any, turn int) {
 	cache.ResetChain()
+	cache.lastTotal = 0 // 压缩后新历史从 0 起（否则下次 MaybeCompress 误判旧阈值再触发）
 	// 保留尾部最近 maxSimRetain 条消息（对齐真机 retainMessages 的 user 消息窗口近似）
 	retained := []map[string]any{}
 	if len(*history) > 0 {
@@ -807,7 +808,6 @@ func simCompress(cache *TokenCache, history *[]map[string]any, turn int) {
 	newHistory = append(newHistory, retained...)
 	*history = newHistory
 }
-
 // cleanVersion 发送前变换：把 read/read_required 的 skill 全文替换为占位符，
 // 仅保留最近 retain 条完整结果（从消息序列尾部向前数）。返回新切片，不改原消息。
 // 占位符替换使该条消息与上一请求的字节不同 → 前缀在"滑出窗口"时断裂一次，
@@ -1026,6 +1026,10 @@ func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow int) (*WindowCostResult, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
+	// 门禁拦截建模：默认按真机 set_phase 失败率 25% 注入拦截（require 未满足），
+	// 失败消息全 miss 且带动重试——让成本口径贴近真机（真机日志 28 次 set_phase 7 次失败）。
+	simGateBlockRate = 0.25
+	defer func() { simGateBlockRate = 0 }()
 
 	simWindowThresholds = []int64{128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024}
 	simCurrentChapter = 0

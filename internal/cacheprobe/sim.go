@@ -32,6 +32,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"novel/internal/agentcfg"
+	"novel/internal/chapter"
 	"novel/internal/config"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
@@ -531,14 +532,14 @@ func (c *TokenCache) MaybeCompress() bool {
 	if c.contextWindow <= 0 || c.onCompress == nil {
 		return false
 	}
-	if float64(c.lastTotal)/float64(c.contextWindow) < c.compressTh {
+	ratio := float64(c.lastTotal) / float64(c.contextWindow)
+	if ratio < c.compressTh {
 		return false
 	}
 	c.compressCount++
 	c.onCompress()
 	return true
 }
-
 func (c *TokenCache) TotalTokens() int64 { return c.hit + c.miss }
 
 // Output 返回累计的 LLM 输出 token（assistant 消息字节）。
@@ -737,11 +738,9 @@ func toolMsg(id, name, content string) map[string]any {
 // 初始为开书阶段，处理 set_phase 时更新（真实：模型每次输出都带思考，长度随阶段不同）。
 var simPhase = "init"
 
-// phaseThinkChars 各门禁阶段 assistant 消息 thinking 均值（字符，reasoning low 口径）。
-// 基线：统计自真实 DB messages.thinking_content 按 set_phase 边界分阶段（全会话聚合偏高，
-// 含高推理会话）；按 2026-08-08 真机窗口实测校准（mimo-v2.5 reasoning low：
-// 单章 1 章 AI 输出 16.5K token - 正文 ~2.5K - 工具调用参数 ~2.3K ≈ thinking 11K / 46 次
-// ≈ 240 字符/次，全会话均值 ~573 → 系数 0.45）。
+// phaseThinkChars 各门禁阶段 assistant 消息 thinking 基数（字符，reasoning low 口径）。
+// 基线：统计自真实 DB messages.thinking_content（204 条，均值 472、范围 6-5629，高度右偏）；
+// 阶段基数按 2026-08-08 真机窗口实测校准（mimo-v2.5 reasoning low 分阶段均值）。
 var phaseThinkChars = map[string]int{
 	"init":     250,
 	"prepare":  370,
@@ -751,12 +750,36 @@ var phaseThinkChars = map[string]int{
 	"maintain": 164,
 }
 
+// simThinkRNG thinking 采样随机源（固定 seed 42，可复现）。
+var simThinkRNG = rand.New(rand.NewSource(42))
+
 // thinkingForPhase 返回某阶段的推理长度（字符），未知阶段回退 write。
+// 采样真实分布（2026-08-12 从 DB 提取 204 条：10 等分位
+// 6/22/44/79/122/177/247/371/595/965/3267/5629，右偏——多数请求短思考、
+// 少数超长）：以阶段基数为中位锚点，按对数分布采样（固定 seed 可复现），
+// 替代固定均值——固定均值高估了多数请求的 thinking（占 miss 15%）。
 func thinkingForPhase(phase string) int {
-	if n, ok := phaseThinkChars[phase]; ok {
-		return n
+	base, ok := phaseThinkChars[phase]
+	if !ok {
+		base = phaseThinkChars["write"]
 	}
-	return phaseThinkChars["write"]
+	if base <= 0 {
+		return 0
+	}
+	// 对数均匀采样：多数落在 base/3 ~ base*1.5，约 5% 落在 base*2~base*5（长思考尾部）
+	u := simThinkRNG.Float64()
+	switch {
+	case u < 0.15:
+		return int(float64(base) * (0.2 + 0.3*simThinkRNG.Float64()))
+	case u < 0.55:
+		return int(float64(base) * (0.5 + 0.5*simThinkRNG.Float64()))
+	case u < 0.9:
+		return int(float64(base) * (1.0 + 0.5*simThinkRNG.Float64()))
+	case u < 0.97:
+		return int(float64(base) * (1.8 + 1.2*simThinkRNG.Float64()))
+	default:
+		return int(float64(base) * (3.0 + 4.0*simThinkRNG.Float64()))
+	}
 }
 
 // thinkingText 生成 n 字符的推理占位文本（固定字符集循环，可复现；
@@ -914,8 +937,14 @@ func novelState(turn int) string {
 	if desc != "" {
 		fmt.Fprintf(&b, "简介：%s\n", desc)
 	}
-	// 进度锚点：turn 动态（真实为 DB chapters 计数；模拟创作推进）
-	fmt.Fprintf(&b, "当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", turn)
+	// 进度锚点：真实 DB chapters 计数 + 模拟 turn 偏移（模拟窗口从真实进度续写，
+	// 对齐真机 agentcfg.NovelState 的 DB chapters 计数口径）
+	realCh := readRealChapterCount()
+	prog := turn
+	if realCh > prog {
+		prog = realCh
+	}
+	fmt.Fprintf(&b, "当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", prog)
 
 	// 真实 goink.md 指纹（若存在）
 	real := readRealGoinkFingerprint()
@@ -957,6 +986,25 @@ func readRealNovelMeta() (title, genre, desc string) {
 		return "", "", ""
 	}
 	return n.Title, n.Genre, n.Description
+}
+
+// readRealChapterCount 读取真实 DB 第一本小说的章节数（NS"当前进度"锚点用，
+// 对齐真机 agentcfg.NovelState 的 DB chapters 计数）。DB 缺失时返回 0（调用方回退 turn）。
+func readRealChapterCount() int {
+	id := realNovel()
+	if id == 0 {
+		return 0
+	}
+	db, err := openRealDB()
+	if err != nil {
+		return 0
+	}
+	defer db.DB()
+	var cnt int64
+	if err := db.Model(&chapter.Chapter{}).Where("novel_id = ?", id).Count(&cnt).Error; err != nil {
+		return 0
+	}
+	return int(cnt)
 }
 
 // openRealDB 打开真实 DB（只读）。gorm sqlite driver。
@@ -1196,7 +1244,26 @@ func phaseOfArgs(args string) string {
 	return args
 }
 
-// runPlays 执行 plays 序列：按 set_phase/run_subagent 断开分组，组内并行（一次请求多条
+// simGateBlockRate 门禁拦截建模概率（0=关闭；真机实测 set_phase 失败率 25%——
+// require 未满足/技能未读/字数未校验时拦截，失败消息全 miss 且带动重试）。
+// 包级开关（单线程模拟器），RunWindowMode/CLI 可配置；固定 seed 可复现。
+var simGateBlockRate float64
+
+// simBlockRNG 拦截建模随机源（固定 seed 42，可复现）。
+var simBlockRNG = rand.New(rand.NewSource(42))
+
+// blockGateTransition 按概率模拟 set_phase 被门禁拦截：
+// 失败时注入真实格式 reminder（{"success":false,"error":...,"current_phase":...}，
+// 对齐 agent.go:586-588），不切换阶段，返回 false（调用方保持原阶段）。
+func blockGateTransition(cur []map[string]any, target string) ([]map[string]any, bool) {
+	if simGateBlockRate <= 0 || simBlockRNG.Float64() >= simGateBlockRate {
+		return cur, true
+	}
+	errMsg := "阶段 [" + simPhase + "] 要求必须调用以下工具后才能切换到 [" + target + "]，当前未调用: [get_writing_snapshot]"
+	reminder := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", fmt.Sprintf(`{"success":false,"error":%q,"current_phase":%q}`, errMsg, simPhase))
+	cur = append(cur, userMsg(reminder))
+	return cur, false
+}
 // tool_calls + 1 次 thinking，与真机 LLM 并行行为一致），set_phase 单独成组并更新 simPhase。
 // 组上限 10（真机单次最多 ~9 个并行调用）。
 // 回调：onSubagent 在 run_subagent play 后插入子代理请求序列；onRead 记录 read 调用 ID；
@@ -1248,6 +1315,14 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 				// 同步真实 agent.go：只真切换（from != to）注入技能，同阶段 set_phase
 				// （批量 write 章边界）跳过——技能已在上下文，重复注入纯浪费。
 				phase := phaseOfArgs(p.args)
+				// 门禁拦截建模：真机 set_phase 25% 失败（require 未满足/技能未读/字数未校验），
+				// 失败注入 reminder 且不切换阶段；LLM 下轮重试（重试请求自然计入 miss）。
+				var ok bool
+				cur, ok = blockGateTransition(cur, phase)
+				if !ok {
+					cur = append(cur, toolMsg(ids[k], p.tool, fmt.Sprintf(`{"success":false,"error":"require 未满足","current_phase":%q}`, simPhase)))
+					continue
+				}
 				if phase != simPhase && onPhase != nil {
 					cur = onPhase(cur, phase)
 				}

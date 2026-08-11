@@ -72,6 +72,14 @@ DeepSeek/商汤等提供的是"字节精确前缀匹配"磁盘缓存，不是 to
 
 Go map 的 encoding/json 序列化行为与真实请求的 JSON 序列化一致（相同键序、相同编码），因此字节序列可精确复现。
 
+## 真机对齐补全（2026-08-12）
+
+1. **上下文压缩建模**：每轮开始检查 `lastTotal/ContextWindow >= 0.7`（对齐 agent.go:434-455）→ ResetChain + 重建（fixedSystem + 新 NS + 摘要 + 保留最近 15 条）→ 下轮首请求全 miss。窗口从设置选中模型的内置定义取（mimo 128K 自动反复压缩、DeepSeek 1M 少数压缩），CLI `window` 命令同源。
+2. **写工具结果模板**：从真实 DB messages 表 441 条 tool 消息提取校准——edit `{"approved","change_type","path"}`、set_phase `{"phase"}`、create_timeline `{"count","ids"}`、update_chapter_meta `{"updated"}`、relationship `{"action","id"}` 等 14 类逐工具对齐。
+3. **门禁拦截建模**：set_phase 按真机 25% 失败率注入拦截（require 未满足 reminder + 失败工具结果），失败消息全 miss。
+4. **thinking 分布采样**：204 条真实 thinking 右偏分布（10 等分位 6~5629，均值 472），按阶段基数对数采样替代固定均值（固定 seed 可复现）。
+5. **进度锚点**：NS"当前进度"用真实 DB chapters 计数 + 模拟 turn 取大（对齐真机 DB 口径）。
+
 ## 关键验证结论
 
 | 优化项 | 验证结果 | 状态 |
