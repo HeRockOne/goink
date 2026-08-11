@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { Settings, Cpu, Palette, Shield, Activity } from 'lucide-react'
+import { Settings, Cpu, Palette, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ModelConfigTab from './ModelConfigTab'
 import GeneralConfigTab from './GeneralConfigTab'
 import ThemeConfigTab from './ThemeConfigTab'
 import PhaseGateConfigTab from './PhaseGateConfigTab'
-import CacheSimTab from './CacheSimTab'
 
-type Tab = 'general' | 'model' | 'theme' | 'phasegate' | 'cachesim'
+type Tab = 'general' | 'model' | 'theme' | 'phasegate'
 
 interface Props {
   open: boolean
@@ -27,7 +26,6 @@ export default function SettingsDialog({ open, onClose, onSaved, initialTab = 'm
     { id: 'model', label: t('settings.modelConfig'), icon: <Cpu className="w-4 h-4" /> },
     { id: 'theme', label: '主题', icon: <Palette className="w-4 h-4" /> },
     { id: 'phasegate', label: '门禁', icon: <Shield className="w-4 h-4" /> },
-    { id: 'cachesim', label: '缓存模拟', icon: <Activity className="w-4 h-4" /> },
   ]
 
   return (
@@ -72,8 +70,6 @@ export default function SettingsDialog({ open, onClose, onSaved, initialTab = 'm
             <ThemeConfigTab />
           ) : activeTab === 'phasegate' ? (
             <PhaseGateConfigTab />
-          ) : activeTab === 'cachesim' ? (
-            <CacheSimTab />
           ) : (
             <GeneralConfigTab />
           )}

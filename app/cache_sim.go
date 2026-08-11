@@ -40,6 +40,18 @@ type CacheSimResult struct {
 	Stages []CacheSimStage `json:"stages"`
 	// 上下文压缩触发次数（真机 0.7×窗口建模；>0 说明长窗口跑到了压缩点）
 	Compresses int `json:"compresses"`
+	// miss 构成（按消息来源分类：thinking/技能注入/工具结果/正文等，对比表用）
+	MissByCat map[string]int64 `json:"miss_by_cat,omitempty"`
+}
+
+// SimScenarioReq 场景对比请求：一个可自定义场景的参数（前端场景编辑器）。
+type SimScenarioReq struct {
+	Name           string `json:"name"`
+	GateRounds     int    `json:"gate_rounds"`     // 单章轮数（single/mixed 用）
+	ShortQARounds  int    `json:"short_qa_rounds"` // 短对话轮数（mixed 用）
+	BatchChapters  int    `json:"batch_chapters"`  // 批量章数（batch/mixed 用）
+	BatchRounds    int    `json:"batch_rounds"`    // 批量轮数（mixed 用）
+	ContextWindow  int    `json:"context_window"`  // 模拟窗口 token，0=按设置选中模型
 }
 
 // CacheSimStage 阶段打点快照（mixed 模式，按创作阶段边界记录）。
@@ -81,6 +93,35 @@ func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds in
 		defer simMu.Unlock()
 		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
 		wails.EventsEmit(a.ctx, "cachesim:done", res)
+	}()
+	return nil
+}
+
+// StartCacheSimScenarios 批量场景对比：一次跑多个可自定义场景，完成后推送事件 cachesim:batch-done。
+// 场景类型按参数推断：批量章数>0 且无单章轮数 → batch；单章轮数>0 且批量章数=0 → single；都有 → mixed。
+func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
+	go func() {
+		simMu.Lock()
+		defer simMu.Unlock()
+		results := make([]CacheSimResult, 0, len(scenarios))
+		for _, sc := range scenarios {
+			mode := "mixed"
+			switch {
+			case sc.BatchChapters > 0 && sc.GateRounds == 0:
+				mode = "batch"
+			case sc.GateRounds > 0 && sc.BatchChapters == 0:
+				mode = "single"
+			}
+			if sc.BatchRounds < 1 {
+				sc.BatchRounds = 1
+			}
+			r := a.runCacheSimulationSync(mode, sc.GateRounds, sc.ShortQARounds, sc.BatchChapters, sc.BatchRounds, sc.ContextWindow)
+			if sc.Name != "" {
+				r.Label = sc.Name
+			}
+			results = append(results, *r)
+		}
+		wails.EventsEmit(a.ctx, "cachesim:batch-done", results)
 	}()
 	return nil
 }
@@ -138,6 +179,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	res.HitRate = hitRate(raw.FinalHit, raw.FinalMiss)
 	res.Cost = costOf(raw.FinalHit, raw.FinalMiss, raw.FinalOut, cachePrice, inputPrice, outputPrice)
 	res.Compresses = raw.Compresses
+	res.MissByCat = raw.MissByCat
 
 	// 窗口刻度：打点快照 + 区间每章成本 + 最省区间
 	res.FinalTotal = raw.FinalTotal

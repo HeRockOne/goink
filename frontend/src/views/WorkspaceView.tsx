@@ -28,6 +28,7 @@ import SettingsDialog from '@/components/settings/SettingsDialog'
 import GitHubLink from '@/components/shell/GitHubLink'
 import HelpDialog from '@/components/help/HelpDialog'
 import ProfileView from '@/components/profile/ProfileView'
+import CachesimView from '@/components/cachesim/CachesimView'
 import GitCommitView from '@/components/git/GitCommitView'
 import ExtractWorkspaceView from '@/components/extract/ExtractWorkspaceView'
 import UpdateDialog from '@/components/update/UpdateDialog'
@@ -35,7 +36,7 @@ import ErrorBoundary from '@/components/shared/ErrorBoundary'
 import { search } from '@/lib/wailsjs/go/models'
 import type { update as updateModels } from '@/lib/wailsjs/go/models'
 import { CheckUpdate, GetSettings, SetPhaseGateEnabled } from '@/lib/wailsjs/go/app/App'
-import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText } from 'lucide-react'
+import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText, Gauge } from 'lucide-react'
 import { WindowMinimise, WindowToggleMaximise, Quit } from '@/lib/wailsjs/runtime/runtime'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useLayoutState } from '@/hooks/useLayoutState'
@@ -277,7 +278,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   }, [app, novels, activeNovelId])
 
   // 特殊面板（不走 ContentPanel，各有独立渲染）
-  const SPECIAL_PANELS = new Set(['characters', 'locations', 'storyarcs', 'timeline', 'reader', 'preferences', 'world', 'items', 'stats', 'profile', 'git', 'style-samples'])
+  const SPECIAL_PANELS = new Set(['characters', 'locations', 'storyarcs', 'timeline', 'reader', 'preferences', 'world', 'items', 'stats', 'profile', 'git', 'style-samples', 'cachesim'])
 
   function renderSpecialPanel(panel: string): React.ReactNode {
     let node: React.ReactNode = null
@@ -293,6 +294,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       case 'stats': node = <StatsView novelId={activeNovelId} />; break
       case 'git': node = <GitCommitView file={selectedGitFile} />; break
       case 'profile': node = <ProfileView />; break
+      case 'cachesim': node = <CachesimView />; break
     }
     return node
   }
@@ -459,6 +461,13 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           </button>
           <GitHubLink />
           <button
+            onClick={() => setActivePanel('cachesim')}
+            className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'cachesim' ? 'text-foreground' : ''}`}
+            title={t('workspace.cachesim')}
+          >
+            <Gauge className="w-5 h-5" />
+          </button>
+          <button
             onClick={() => setActivePanel('profile')}
             className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'profile' ? 'text-foreground' : ''}`}
             title={t('workspace.profile')}
@@ -592,7 +601,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         )}
 
         {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
-        <div className={`${activePanel === 'profile' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' ? undefined : chatPanelWidth }}>
+        <div className={`${activePanel === 'profile' || activePanel === 'cachesim' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' || activePanel === 'cachesim' ? undefined : chatPanelWidth }}>
           <ErrorBoundary>
             <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} />
           </ErrorBoundary>

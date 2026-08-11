@@ -966,7 +966,8 @@ type WindowCostResult struct {
 	FinalMiss  int64
 	FinalOut   int64
 	FinalReqs  int
-	FinalTotal int64 // 最后请求的输入大小（历史到达的最终规模）
+	FinalTotal int64          // 最后请求的输入大小（历史到达的最终规模）
+	MissByCat  map[string]int64 // miss 构成（按消息来源分类，GUI 对比表用）
 }
 
 // RunWindowCost 单窗口"上下文规模刻度"打点：
@@ -1034,6 +1035,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 	simWindowThresholds = []int64{128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024}
 	simCurrentChapter = 0
 	c := NewTokenCache()
+	c.SetMissCat(missCatOf)
 	c.marks = make([]WindowMark, len(simWindowThresholds))
 	// 预填刻度值：未到达的刻度也要有名字（前端不再显示 0K）
 	for i, th := range simWindowThresholds {
@@ -1079,6 +1081,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		FinalOut:   c.output,
 		FinalReqs:  c.reqCount,
 		Compresses: c.compressCount,
+		MissByCat:  c.MissByCat,
 	}
 	// 终点历史用峰值：压缩重建后 lastTotal 缩回骨架，峰值才反映窗口真实增长上限
 	r.FinalTotal = c.peakTotal
