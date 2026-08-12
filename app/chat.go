@@ -15,6 +15,8 @@ import (
 
 	"novel/internal/agent"
 	"novel/internal/agentcfg"
+	"novel/internal/chapter"
+	"novel/internal/character"
 	"novel/internal/config"
 	"novel/internal/git"
 	"novel/internal/llm"
@@ -152,10 +154,27 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		}
 	}
 
-	// 6.5 阶段门禁起点：新会话 PhaseCurrent 留空，agent.Run 解析门禁配置后
-	// 自然落在首阶段（默认 init）。旧实现硬编码 prepare 导致 init 不可达：
-	// SetPhase 只允许推进到 next 或回退到 visited，prepare 起点下 init 两者都不是，
-	// 新书角色/世界观创建流程整体跳过。门禁状态持久化由 agent defer 负责。
+	// 6.5 阶段门禁起点：新会话智能判断——开书已完成的小说（有角色或章节）直接
+	// 从 prepare 开始，跳过 init（init 的 7 项 require 查询 + 5 个开书技能注入 +
+	// 白名单限制对已开书小说是纯浪费）。全新小说保持空，agent.Run 解析后落 init
+	// （开书流程正常走）。续写旧会话（已有 current_phase）不受影响。
+	// 历史教训：曾硬编码 prepare 导致全新书 init 不可达（SetPhase 只允许 next/visited），
+	// 所以只对"已开书"判断成立时设 prepare，全新书必须留空落 init。
+	if sess.CurrentPhase == "" && sess.CalledTools == "" {
+		var roleCount int64
+		var chapterCount int64
+		a.session.DB.Model(&character.Character{}).Where("novel_id = ?", input.NovelID).Count(&roleCount)
+		a.session.DB.Model(&chapter.Chapter{}).Where("novel_id = ?", input.NovelID).Count(&chapterCount)
+		if roleCount > 0 || chapterCount > 0 {
+			sess.CurrentPhase = "prepare"
+			if err := a.session.DB.Model(&session.Session{}).
+				Where("session_id = ?", sess.SessionID).
+				Update("current_phase", "prepare").Error; err != nil {
+				a.logger.Warn("保存门禁起点失败", "err", err)
+			}
+			a.logger.Info("已开书小说新会话，门禁起点 prepare（跳过 init）", "session_id", sess.SessionID, "roles", roleCount, "chapters", chapterCount)
+		}
+	}
 
 	// 6.6 构建 NovelState（缓存协议：NS 落库进消息历史，跟随 user 消息之后，
 	// 永不清理——上一轮完整请求（含 NS）必须是下一轮请求的前缀，
