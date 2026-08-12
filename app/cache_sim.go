@@ -38,8 +38,10 @@ type CacheSimResult struct {
 	BestPerChapter float64         `json:"best_per_chapter"`
 	// 阶段打点（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束的成本快照）
 	Stages []CacheSimStage `json:"stages"`
-	// 上下文压缩触发次数（真机 0.7×窗口建模；>0 说明长窗口跑到了压缩点）
+	// 上下文压缩触发次数（真机 threshold×窗口建模；>0 说明长窗口跑到了压缩点）
 	Compresses int `json:"compresses"`
+	// 压缩阈值（0.7=70%×窗口触发；读设置自定义值，前端提示用）
+	CompressThreshold float64 `json:"compress_threshold"`
 	// miss 构成（按消息来源分类：thinking/技能注入/工具结果/正文等，对比表用）
 	MissByCat map[string]int64 `json:"miss_by_cat,omitempty"`
 }
@@ -131,6 +133,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	// 上下文窗口：前端传入 >0 用传入值；否则按设置选中模型推断
 	// （SelectedModelKey 格式 provider/modelID，解析后匹配内置定义），
 	// 仍匹配不到默认 1M（DeepSeek）。
+	compressThreshold := 0.7
 	if contextWindow <= 0 {
 		contextWindow = 1_000_000
 		if s, err := config.LoadSettings(a.db); err == nil && s.SelectedModelKey != "" {
@@ -139,7 +142,11 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 			}
 		}
 	}
-	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
+	// 压缩阈值：读设置自定义值（对齐真机压缩触发口径），默认 0.7
+	if s, err := config.LoadSettings(a.db); err == nil && s.CompressionThreshold > 0 {
+		compressThreshold = s.CompressionThreshold
+	}
+	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow, compressThreshold)
 	if err != nil {
 		a.Logger().Error("cachesim failed", "mode", mode, "window", contextWindow, "err", err.Error())
 		return &CacheSimResult{Cost: -1} // 失败标记
@@ -179,6 +186,7 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	res.HitRate = hitRate(raw.FinalHit, raw.FinalMiss)
 	res.Cost = costOf(raw.FinalHit, raw.FinalMiss, raw.FinalOut, cachePrice, inputPrice, outputPrice)
 	res.Compresses = raw.Compresses
+	res.CompressThreshold = raw.Threshold
 	res.MissByCat = raw.MissByCat
 
 	// 窗口刻度：打点快照 + 区间每章成本 + 最省区间

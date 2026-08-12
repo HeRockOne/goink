@@ -632,16 +632,16 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 // （首批 init + 每批 prepare→outline(perBatch 章大纲)→write→review→maintain），
 // 批次循环、上下文累积，直到刻度/窗口上限。章号按批偏移，不覆盖前批。
 func buildBatchLoop(mode string, cache *TokenCache, perBatch, batches int) [][2]int64 {
-	return buildBatchLoopCompress(mode, cache, perBatch, batches, 0)
+	return buildBatchLoopCompress(mode, cache, perBatch, batches, 0, 0.7)
 }
 
 // buildBatchLoopCompress 带上下文压缩建模的批量循环（contextWindow>0 时每批开始检查）。
-func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, contextWindow int) [][2]int64 {
+func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, contextWindow int, threshold float64) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
 	if contextWindow > 0 {
-		cache.EnableCompression(contextWindow, 0.7, func() {
+		cache.EnableCompression(contextWindow, threshold, func() {
 			simCompress(cache, &history, simCurrentChapter)
 		})
 	}
@@ -968,6 +968,7 @@ type WindowCostResult struct {
 	FinalReqs  int
 	FinalTotal int64          // 最后请求的输入大小（历史到达的最终规模）
 	MissByCat  map[string]int64 // miss 构成（按消息来源分类，GUI 对比表用）
+	Threshold  float64        // 压缩阈值（0.7=70%×窗口触发；用户自定义值，GUI 展示用）
 }
 
 // RunWindowCost 单窗口"上下文规模刻度"打点：
@@ -1021,10 +1022,14 @@ func RunWindowCost(mode string, chapters int) (*WindowCostResult, error) {
 //          批量部分按 batchRounds 批次循环（章号偏移，不覆盖前批），
 //          按用户配置的轮数跑（窗口大小由输入决定，刻度能打到哪算哪）
 // contextWindow>0 时启用上下文压缩建模（对齐真机 agent.go:434-455：每轮开始
-// 检查 token 预算，超 0.7×窗口触发压缩重建——链重置 + fixedSystem/NS/摘要/保留尾部）。
+// 检查 token 预算，超 threshold×窗口触发压缩重建——链重置 + fixedSystem/NS/摘要/保留尾部）。
+// threshold<=0 时默认 0.7（真机默认压缩阈值；用户可自定义，GUI 从设置传入）。
 // 历史增长过程中首次跨过 128K/256K/512K/1024K 时记录累计 hit/miss/out/请求数/章数。
 // 返回：刻度快照 + 最终汇总（成本由调用方按设置页价格估算）。
-func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow int) (*WindowCostResult, error) {
+func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow int, threshold float64) (*WindowCostResult, error) {
+	if threshold <= 0 {
+		threshold = 0.7
+	}
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
 	// 门禁拦截建模：默认按真机 set_phase 失败率 25% 注入拦截（require 未满足），
@@ -1049,7 +1054,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		if gateRounds <= 0 {
 			gateRounds = 26 // 1M 窗口约 25 章
 		}
-		res = buildMixedSessionCompress("auto", c, gateRounds, 0, 0, 1, contextWindow)
+		res = buildMixedSessionCompress("auto", c, gateRounds, 0, 0, 1, contextWindow, threshold)
 	case "batch":
 		if batchChapters <= 0 {
 			batchChapters = 120
@@ -1059,7 +1064,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		if batches < 1 {
 			batches = 1
 		}
-		res = buildBatchLoopCompress("now", c, perBatch, batches, contextWindow)
+		res = buildBatchLoopCompress("now", c, perBatch, batches, contextWindow, threshold)
 	default: // mixed
 		if gateRounds <= 0 && shortQARounds <= 0 && batchChapters <= 0 {
 			gateRounds, shortQARounds, batchChapters = 3, 5, 5
@@ -1069,7 +1074,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		}
 		// 阶段打点（混合模式专用）：按创作阶段边界记录，替代阈值刻度
 		c.stageMarks = make([]StageMark, 0, 12)
-		res = buildMixedSessionCompress("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
+		res = buildMixedSessionCompress("auto", c, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow, threshold)
 	}
 	_ = res
 
@@ -1082,6 +1087,7 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 		FinalReqs:  c.reqCount,
 		Compresses: c.compressCount,
 		MissByCat:  c.MissByCat,
+		Threshold:  threshold,
 	}
 	// 终点历史用峰值：压缩重建后 lastTotal 缩回骨架，峰值才反映窗口真实增长上限
 	r.FinalTotal = c.peakTotal
@@ -1095,28 +1101,28 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 // → 短对话 → 批量创作 → 短对话……全部发生在同一条历史里，短对话穿插在创作轮之间。
 // 这比"短对话独立场景"更贴近真实使用：用户不会开一个窗口纯聊天，再开一个窗口纯创作。
 func buildMixedSession(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters int) [][2]int64 {
-	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, 1, 0)
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, 1, 0, 0.7)
 }
 
 // buildMixedSessionLoop 同 buildMixedSession，但批量部分批次循环 batchRounds 次
 // （每批 batchChapters 章，章号按批偏移，不覆盖前批）——混合会话也能跑到 1M 窗口。
 func buildMixedSessionLoop(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds int) [][2]int64 {
-	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, 0)
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, 0, 0.7)
 }
 
 // buildMixedSessionCompress 带上下文压缩建模的混合会话（contextWindow>0 时启用）。
-func buildMixedSessionCompress(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int) [][2]int64 {
-	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow)
+func buildMixedSessionCompress(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int, threshold float64) [][2]int64 {
+	return buildMixedSessionCore(mode, cache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow, threshold)
 }
 
-func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int) [][2]int64 {
+func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds, batchChapters, batchRounds, contextWindow int, threshold float64) [][2]int64 {
 	results := [][2]int64{}
 	history := append([]map[string]any{}, fixedSystem()...)
 
 	// 上下文压缩建模：每轮开始时检查 token 预算（对齐真机 agent.go:434-455），
-	// 超 0.7×窗口触发压缩重建（ResetChain + 重建消息序列）
+	// 超 threshold×窗口触发压缩重建（ResetChain + 重建消息序列）
 	if contextWindow > 0 {
-		cache.EnableCompression(contextWindow, 0.7, func() {
+		cache.EnableCompression(contextWindow, threshold, func() {
 			simCompress(cache, &history, simCurrentChapter)
 		})
 	}

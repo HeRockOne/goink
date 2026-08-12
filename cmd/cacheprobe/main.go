@@ -204,7 +204,7 @@ func runWindow(cachePrice, inputPrice, outputPrice float64) {
 		fmt.Printf("\n### 模型 %s（hit ¥%.3f/M · miss ¥%.3f/M · out ¥%.3f/M，%s）\n\n", m.name, m.cache, m.in, m.out, m.note)
 		for _, md := range modes {
 			fmt.Printf("**%s**\n\n", md.name)
-			res, err := cacheprobe.RunWindowMode(md.key, 0, 0, md.chapters, 1, m.context)
+			res, err := cacheprobe.RunWindowMode(md.key, 0, 0, md.chapters, 1, m.context, 0.7)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "窗口刻度模拟失败:", err)
 				os.Exit(1)

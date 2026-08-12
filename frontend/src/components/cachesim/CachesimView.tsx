@@ -50,6 +50,7 @@ interface CacheSimResult {
   best_per_chapter: number
   stages: CacheSimStage[]
   compresses: number
+  compress_threshold: number
   miss_by_cat: Record<string, number>
 }
 
@@ -645,11 +646,13 @@ function ScaleTable({ result }: { result: CacheSimResult }) {
           单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本，找最省区间。
           {r.compresses > 0 && (
             <span className="text-amber-600/80">
-              {' '}上下文压缩触发 {r.compresses} 次（0.7×模型窗口，压缩后整链重置、下轮首请求全 miss，历史峰值停在压缩点附近）。
+              {' '}上下文压缩触发 {r.compresses} 次（阈值 {Math.round(r.compress_threshold * 100)}%×模型窗口，压缩后整链重置、下轮首请求全 miss，历史峰值停在压缩点附近）。
             </span>
           )}
           {!r.marks.some(m => m.threshold >= 1048576 && m.reached) && (
-            <span> {' '}1024K 刻度未到达：压缩阈值 = 0.7×模拟窗口（1M 窗口约 700K），想测 1024K 请把模拟窗口 K 调到 1500 以上。</span>
+            <span>
+              {' '}1024K 刻度未到达：压缩阈值 = {Math.round(r.compress_threshold * 100)}%×模拟窗口（1M 窗口约 {Math.round(r.compress_threshold * 1000)}K 触发），想测 1024K 请把模拟窗口 K 调到 {Math.ceil(1024 / (r.compress_threshold || 0.7) / 100) * 100} 以上。
+            </span>
           )}
         </p>
       </div>
@@ -694,7 +697,7 @@ function ScaleTable({ result }: { result: CacheSimResult }) {
         </tbody>
       </table>
       {r.compresses > 0 && (
-        <p className="text-[10px] text-amber-600/80">上下文压缩触发 {r.compresses} 次（0.7×模型窗口）。</p>
+        <p className="text-[10px] text-amber-600/80">上下文压缩触发 {r.compresses} 次（阈值 {Math.round(r.compress_threshold * 100)}%×模型窗口）。</p>
       )}
     </div>
   )
