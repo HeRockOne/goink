@@ -622,6 +622,31 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": pg.CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
 							} else {
+								// 失败：require 未满足 / 技能未读 / 未知阶段。
+								// 技能缺失（auto_skill_injection 未满足）：系统自动补注入当前阶段
+								// 必读技能并重试一次——全自动模式零卡顿，不再让 LLM 手动调
+								// auto_skill_injection（旧行为：LLM 手动读技能 → 多一轮试错）。
+								if strings.Contains(warning, "auto_skill_injection") {
+									a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
+									if ok2, _ := pg.SetPhase(targetPhase); ok2 {
+										pg.OnToolCall("set_phase", true)
+										if from != targetPhase {
+											a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
+										}
+										if pg.mode == "batch" && targetPhase == "write" {
+											if wc := pg.WordCountCheck(); wc == nil || !*wc {
+												wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。\n</system-reminder>"
+												a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
+											}
+										}
+										injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段（技能已自动补注入），继续执行该阶段任务。\n</system-reminder>", pg.CurrentPhase())
+										a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+										ps := pg.Status()
+										emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
+										toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": pg.CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
+										continue
+									}
+								}
 								// 失败：require 未满足或未知阶段
 								resultJSON := fmt.Sprintf(`{"success":false,"error":"%s","current_phase":"%s"}`, warning, pg.CurrentPhase())
 								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", resultJSON)
@@ -637,6 +662,16 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// ---- 阶段门禁：先检查，再执行（硬拦截） ----
 					if pg != nil && pg.Active() && pg.CurrentPhase() != "" {
 						allowed, warning := pg.CheckToolAllowed(name)
+						// 技能缺失拦截（"必读技能尚未加载"）：系统自动补注入当前阶段必读技能后
+						// 重查并放行——全自动模式零卡顿，AI 无需手动调 auto_skill_injection，
+						// 也不用被拦一次再试错（创作动作前技能必须就绪是质量红线，自动补齐不降级）。
+						if !allowed && strings.Contains(warning, "必读技能尚未加载") {
+							a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
+							if allowed2, _ := pg.CheckToolAllowed(name); allowed2 {
+								allowed = true
+								a.logger.Info("技能自动补注入后放行", "tool", name, "phase", pg.CurrentPhase())
+							}
+						}
 						if !allowed {
 							// 硬拦截：不执行工具，返回错误结果
 							key := pg.CurrentPhase() + ":" + name
