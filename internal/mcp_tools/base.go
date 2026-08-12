@@ -56,6 +56,7 @@ type ToolContext struct {
 
 	RunSubAgent   RunSubAgentFunc                                                // 子 Agent 运行器，由 agent 包注入
 	SkillStore    *skill.Store                                                   // 技能存储，read 工具用于读取内置 skill
+	Messages      []map[string]any                                               // 当前上下文消息（auto_skill_injection 去重用：全文已在上下文时不再重复返回）
 	SearchService *search.Service                                                // 搜索服务，write 工具用于更新正文缓存
 	WebSearch     func(ctx context.Context, query string) (*llm.WebSearchResult, error) // 网络搜索，由 agent 注入 DeepSeek 闭包；nil 表示未配置
 }

@@ -737,6 +737,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							return a.RunSubAgent(ctx, opts, req, pg)
 						},
 						SkillStore:    a.skillStore,
+						Messages:      opts.Messages,
 						SearchService: a.searchService.Load(),
 						WebSearch:     a.BuildWebSearch(),
 					}

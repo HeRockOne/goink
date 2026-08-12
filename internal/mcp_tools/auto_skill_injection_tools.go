@@ -54,11 +54,31 @@ func (t *AutoSkillInjectionTool) Execute(ctx context.Context, args any, tc ToolC
 	if err != nil {
 		return &ToolResult{Success: false, Error: err.Error()}, nil
 	}
+	// 去重：全文已在当前上下文（系统 set_phase 时已自动注入）时不再重复返回全文——
+	// 手动调 auto_skill_injection 只是多余交互，重复注入全文浪费 token 且无增益。
+	// 此时只返回"已在上下文中"提示，OnSkillInjected 标记照常由 agent 层完成。
+	if content != "" && messagesContainContent(tc.Messages, content) {
+		return &ToolResult{Success: true, Data: map[string]any{
+			"skills":  names,
+			"display": fmt.Sprintf("技能已在上下文中（系统已自动注入），无需重复加载: %s", strings.Join(names, ", ")),
+			"already_in_context": true,
+		}}, nil
+	}
 	return &ToolResult{Success: true, Data: map[string]any{
 		"skills":  names,
 		"display": fmt.Sprintf("加载技能: %s", strings.Join(names, ", ")),
 		"content": content,
 	}}, nil
+}
+
+// messagesContainContent 检查消息列表中是否已有完全相同的技能全文（去重用）。
+func messagesContainContent(messages []map[string]any, content string) bool {
+	for _, m := range messages {
+		if c, ok := m["content"].(string); ok && c == content {
+			return true
+		}
+	}
+	return false
 }
 
 // RegisterAutoSkillInjectionTool 注册 auto_skill_injection 工具。
