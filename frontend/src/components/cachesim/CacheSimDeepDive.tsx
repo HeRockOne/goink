@@ -4,21 +4,6 @@ import { StartCacheSimulation } from '@/lib/wailsjs/go/app/App'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 
 // 模拟结果类型（后端 app.CacheSimResult 通过事件推送，未生成 wails 模型，本地定义）
-interface WindowSimMark {
-  threshold: number
-  reached: boolean
-  hit: number
-  miss: number
-  out: number
-  requests: number
-  chapter: number
-  cost: number
-  hit_rate: number
-  interval_chapters: number
-  interval_cost: number
-  interval_per_chapter: number
-}
-
 // 阶段打点快照（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束）
 interface CacheSimStage {
   stage: string
@@ -40,16 +25,12 @@ interface CacheSimResult {
   total_out: number
   hit_rate: number
   cost: number
-  marks: WindowSimMark[]
   final_total: number
   final_reqs: number
   final_cost: number
   final_hit_rate: number
-  best_interval: string
-  best_per_chapter: number
   stages: CacheSimStage[]
   compresses: number
-  compress_threshold: number
 }
 
 // 格式化为 M（百万）单位
@@ -301,77 +282,6 @@ export default function CacheSimDeepDive() {
                   </tr>
                 </tbody>
               </table>
-            </div>
-          )}
-
-          {/* ── 窗口刻度（single/batch 模式）── */}
-          {result.mode !== 'mixed' && (
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">上下文窗口刻度（单窗口成本曲线）</span>
-                {result.best_interval && (
-                  <span className="text-xs text-primary">
-                    最省区间：{result.best_interval}（每章 ¥{result.best_per_chapter.toFixed(4)}）
-                  </span>
-                )}
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="text-left py-1 font-normal">刻度</th>
-                    <th className="text-right py-1 font-normal">到达时</th>
-                    <th className="text-right py-1 font-normal">累计成本 ¥</th>
-                    <th className="text-right py-1 font-normal">累计 miss</th>
-                    <th className="text-right py-1 font-normal">累计 hit</th>
-                    <th className="text-right py-1 font-normal">请求</th>
-                    <th className="text-right py-1 font-normal">命中率</th>
-                    <th className="text-right py-1 font-normal">区间每章 ¥</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.marks.map(m => (
-                    <tr key={m.threshold} className="border-t border-border/50">
-                      <td className="py-1.5 tabular-nums">{m.threshold / 1024}K</td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {m.reached ? `第 ${m.chapter} 章` : '未到达'}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">{m.reached ? m.cost.toFixed(4) : '-'}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.reached ? `${(m.miss / 1000).toFixed(0)}K` : '-'}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.reached ? fmtM(m.hit) : '-'}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.reached ? m.requests : '-'}</td>
-                      <td className="py-1.5 text-right tabular-nums">{m.reached ? `${m.hit_rate.toFixed(1)}%` : '-'}</td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {m.interval_per_chapter > 0 ? `¥${m.interval_per_chapter.toFixed(4)}` : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border/50 text-muted-foreground">
-                    <td className="py-1.5">终点（历史峰值 {(result.final_total / 1000).toFixed(0)}K）</td>
-                    <td className="py-1.5 text-right">{result.final_reqs} 请求</td>
-                    <td className="py-1.5 text-right tabular-nums">{result.final_cost.toFixed(4)}</td>
-                    <td className="py-1.5 text-right tabular-nums">-</td>
-                    <td className="py-1.5 text-right tabular-nums">-</td>
-                    <td className="py-1.5 text-right">-</td>
-                    <td className="py-1.5 text-right tabular-nums">{result.final_hit_rate.toFixed(1)}%</td>
-                    <td className="py-1.5 text-right">-</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="text-[10px] text-muted-foreground/70 mt-2">
-                单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本。
-                {result.compresses > 0 && (
-                  <span className="text-amber-600/80">
-                    {' '}上下文压缩触发 {result.compresses} 次（阈值 {Math.round(result.compress_threshold * 100)}%×模型窗口，压缩后整链重置、下轮首请求全 miss，
-                    历史峰值停在压缩点附近）。
-                  </span>
-                )}
-                {!result.marks.some(m => m.threshold >= 1048576 && m.reached) && (
-                  <span>
-                    {' '}1024K 刻度未到达：压缩阈值 = {Math.round(result.compress_threshold * 100)}%×模拟窗口（1M 窗口约 {Math.round(result.compress_threshold * 1000)}K 触发），想测 1024K 请把模拟窗口 K 调到 {Math.ceil(1024 / (result.compress_threshold || 0.7) / 100) * 100} 以上。
-                  </span>
-                )}
-              </p>
             </div>
           )}
         </div>

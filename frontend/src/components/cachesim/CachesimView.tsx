@@ -6,21 +6,6 @@ import type { config } from '@/lib/wailsjs/go/models'
 import CacheSimDeepDive from './CacheSimDeepDive'
 
 // 模拟结果类型（后端 app.CacheSimResult 通过事件推送，本地定义）
-interface WindowSimMark {
-  threshold: number
-  reached: boolean
-  hit: number
-  miss: number
-  out: number
-  requests: number
-  chapter: number
-  cost: number
-  hit_rate: number
-  interval_chapters: number
-  interval_cost: number
-  interval_per_chapter: number
-}
-
 interface CacheSimStage {
   stage: string
   chapter: number
@@ -41,16 +26,8 @@ interface CacheSimResult {
   total_out: number
   hit_rate: number
   cost: number
-  marks: WindowSimMark[]
-  final_total: number
-  final_reqs: number
-  final_cost: number
-  final_hit_rate: number
-  best_interval: string
-  best_per_chapter: number
   stages: CacheSimStage[]
   compresses: number
-  compress_threshold: number
   miss_by_cat: Record<string, number>
 }
 
@@ -113,12 +90,11 @@ function chaptersOf(sc: SimScenario): number {
   return Math.max(1, sc.gate_rounds + sc.batch_chapters * sc.batch_rounds)
 }
 
-type Tab = 'compare' | 'miss' | 'scale' | 'deep'
+type Tab = 'compare' | 'miss' | 'deep'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'compare', label: '场景对比' },
   { id: 'miss', label: 'miss 构成' },
-  { id: 'scale', label: '窗口刻度' },
   { id: 'deep', label: '单场景深挖' },
 ]
 
@@ -136,7 +112,6 @@ export default function CachesimView() {
   const [error, setError] = useState('')
   const [results, setResults] = useState<CacheSimResult[]>([])
   const [tab, setTab] = useState<Tab>('compare')
-  const [scaleIdx, setScaleIdx] = useState(0)
   const [prices, setPrices] = useState({ input: 1, output: 2, cache: 0.02 })
   const mountedRef = useRef(true)
 
@@ -555,32 +530,7 @@ export default function CachesimView() {
                 </div>
               )}
 
-              {/* Tab 3 窗口刻度 */}
-              {tab === 'scale' && (
-                <div className="rounded-lg border p-4 space-y-3">
-                  {results.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">点击"跑全部场景"，再选场景看窗口刻度</p>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-3">
-                        <label className="text-xs text-muted-foreground">场景</label>
-                        <select
-                          value={Math.min(scaleIdx, results.length - 1)}
-                          onChange={e => setScaleIdx(Number(e.target.value))}
-                          className="h-7 px-2 rounded border bg-background text-xs text-foreground"
-                        >
-                          {results.map((r, i) => (
-                            <option key={i} value={i}>{r.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <ScaleTable result={results[Math.min(scaleIdx, results.length - 1)]} />
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 4 单场景深挖 */}
+              {/* Tab 3 单场景深挖 */}
               {tab === 'deep' && <CacheSimDeepDive />}
             </div>
           )}
@@ -590,116 +540,3 @@ export default function CachesimView() {
   )
 }
 
-// 刻度/阶段表：single/batch 显示窗口刻度，mixed 显示阶段轮次
-function ScaleTable({ result }: { result: CacheSimResult }) {
-  const r = result
-  if (r.mode !== 'mixed') {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">上下文窗口刻度（单窗口成本曲线）</span>
-          {r.best_interval && (
-            <span className="text-xs text-primary">最省区间：{r.best_interval}（每章 ¥{r.best_per_chapter.toFixed(4)}）</span>
-          )}
-        </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-muted-foreground">
-              <th className="text-left py-1 font-normal">刻度</th>
-              <th className="text-right py-1 font-normal">到达时</th>
-              <th className="text-right py-1 font-normal">累计成本 ¥</th>
-              <th className="text-right py-1 font-normal">累计 miss</th>
-              <th className="text-right py-1 font-normal">累计 hit</th>
-              <th className="text-right py-1 font-normal">请求</th>
-              <th className="text-right py-1 font-normal">命中率</th>
-              <th className="text-right py-1 font-normal">区间每章 ¥</th>
-            </tr>
-          </thead>
-          <tbody>
-            {r.marks.map(m => (
-              <tr key={m.threshold} className="border-t border-border/50">
-                <td className="py-1.5 tabular-nums">{m.threshold / 1024}K</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? `第 ${m.chapter} 章` : '未到达'}</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? m.cost.toFixed(4) : '-'}</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? `${(m.miss / 1000).toFixed(0)}K` : '-'}</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? fmtM(m.hit) : '-'}</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? m.requests : '-'}</td>
-                <td className="py-1.5 text-right tabular-nums">{m.reached ? `${m.hit_rate.toFixed(1)}%` : '-'}</td>
-                <td className="py-1.5 text-right tabular-nums">
-                  {m.interval_per_chapter > 0 ? `¥${m.interval_per_chapter.toFixed(4)}` : '-'}
-                </td>
-              </tr>
-            ))}
-            <tr className="border-t border-border/50 text-muted-foreground">
-              <td className="py-1.5">终点（历史峰值 {(r.final_total / 1000).toFixed(0)}K）</td>
-              <td className="py-1.5 text-right">{r.final_reqs} 请求</td>
-              <td className="py-1.5 text-right tabular-nums">{r.final_cost.toFixed(4)}</td>
-              <td className="py-1.5 text-right tabular-nums">-</td>
-              <td className="py-1.5 text-right tabular-nums">-</td>
-              <td className="py-1.5 text-right">-</td>
-              <td className="py-1.5 text-right tabular-nums">{r.final_hit_rate.toFixed(1)}%</td>
-              <td className="py-1.5 text-right">-</td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-[10px] text-muted-foreground/70">
-          单窗口内历史增长到 128K/256K/512K/1024K 时的累计成本快照与区间每章成本，找最省区间。
-          {r.compresses > 0 && (
-            <span className="text-amber-600/80">
-              {' '}上下文压缩触发 {r.compresses} 次（阈值 {Math.round(r.compress_threshold * 100)}%×模型窗口，压缩后整链重置、下轮首请求全 miss，历史峰值停在压缩点附近）。
-            </span>
-          )}
-          {!r.marks.some(m => m.threshold >= 1048576 && m.reached) && (
-            <span>
-              {' '}1024K 刻度未到达：压缩阈值 = {Math.round(r.compress_threshold * 100)}%×模拟窗口（1M 窗口约 {Math.round(r.compress_threshold * 1000)}K 触发），想测 1024K 请把模拟窗口 K 调到 {Math.ceil(1024 / (r.compress_threshold || 0.7) / 100) * 100} 以上。
-            </span>
-          )}
-        </p>
-      </div>
-    )
-  }
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">阶段轮次成本（每阶段结束快照）</span>
-      </div>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-muted-foreground">
-            <th className="text-left py-1 font-normal">阶段</th>
-            <th className="text-right py-1 font-normal">累计章</th>
-            <th className="text-right py-1 font-normal">历史</th>
-            <th className="text-right py-1 font-normal">累计成本 ¥</th>
-            <th className="text-right py-1 font-normal">区间增量 ¥</th>
-            <th className="text-right py-1 font-normal">区间每章 ¥</th>
-            <th className="text-right py-1 font-normal">请求</th>
-            <th className="text-right py-1 font-normal">命中率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {r.stages && r.stages.map((s, i) => (
-            <tr key={i} className="border-t border-border/50">
-              <td className="py-1.5">{s.stage}</td>
-              <td className="py-1.5 text-right tabular-nums">
-                {s.stage === '开书完成' || s.stage.startsWith('短对话') ? '-' : s.chapter}
-              </td>
-              <td className="py-1.5 text-right tabular-nums">{(s.total / 1000).toFixed(0)}K</td>
-              <td className="py-1.5 text-right tabular-nums">{s.cost.toFixed(4)}</td>
-              <td className="py-1.5 text-right tabular-nums">{i > 0 ? `+${s.interval_cost.toFixed(4)}` : '-'}</td>
-              <td className="py-1.5 text-right tabular-nums">
-                {s.interval_per_chapter > 0 ? `¥${s.interval_per_chapter.toFixed(4)}` : '-'}
-              </td>
-              <td className="py-1.5 text-right tabular-nums">{s.requests}</td>
-              <td className="py-1.5 text-right tabular-nums">{s.hit_rate.toFixed(1)}%</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {r.compresses > 0 && (
-        <p className="text-[10px] text-amber-600/80">上下文压缩触发 {r.compresses} 次（阈值 {Math.round(r.compress_threshold * 100)}%×模型窗口）。</p>
-      )}
-    </div>
-  )
-}
