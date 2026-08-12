@@ -162,3 +162,4 @@
 > - **可见性判定**（aeed97c）：模拟器去重判定从 injectedPhases 记录改为 `visibleIn` 全文比对（history+cur 中 role=system 且 content 相同）——压缩清理历史后判定失败自动重新注入，杜绝"记录还在内容没了"的误判；真机 agent.go 遍历 opts.Messages 同标准
 > - **短提醒注入**（2a798b6 模拟器 + cdbdbc3 真机）：首次进入阶段注入全文（学习内容常驻历史）；再次进入同阶段注入 `BuildSkillsReminder` 短提醒（技能名+description 要点，~300 字符 vs 全文 8K，紧跟请求尾部注意力最强位置）——解决 Lost in the Middle（单章 5 轮时技能全文在历史 24.6% 位置，注意力衰减）；业界对照：Anthropic skills #591 index-page / hermes-agent system-reminder / autogen 300-token 修复；模拟 miss 降 13.8%（506,703→436,595）命中率 97.4% 不变
 > 2026-08-12 文档审计：cache-simulation.md/cmd-cacheprobe-README/phase-gate.md/TODO-P4 同步上述全部变更（模式驱动、阶段表、性能、技能可见性 + 短提醒）。
+> 2026-08-13 前端崩溃修复（86fec21）：角色/地点面板 React #31 崩溃 —— LLM 经 MCP 工具把 abilities/tags 写成对象数组（{name,level,description}），前端按字符串数组渲染对象导致渲染失败；新增 parseStringArray（lib/utils.ts）规整为字符串数组（对象取 name ?? description），应用于 CharacterListView/CharacterGraph/LocationListView/LocationGraph。
