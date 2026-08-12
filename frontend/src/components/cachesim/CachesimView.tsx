@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play, Loader2, Plus, RotateCcw, X, Gauge, ChevronDown, ChevronUp, BookOpen, Package, MessagesSquare, TrendingUp } from 'lucide-react'
-import { StartCacheSimScenarios, GetSettings } from '@/lib/wailsjs/go/app/App'
+import { StartCacheSimScenarios, GetSettings, SetSimHitRateAdjust } from '@/lib/wailsjs/go/app/App'
 import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import type { config } from '@/lib/wailsjs/go/models'
 import CacheSimDeepDive from './CacheSimDeepDive'
@@ -115,6 +115,8 @@ export default function CachesimView() {
   const [results, setResults] = useState<CacheSimResult[]>([])
   const [tab, setTab] = useState<Tab>('compare')
   const [prices, setPrices] = useState({ input: 1, output: 2, cache: 0.02 })
+  const [hitAdjust, setHitAdjust] = useState(0.95)
+  const [hitAdjustSaved, setHitAdjustSaved] = useState(true)
   const mountedRef = useRef(true)
 
   // 进面板自动跑三档预设
@@ -144,6 +146,9 @@ export default function CachesimView() {
         output: s.price_output > 0 ? s.price_output : 2,
         cache: s.cache_price > 0 ? s.cache_price : 0.02,
       })
+      if (s.sim_hit_rate_adjust > 0 && s.sim_hit_rate_adjust <= 1) {
+        setHitAdjust(s.sim_hit_rate_adjust)
+      }
     }).catch(() => {})
   }, [])
 
@@ -330,7 +335,11 @@ export default function CachesimView() {
 
             <p className="text-[10px] text-muted-foreground/70">
               三档写法都是「同一个会话窗口里连续完成」：写下一章不新开对话，AI 记得之前写的内容，缓存延续更省钱。
-              每章成本 = 该窗口总花费 ÷ 窗口内产出章数。估算基于当前模型价格（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟。想对比更多写法、看缓存命中明细，展开下方高级详情。
+              每章成本 = 该窗口总花费 ÷ 窗口内产出章数。估算基于当前模型价格（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟。
+              {hitAdjust < 1 && (
+                <span> 命中率已按真机校准（×{hitAdjust.toFixed(2)}，可在高级详情调整）。</span>
+              )}
+              想对比更多写法、看缓存命中明细，展开下方高级详情。
             </p>
           </>
         )}
@@ -365,6 +374,31 @@ export default function CachesimView() {
                     className="w-20 px-2 py-1 rounded border bg-background text-sm text-foreground"
                   />
                   <span className="text-[10px] text-muted-foreground/70">0=按选中模型</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground shrink-0" title="真机命中率（89-93%）低于模拟器（96-97%），系数把模拟命中率乘此值：0.95=按 95% 折算，1=不校准">
+                  命中率校准 ×
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={1}
+                    step={0.01}
+                    value={hitAdjust}
+                    onChange={e => {
+                      const n = Number(e.target.value)
+                      if (e.target.value !== '' && !Number.isNaN(n)) {
+                        setHitAdjust(Math.max(0.5, Math.min(1, n)))
+                        setHitAdjustSaved(false)
+                      }
+                    }}
+                    onBlur={() => {
+                      if (hitAdjustSaved) return
+                      SetSimHitRateAdjust(hitAdjust).then(() => setHitAdjustSaved(true)).catch(() => {})
+                    }}
+                    className="w-16 px-2 py-1 rounded border bg-background text-sm text-foreground"
+                  />
+                  <span className="text-[10px] text-muted-foreground/70">
+                    {hitAdjustSaved ? '已保存' : '修改后自动保存'}
+                  </span>
                 </label>
                 <div className="flex-1" />
                 <button

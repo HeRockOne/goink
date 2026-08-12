@@ -143,13 +143,24 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 		}
 	}
 	// 压缩阈值：读设置自定义值（对齐真机压缩触发口径），默认 0.7
-	if s, err := config.LoadSettings(a.db); err == nil && s.CompressionThreshold > 0 {
-		compressThreshold = s.CompressionThreshold
+	simHitAdjust := 1.0
+	if s, err := config.LoadSettings(a.db); err == nil {
+		if s.CompressionThreshold > 0 {
+			compressThreshold = s.CompressionThreshold
+		}
+		// 命中率校准：真机命中率（89-93%）低于模拟器（96-97%），按系数下调（1=不校准）
+		if s.SimHitRateAdjust > 0 && s.SimHitRateAdjust <= 1 {
+			simHitAdjust = s.SimHitRateAdjust
+		}
 	}
 	raw, err := cacheprobe.RunWindowMode(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow, compressThreshold)
 	if err != nil {
 		a.Logger().Error("cachesim failed", "mode", mode, "window", contextWindow, "err", err.Error())
 		return &CacheSimResult{Cost: -1} // 失败标记
+	}
+	// 校准命中率：输入总量不变，把部分 hit 转为 miss（成本随 miss 比例上升）
+	if simHitAdjust < 1 {
+		applyHitAdjust(raw, simHitAdjust)
 	}
 
 	// 价格：从设置读（ContextRing 同源），默认 DeepSeek 价（0.02/1/2，元/百万 token）
@@ -305,4 +316,58 @@ func costOf(hit, miss, out int64, cachePrice, inputPrice, outputPrice float64) f
 	missCost := float64(miss) * inputPrice / 1_000_000
 	outCost := float64(out) * outputPrice / 1_000_000
 	return hitCost + missCost + outCost
+}
+
+// applyHitAdjust 按校准系数下调命中率（真机 89-93% vs 模拟 96-97%）：
+// 输入总量不变，把部分 hit 转成 miss（按各快照的当前命中率等比下调），
+// 成本随 miss 比例自然上升。MissByCat 按 miss 增幅等比缩放保持分类占比。
+func applyHitAdjust(raw *cacheprobe.WindowCostResult, adjust float64) {
+	total := raw.FinalHit + raw.FinalMiss
+	if total <= 0 {
+		return
+	}
+	oldMiss := raw.FinalMiss
+	rate := float64(raw.FinalHit) / float64(total)
+	newMiss := int64(float64(total) * (1 - rate*adjust))
+	if newMiss > total {
+		newMiss = total
+	}
+	raw.FinalHit = total - newMiss
+	raw.FinalMiss = newMiss
+	missScale := 1.0
+	if oldMiss > 0 {
+		missScale = float64(newMiss) / float64(oldMiss)
+	}
+	if raw.MissByCat != nil {
+		for k, v := range raw.MissByCat {
+			raw.MissByCat[k] = int64(float64(v) * missScale)
+		}
+		// 四舍五入误差补到第一个分类，保证分类总和 = newMiss
+		sum := int64(0)
+		for _, v := range raw.MissByCat {
+			sum += v
+		}
+		for k := range raw.MissByCat {
+			raw.MissByCat[k] += newMiss - sum
+			break
+		}
+	}
+	adjustPair := func(hit, miss int64) (int64, int64) {
+		t := hit + miss
+		if t <= 0 {
+			return hit, miss
+		}
+		r := float64(hit) / float64(t)
+		nm := int64(float64(t) * (1 - r*adjust))
+		if nm > t {
+			nm = t
+		}
+		return t - nm, nm
+	}
+	for i := range raw.Marks {
+		raw.Marks[i].Hit, raw.Marks[i].Miss = adjustPair(raw.Marks[i].Hit, raw.Marks[i].Miss)
+	}
+	for i := range raw.StageMarks {
+		raw.StageMarks[i].Hit, raw.StageMarks[i].Miss = adjustPair(raw.StageMarks[i].Hit, raw.StageMarks[i].Miss)
+	}
 }

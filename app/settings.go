@@ -188,6 +188,18 @@ func (a *App) SetCompressionThreshold(threshold float64) error {
 	return config.SaveSettings(a.db, a.settings)
 }
 
+// SetSimHitRateAdjust 设置模拟命中率校准系数（0.5-1.0，真机命中率低于模拟器，默认 0.95；1=不校准）。
+func (a *App) SetSimHitRateAdjust(adjust float64) error {
+	if adjust < 0.5 {
+		adjust = 0.5
+	}
+	if adjust > 1 {
+		adjust = 1
+	}
+	a.settings.SimHitRateAdjust = adjust
+	return config.SaveSettings(a.db, a.settings)
+}
+
 // SetPhaseGateEnabled 设置阶段门禁开关。
 func (a *App) SetPhaseGateEnabled(enabled bool) error {
 	a.settings.PhaseGateEnabled = &enabled

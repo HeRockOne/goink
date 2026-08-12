@@ -21,6 +21,7 @@ type AppSettings struct {
 	GitEmail         string `gorm:"column:git_email;default:'goink@local'"  json:"git_email"`
 	DismissedVersion string `gorm:"column:dismissed_version;default:''"     json:"dismissed_version"`
 	CompressionThreshold float64 `gorm:"column:compression_threshold;default:0.7" json:"compression_threshold"`
+	SimHitRateAdjust float64 `gorm:"column:sim_hit_rate_adjust;default:0.95" json:"sim_hit_rate_adjust"` // 模拟命中率校准系数（0.5-1，真机命中率低于模拟器，乘此系数；1=不校准）
 	PhaseGateEnabled *bool  `gorm:"column:phase_gate_enabled;default:true" json:"phase_gate_enabled"` // 阶段门禁开关，默认开启
 	WebDAVPort       int    `gorm:"column:webdav_port;default:12345" json:"webdav_port"`
 	WebDAVUser       string `gorm:"column:webdav_user;default:1" json:"webdav_user"`
