@@ -11,7 +11,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { toast } from 'sonner'
-import { toastError, cn } from './utils'
+import { toastError, cn, parseStringArray } from './utils'
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -78,5 +78,30 @@ describe('toastError', () => {
     const action = call[1].action
     action.onClick()
     expect(writeText).toHaveBeenCalledWith('clipboard test')
+  })
+})
+
+describe('parseStringArray', () => {
+  it('parses plain string arrays', () => {
+    expect(parseStringArray('["潜行", "侦察"]')).toEqual(['潜行', '侦察'])
+  })
+
+  it('flattens LLM object arrays like {name, level, description}', () => {
+    const json = '[{"name": "再生", "level": "Lv.1", "description": "自动修复"}, {"name": "飞行"}]'
+    expect(parseStringArray(json)).toEqual(['再生', '飞行'])
+  })
+
+  it('falls back to description when name is missing', () => {
+    expect(parseStringArray('[{"description": "潜行术"}]')).toEqual(['潜行术'])
+  })
+
+  it('returns [] for invalid json or non-arrays', () => {
+    expect(parseStringArray('not json')).toEqual([])
+    expect(parseStringArray('{"a": 1}')).toEqual([])
+    expect(parseStringArray('')).toEqual([])
+  })
+
+  it('drops empty strings and object without name/description', () => {
+    expect(parseStringArray('["a", "", {"level": 3}]')).toEqual(['a'])
   })
 })

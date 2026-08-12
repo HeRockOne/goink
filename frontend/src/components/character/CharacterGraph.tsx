@@ -4,6 +4,7 @@ import { LocateFixed, RefreshCw, UsersRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '@/hooks/useApp'
 import { useGraphColors } from '@/components/graphColors'
+import { parseStringArray } from '@/lib/utils'
 import type { character } from '@/hooks/useApp'
 
 interface Props {
@@ -302,10 +303,10 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
 
       {selectedCharacter && (() => {
         const personality = safeJson<Record<string, any>>(selectedCharacter.personality, {})
-        const abilities = safeJson<string[]>(selectedCharacter.abilities, [])
+        const abilities = parseStringArray(selectedCharacter.abilities)
         const desc = selectedCharacter.description?.trim() || ''
         const brief: string = personality?.brief || personality?.brief_description || ''
-        const traits: string[] = Array.isArray(personality?.traits) ? personality.traits : []
+        const traits: string[] = Array.isArray(personality?.traits) ? personality.traits.filter((t: unknown): t is string => typeof t === 'string') : []
         const hasContent = desc || brief || traits.length > 0 || abilities.length > 0
         const longDesc = desc.length > 100
 

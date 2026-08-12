@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2, UsersRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '@/hooks/useApp'
+import { parseStringArray } from '@/lib/utils'
 import type { character } from '@/hooks/useApp'
 import CharacterGraph from '@/components/character/CharacterGraph'
 import TagInput from '@/components/shared/TagInput'
@@ -22,11 +23,6 @@ type CharForm = {
 }
 
 const EMPTY_FORM: CharForm = { name: '', description: '', abilities: [] }
-
-function safeJson<T>(json: string, fallback: T): T {
-  try { return JSON.parse(json) }
-  catch { return fallback }
-}
 
 export default function CharacterListView({ novelId, focusId }: Props) {
   const app = useApp()
@@ -69,7 +65,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
     setForm({
       name: c.name,
       description: c.description || '',
-      abilities: safeJson<string[]>(c.abilities, []),
+      abilities: parseStringArray(c.abilities),
     })
     setEditMode({ type: 'edit', item: c })
   }
@@ -254,7 +250,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
               <div className="space-y-2">
                 {characters.map(c => {
                   const isEditing = editMode?.type === 'edit' && editMode.item.id === c.id
-                  const abilities: string[] = safeJson<string[]>(c.abilities, [])
+                  const abilities: string[] = parseStringArray(c.abilities)
 
                   if (isEditing) {
                     return (

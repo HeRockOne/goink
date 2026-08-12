@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRight, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '@/hooks/useApp'
+import { parseStringArray } from '@/lib/utils'
 import type { location } from '@/hooks/useApp'
 import LocationGraph from '@/components/location/LocationGraph'
 import TagInput from '@/components/shared/TagInput'
@@ -24,11 +25,6 @@ type LocForm = {
 }
 
 const EMPTY_FORM: LocForm = { name: '', location_type: '', description: '', tags: [] }
-
-function safeJson<T>(json: string, fallback: T): T {
-  try { return JSON.parse(json) }
-  catch { return fallback }
-}
 
 export default function LocationListView({ novelId, focusId }: Props) {
   const app = useApp()
@@ -110,7 +106,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       location_type: loc.location_type || '',
       description: loc.description || '',
       parent_location_id: loc.parent_location_id ?? undefined,
-      tags: safeJson<string[]>(loc.tags, []),
+      tags: parseStringArray(loc.tags),
     })
     setEditMode({ type: 'edit', item: loc })
   }
@@ -326,7 +322,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
               <div className="space-y-2">
                 {locations.map(loc => {
                   const isEditing = editMode?.type === 'edit' && editMode.item.id === loc.id
-                  const tags: string[] = safeJson<string[]>(loc.tags, [])
+                  const tags: string[] = parseStringArray(loc.tags)
                   const desc = loc.description?.trim() || ''
                   const parentName = loc.parent_location_id ? nameMap.get(loc.parent_location_id) : null
 

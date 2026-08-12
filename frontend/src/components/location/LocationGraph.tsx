@@ -4,6 +4,7 @@ import { LocateFixed, Map as MapIcon, RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '@/hooks/useApp'
 import { useGraphColors } from '@/components/graphColors'
+import { parseStringArray } from '@/lib/utils'
 import type { location } from '@/hooks/useApp'
 
 interface Props {
@@ -263,7 +264,7 @@ export default function LocationGraph({ novelId, focusId }: Props) {
 
       {selectedLocation && (() => {
         const detail = safeJson<Record<string, any>>(selectedLocation.detail_json, {})
-        const tags: string[] = safeJson<string[]>(selectedLocation.tags, [])
+        const tags: string[] = parseStringArray(selectedLocation.tags)
         const desc = selectedLocation.description?.trim() || ''
         const detailKeys = Object.keys(detail).filter(k => k.trim())
         const hasContent = desc || detailKeys.length > 0 || tags.length > 0 || selectedLocation.location_type
