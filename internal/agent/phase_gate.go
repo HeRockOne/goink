@@ -277,10 +277,9 @@ func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue 
 			names[p.Name] = true
 		}
 		for _, p := range gate.phases {
-			// next 必须指向存在的阶段
-			if p.Next == "" {
-				issues = append(issues, ValidationIssue{mode, p.Name, "error", "缺少 next（必须指向下一阶段）"})
-			} else if !names[p.Next] {
+			// next 指向存在的阶段（空 next = 终点阶段合法，如 done：流程走完停在终点，
+			// 不再自动推进；终点前的阶段 next 必须存在）
+			if p.Next != "" && !names[p.Next] {
 				issues = append(issues, ValidationIssue{mode, p.Name, "error",
 					fmt.Sprintf("next 指向不存在的阶段 [%s]", p.Next)})
 			}
