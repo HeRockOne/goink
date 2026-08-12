@@ -280,6 +280,9 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   // 特殊面板（不走 ContentPanel，各有独立渲染）
   const SPECIAL_PANELS = new Set(['characters', 'locations', 'storyarcs', 'timeline', 'reader', 'preferences', 'world', 'items', 'stats', 'profile', 'git', 'style-samples', 'cachesim'])
 
+  // 全屏面板：隐藏 SidePanel（stats/profile/cachesim 无侧边列表，显示空壳会留白）
+  const FULLSCREEN_PANELS = new Set(['stats', 'profile', 'cachesim'])
+
   function renderSpecialPanel(panel: string): React.ReactNode {
     let node: React.ReactNode = null
     switch (panel) {
@@ -461,14 +464,14 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           </button>
           <GitHubLink />
           <button
-            onClick={() => setActivePanel('cachesim')}
+            onClick={() => { setSidebarPanel(null); setActivePanel('cachesim') }}
             className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'cachesim' ? 'text-foreground' : ''}`}
             title={t('workspace.cachesim')}
           >
             <Gauge className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setActivePanel('profile')}
+            onClick={() => { setSidebarPanel(null); setActivePanel('profile') }}
             className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'profile' ? 'text-foreground' : ''}`}
             title={t('workspace.profile')}
           >
@@ -525,7 +528,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <ActivityBar activeId={sidebarPanel ?? activePanel} onSelect={handleActivitySelect} />
 
-        {!sidebarClosed && (sidebarPanel ?? activePanel) !== 'stats' && (
+        {!sidebarClosed && !FULLSCREEN_PANELS.has(sidebarPanel ?? activePanel) && (
           <SidePanel
             activePanel={sidebarPanel ?? activePanel}
             novels={novels}
