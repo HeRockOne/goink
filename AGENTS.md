@@ -16,7 +16,7 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 
 ### Skill 结构约定
 
-- **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（42 个：33 原内置 + 8 新增通用/类型 + 1 章节标题设计）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
+- **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（当前 43 个：37 auto + 5 manual + 1 always；数量以目录为准，勿在文档写死）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
 - **2 个常驻调度 skill**（main-core-writing-kernel、main-core-ai-communication-standard）在 `skills/`（项目根目录，版本控制），**需要时可改**（调度流程调整）；同步到 `~/.goink/skills/` 后生效
 - **新增 skill**：放 `internal/skill/builtin/<name>.md`，并在 main-core-writing-kernel 的阶段技能表登记（需重新编译，或放用户级即时生效）
 - 同名优先级：小说级 > 用户级 > 内置（放用户级可覆盖内置默认行为）
@@ -25,10 +25,15 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 
 ## 一、新 AI 接手必读
 
+**仓库布局**：`app/` = Wails 绑定层（Chat/设置/面板入口，chat.go 组装 LLM 链路）；`internal/` = 核心库（agent=循环+门禁+压缩、agentcfg=系统提示词/白名单、mcp_tools=工具、cacheprobe=成本模拟、session=消息存储、skill=技能库、llm=客户端）；`frontend/` = React 前端；`cmd/cacheprobe/` = 模拟 CLI；`skills/` = 常驻调度 skill（版本控制）。
+
 阅读顺序：
-1. `docs/README.md` — 文档索引（architecture/design/adr/archive 分层）
+1. `docs/README.md` — 文档索引（architecture/design/adr/archive 分层，archive 含历次审计）
 2. `docs/architecture/architecture.md` — 系统架构
 3. `docs/architecture/phase-gate.md` — 阶段门禁
+4. `docs/adr/0001-prompt-caching.md` — 前缀缓存决策（改工具注入/消息顺序前必读）
+5. `internal/agent/DESIGN.md` — Agent 循环设计（**有过时声明**，以代码为准）
+6. `docs/archive/llm-chain-audit-2026-08-12.md` — 最近一次 LLM 链路全量审计（问题清单 + 修复记录）
 
 ---
 
@@ -90,8 +95,13 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 ### 代码
 - 计费有关的缓存字段：优先 `prompt_tokens_details.cached_tokens`，fallback `prompt_cache_hit_tokens`。详见 `docs/archive/billing-panel.md`
 - `updateUsage` 在 `tokens.go`，每次 EventUsage 触发。改这里要小心 `perModel` 和全局累计值的一致性
-- CGO：ONNX/sqlite-vec 用 `//go:build cgo`。Windows 编译必须带 CGO 环境：`build.ps1` 已设置（PATH 含 MSYS2 mingw64、`CGO_ENABLED=1`、`CGO_CFLAGS=-I$(go env GOMODCACHE)/github.com/mattn/go-sqlite3@版本`——sqlite-vec 的 C 代码 include "sqlite3.h"，头文件由 mattn 包自带）。直接用 `go build ./...` 不带这些环境变量报 `sqlite3.h: No such file or directory` 是缺 include 路径，不是"Windows 不能编译"。验证统一用：`go build ./...` + `go test ./internal/... ./app/...`（e2e 需真实 git/ONNX 环境，可跳过）
-- 不改 `frontend/src/lib/wailsjs/go/models.ts`（Wails 自动生成）
+- CGO：ONNX/sqlite-vec 用 `//go:build cgo`。Windows 编译必须带 CGO 环境：`build.ps1` 已设置（PATH 含 MSYS2 mingw64、`CGO_ENABLED=1`、`CGO_CFLAGS=-I$(go env GOMODCACHE)/github.com/mattn/go-sqlite3@版本`——sqlite-vec 的 C 代码 include "sqlite3.h"，头文件由 mattn 包自带）。直接用 `go build ./...` 不带这些环境变量报 `sqlite3.h: No such file or directory` 是缺 include 路径，不是"Windows 不能编译"
+- **验证命令**（项目根，需先设置上述 CGO 环境）：
+  - `go build ./...`
+  - `go test ./internal/... ./app/...`（e2e 需真实 git/ONNX 环境，可跳过）
+  - 例外：`internal/web` 测试**必然失败**（测试访问内网 IPv6 地址被环境防护拦截，`禁止访问内网地址`），属既有问题，与本轮改动无关，勿纠结
+  - 前端：`cd frontend && npm run build`（tsc + vite，前端改动必须跑）
+- **bindings 自动生成**：`frontend/src/lib/wailsjs/`（App.js/App.d.ts/models.ts）由 `wails generate module` 生成，**不手改**。新增/修改 app 方法或结构体后，先跑 `wails generate module`（需 CGO 环境）再构建前端，否则前端调不到新方法
 
 ---
 
@@ -106,9 +116,11 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 ### 常规规范
 
 - **并行读取文件**，减少来回
-- **每次修改写入审计**到 `docs/README.md`（更新索引）
+- **审计**：涉及行为变更/新功能/修复的修改，commit 前在 `docs/README.md` 追加一行审计（格式：`> YYYY-MM-DD：改动摘要（关键文件/决策，一两句）`）；纯文案/格式微调可不写。漏了就在下一轮补
 - **每次疑问先 `websearch`** 联网比对
 - **每次修改完业务代码，必须Commit本地**: 英文，具体描述，无 emoji
+- **不主动 push**：除非用户明确要求，只 commit 本地（远端同步由用户决定）
+- **并发代码警惕共享状态**：Agent 单例字段/包级变量在多会话并发时会串扰（教训：agent 门禁 phaseGate 存 Agent 字段导致桌面+移动端并发互相覆盖，已改为 Run 局部变量；cacheprobe 包级状态靠 simMu 串行化）。新写并发路径时优先局部变量/context 传递
 - **用户用中文** — 用中文回复
 - **不改日志和注释**，除非明确要求
 - **不用 sed/python 脚本改代码**，用 Edit/Write
