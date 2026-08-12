@@ -28,14 +28,11 @@ type CacheSimResult struct {
 	TotalOut  int64   `json:"total_out"`
 	HitRate   float64 `json:"hit_rate"`
 	Cost      float64 `json:"cost"`
-	// 上下文窗口刻度（单窗口成本曲线，single/batch 模式）
-	Marks          []WindowSimMark `json:"marks"`
-	FinalTotal     int64           `json:"final_total"` // 终点历史大小（token）
-	FinalReqs      int             `json:"final_reqs"`
-	FinalCost      float64         `json:"final_cost"`
-	FinalHitRate   float64         `json:"final_hit_rate"`
-	BestInterval   string          `json:"best_interval"` // 最省区间标签（如 "256K→512K"）
-	BestPerChapter float64         `json:"best_per_chapter"`
+	// 终点汇总（mixed 阶段表终点行用）
+	FinalTotal   int64   `json:"final_total"`
+	FinalReqs    int     `json:"final_reqs"`
+	FinalCost    float64 `json:"final_cost"`
+	FinalHitRate float64 `json:"final_hit_rate"`
 	// 阶段打点（mixed 模式：开书/短对话/单章轮/批量轮每阶段结束的成本快照）
 	Stages []CacheSimStage `json:"stages"`
 	// 上下文压缩触发次数（真机 threshold×窗口建模；>0 说明长窗口跑到了压缩点）
@@ -67,22 +64,6 @@ type CacheSimStage struct {
 	IntervalCost  float64 `json:"interval_cost"`  // 距上一阶段的增量成本
 	IntervalCh    int     `json:"interval_chapters"` // 距上一阶段的章数增量
 	IntervalPerCh float64 `json:"interval_per_chapter"`
-}
-
-// WindowSimMark 窗口刻度快照（单窗口成本曲线打点）。
-type WindowSimMark struct {
-	Threshold        int64   `json:"threshold"` // 刻度（token）：128K/256K/512K/1024K
-	Reached          bool    `json:"reached"`
-	Hit              int64   `json:"hit"`
-	Miss             int64   `json:"miss"`
-	Out              int64   `json:"out"`
-	Requests         int     `json:"requests"`
-	Chapter          int     `json:"chapter"` // 到达时写到的章节号
-	Cost             float64 `json:"cost"`    // 到达时累计成本（元）
-	HitRate          float64 `json:"hit_rate"`
-	IntervalChapters int     `json:"interval_chapters"` // 距上一刻度的章节数
-	IntervalCost     float64 `json:"interval_cost"`     // 区间增量成本
-	IntervalPerCh    float64 `json:"interval_per_chapter"`
 }
 
 // StartCacheSimulation 异步启动写书成本模拟（用户手动触发）。
@@ -200,48 +181,11 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 	res.CompressThreshold = raw.Threshold
 	res.MissByCat = raw.MissByCat
 
-	// 窗口刻度：打点快照 + 区间每章成本 + 最省区间
+	// 终点汇总（mixed 阶段表终点行用）
 	res.FinalTotal = raw.FinalTotal
 	res.FinalReqs = raw.FinalReqs
 	res.FinalCost = res.Cost
 	res.FinalHitRate = res.HitRate
-	prevCost := 0.0
-	prevCh := 0
-	prevTh := int64(0)
-	prevReached := false
-	bestInterval := ""
-	bestPerCh := 1e18
-	for _, mk := range raw.Marks {
-		m := WindowSimMark{
-			Threshold: mk.Threshold,
-			Reached:   mk.Reached,
-			Hit:       mk.Hit,
-			Miss:      mk.Miss,
-			Out:       mk.Out,
-			Requests:  mk.Requests,
-			Chapter:   mk.Chapter,
-			Cost:      costOf(mk.Hit, mk.Miss, mk.Out, cachePrice, inputPrice, outputPrice),
-			HitRate:   hitRate(mk.Hit, mk.Miss),
-		}
-		if prevReached && mk.Reached {
-			m.IntervalChapters = mk.Chapter - prevCh
-			m.IntervalCost = m.Cost - prevCost
-			if m.IntervalChapters > 0 {
-				m.IntervalPerCh = m.IntervalCost / float64(m.IntervalChapters)
-			}
-			if m.IntervalPerCh > 0 && m.IntervalPerCh < bestPerCh {
-				bestPerCh = m.IntervalPerCh
-				bestInterval = fmt.Sprintf("%dK→%dK", prevTh/1024, mk.Threshold/1024)
-			}
-		}
-		prevCost = m.Cost
-		prevCh = mk.Chapter
-		prevTh = mk.Threshold
-		prevReached = mk.Reached
-		res.Marks = append(res.Marks, m)
-	}
-	res.BestInterval = bestInterval
-	res.BestPerChapter = bestPerCh
 
 	// 阶段打点（mixed 模式）：每阶段累计成本 + 区间增量 + 每章成本
 	if mode == "mixed" {
@@ -278,8 +222,6 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 		"total_miss", res.TotalMiss,
 		"total_out", res.TotalOut,
 		"compresses", res.Compresses,
-		"best_interval", res.BestInterval,
-		"best_per_chapter", res.BestPerChapter,
 	)
 	return res
 }
@@ -363,9 +305,6 @@ func applyHitAdjust(raw *cacheprobe.WindowCostResult, adjust float64) {
 			nm = t
 		}
 		return t - nm, nm
-	}
-	for i := range raw.Marks {
-		raw.Marks[i].Hit, raw.Marks[i].Miss = adjustPair(raw.Marks[i].Hit, raw.Marks[i].Miss)
 	}
 	for i := range raw.StageMarks {
 		raw.StageMarks[i].Hit, raw.StageMarks[i].Miss = adjustPair(raw.StageMarks[i].Hit, raw.StageMarks[i].Miss)

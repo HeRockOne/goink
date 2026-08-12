@@ -119,6 +119,19 @@ export default function CachesimView() {
   const [hitAdjustSaved, setHitAdjustSaved] = useState(true)
   const mountedRef = useRef(true)
 
+  // 跑三档预设（进面板自动 + 校准系数变化后手动重跑）
+  const runPresets = useCallback(async () => {
+    setPresetRunning(true)
+    setError('')
+    setPresetResults([])
+    try {
+      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, context_window: windowK * 1000 })))
+    } catch (e) {
+      setError(String(e))
+      setPresetRunning(false)
+    }
+  }, [windowK])
+
   // 进面板自动跑三档预设
   useEffect(() => {
     mountedRef.current = true
@@ -134,7 +147,7 @@ export default function CachesimView() {
       setPresetResults(ok)
       setResults(ok)
     })
-    StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, context_window: windowK * 1000 })))
+    runPresets()
     return () => { mountedRef.current = false; c1() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -223,6 +236,16 @@ export default function CachesimView() {
           <Gauge className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-semibold text-foreground">写书成本估算</h1>
           <span className="text-xs text-muted-foreground">按你的写法和当前模型价格，估算写书的费用</span>
+          <div className="flex-1" />
+          <button
+            onClick={runPresets}
+            disabled={presetRunning}
+            className="shrink-0 px-3 py-1.5 rounded border text-xs text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            title="修改价格或校准系数后重新估算"
+          >
+            {presetRunning ? <Loader2 className="w-3.5 h-3.5 inline animate-spin mr-1" /> : <Play className="w-3.5 h-3.5 inline mr-1" />}
+            重新估算
+          </button>
         </div>
 
         {/* ── 第一屏：我的写作成本 ── */}
@@ -392,7 +415,12 @@ export default function CachesimView() {
                     }}
                     onBlur={() => {
                       if (hitAdjustSaved) return
-                      SetSimHitRateAdjust(hitAdjust).then(() => setHitAdjustSaved(true)).catch(() => {})
+                      SetSimHitRateAdjust(hitAdjust)
+                        .then(() => {
+                          setHitAdjustSaved(true)
+                          runPresets()
+                        })
+                        .catch(() => {})
                     }}
                     className="w-16 px-2 py-1 rounded border bg-background text-sm text-foreground"
                   />
