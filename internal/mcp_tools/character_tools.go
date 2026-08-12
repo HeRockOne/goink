@@ -177,7 +177,7 @@ type CreateCharacterItem struct {
 	Name        string `json:"name"        jsonschema:"required,description=角色名称"               validate:"required"`
 	Description string `json:"description" jsonschema:"required,description=角色自然语言描述，如外貌、身份、背景故事等" validate:"required"`
 	Personality string `json:"personality" jsonschema:"description=自由JSON对象，描述角色性格/定位/背景等，如{\"traits\":[\"勇敢\"]，\"brief\":\"热血青年\"}"`
-	Abilities   string `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]"`
+	Abilities   string `json:"abilities"   jsonschema:"description=JSON数组，角色能力/技能列表，如[\"剑术\"，\"隐身\"]。必须是纯字符串数组，禁止写成对象数组（如[{name,level,description}]），禁止单引号或注释"`
 	LocationID  *int64 `json:"location_id" jsonschema:"description=角色当前所在地点ID（不确定可不传）"`
 	Status      string `json:"status"      jsonschema:"description=角色状态,enum=alive,enum=dead,enum=missing,enum=unknown,default=alive"`
 }
@@ -213,12 +213,18 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Characters {
+			abilities, err := NormalizeStringArray(item.Abilities)
+			if err != nil {
+				failedName = item.Name
+				failedErr = fmt.Errorf("abilities 格式错误: %w", err)
+				return err
+			}
 			ch := character.Character{
 				NovelID:     tc.NovelID,
 				Name:        item.Name,
 				Description: item.Description,
 				Personality: item.Personality,
-				Abilities:   item.Abilities,
+				Abilities:   abilities,
 				LocationID:  item.LocationID,
 				Status:      item.Status,
 			}
@@ -252,7 +258,7 @@ type UpdateCharacterArgs struct {
 	Name                   string `json:"name"         jsonschema:"description=新的名称"`
 	Description            string `json:"description"  jsonschema:"description=新的自然语言描述（完全替换旧的）"`
 	Personality            string `json:"personality" jsonschema:"description=新的性格/设定，字符串形式JSON（完全替换旧的）；只改状态时可不传"`
-	Abilities              string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON（完全替换旧的）"`
+	Abilities              string `json:"abilities"    jsonschema:"description=新的能力列表，字符串形式JSON数组（完全替换旧的）。必须是纯字符串数组，如[\"剑术\"，\"隐身\"]，禁止对象数组"`
 	LocationID             *int64 `json:"location_id"  jsonschema:"description=新的所在地点ID"`
 	Status                 string `json:"status"       jsonschema:"description=新的角色状态,enum=alive,enum=dead,enum=missing,enum=unknown。注意：dead（已死亡）是终态，已死亡角色不允许直接改回 alive/missing/unknown，如需复活请人工确认"`
 	StatusChangedChapterID int64  `json:"status_changed_chapter_id" jsonschema:"description=状态变化发生的章节ID（角色死亡/失踪/复活的章节），状态变化时必填"`
@@ -311,7 +317,11 @@ func (t *UpdateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 		ch.Personality = a.Personality
 	}
 	if a.Abilities != "" {
-		ch.Abilities = a.Abilities
+		abilities, err := NormalizeStringArray(a.Abilities)
+		if err != nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("abilities 格式错误: %v", err)}, nil
+		}
+		ch.Abilities = abilities
 	}
 	if a.LocationID != nil {
 		ch.LocationID = a.LocationID

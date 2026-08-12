@@ -82,7 +82,7 @@ type CreateLoreArgs struct {
 	IsPublic        bool   `json:"is_public" jsonschema:"description=是否公开设定（读者已知），false=秘密,default=true"`
 	ReferenceID     int64  `json:"reference_id" jsonschema:"description=关联实体ID"`
 	ReferenceType   string `json:"reference_type" jsonschema:"description=关联类型：location/character"`
-	Tags            string `json:"tags" jsonschema:"description=JSON标签数组"`
+	Tags            string `json:"tags" jsonschema:"description=JSON标签数组，纯字符串数组，如[\"仙侠\"，\"上古\"],禁止对象数组"`
 }
 
 type CreateLoreTool struct{}
@@ -102,10 +102,14 @@ func (t *CreateLoreTool) ExposeToLLM() bool           { return true }
 func (t *CreateLoreTool) NewArgs() any                { return &CreateLoreArgs{} }
 func (t *CreateLoreTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*CreateLoreArgs)
+	tags, err := NormalizeStringArray(a.Tags)
+	if err != nil {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+	}
 	entry := &lore.LoreEntry{
 		NovelID: tc.NovelID, Title: a.Title, Category: a.Category,
 		Content: a.Content, Summary: a.Summary, IsPublic: a.IsPublic,
-		ReferenceID: &a.ReferenceID, ReferenceType: a.ReferenceType, Tags: a.Tags,
+		ReferenceID: &a.ReferenceID, ReferenceType: a.ReferenceType, Tags: tags,
 	}
 	if a.ArcID > 0 { entry.ArcID = &a.ArcID }
 	if a.RevealChapterID > 0 { entry.RevealChapterID = &a.RevealChapterID }
@@ -129,7 +133,7 @@ type UpdateLoreArgs struct {
 	IsPublic        *bool   `json:"is_public,omitempty" jsonschema:"description=是否公开"`
 	ReferenceID     int64   `json:"reference_id" jsonschema:"description=关联实体ID"`
 	ReferenceType   string  `json:"reference_type" jsonschema:"description=关联实体类型"`
-	Tags            string  `json:"tags" jsonschema:"description=标签JSON数组"`
+	Tags            string  `json:"tags" jsonschema:"description=标签JSON数组，纯字符串数组"`
 }
 
 type UpdateLoreTool struct{}
@@ -159,7 +163,13 @@ func (t *UpdateLoreTool) Execute(ctx context.Context, args any, tc ToolContext) 
 	if a.RevealChapterID != nil { existing.RevealChapterID = a.RevealChapterID }
 	if a.IsPublic != nil { existing.IsPublic = *a.IsPublic }
 	if a.ReferenceID > 0 { existing.ReferenceID = &a.ReferenceID; existing.ReferenceType = a.ReferenceType }
-	if a.Tags != "" { existing.Tags = a.Tags }
+	if a.Tags != "" {
+		tags, err := NormalizeStringArray(a.Tags)
+		if err != nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+		}
+		existing.Tags = tags
+	}
 	if err := store.Update(ctx, existing); err != nil {
 		return nil, fmt.Errorf("update lore: %w", err)
 	}

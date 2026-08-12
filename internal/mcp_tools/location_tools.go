@@ -209,7 +209,7 @@ type CreateLocationItem struct {
 	LocationType string `json:"location_type" jsonschema:"required,description=地点类型：城镇/村落/山脉/建筑/秘境/水域/战场/其他" validate:"required"`
 	Description      string `json:"description" jsonschema:"required,description=地点详细描述，环境氛围、特色等" validate:"required"`
 	DetailJSON       string `json:"detail_json" jsonschema:"description=字符串形式的JSON对象，结构化信息：气候、氛围、历史事件等"`
-	Tags             string `json:"tags" jsonschema:"description=字符串形式的JSON数组，自由标签，如[\"危险\"，\"神秘\"]"`
+	Tags             string `json:"tags" jsonschema:"description=字符串形式的JSON数组，自由标签，如[\"危险\"，\"神秘\"]。必须是纯字符串数组，禁止对象数组或单引号"`
 	ParentLocationID *int64 `json:"parent_location_id" jsonschema:"description=父级地点ID，用于构建层级树"`
 }
 
@@ -266,13 +266,19 @@ func (t *CreateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Locations {
+			tags, err := NormalizeStringArray(item.Tags)
+			if err != nil {
+				failedName = item.Name
+				failedErr = fmt.Errorf("tags 格式错误: %w", err)
+				return err
+			}
 			loc := location.Location{
 				NovelID:          tc.NovelID,
 				Name:             item.Name,
 				LocationType:     item.LocationType,
 				Description:      item.Description,
 				DetailJSON:       item.DetailJSON,
-				Tags:             item.Tags,
+				Tags:             tags,
 				ParentLocationID: item.ParentLocationID,
 			}
 			if err := tx.Create(&loc).Error; err != nil {
@@ -306,7 +312,7 @@ type UpdateLocationArgs struct {
 	LocationType     string `json:"location_type" jsonschema:"description=新的类型"`
 	Description      string `json:"description" jsonschema:"description=新的描述"`
 	DetailJSON       string `json:"detail_json" jsonschema:"description=新的结构化信息，字符串形式JSON（完全替换旧的）"`
-	Tags             string `json:"tags" jsonschema:"description=新的标签，字符串形式JSON数组（完全替换旧的）"`
+	Tags             string `json:"tags" jsonschema:"description=新的标签，字符串形式JSON数组（完全替换旧的）。必须是纯字符串数组"`
 	ParentLocationID *int64 `json:"parent_location_id" jsonschema:"description=新的父级地点ID（不传不变，传null变根节点）"`
 }
 
@@ -360,6 +366,16 @@ func (t *UpdateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 	}
 
 	json.Unmarshal(tc.RawArgs, &loc)
+
+	// tags 规范化：LLM 可能传对象数组或裸数组，统一规整为字符串数组；从 RawArgs 取原始值
+	if rawTags, ok := raw["tags"]; ok {
+		tags, err := NormalizeStringArrayValue(rawTags)
+		if err != nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+		}
+		b, _ := json.Marshal(tags)
+		loc.Tags = string(b)
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&loc).Error; err != nil {
 		return nil, fmt.Errorf("save location: %w", err)

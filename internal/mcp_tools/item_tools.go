@@ -88,7 +88,7 @@ type CreateItemArgs struct {
 	OwnerID                int64  `json:"owner_id" jsonschema:"description=当前持有者character_id（无主物品可不传，>0 才写入）"`
 	PreviousOwnerID        int64  `json:"previous_owner_id" jsonschema:"description=上一任持有者character_id"`
 	LocationID             int64  `json:"location_id" jsonschema:"description=当前位置location_id"`
-	Tags                   string `json:"tags" jsonschema:"description=JSON标签数组"`
+	Tags                   string `json:"tags" jsonschema:"description=JSON标签数组，纯字符串数组，如[\"法宝\"，\"护主\"],禁止对象数组"`
 }
 
 type CreateItemTool struct{}
@@ -108,8 +108,12 @@ func (t *CreateItemTool) ExposeToLLM() bool           { return true }
 func (t *CreateItemTool) NewArgs() any                { return &CreateItemArgs{} }
 func (t *CreateItemTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*CreateItemArgs)
+	tags, err := NormalizeStringArray(a.Tags)
+	if err != nil {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+	}
 	it := &item.Item{NovelID: tc.NovelID, Name: a.Name, ItemType: a.ItemType, Grade: a.Grade,
-		Description: a.Description, Lore: a.Lore, Ability: a.Ability, Tags: a.Tags,
+		Description: a.Description, Lore: a.Lore, Ability: a.Ability, Tags: tags,
 		NarrativeRole: a.NarrativeRole}
 	if a.ArcID > 0 {
 		it.ArcID = &a.ArcID
@@ -150,7 +154,7 @@ type UpdateItemArgs struct {
 	PreviousOwnerID        int64  `json:"previous_owner_id" jsonschema:"description=上一任持有者character_id（>0 才更新）"`
 	LocationID             int64  `json:"location_id" jsonschema:"description=新的当前位置location_id（>0 才更新）"`
 	Status                 string `json:"status" jsonschema:"enum=active,enum=consumed,enum=destroyed,enum=lost。注意：destroyed（已销毁）/consumed（已消耗）是终态，不可改回"`
-	Tags                   string `json:"tags" jsonschema:"description=新的JSON标签数组（完全替换）"`
+	Tags                   string `json:"tags" jsonschema:"description=新的JSON标签数组（完全替换），纯字符串数组"`
 	ChapterID              int64  `json:"chapter_id" jsonschema:"description=当前章节ID（maintain 阶段处理本章物品时必填）。持有者变更/状态变化时用于记录流转，必须是有效章节"`
 }
 
@@ -232,7 +236,11 @@ func (t *UpdateItemTool) Execute(ctx context.Context, args any, tc ToolContext) 
 		existing.Status = a.Status
 	}
 	if a.Tags != "" {
-		existing.Tags = a.Tags
+		tags, err := NormalizeStringArray(a.Tags)
+		if err != nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+		}
+		existing.Tags = tags
 	}
 	if a.OwnerID > 0 {
 		existing.OwnerID = &a.OwnerID

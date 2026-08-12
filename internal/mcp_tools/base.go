@@ -3,6 +3,7 @@ package mcp_tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -351,4 +352,69 @@ func resolveRefs(node any, defs map[string]any) any {
 		return v
 	}
 	return node
+}
+
+// NormalizeStringArray 把 LLM 自由格式的 JSON 数组规整为纯字符串数组（JSON 文本）后落库。
+// 字符串元素保留；对象元素取 name ?? description（LLM 常写成 {name, level, description} 结构）；
+// 数字/布尔转字符串；空元素丢弃。无法解析或非数组时返回错误，由调用方让 LLM 重试。
+func NormalizeStringArray(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	var v any
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return "", fmt.Errorf("不是合法 JSON: %w", err)
+	}
+	out, err := NormalizeStringArrayValue(v)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// NormalizeStringArrayValue 对已解析的 JSON 值做字符串数组规整，返回 []string。
+// 接受 string（再解析）或 []any；其他类型视为格式错误。
+func NormalizeStringArrayValue(v any) ([]string, error) {
+	switch t := v.(type) {
+	case string:
+		return NormalizeStringArrayValue(mustParseJSON(t))
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			var s string
+			switch elem := e.(type) {
+			case string:
+				s = strings.TrimSpace(elem)
+			case map[string]any:
+				name, _ := elem["name"].(string)
+				desc, _ := elem["description"].(string)
+				s = strings.TrimSpace(name)
+				if s == "" {
+					s = strings.TrimSpace(desc)
+				}
+			case nil:
+				continue
+			default:
+				s = strings.TrimSpace(fmt.Sprint(elem))
+			}
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("必须是 JSON 数组（字符串或数组形式），得到 %T", t)
+	}
+}
+
+func mustParseJSON(raw string) any {
+	var v any
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return raw
+	}
+	return v
 }
