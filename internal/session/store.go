@@ -290,11 +290,19 @@ func (s *Store) GetAllMessages(ctx context.Context, sessionID string) ([]Message
 	return msgs, nil
 }
 
-// DeleteSession 删除指定 session 及其所有消息。
+// DeleteSession 删除指定 session 及其所有消息与关联数据。
+// 关联表必须一并清理：model_usage（计费统计）、turn_commits（git 提交记录）、
+// operation_log（操作日志）——旧实现只删 messages+sessions，删除会话后这些表
+// 残留孤儿数据（实测 411 条 operation_log / 43 条 turn_commits / 10 条 model_usage）。
 func (s *Store) DeleteSession(ctx context.Context, sessionID string) error {
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("session_id = ?", sessionID).Delete(&Message{}).Error; err != nil {
 			return fmt.Errorf("session store: delete messages: %w", err)
+		}
+		for _, table := range []string{"model_usage", "turn_commits", "operation_log"} {
+			if err := tx.Exec("DELETE FROM "+table+" WHERE session_id = ?", sessionID).Error; err != nil {
+				return fmt.Errorf("session store: delete %s: %w", table, err)
+			}
 		}
 		if err := tx.Where("session_id = ?", sessionID).Delete(&Session{}).Error; err != nil {
 			return fmt.Errorf("session store: delete session: %w", err)
