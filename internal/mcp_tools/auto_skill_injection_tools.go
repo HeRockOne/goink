@@ -84,12 +84,18 @@ func parseSkillNames(raw string) []string {
 // BuildSkillsContent 从 skill store 读取技能内容并拼接成全文。
 // 被 auto-inject（agent.injectPhaseSkills）和 auto_skill_injection 工具共享，
 // 避免读取逻辑重复。
+// 防御性设计（read_required 时代 buildRequiredSkillsContent 语义）：
+// store 为 nil 或技能缺失时跳过该项而非整体失败——注入不能因单个技能
+// 缺失而整个中断（否则 reads 不标记 → set_phase 失败/工具拦截连锁断点）。
 func BuildSkillsContent(store *skill.Store, novelID int64, names []string) (string, error) {
+	if store == nil {
+		return "", nil
+	}
 	var b strings.Builder
 	for _, name := range names {
 		sk, ok := store.Get(novelID, name)
 		if !ok {
-			return "", fmt.Errorf("技能 %q 不存在", name)
+			continue
 		}
 		b.WriteString("--- ")
 		b.WriteString(sk.Name)

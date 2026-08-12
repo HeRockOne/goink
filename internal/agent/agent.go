@@ -230,7 +230,14 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 //     短提醒紧跟本轮请求尾部（注意力最强位置），每轮进入阶段唤起模型遵循技能。
 // 压缩重建历史后技能消息被清掉，后续 set_phase 时历史中无该内容，自动恢复注入全文。
 // pg 由调用方传入（Run 局部门禁实例，并发会话互不污染）。
+// defer recover：注入路径任何 panic 都要记日志——静默中断曾导致"AI 注入技能后
+// 对话停止、无任何错误提示"（chatImpl 的 recover 在 Wails 模式不推送，必须在这里兜住）。
 func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			a.logger.Error("injectPhaseSkills panic", "phase", phase, "err", rec)
+		}
+	}()
 	if pg == nil || !pg.Active() {
 		return
 	}
@@ -273,6 +280,34 @@ func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions)
 		}
 	}
 	a.logger.Info("自动注入必读技能", "phase", phase, "skills", pc.AutoSkillInjection)
+}
+
+// autoAdvancePhase 门禁自动推进：当前阶段 require 满足时 SetPhase 到下一阶段，
+// 注入必读技能 + 发静态提醒。返回是否发生了推进。
+// 调用点：① LLM 收尾（无工具调用）break 前——推进后不 break，继续循环让 LLM
+// 在新阶段立即干活（旧实现 break 后兜底推进，注入后 Run 结束 → "AI 完成阶段就停"，
+// 用户被迫发"继续"）；② 循环内每轮末尾（LLM 持续调工具场景，如 write 阶段维护循环）。
+func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens map[string]int, emit func(AgentEvent)) bool {
+	if pg == nil || !pg.Active() {
+		return false
+	}
+	ready, next := pg.CheckTransitionReady()
+	if !ready || next == "" || pg.CurrentPhase() == next {
+		return false
+	}
+	current := pg.CurrentPhase()
+	if ok, _ := pg.SetPhase(next); !ok {
+		return false
+	}
+	a.injectPhaseSkills(pg, next, opts)
+	a.logger.Info("门禁自动推进", "from", current, "to", next)
+	reminder := fmt.Sprintf(
+		"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
+		current, next)
+	a.appendMsg("user", reminder, "", nil, opts, runningTokens)
+	ps := pg.Status()
+	emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
+	return true
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
@@ -350,6 +385,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	recentPatterns := make([]string, 0, 6)
 	failCnt := make(map[string]int)
 	retryCount := 0
+	// 拦截降噪：phase:tool → 连续拦截次数。同一工具同阶段连续拦截 ≥3 次后
+	// 不再重复注入提醒消息（LLM 已知道，重复提醒纯噪音填充历史），只返回失败结果。
+	blockCount := make(map[string]int)
 	runningTokens := a.InitRunningTokens(opts.Messages)
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
@@ -599,9 +637,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						allowed, warning := pg.CheckToolAllowed(name)
 						if !allowed {
 							// 硬拦截：不执行工具，返回错误结果
-							a.logger.Warn("门禁拦截", "tool", name, "phase", pg.CurrentPhase())
-							injectMsg := fmt.Sprintf("<system-reminder>\n🚫 门禁拦截：当前阶段 [%s] 不允许使用 [%s]。%s\n</system-reminder>", pg.CurrentPhase(), name, warning)
-							a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+							key := pg.CurrentPhase() + ":" + name
+							blockCount[key]++
+							a.logger.Warn("门禁拦截", "tool", name, "phase", pg.CurrentPhase(), "count", blockCount[key])
+							if blockCount[key] <= 2 {
+								injectMsg := fmt.Sprintf("<system-reminder>\n🚫 门禁拦截：当前阶段 [%s] 不允许使用 [%s]。%s\n</system-reminder>", pg.CurrentPhase(), name, warning)
+								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+							}
 							ps := pg.Status()
 							emit(AgentEvent{
 								TurnID:    opts.TurnID,
@@ -689,6 +731,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// 门禁：记录调用
 					if pg != nil && pg.Active() {
 						pg.OnToolCall(name, result.Success)
+						// 工具执行成功：重置该工具的拦截计数（连续拦截才算降噪）
+						if result.Success {
+							delete(blockCount, pg.CurrentPhase()+":"+name)
+						}
 // auto_skill_injection 成功：上报本次读取的技能名（auto_skill_injection 检查用）
 					if name == "auto_skill_injection" && result.Success && result.Data != nil {
 							if skills, ok := result.Data["skills"].([]string); ok {
@@ -729,13 +775,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					pendingUsage = event.Usage
 
 				case llm.EventError:
-					// 检查是否可重试（429限流 + Retryable标记）。最多重试 maxLLMRetries 次，
-					// 防止账号欠费/持续限流时无限重试死循环
+					// 检查是否可重试：429 限流 + Retryable 标记 + 402 短重试。
+					// 402（额度/免费渠道限流）旧实现直接判死——实测商汤免费渠道 402 几分钟内
+					// 恢复，turn 1-2 连续"对话失败"就是它。短重试 2 次防真欠费白等。
 					retryable := false
+					maxRetries := maxLLMRetries
 					if apiErr, ok := event.Error.(*llm.APIError); ok {
-						retryable = apiErr.StatusCode == 429 || apiErr.Retryable
+						retryable = apiErr.StatusCode == 429 || apiErr.StatusCode == 402 || apiErr.Retryable
+						if apiErr.StatusCode == 402 {
+							maxRetries = 2
+						}
 					}
-					if retryable && retryCount < maxLLMRetries {
+					if retryable && retryCount < maxRetries {
 						retryCount++
 						waitTime := time.Duration(retryCount) * 5 * time.Second
 						if waitTime > 60*time.Second {
@@ -744,7 +795,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						a.logger.Warn("LLM 请求失败，自动重试", "retry", retryCount, "wait", waitTime, "err", event.Error)
 						emit(AgentEvent{
 							TurnID: opts.TurnID, Type: EventRetry,
-							RetryCount: retryCount, RetryMax: maxLLMRetries, RetryWait: int(waitTime.Seconds()),
+							RetryCount: retryCount, RetryMax: maxRetries, RetryWait: int(waitTime.Seconds()),
 							Timestamp: time.Now(),
 						})
 						responseBuffer = ""
@@ -783,6 +834,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				a.appendMsg("assistant", responseBuffer, thinkingBuffer,
 					nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
+			// 自动推进：require 满足则推进+注入+提醒，不 break——LLM 在新阶段继续干活
+			if a.autoAdvancePhase(pg, &opts, runningTokens, emit) {
+				continue
+			}
 			break
 		}
 
@@ -821,7 +876,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 		// 4. 死循环检测
 		patterns := append(recentPatterns, toolPattern(toolOutputs))
-		if len(patterns) > 6 {
+		if len(patterns) > 8 {
 			patterns = patterns[1:]
 		}
 		if isStuckLoop(patterns, toolOutputs, loopCount) {
@@ -840,45 +895,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		loopCount++
 
 		// 门禁自动推进（每轮检查）：require 满足即自动 set_phase 进入下一阶段。
-		// 不能只放在循环后——LLM 在 write 阶段会持续调维护工具（create_scene/update_*）
-		// 不输出收尾文本，循环永不 break，循环后的推进永远不会执行，卡死在 write
+		// 不能只放在 break 前——LLM 在 write 阶段会持续调维护工具（create_scene/update_*）
+		// 不输出收尾文本，循环永不 break，LLM 持续调工具期间也要能推进
 		// （真机：批量写完后 LLM 反复调 get_chapter_list/维护工具，不调 set_phase("review")，
 		// 状态栏显示 review 但实际 phase=write，run_subagent 被 write 白名单拦截）。
-		if pg != nil && pg.Active() {
-			ready, next := pg.CheckTransitionReady()
-			if ready && next != "" {
-				current := pg.CurrentPhase()
-				if ok, _ := pg.SetPhase(next); ok {
-					a.injectPhaseSkills(pg, next, &opts)
-					a.logger.Info("门禁自动推进", "from", current, "to", next)
-					reminder := fmt.Sprintf(
-						"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
-						current, next)
-					a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
-					ps := pg.Status()
-					emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
-				}
-			}
-		}
-	}
-
-	// 门禁自动推进（循环后兜底）：LLM 收尾 break 场景下，require 满足仍推进。
-	// 循环内已推进过的（current==next）跳过，避免同阶段重复注入技能。
-	// SetPhase 返回值必须检查：auto_skill_injection 未满足时推进失败，
-	// 旧实现忽略返回值——技能误注入 + reads 污染 + 发送"已推进"假消息。
-	if pg != nil && pg.Active() {
-		ready, next := pg.CheckTransitionReady()
-		if ready && next != "" && pg.CurrentPhase() != next {
-			current := pg.CurrentPhase()
-			if ok, _ := pg.SetPhase(next); ok {
-				a.injectPhaseSkills(pg, next, &opts)
-				a.logger.Info("门禁自动推进", "from", current, "to", next)
-				reminder := fmt.Sprintf(
-					"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
-					current, next)
-				a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
-			}
-		}
+		a.autoAdvancePhase(pg, &opts, runningTokens, emit)
 	}
 
 	if interrupted {

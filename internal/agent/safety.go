@@ -62,12 +62,14 @@ func buildToolCalls(outputs []toolOutput) []map[string]any {
 	return calls
 }
 
-// isStuckLoop 检测是否陷入死循环：最近 4 轮 ≤2 种调用模式 + 全是只读工具 + turn≥4。
+// isStuckLoop 检测是否陷入死循环：最近 6 轮 ≤2 种调用模式 + 全是只读工具 + turn≥6。
+// 6 轮窗口：write 阶段 LLM 反复调 get_chapter_list/read 校验字数属正常密集只读轮，
+// 4 轮窗口误判频繁（真机：写正文期间连续 4 轮只读查询被误判为死循环卡死）。
 func isStuckLoop(patterns []string, outputs []toolOutput, loopCount int) bool {
-	if len(patterns) < 4 || loopCount < 4 {
+	if len(patterns) < 6 || loopCount < 6 {
 		return false
 	}
-	recent := patterns[len(patterns)-4:]
+	recent := patterns[len(patterns)-6:]
 	uniq := make(map[string]bool, len(recent))
 	for _, p := range recent {
 		uniq[p] = true

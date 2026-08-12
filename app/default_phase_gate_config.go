@@ -20,7 +20,7 @@ next: prepare
 <!-- phase-gate-config
 mode: single
 phase: prepare
-tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, search_story_memory, web_search, web_fetch, set_phase
+tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, update_chapter_plan, create_story_arc, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
 next: outline
@@ -72,7 +72,7 @@ next: prepare
 <!-- phase-gate-config
 mode: batch
 phase: prepare
-tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, search_story_memory, web_search, web_fetch, set_phase
+tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, update_chapter_plan, create_story_arc, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
 next: outline

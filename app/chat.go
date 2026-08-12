@@ -51,9 +51,12 @@ func (a *App) ChatWithCallback(input ChatInput, eventCallback func(map[string]an
 
 // chatImpl 是 Chat 的核心实现，eventCallback 非 nil 时通过回调推送事件。
 func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*ChatResult, error) {
-	// Panic recovery
+	// Panic recovery：无论哪种模式都必须记录错误日志——
+	// 旧实现只在 eventCallback（API 模式）推送错误，Wails 模式下 panic 被静默吞掉，
+	// 表现为"AI 对话突然停止无任何提示"（注入路径 panic 时实发）。
 	defer func() {
 		if rec := recover(); rec != nil {
+			a.logger.Error("chatImpl panic", "err", rec)
 			if eventCallback != nil {
 				eventCallback(map[string]any{"type": "error", "error": fmt.Sprintf("内部错误: %v", rec)})
 			}

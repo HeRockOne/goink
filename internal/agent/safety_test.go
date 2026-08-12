@@ -14,42 +14,42 @@ func TestIsStuckLoop_NotEnoughTurns(t *testing.T) {
 }
 
 func TestIsStuckLoop_TooManyPatterns(t *testing.T) {
-	patterns := []string{"a", "b", "c", "d"} // 4 patterns, 4 unique → > 2 uniq
-	if isStuckLoop(patterns, nil, 4) {
+	patterns := []string{"a", "b", "c", "d", "e", "f"} // 6 patterns, 6 unique → > 2 uniq
+	if isStuckLoop(patterns, nil, 6) {
 		t.Error("should not detect loop with > 2 unique patterns")
 	}
 }
 
 func TestIsStuckLoop_RepeatingPatternsReadOnly(t *testing.T) {
-	patterns := []string{"a", "b", "a", "b"} // 2 unique, 4 turns
+	patterns := []string{"a", "b", "a", "b", "a", "b"} // 2 unique, 6 turns
 	outputs := []toolOutput{
 		{name: "read", id: "1"},
 		{name: "search_story_memory", id: "2"},
 	}
-	if !isStuckLoop(patterns, outputs, 4) {
+	if !isStuckLoop(patterns, outputs, 6) {
 		t.Error("should detect loop: 2 repeating patterns + all read-only")
 	}
 }
 
 func TestIsStuckLoop_HasWriteTool(t *testing.T) {
-	patterns := []string{"a", "b", "a", "b"}
+	patterns := []string{"a", "b", "a", "b", "a", "b"}
 	outputs := []toolOutput{
 		{name: "read", id: "1"},
 		{name: "edit", id: "2"}, // write tool, not in readOnlyTools
 	}
-	if isStuckLoop(patterns, outputs, 4) {
+	if isStuckLoop(patterns, outputs, 6) {
 		t.Error("should not detect loop when a write tool is present")
 	}
 }
 
 func TestIsStuckLoop_OnlyReadsOldTurn(t *testing.T) {
-	// loopCount < 4 时不检测
-	patterns := []string{"a", "b", "a", "b"}
+	// loopCount < 6 时不检测
+	patterns := []string{"a", "b", "a", "b", "a", "b"}
 	outputs := []toolOutput{
 		{name: "read", id: "1"},
 	}
-	if isStuckLoop(patterns, outputs, 3) {
-		t.Error("should not detect loop when loopCount < 4")
+	if isStuckLoop(patterns, outputs, 5) {
+		t.Error("should not detect loop when loopCount < 6")
 	}
 }
 

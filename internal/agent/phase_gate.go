@@ -167,6 +167,9 @@ func (g *PhaseGate) OnSkillInjected(skillName string) {
 	if g == nil || !g.active || skillName == "" {
 		return
 	}
+	if g.readsByPhase == nil {
+		g.readsByPhase = make(map[string]map[string]bool)
+	}
 	if g.readsByPhase[g.currentPhase] == nil {
 		g.readsByPhase[g.currentPhase] = make(map[string]bool)
 	}
