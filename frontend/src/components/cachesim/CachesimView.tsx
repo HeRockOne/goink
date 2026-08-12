@@ -40,6 +40,8 @@ interface SimScenario {
 }
 
 // ── 三档预设（普通用户视角：写法 → 参数自动映射）──
+// 三档共同语义：同一个会话窗口内连续完成（写下一章不新开对话），
+// 上下文一路累积、缓存延续。每章成本 = 该窗口总花费 ÷ 窗口内章数。
 interface Preset {
   key: string
   title: string
@@ -49,16 +51,16 @@ interface Preset {
 }
 
 const PRESETS: Preset[] = [
-  { key: 'single', title: '精写单章', desc: '每章都走完整审校流程，质量最稳', icon: <BookOpen className="w-4 h-4" />, scenario: { name: '精写单章', gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 } },
-  { key: 'batch', title: '批量连写', desc: '每批写 6 章，一个窗口连写 3 批', icon: <Package className="w-4 h-4" />, scenario: { name: '批量连写', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 18, batch_rounds: 1 } },
-  { key: 'mixed', title: '边写边聊', desc: '写几章就聊几句设定，贴近日常用法', icon: <MessagesSquare className="w-4 h-4" />, scenario: { name: '边写边聊', gate_rounds: 3, short_qa_rounds: 2, batch_chapters: 3, batch_rounds: 1 } },
+  { key: 'single', title: '逐章精写', desc: '一个会话窗口里连续写 9 章，每章都走完整流程（大纲→正文→审校），上下文一路累积不换窗口', icon: <BookOpen className="w-4 h-4" />, scenario: { name: '逐章精写', gate_rounds: 9, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 } },
+  { key: 'batch', title: '批量连写', desc: '一个会话窗口里每批写 6 章（先一起出大纲、再逐章写正文），连写 3 批共 18 章，上下文一路累积不换窗口', icon: <Package className="w-4 h-4" />, scenario: { name: '批量连写', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 18, batch_rounds: 1 } },
+  { key: 'mixed', title: '边写边聊', desc: '一个会话窗口里：写 3 章精修 → 聊 2 轮设定 → 再批量写 3 章，贴近日常边写边调整', icon: <MessagesSquare className="w-4 h-4" />, scenario: { name: '边写边聊', gate_rounds: 3, short_qa_rounds: 2, batch_chapters: 3, batch_rounds: 1 } },
 ]
 
 // ── 高级详情：自定义场景（保留原能力）──
 const DEFAULT_SCENARIOS: SimScenario[] = [
-  { name: '单章 1 轮', gate_rounds: 1, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
-  { name: '单章 3 轮', gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
-  { name: '单章 5 轮', gate_rounds: 5, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
+  { name: '单章 1 章', gate_rounds: 1, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
+  { name: '单章 3 章', gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
+  { name: '单章 5 章', gate_rounds: 5, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
   { name: '批量 20 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 20, batch_rounds: 1 },
   { name: '批量 40 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 40, batch_rounds: 1 },
   { name: '批量 60 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 60, batch_rounds: 1 },
@@ -327,8 +329,8 @@ export default function CachesimView() {
             )}
 
             <p className="text-[10px] text-muted-foreground/70">
-              估算基于当前模型（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟，含正文长度、思考过程与上下文整理。
-              批量 = 每批 6 章在同一会话窗口内批次循环（写完一批继续下一批，缓存延续）。想对比更多写法、看缓存命中明细，展开下方高级详情。
+              三档写法都是「同一个会话窗口里连续完成」：写下一章不新开对话，AI 记得之前写的内容，缓存延续更省钱。
+              每章成本 = 该窗口总花费 ÷ 窗口内产出章数。估算基于当前模型价格（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟。想对比更多写法、看缓存命中明细，展开下方高级详情。
             </p>
           </>
         )}
@@ -378,7 +380,7 @@ export default function CachesimView() {
               {/* 场景编辑器 */}
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium text-foreground">场景集（可自定义）</span>
-                <span className="text-[10px] text-muted-foreground/70">单章轮 g · 短对话 q · 批量章 b · 批量轮 r</span>
+                <span className="text-[10px] text-muted-foreground/70">单章章数 g · 短对话轮 q · 批量章 b · 批量批数 r</span>
                 <div className="flex-1" />
                 <button
                   onClick={() => setScenarios(prev => [...prev, { name: `新场景 ${prev.length + 1}`, gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 }])}
@@ -411,7 +413,7 @@ export default function CachesimView() {
                       批量章{numInput(sc.batch_chapters, n => updateScenario(i, { batch_chapters: n }))}
                     </span>
                     <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      批量轮{numInput(sc.batch_rounds, n => updateScenario(i, { batch_rounds: n }))}
+                      批量批{numInput(sc.batch_rounds, n => updateScenario(i, { batch_rounds: n }))}
                     </span>
                     <button
                       onClick={() => setScenarios(prev => prev.filter((_, idx) => idx !== i))}

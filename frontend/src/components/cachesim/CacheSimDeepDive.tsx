@@ -186,10 +186,10 @@ export default function CacheSimDeepDive() {
         )}
         {mode === 'mixed' && (
           <>
-            <NumInput value={gateRounds} onChange={setGateRounds} min={0} max={20} label="单章轮数" hint="0=不跑" />
+            <NumInput value={gateRounds} onChange={setGateRounds} min={0} max={20} label="单章章数" hint="0=不跑" />
             <NumInput value={qaRounds} onChange={setQaRounds} min={0} max={20} label="短对话轮数" hint="穿插创作间" />
             <NumInput value={mixedBatch} onChange={setMixedBatch} min={0} max={20} label="每批章数" hint="每批完整门禁" />
-            <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量轮数" hint="章号顺延" />
+            <NumInput value={batchRounds} onChange={setBatchRounds} min={1} max={20} label="批量批数" hint="章号顺延" />
           </>
         )}
         <NumInput value={simWindow} onChange={setSimWindow} min={0} max={2000000} label="模拟窗口 K" hint="0=按选中模型" />
