@@ -99,7 +99,11 @@ Invoke-WebRequest -Uri "$base/api/chat" -Method Post -Body $body -ContentType "a
 - **验证命令**（项目根，需先设置上述 CGO 环境）：
   - `go build ./...`
   - `go test ./internal/... ./app/...`（e2e 需真实 git/ONNX 环境，可跳过）
-  - 例外：`internal/web` 测试**必然失败**（测试访问内网 IPv6 地址被环境防护拦截，`禁止访问内网地址`），属既有问题，与本轮改动无关，勿纠结
+  - 例外：`internal/web` 测试**必然失败**，与本轮改动无关，勿纠结，原因见下：
+    - `internal/web` 是 `web_fetch` MCP 工具的网页抓取库（`fetch.go`：抓网页转纯文本给 LLM，带反爬检测 + SSRF 防护）
+    - `fetch_test.go` / `realworld_test.go` 是**真实外网测试**（抓 `api-docs.deepseek.com`、Wikipedia、CSDN 等），依赖外网可达和域名解析正常
+    - 本机 DNS 会把 `api-docs.deepseek.com` 解析到 ULA 保留地址 `fdfe:dcba:9876::f`（系统代理/DNS 劫持/广告过滤注入），`validateHost` 的 SSRF 防护把 fc00::/7 判为内网拒绝 → 报 `禁止访问内网地址`
+    - 处理：整体测试时跳过该包；纯逻辑测试（`fetch_internal_test.go` 的乱码/反爬判定）正常，可单独跑 `go test ./internal/web/... -run TestIsEncodingGarbled|TestIsAntiCrawl|TestCompressionRatios`
   - 前端：`cd frontend && npm run build`（tsc + vite，前端改动必须跑）
 - **bindings 自动生成**：`frontend/src/lib/wailsjs/`（App.js/App.d.ts/models.ts）由 `wails generate module` 生成，**不手改**。新增/修改 app 方法或结构体后，先跑 `wails generate module`（需 CGO 环境）再构建前端，否则前端调不到新方法
 
