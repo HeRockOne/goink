@@ -230,9 +230,11 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 //     短提醒紧跟本轮请求尾部（注意力最强位置），每轮进入阶段唤起模型遵循技能。
 // 压缩重建历史后技能消息被清掉，后续 set_phase 时历史中无该内容，自动恢复注入全文。
 // pg 由调用方传入（Run 局部门禁实例，并发会话互不污染）。
+// runningTokens 必传非 nil：内部 appendMsg 需要 token 计数——旧实现传 nil 导致
+// appendMsg 的 runningTokens[role] += n panic（nil map 赋值），注入中止且 reads 不标记。
 // defer recover：注入路径任何 panic 都要记日志——静默中断曾导致"AI 注入技能后
 // 对话停止、无任何错误提示"（chatImpl 的 recover 在 Wails 模式不推送，必须在这里兜住）。
-func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions) {
+func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions, runningTokens map[string]int) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			a.logger.Error("injectPhaseSkills panic", "phase", phase, "err", rec)
@@ -259,7 +261,7 @@ func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions)
 			if c, ok := m["content"].(string); ok && c == content {
 				reminder, rerr := mcp_tools.BuildSkillsReminder(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
 				if rerr == nil && reminder != "" {
-					a.appendMsg("system", reminder, "", nil, opts, nil)
+					a.appendMsg("system", reminder, "", nil, opts, runningTokens)
 					a.logger.Debug("技能全文已在上下文，注入短提醒唤起注意", "phase", phase, "skills", pc.AutoSkillInjection)
 				} else {
 					a.logger.Debug("技能已在上下文中，跳过重复注入", "phase", phase, "skills", pc.AutoSkillInjection)
@@ -273,7 +275,7 @@ func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions)
 			}
 		}
 	}
-	a.appendMsg("system", content, "", nil, opts, nil)
+	a.appendMsg("system", content, "", nil, opts, runningTokens)
 	for _, name := range pc.AutoSkillInjection {
 		if !strings.Contains(name, "*") {
 			pg.OnSkillInjected(name)
@@ -299,7 +301,7 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 	if ok, _ := pg.SetPhase(next); !ok {
 		return false
 	}
-	a.injectPhaseSkills(pg, next, opts)
+	a.injectPhaseSkills(pg, next, opts, runningTokens)
 	a.logger.Info("门禁自动推进", "from", current, "to", next)
 	reminder := fmt.Sprintf(
 		"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
@@ -597,7 +599,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 去重只针对同阶段 set_phase（批量 write 循环每章声明章边界）：
 								// 技能已在上下文中，重复注入纯浪费；真切换（from != target）才注入。
 								if from != targetPhase {
-									a.injectPhaseSkills(pg, targetPhase, &opts)
+									a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 								}
 								// 批量 write 章边界：强制每章字数校验（真机验证：LLM 整批写完才
 								// 在转出 review 时被字数拦截，被迫一次性扩写全部正文）。
@@ -931,7 +933,12 @@ func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[strin
 	if err != nil {
 		a.logger.Warn("token count failed", "role", role, "err", err)
 	}
-	runningTokens[role] += n
+	// runningTokens 可能为 nil（injectPhaseSkills 历史调用传 nil）——nil map 赋值会
+	// panic（"assignment to entry in nil map"），曾导致注入路径 panic、reads 不标记、
+	// 后续 set_phase 失败/工具拦截连锁断点。防御性跳过计数。
+	if runningTokens != nil {
+		runningTokens[role] += n
+	}
 }
 
 // sumRunningTokens 计算各角色 token 总数。
