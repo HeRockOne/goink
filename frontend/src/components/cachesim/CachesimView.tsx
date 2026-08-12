@@ -73,7 +73,7 @@ interface Preset {
 
 const PRESETS: Preset[] = [
   { key: 'single', title: '精写单章', desc: '每章都走完整审校流程，质量最稳', icon: <BookOpen className="w-4 h-4" />, scenario: { name: '精写单章', gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 } },
-  { key: 'batch', title: '批量连写', desc: '一次连写 40 章，节奏快、最省', icon: <Package className="w-4 h-4" />, scenario: { name: '批量连写', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 40, batch_rounds: 1 } },
+  { key: 'batch', title: '批量连写', desc: '每批写 6 章，一个窗口连写 3 批', icon: <Package className="w-4 h-4" />, scenario: { name: '批量连写', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 18, batch_rounds: 1 } },
   { key: 'mixed', title: '边写边聊', desc: '写几章就聊几句设定，贴近日常用法', icon: <MessagesSquare className="w-4 h-4" />, scenario: { name: '边写边聊', gate_rounds: 3, short_qa_rounds: 2, batch_chapters: 3, batch_rounds: 1 } },
 ]
 
@@ -352,7 +352,8 @@ export default function CachesimView() {
             )}
 
             <p className="text-[10px] text-muted-foreground/70">
-              估算基于当前模型（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟，含正文长度、思考过程与上下文整理。想对比更多写法、看缓存命中明细，展开下方高级详情。
+              估算基于当前模型（缓存 ¥{prices.cache.toFixed(2)}/M · 输入 ¥{prices.input.toFixed(2)}/M · 输出 ¥{prices.output.toFixed(2)}/M）与真实写作流程模拟，含正文长度、思考过程与上下文整理。
+              批量 = 每批 6 章在同一会话窗口内批次循环（写完一批继续下一批，缓存延续）。想对比更多写法、看缓存命中明细，展开下方高级详情。
             </p>
           </>
         )}
