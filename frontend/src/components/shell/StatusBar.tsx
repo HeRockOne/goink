@@ -8,6 +8,7 @@ interface Props {
   isDirty?: boolean
   gateStatus?: PhaseStatus | null
   usage?: UsageInfo | null
+  selectedModel?: string
   onCompress?: () => void
 }
 
@@ -68,7 +69,7 @@ function computeStats(text: string): DetailedStats {
   }
 }
 
-export default function StatusBar({ content, isDirty, gateStatus, usage, onCompress }: Props) {
+export default function StatusBar({ content, isDirty, gateStatus, usage, selectedModel, onCompress }: Props) {
   const { t } = useTranslation()
   const stats = useMemo(() => computeStats(content), [content])
   const [showDetail, setShowDetail] = useState(false)
@@ -163,7 +164,7 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, onCompr
       <span className="flex items-center gap-2 shrink-0">
         <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
         {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
-        <ContextRing usage={usage ?? null} onCompress={onCompress} bar />
+        <ContextRing usage={usage ?? null} selectedModel={selectedModel} onCompress={onCompress} bar />
       </span>
     </div>
   )

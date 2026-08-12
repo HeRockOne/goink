@@ -58,7 +58,12 @@ tools: read, auto_skill_injection, edit, update_character, update_character_rela
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle
-next: prepare
+next: done
+-->
+<!-- phase-gate-config
+mode: single
+phase: done
+tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
 -->
 <!-- phase-gate-config
 mode: batch
@@ -111,8 +116,14 @@ tools: read, auto_skill_injection, edit, update_character, update_character_rela
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle
-next: prepare
--->`
+next: done
+-->
+<!-- phase-gate-config
+mode: batch
+phase: done
+tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
+-->
+`
 
 // EnsurePhaseGateConfigSeeded 首次启动时写入默认门禁配置，返回最新的设置对象。
 // 已存在配置（用户改过）则跳过，避免覆盖用户自定义。

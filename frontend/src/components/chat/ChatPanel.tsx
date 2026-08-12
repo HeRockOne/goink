@@ -33,6 +33,7 @@ interface Props {
   onChatPanelResize: (w: number) => void
   onPhaseGate?: (s: import('./types').PhaseStatus) => void
   onUsage?: (u: UsageInfo | null) => void
+  onModelChange?: (modelID: string) => void
 }
 const EVENT_REORDER_TIMEOUT = 120
 
@@ -51,7 +52,7 @@ export interface ChatPanelHandle {
   compress: () => void
 }
 
-export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage }: Props, ref) {
+export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage, onModelChange }: Props, ref) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -306,6 +307,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     })
     return () => { cleanup() }
   }, [app, models])
+
+  // 当前模型变化时上报纯 modelID（底部计费面板按模型切换统计）
+  useEffect(() => {
+    const [, modelID] = splitModelKey(selectedKey)
+    if (modelID) onModelChange?.(modelID)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey])
 
   // 加载历史消息
   useEffect(() => {

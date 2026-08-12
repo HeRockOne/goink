@@ -94,6 +94,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [gateStatus, setGateStatus] = useState<import('@/components/chat/types').PhaseStatus | null>(null)
   // token 用量（状态栏条状统计）
   const [tokenUsage, setTokenUsage] = useState<import('@/components/chat/ContextRing').UsageInfo | null>(null)
+  // 当前选中模型（纯 modelID），底部计费面板按模型切换统计
+  const [statusBarModel, setStatusBarModel] = useState('')
   const chatPanelRef = useRef<import('@/components/chat/ChatPanel').ChatPanelHandle | null>(null)
   // 当前卷名（顶部栏"小说名 · 卷名"）
   const [currentVolume, setCurrentVolume] = useState('')
@@ -606,12 +608,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
         <div className={`${activePanel === 'profile' || activePanel === 'cachesim' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' || activePanel === 'cachesim' ? undefined : chatPanelWidth }}>
           <ErrorBoundary>
-            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} />
+            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} onModelChange={setStatusBarModel} />
           </ErrorBoundary>
         </div>
       </div>
 
-      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} onCompress={() => chatPanelRef.current?.compress()} />
+      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} selectedModel={statusBarModel} onCompress={() => chatPanelRef.current?.compress()} />
 
       <SettingsDialog
         open={showSettings}

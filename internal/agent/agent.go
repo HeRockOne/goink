@@ -775,18 +775,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					pendingUsage = event.Usage
 
 				case llm.EventError:
-					// 检查是否可重试：429 限流 + Retryable 标记 + 402 短重试。
-					// 402（额度/免费渠道限流）旧实现直接判死——实测商汤免费渠道 402 几分钟内
-					// 恢复，turn 1-2 连续"对话失败"就是它。短重试 2 次防真欠费白等。
+					// 检查是否可重试：429 限流 + Retryable 标记 + 402（额度/免费渠道限流）。
+					// 402 旧实现直接判死——实测商汤免费渠道 402 几分钟内恢复，turn 1-2 连续
+					// "对话失败"就是它。与 429 同上限重试（用户实测短重试不够，改满额）。
 					retryable := false
-					maxRetries := maxLLMRetries
 					if apiErr, ok := event.Error.(*llm.APIError); ok {
 						retryable = apiErr.StatusCode == 429 || apiErr.StatusCode == 402 || apiErr.Retryable
-						if apiErr.StatusCode == 402 {
-							maxRetries = 2
-						}
 					}
-					if retryable && retryCount < maxRetries {
+					if retryable && retryCount < maxLLMRetries {
 						retryCount++
 						waitTime := time.Duration(retryCount) * 5 * time.Second
 						if waitTime > 60*time.Second {
@@ -795,7 +791,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						a.logger.Warn("LLM 请求失败，自动重试", "retry", retryCount, "wait", waitTime, "err", event.Error)
 						emit(AgentEvent{
 							TurnID: opts.TurnID, Type: EventRetry,
-							RetryCount: retryCount, RetryMax: maxRetries, RetryWait: int(waitTime.Seconds()),
+							RetryCount: retryCount, RetryMax: maxLLMRetries, RetryWait: int(waitTime.Seconds()),
 							Timestamp: time.Now(),
 						})
 						responseBuffer = ""

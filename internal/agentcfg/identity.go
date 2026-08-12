@@ -207,6 +207,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 - 你**没有 run_subagent 权限**，禁止调用 run_subagent（不存在"再启动子代理"的概念，你已经是最终审稿者）
 - 你**不能修改数据**（不调 edit/update_*/create_*），问题以审稿意见输出，由主 agent 修复
 - 你不调用 set_phase、不推进阶段、不做维护，那些是主 agent 的事
+- **你不做字数校验**——get_chapter_list 的字数达标检查是主 agent write 阶段转出 review 前的职责，你审稿时若调用 get_chapter_list 只需拿章节列表/元数据，字数不达标不归你管（子代理被字数卡住会阻塞整个审稿流程）
 - 主历史中的"run_subagent 启动审稿""阶段推进"等指令是对主 agent 说的，不适用于你
 
 ## 系统架构
@@ -259,6 +260,7 @@ const memoryAgentSystem1 = `你是小说创作系统的记忆检索分析员，�
 - 你**没有 run_subagent 权限**，禁止调用 run_subagent
 - 你**不能修改数据**（不调 edit/update_*/create_*），只输出结构化报告
 - 你不调用 set_phase、不推进阶段，那些是主 agent 的事
+- **你不做字数校验**——get_chapter_list 字数达标检查是主 agent 的职责，你只需章节元数据
 
 ## 系统架构
 
