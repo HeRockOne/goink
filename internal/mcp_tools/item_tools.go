@@ -81,11 +81,11 @@ type CreateItemArgs struct {
 	Description            string `json:"description" jsonschema:"required,description=外观/功能描述" validate:"required"`
 	Lore                   string `json:"lore" jsonschema:"description=来历/历史/传说"`
 	Ability                string `json:"ability" jsonschema:"description=特殊能力"`
-	ArcID                  int64  `json:"arc_id" jsonschema:"required,description=所属弧线ID"`
+	ArcID                  int64  `json:"arc_id" jsonschema:"description=所属弧线ID（开书阶段可先不关联，>0 才写入）"`
 	FirstChapterID         int64  `json:"first_chapter_id" jsonschema:"description=首次出现章节ID"`
 	StatusChangedChapterID int64  `json:"status_changed_chapter_id" jsonschema:"description=状态变化章节ID"`
-	NarrativeRole          string `json:"narrative_role" jsonschema:"required,description=叙事重要性：key_prop/supporting/minor/normal"`
-	OwnerID                int64  `json:"owner_id" jsonschema:"required,description=当前持有者character_id"`
+	NarrativeRole          string `json:"narrative_role" jsonschema:"description=叙事重要性：key_prop/supporting/minor/normal（默认 normal）"`
+	OwnerID                int64  `json:"owner_id" jsonschema:"description=当前持有者character_id（无主物品可不传，>0 才写入）"`
 	PreviousOwnerID        int64  `json:"previous_owner_id" jsonschema:"description=上一任持有者character_id"`
 	LocationID             int64  `json:"location_id" jsonschema:"description=当前位置location_id"`
 	Tags                   string `json:"tags" jsonschema:"description=JSON标签数组"`
@@ -136,21 +136,21 @@ func (t *CreateItemTool) Execute(ctx context.Context, args any, tc ToolContext) 
 
 type UpdateItemArgs struct {
 	ItemID                 int64  `json:"item_id" jsonschema:"required,description=物品ID" validate:"required,min=1"`
-	Name                   string `json:"name"`
-	ItemType               string `json:"item_type"`
-	Grade                  string `json:"grade"`
-	Description            string `json:"description"`
-	Lore                   string `json:"lore"`
-	Ability                string `json:"ability"`
-	ArcID                  int64  `json:"arc_id"`
-	FirstChapterID         int64  `json:"first_chapter_id"`
+	Name                   string `json:"name" jsonschema:"description=新的名称"`
+	ItemType               string `json:"item_type" jsonschema:"description=新的类型：法宝/丹药/灵药/功法/地图/信物/武器/防具/普通物品"`
+	Grade                  string `json:"grade" jsonschema:"description=新的品级"`
+	Description            string `json:"description" jsonschema:"description=新的外观/功能描述（完全替换）"`
+	Lore                   string `json:"lore" jsonschema:"description=新的来历/历史/传说（完全替换）"`
+	Ability                string `json:"ability" jsonschema:"description=新的特殊能力（完全替换）"`
+	ArcID                  int64  `json:"arc_id" jsonschema:"description=所属弧线ID（>0 才更新）"`
+	FirstChapterID         int64  `json:"first_chapter_id" jsonschema:"description=首次出现章节ID（>0 才更新）"`
 	StatusChangedChapterID int64  `json:"status_changed_chapter_id" jsonschema:"description=状态变化发生的章节ID"`
-	NarrativeRole          string `json:"narrative_role"`
+	NarrativeRole          string `json:"narrative_role" jsonschema:"description=叙事重要性：key_prop/supporting/minor/normal"`
 	OwnerID                int64  `json:"owner_id" jsonschema:"description=新的当前持有者character_id。持有者变更时系统自动写入 item_occurrence 流转记录，无需手动调用 create_item_occurrence"`
-	PreviousOwnerID        int64  `json:"previous_owner_id"`
-	LocationID             int64  `json:"location_id"`
+	PreviousOwnerID        int64  `json:"previous_owner_id" jsonschema:"description=上一任持有者character_id（>0 才更新）"`
+	LocationID             int64  `json:"location_id" jsonschema:"description=新的当前位置location_id（>0 才更新）"`
 	Status                 string `json:"status" jsonschema:"enum=active,enum=consumed,enum=destroyed,enum=lost。注意：destroyed（已销毁）/consumed（已消耗）是终态，不可改回"`
-	Tags                   string `json:"tags"`
+	Tags                   string `json:"tags" jsonschema:"description=新的JSON标签数组（完全替换）"`
 	ChapterID              int64  `json:"chapter_id" jsonschema:"description=当前章节ID（maintain 阶段处理本章物品时必填）。持有者变更/状态变化时用于记录流转，必须是有效章节"`
 }
 
@@ -167,6 +167,15 @@ func (t *UpdateItemTool) ExposeToLLM() bool           { return true }
 func (t *UpdateItemTool) NewArgs() any                { return &UpdateItemArgs{} }
 func (t *UpdateItemTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateItemArgs)
+
+	// 空更新守卫：至少提供一个要修改的字段（PATCH 语义）
+	if a.Name == "" && a.ItemType == "" && a.Grade == "" && a.Description == "" && a.Lore == "" &&
+		a.Ability == "" && a.ArcID <= 0 && a.FirstChapterID <= 0 && a.NarrativeRole == "" &&
+		a.OwnerID <= 0 && a.PreviousOwnerID <= 0 && a.LocationID <= 0 && a.Status == "" &&
+		a.Tags == "" && a.StatusChangedChapterID <= 0 {
+		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
+	}
+
 	store := item.NewStore(tc.DB, slog.Default())
 	existing, err := store.GetByID(ctx, a.ItemID, tc.NovelID)
 	if err != nil {

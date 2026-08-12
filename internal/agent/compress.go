@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"novel/internal/agentcfg"
+	"novel/internal/mcp_tools"
 	"novel/internal/llm"
 	"novel/internal/session"
 )
@@ -76,7 +77,7 @@ func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, 
 
 // Compress 执行主 Agent 上下文压缩：调 LLM 生成摘要，重建 SkillCatalog/NovelState，保留近期关键消息。
 // opts 不会被修改，成功后才赋值新的 Messages / ActiveVersion / runningTokens。
-func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens map[string]int) error {
+func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens map[string]int, pg *PhaseGate) error {
 	a.logger.Info("开始上下文压缩",
 		"session_id", opts.SessionID,
 		"turn_id", opts.TurnID,
@@ -106,8 +107,21 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 		novelState = ""
 	}
 
+	// 当前阶段必读技能全文：压缩清掉了历史中的技能消息，重建时补回。
+	// 否则压缩后同阶段 set_phase 走"同阶段直接成功"分支不注入（readsByPhase 保留），
+	// 创作指导缺失（旧实现依赖"后续 set_phase 自动恢复"，压缩后当前阶段内不成立）。
+	phaseSkills := ""
+	if pg != nil && pg.Active() {
+		pc := pg.findPhase(pg.CurrentPhase())
+		if pc != nil && len(pc.AutoSkillInjection) > 0 {
+			if c, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, pc.AutoSkillInjection); err == nil {
+				phaseSkills = c
+			}
+		}
+	}
+
 	// 在事务中完成版本递增 + 全部 DB 写入（NS 作为新版本末尾的消息落库，见 persistCompression）
-	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, novelState, summary, retained)
+	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, novelState, summary, retained, phaseSkills)
 	if err != nil {
 		return fmt.Errorf("compress: persist failed: %w", err)
 	}
@@ -213,7 +227,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 }
 
 // persistCompression 在事务中递增 active_version 并写入所有压缩消息。
-func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, novelState, summary string, retained []map[string]any) (int, error) {
+func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, novelState, summary string, retained []map[string]any, phaseSkills string) (int, error) {
 	var newVersion int
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -270,6 +284,12 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 			rm := apiMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
 			if err := tx.Create(rm).Error; err != nil {
 				return fmt.Errorf("写入保留消息失败: %w", err)
+			}
+		}
+		// 当前阶段必读技能全文（压缩清掉的创作指导，重建时补回）
+		if phaseSkills != "" {
+			if err := msg("system", phaseSkills, true, false, ""); err != nil {
+				return fmt.Errorf("write phase skills: %w", err)
 			}
 		}
 		// 最新 NS 快照落库到新版本末尾（缓存协议：NS 作为消息进历史、永不清理；

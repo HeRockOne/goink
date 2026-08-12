@@ -27,6 +27,7 @@ type PhaseGate struct {
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
 	visited         []string       // 已访问过的阶段列表，用于回退校验；回到起点时重置
 	readsByPhase    map[string]map[string]bool // 阶段 → 已成功读取的技能集合（auto_skill_injection 用，阶段切换后从零开始）
+	roundCompleted  bool                       // 本轮完整流程走完（SetPhase 回到流程起点触发），batch 模式清除标记用
 }
 
 // PhaseConfig 是单个阶段的配置。
@@ -396,6 +397,7 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	// 此时重置 visited，避免旧 bug：visited 永久累积导致第二轮创作可任意跳转。
 	if current != nil && current.Next == targetPhase && g.wasVisited(targetPhase) {
 		g.visited = []string{targetPhase}
+		g.roundCompleted = true
 	} else {
 		g.visited = append(g.visited, targetPhase)
 	}

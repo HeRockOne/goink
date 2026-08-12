@@ -68,6 +68,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [llm-chain-audit-2026-08-12.md](archive/llm-chain-audit-2026-08-12.md) | LLM 链路全量审计（系统提示词/工具/skill/缓存/门禁/压缩，16 项修复 + 9 项遗留） |
 | billing-panel.md | 计费面板技术设计（已完成功能的实现记录） |
 | billing-test-report.md | 计费面板测试报告（含缓存命中率实测 89-93%） |
 | billing-bug-report.md | 计费 Bug 原始报告 |

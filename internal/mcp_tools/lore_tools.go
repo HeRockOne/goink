@@ -77,8 +77,8 @@ type CreateLoreArgs struct {
 	Category        string `json:"category" jsonschema:"required,description=分类：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述" validate:"required"`
 	Content         string `json:"content" jsonschema:"required,description=设定正文（Markdown）" validate:"required"`
 	Summary         string `json:"summary" jsonschema:"description=一句话摘要"`
-	ArcID           int64  `json:"arc_id" jsonschema:"required,description=关联弧线ID"`
-	RevealChapterID int64  `json:"reveal_chapter_id" jsonschema:"required,description=读者首次得知此设定的章节ID"`
+	ArcID           int64  `json:"arc_id" jsonschema:"description=关联弧线ID（开书阶段可先不关联，>0 才写入）"`
+	RevealChapterID int64  `json:"reveal_chapter_id" jsonschema:"description=读者首次得知此设定的章节ID（>0 才写入；未确定可不传）"`
 	IsPublic        bool   `json:"is_public" jsonschema:"description=是否公开设定（读者已知），false=秘密,default=true"`
 	ReferenceID     int64  `json:"reference_id" jsonschema:"description=关联实体ID"`
 	ReferenceType   string `json:"reference_type" jsonschema:"description=关联类型：location/character"`

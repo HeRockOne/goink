@@ -56,7 +56,7 @@ func TestPersistCompression_NovelStateAtEnd(t *testing.T) {
 	}
 	// 压缩后最新 NS 作为消息落库到新版本末尾（缓存协议：NS 进历史、永不清理）
 	_, err = a.persistCompression(context.Background(), opts,
-		"identity-content", "", "", novelState, "摘要内容", retained)
+		"identity-content", "", "", novelState, "摘要内容", retained, "")
 	if err != nil {
 		t.Fatal(err)
 	}

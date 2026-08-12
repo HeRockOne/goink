@@ -28,7 +28,7 @@ func (t *SetPhaseTool) Description() string {
 require 未满足：返回 success=false，提示缺少哪些工具调用。
 未知阶段名：返回 success=false。
 
-【批量循环】批量模式每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，只产生阶段记录；每次 set_phase 都会重新注入该阶段必读技能全文，无去重）。自检/修复/迷你维护不需要 set_phase。
+【批量循环】批量模式每章写完后调 set_phase("write") 声明下一章边界（同阶段幂等成功，不重复注入技能）；真正切换阶段时系统自动注入该阶段必读技能全文。自检/修复/迷你维护不需要 set_phase。
 
 门禁关闭时（设置中已关）此工具无操作，可忽略。`
 }
@@ -55,7 +55,7 @@ func (t *SetPhaseTool) Execute(ctx context.Context, args any, tc ToolContext) (*
 
 // SetPhaseArgs set_phase 工具参数。
 type SetPhaseArgs struct {
-	Phase string `json:"phase" validate:"required" jsonschema:"description=目标阶段名称"`
+	Phase string `json:"phase" validate:"required" jsonschema:"required,description=目标阶段名称"`
 }
 
 // RegisterPhaseGateTools 注册阶段门禁工具。

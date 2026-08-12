@@ -50,7 +50,6 @@ type CallOptions struct {
 	ReasoningEffort *string   // 不传从 ModelInfo 取
 	ThinkingEnabled *bool     // 不传从 ModelInfo 判断
 	ToolChoice      any       // OpenAI tool_choice payload; nil = provider default
-	AllowedTools    []string  // 限制模型可调用的工具（不影响 tools 数组，保留缓存前缀）
 	CacheKey        string    // prompt_cache_key（OpenAI 兼容缓存路由粘性，= sessionID，opencode 同款做法）
 }
 

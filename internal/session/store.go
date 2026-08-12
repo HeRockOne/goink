@@ -248,14 +248,20 @@ func (s *Store) NextTurn(ctx context.Context, sessionID string) (int, error) {
 }
 
 // GetMessagesForAPI 返回 LLM context 所需的消息。
+// 用 DESC+反转取最新 1000 条：旧实现 ORDER BY id ASC LIMIT 1000 取的是最早的 1000 条，
+// 消息数超限时本轮刚写入的 user 消息与 NS 快照（id 尾部）被截断，agent 第一轮无用户输入。
 func (s *Store) GetMessagesForAPI(ctx context.Context, sessionID string, version int) ([]Message, error) {
 	var msgs []Message
 	if err := s.DB.WithContext(ctx).
 		Where("session_id = ? AND to_api = ? AND version = ?", sessionID, true, version).
-		Order("id ASC").
+		Order("id DESC").
 		Limit(1000).
 		Find(&msgs).Error; err != nil {
 		return nil, fmt.Errorf("session store: get api messages: %w", err)
+	}
+	// 反转回 id 升序（历史顺序是请求前缀顺序）
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 	return msgs, nil
 }

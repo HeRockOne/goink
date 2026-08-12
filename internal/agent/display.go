@@ -175,7 +175,7 @@ func displayPhaseName(name string) string {
 // buildDisplay 根据 tool_name + args + phase 生成前端展示文本。
 // executing 阶段加 "正在" 前缀，completed/failed/cancelled 去掉。
 // chapter 工具通过 novelID + chapter_number 查 DB 获取章节标题。
-func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.DisplayPhase, novelID int64) *mcp_tools.DisplayInfo {
+func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.DisplayPhase, novelID int64, pg *PhaseGate) *mcp_tools.DisplayInfo {
 	// set_phase 特殊处理：显示阶段流转（起点 → 终点），如 "准备 → 大纲"
 	if name == "set_phase" {
 		targetPhase := ""
@@ -185,7 +185,7 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 			}
 		}
 		text := displayPhaseName(targetPhase)
-		if pg := a.getPG(); pg != nil {
+		if pg != nil {
 			from := pg.CurrentPhase()
 			if from != "" && from != targetPhase {
 				text = displayPhaseName(from) + " → " + text

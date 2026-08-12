@@ -14,11 +14,11 @@ import (
 const NovelStatePrefix = "【小说基础信息】\n"
 
 // NovelState 快照消息在 extra_metadata 内的标记，供识别与过期清理（见 app/chat.go、internal/agent/compress.go）。
+// NS 按"永不清理、由压缩兜底"协议落库（chat.go 注释：上一轮完整请求必须是下一轮请求的前缀）。
 const (
-	NovelStateKind       = "novel_state"
-	NovelStateKindJSON   = `{"kind":"novel_state"}`
-	NovelStateKindLike   = `%"kind":"novel_state"%`
-	KeepNovelStateSnapshots = 3 // 每轮保留的 NS 快照份数（其余置 to_api=false）
+	NovelStateKind     = "novel_state"
+	NovelStateKindJSON = `{"kind":"novel_state"}`
+	NovelStateKindLike = `%"kind":"novel_state"%`
 )
 
 // NovelState 构建小说上下文快照（原 System3），每轮对话开头注入。

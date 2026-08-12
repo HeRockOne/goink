@@ -149,16 +149,10 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		}
 	}
 
-	// 6.5 每次对话都激活阶段门禁（系统级强制）
-	// 确保 currentPhase 始终有值，门禁不会因空值跳过
-	if sess.CurrentPhase == "" {
-		sess.CurrentPhase = "prepare"
-	}
-	if err := a.session.DB.Model(&session.Session{}).
-		Where("session_id = ?", sess.SessionID).
-		Update("current_phase", sess.CurrentPhase).Error; err != nil {
-		a.logger.Warn("保存阶段门禁状态失败", "err", err)
-	}
+	// 6.5 阶段门禁起点：新会话 PhaseCurrent 留空，agent.Run 解析门禁配置后
+	// 自然落在首阶段（默认 init）。旧实现硬编码 prepare 导致 init 不可达：
+	// SetPhase 只允许推进到 next 或回退到 visited，prepare 起点下 init 两者都不是，
+	// 新书角色/世界观创建流程整体跳过。门禁状态持久化由 agent defer 负责。
 
 	// 6.6 构建 NovelState（缓存协议：NS 落库进消息历史，跟随 user 消息之后，
 	// 永不清理——上一轮完整请求（含 NS）必须是下一轮请求的前缀，
@@ -567,7 +561,18 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 		MaxTurns:      50,
 	}
 
-	if err := a.agent.Compress(ctx, &opts, runningTokens); err != nil {
+	// 从 session 恢复门禁实例（压缩重建需要补回当前阶段必读技能全文）
+	var compressPG *agent.PhaseGate
+	if a.settings.PhaseGateEnabled == nil || *a.settings.PhaseGateEnabled {
+		if pg := agent.ParsePhaseGateConfig(a.settings.PhaseGateConfig, "single"); pg != nil {
+			if sess.CurrentPhase != "" || sess.CalledTools != "" {
+				pg.LoadState(sess.CurrentPhase, sess.CalledTools)
+			}
+			compressPG = pg
+		}
+	}
+
+	if err := a.agent.Compress(ctx, &opts, runningTokens, compressPG); err != nil {
 		return nil, err
 	}
 	return &CompressResult{TurnID: turnID}, nil
