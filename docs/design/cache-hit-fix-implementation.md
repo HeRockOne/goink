@@ -22,7 +22,7 @@
 ```
 
 - **NS**：`role=system` 消息，紧跟 user 之后**落库**（kind 标记），**永不清理**——旧 NS 字节不变可命中，每轮只 miss 最新 NS；膨胀由压缩兜底
-- **prompt_cache_key**：所有请求携带 `prompt_cache_key = sessionID`（opencode 对 openai-compatible 的默认做法）——相同前缀路由到同一后端节点，消除负载均衡漂移导致的偶发全 miss（小米 MiMo 直连实测：不带 key 时偶发全 miss 15.5 万/次，23 秒间隔；走中转/openrouter 95% 命中）
+- **prompt_cache_key**：所有请求携带 `prompt_cache_key = sessionID`（opencode 对 openai-compatible 的默认做法）——相同前缀路由到同一后端节点，消除负载均衡漂移导致的偶发全 miss（小米 MiMo 直连实测：不带 key 时偶发全 miss 15.5 万/次，23 秒间隔；走中转/openrouter 95% 命中）。**2026-08-14 增补**：非所有端点都忽略未知参数（英伟达 stepfun 直接 400），ChatStream 收到 400 且错误含 `prompt_cache_key` 时自动降级（sync.Map 记忆该 provider + 去参重发一次，后续不再发送）
 - **子 agent**：请求 = **完整主历史原文** + 尾部 `[身份+NS][指令]`（fork 模式完整版）——首轮完整命中主会话缓存，正文/设定直接从历史读取，不再重复 read（旧实现每次 review 重复读相同内容，每轮 miss 4-10K）
 
 ## 三、迭代记录

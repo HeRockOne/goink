@@ -171,6 +171,8 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 
 注意：write 阶段转出时**自动强制字数检查**（get_chapter_list 的 word_count_ok），无需配置。
 
+> **require 按阶段计数**：工具调用统计（calledTools/successfulTools）在每次阶段切换时重置——require 的语义是"本阶段内必须调用"，上一阶段调过的工具（如 write 的 edit）不会预填下一阶段的 require（2026-08-14 修复：跨阶段累计曾导致 maintain 的 goink.md 指纹 edit 被轮末自动推进提前推到 done 白名单冻结，形成死循环）。同阶段 set_phase（批量章边界）不重置。
+
 ### 第四步：定每阶段的 auto_skill_injection（必读技能）
 
 原则：该阶段核心方法论，对照 kernel 阶段技能表（`skills/main-core-writing-kernel.md` 的"阶段技能表"）。**这些技能由系统在 set_phase 进入该阶段时自动注入为 system 消息**，模型无需手动调用 auto_skill_injection 工具。
@@ -180,7 +182,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | init | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
 | prepare | main-tech-common-sense-logic |
 | outline | main-tech-chapter-hook-enhanced, main-tech-chapter-title-design |
-| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density |
+| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration |
 | review | 空（sub-tech-review-standards 由系统自动注入子代理，主代理不用读） |
 | maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
 

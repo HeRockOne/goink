@@ -110,7 +110,7 @@ DeepSeek 缓存匹配的是"请求开头到最后一个与前一次相同的位�
 
 ### 4.6 prompt_cache_key：路由粘性（偶发全 miss 的解法）
 
-OpenAI 兼容多节点负载均衡下，相同前缀的请求可能被路由到不同后端节点，各节点缓存不共享 → 偶发全 miss（实测：23 秒间隔、上轮 99.9% 命中、下轮 hit=0 miss=15.5 万）。opencode 对 openai-compatible 默认发送 `promptCacheKey`（= sessionID，PR #22569），把相同前缀路由到同一节点。Goink 已对齐：所有请求携带 `prompt_cache_key = sessionID`。不支持的端点忽略未知参数。
+OpenAI 兼容多节点负载均衡下，相同前缀的请求可能被路由到不同后端节点，各节点缓存不共享 → 偶发全 miss（实测：23 秒间隔、上轮 99.9% 命中、下轮 hit=0 miss=15.5 万）。opencode 对 openai-compatible 默认发送 `promptCacheKey`（= sessionID，PR #22569），把相同前缀路由到同一节点。Goink 已对齐：请求携带 `prompt_cache_key = sessionID`。**注意：并非所有端点都会忽略未知参数**——部分自定义端点（如英伟达 stepfun）直接 400 拒绝该参数。2026-08-14 起 ChatStream 自动降级：首次收到 400 且错误体含 `prompt_cache_key`/`Unsupported parameter` 时，进程内记忆该 provider（包级 sync.Map）并去掉参数重发一次，后续请求不再发送（`internal/llm/stream.go`，测试 TestPromptCacheKeyAutoDowngrade）。
 
 ### 4.7 上下文快满：压缩 vs 新窗口
 
