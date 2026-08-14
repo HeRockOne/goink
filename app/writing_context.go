@@ -390,8 +390,12 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 			}
 			itemNames := map[int64]string{}
 			if len(itemIDSet) > 0 {
+				ids := make([]int64, 0, len(itemIDSet))
+				for id := range itemIDSet {
+					ids = append(ids, id)
+				}
 				var items []item.Item
-				if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, itemIDSet).Find(&items).Error == nil {
+				if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, ids).Find(&items).Error == nil {
 					for _, it := range items {
 						itemNames[it.ID] = it.Name
 					}
@@ -454,8 +458,12 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 					itemIDSet[o.ItemID] = true
 				}
 				if len(itemIDSet) > 0 {
+					ids := make([]int64, 0, len(itemIDSet))
+					for id := range itemIDSet {
+						ids = append(ids, id)
+					}
 					var items []item.Item
-					if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, itemIDSet).Find(&items).Error == nil {
+					if a.db.WithContext(ctx).Where("novel_id = ? AND id IN ?", novelID, ids).Find(&items).Error == nil {
 						seen := map[string]bool{}
 						for _, it := range items {
 							if !seen[it.Name] {
