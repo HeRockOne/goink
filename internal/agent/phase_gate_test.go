@@ -285,7 +285,9 @@ func TestPhaseGateSecondCycleForwardStillWorks(t *testing.T) {
 	gate.OnToolCall("get_characters", true)
 	walkFullCycle(t, gate)
 
-	// 第二轮：prepare → outline 正常推进（走 next）
+	// 第二轮：prepare → outline 正常推进（走 next）。
+	// 阶段切换后工具计数已重置，本阶段 require（get_characters）须在本阶段内满足。
+	gate.OnToolCall("get_characters", true)
 	gate.OnToolCall("edit", true)
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
@@ -311,7 +313,9 @@ func TestPhaseGateInCycleFallbackStillWorks(t *testing.T) {
 		t.Fatal("outline->write should succeed")
 	}
 
-	// write 回退到已访问的 outline：合法（单轮内回退修正）
+	// write 回退到已访问的 outline：合法（单轮内回退修正）。
+	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
+	gate.OnToolCall("edit", true)
 	gate.SetWordCountOK(true) // write 转出需字数达标
 	ok, _ = gate.SetPhase("outline")
 	if !ok {
@@ -338,6 +342,9 @@ func TestPhaseGateEnterWriteResetsWordCount(t *testing.T) {
 	if gate.WordCountCheck() != nil {
 		t.Fatal("wordCountOK should reset to nil after entering write")
 	}
+
+	// 本阶段正文写入（阶段切换后 require edit 从零计）
+	gate.OnToolCall("edit", true)
 
 	// 未重新检查字数时，write 转出必须被阻塞
 	ok, msg := gate.SetPhase("review")
@@ -375,7 +382,9 @@ func TestPhaseGateInCycleFallbackToStartAllowed(t *testing.T) {
 		t.Fatal("outline->write should succeed")
 	}
 
-	// write 回退到已访问的 prepare：单轮内仍允许（prepare 在本轮 visited 中）
+	// write 回退到已访问的 prepare：单轮内仍允许（prepare 在本轮 visited 中）。
+	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
+	gate.OnToolCall("edit", true)
 	gate.SetWordCountOK(true) // write 转出需字数达标
 	ok, _ = gate.SetPhase("prepare")
 	if !ok {
@@ -497,7 +506,9 @@ next: review
 		t.Fatal("outline->write failed")
 	}
 
-	// write 回退到 outline：合法，且 visited 不应被重置（仍含 prepare）
+	// write 回退到 outline：合法，且 visited 不应被重置（仍含 prepare）。
+	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
+	gate.OnToolCall("edit", true)
 	gate.SetWordCountOK(true)
 	ok, _ = gate.SetPhase("outline")
 	if !ok {
@@ -561,6 +572,76 @@ next: prepare
 	ok, warning = gate.SetPhase("prepare")
 	if !ok {
 		t.Errorf("should allow transition after all 13 requires met, got warning: %s", warning)
+	}
+}
+
+// Bug 回归测试（真机阻塞复盘）：write 阶段调过的 edit 不能预填 maintain 的 require。
+// 进入 maintain 后 require 从零计——否则轮末自动推进在 LLM 补做 goink.md 指纹（edit）前
+// 就把阶段推到 done，done 白名单无 edit，指纹被冻结；set_phase("maintain") 回退后
+// require 仍满又被立即推进，形成死循环。
+func TestMaintainRequireNotPrefilledByWritePhase(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: prepare
+tools: read, edit
+require: edit
+next: maintain
+-->
+<!-- phase-gate-config
+phase: maintain
+tools: read, edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
+require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations
+next: done
+-->
+<!-- phase-gate-config
+phase: done
+tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
+-->
+`, "single")
+	if gate == nil {
+		t.Fatal("ParsePhaseGateConfig returned nil")
+	}
+
+	// 模拟 write 阶段：edit 已成功（正文写入）
+	gate.OnToolCall("edit", true)
+	ok, warning := gate.SetPhase("maintain")
+	if !ok {
+		t.Fatalf("prepare->maintain should succeed: %s", warning)
+	}
+
+	// 进入 maintain 后，write 阶段的 edit 不能算数：require 未满足，不得自动推进
+	if ready, _ := gate.CheckTransitionReady(); ready {
+		t.Fatal("maintain should NOT be transition-ready right after entry (edit from write phase must not prefill)")
+	}
+
+	// maintain 阶段 edit 仍可用（白名单含 edit），但 done 阶段没有 edit
+	if allowed, _ := gate.CheckToolAllowed("edit"); !allowed {
+		t.Fatal("edit should be allowed in maintain phase")
+	}
+
+	// 做完全部 12 项非 edit 维护动作后仍不得推进（缺 edit）
+	for _, tool := range []string{"update_chapter_plan", "update_chapter_meta", "update_writing_snapshot",
+		"search_lore", "search_items", "get_characters", "get_timeline", "get_story_arcs",
+		"get_reader_perspective", "get_scenes", "get_item_occurrences", "get_character_relations"} {
+		gate.OnToolCall(tool, true)
+	}
+	if ready, _ := gate.CheckTransitionReady(); ready {
+		t.Fatal("maintain should NOT be transition-ready without edit (goink.md fingerprint)")
+	}
+
+	// 补做 edit（goink.md 指纹）后才允许推进 done
+	gate.OnToolCall("edit", true)
+	ready, next := gate.CheckTransitionReady()
+	if !ready || next != "done" {
+		t.Fatalf("maintain should be transition-ready to done after all 13 requires met in-phase, got ready=%v next=%q", ready, next)
+	}
+	ok, _ = gate.SetPhase("done")
+	if !ok {
+		t.Fatal("maintain->done should succeed")
+	}
+	// done 阶段 edit 被冻结（指纹在 maintain 阶段内已完成，此冻结是正确行为）
+	if allowed, _ := gate.CheckToolAllowed("edit"); allowed {
+		t.Error("edit should be blocked in done phase")
 	}
 }
 

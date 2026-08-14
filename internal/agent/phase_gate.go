@@ -393,6 +393,14 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
+	// 阶段切换成功后重置工具调用统计：require 的语义是"本阶段内必须调用"。
+	// 跨阶段累计会让上一阶段调过的工具（如 write 的 edit）提前满足本阶段 require，
+	// 轮末自动推进过早触发——batch 第 3 章 maintain 的 goink.md 指纹（edit）被 done
+	// 白名单冻结，回退 maintain 后又立即被推进，形成死循环。
+	// 与 readsByPhase（技能按阶段独立生效）保持一致。
+	g.calledTools = make(map[string]int)
+	g.successfulTools = make(map[string]int)
+
 	g.currentPhase = targetPhase
 	// 判定一轮完整流程完成：目标阶段是"按 next 链推进回来的、且本轮已访问过"的阶段。
 	// 例：single 的 maintain.next=prepare、batch 的 done.next=prepare，回到 prepare 说明走完一轮。
