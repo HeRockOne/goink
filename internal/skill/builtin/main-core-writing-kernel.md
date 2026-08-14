@@ -37,8 +37,10 @@ mode: always
 >   自检不调 run_subagent（那是批末的事），不 set_phase。
 > - **批末审稿覆盖全批**：整批写完进入 review 阶段后，run_subagent 审读**本批全部 N 章**
 >   （子代理 fork 完整主历史，正文已在上下文中，无需重复 read 注入）；审稿重点同样是
->   **一致性优先**（设定矛盾、章节衔接、伏笔状态），其次节奏与 AI 味；根据审稿意见
->   **逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，**不要只审第 1 章**。
+>   **一致性优先**（设定矛盾、章节衔接、伏笔状态），其次节奏与 AI 味；**子代理报告必须
+>   列出实际审读的章节清单，主 agent 先核对覆盖范围再修复**——覆盖不全（漏章/只审开头）
+>   先补审，然后根据审稿意见**逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，
+>   **不要只审第 1 章**。
 
 > **批量 write 显式循环（每章一个阶段边界）**：批量循环中**每章写完后调 set_phase("write") 声明下一章开始**
 > ——同阶段切换幂等成功，不重置任何校验状态，只产生显式阶段记录（UI/审计逐章可见、LLM 获得"本章完成
@@ -129,7 +131,7 @@ mode: always
 
 ### review
 
-1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章
+1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章。**审稿报告必须列出实际审读的章节清单**（如"已审：第 3-7 章"），主 agent 收到报告先核对覆盖范围，发现覆盖不全（漏章/只审了开头几章）必须再启动子代理补审未覆盖章节，全部覆盖后才进入修复
 2. **审稿核对（身份差异：主会话核对全量，子代理定向）**：
    - 主会话（作家视角）按意见修复前，先核对状态：**get_characters 全量**（核对角色 status：alive/dead 与正文一致性——brief 无 status 会漏检）、**get_timeline/get_story_arcs 传 current_chapter**（核对伏笔/弧线进度）、**get_reader_perspective 全量**、**check_story_consistency**（自动 DB 核对，输出问题条目）；读本章正文分段核对（read start_line/end_line）
    - 审稿子代理（fork 完整主历史，正文+writing_context 已在上下文）：只做**少量定向核对**（get_characters brief+size 小、get_timeline current_chapter），加 check_story_consistency 自动核对，然后输出审读报告——不要重复拉全量
