@@ -590,7 +590,9 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           <div className="flex-1 min-w-0 flex flex-col">
             {/* ContentPanel: for non-special panels (chapters, search, etc.) */}
             {!SPECIAL_PANELS.has(activePanel) && (
-              <ContentPanel ref={contentRef} novelId={activeNovelId} onContentChange={setActiveContent} onDirtyChange={setIsDirty} />
+              <ErrorBoundary label="ContentPanel">
+                <ContentPanel ref={contentRef} novelId={activeNovelId} onContentChange={setActiveContent} onDirtyChange={setIsDirty} />
+              </ErrorBoundary>
             )}
 
             {/* Always mounted: pattern extraction is a long-running task, unmounting would interrupt progress listeners */}

@@ -102,6 +102,12 @@ func (a *App) Logger() *slog.Logger {
 	return a.logger
 }
 
+// LogFrontendError 前端错误上报（React 渲染崩溃 / 未捕获异常），落 goink.log。
+// 前端白屏时后端无任何请求，必须显式上报才能定位。
+func (a *App) LogFrontendError(message string, stack string) {
+	a.logger.Error("frontend error", "message", message, "stack", stack)
+}
+
 // SetLoggingEnabled 启用/禁用文件日志，并持久化到 SQLite。
 func (a *App) SetLoggingEnabled(enabled bool) {
 	a.logEnabled = enabled
