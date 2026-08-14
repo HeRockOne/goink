@@ -23,6 +23,17 @@ type Client struct {
 	logger    *slog.Logger
 }
 
+// noCacheKeyProviders 记忆已确认不支持 prompt_cache_key 参数的端点。
+// 部分自定义端点（如英伟达 stepfun）不忽略未知参数而是直接 400 拒绝，
+// 首次命中后自动降级（不再发送该参数），避免每次请求都被拒。
+var noCacheKeyProviders sync.Map // providerName → bool
+
+// providerDisablesCacheKey 判断该 provider 是否已确认不支持 prompt_cache_key。
+func providerDisablesCacheKey(providerName string) bool {
+	_, ok := noCacheKeyProviders.Load(providerName)
+	return ok
+}
+
 // NewClient 创建 LLM 客户端。providers 应为 Merge 产出的已组装配置。
 func NewClient(providers map[string]Provider, log *slog.Logger) *Client {
 	return &Client{
@@ -69,33 +80,44 @@ func (c *Client) ChatStream(
 	go func() {
 		defer close(ch)
 
-		payload := c.buildPayload(&p, messages, tools, model, opts)
-
-		body, err := marshalPayload(payload)
-		if err != nil {
-			ch <- StreamEvent{Type: EventError, Error: fmt.Errorf("failed to marshal request body: %w", err)}
-			return
+		// send 构建 payload 并发送请求。cacheKey 空串表示不发送 prompt_cache_key。
+		send := func(cacheKey string) (*http.Response, error) {
+			var callOpts *CallOptions
+			if opts != nil {
+				cp := *opts
+				cp.CacheKey = cacheKey
+				callOpts = &cp
+			}
+			payload := c.buildPayload(&p, messages, tools, model, callOpts)
+			body, err := marshalPayload(payload)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal request body: %w", err)
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ChatURL, bytes.NewReader(body))
+			if err != nil {
+				return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+			}
+			// 组装请求头
+			headers := map[string]string{
+				"Content-Type":  "application/json",
+				"Authorization": "Bearer " + p.APIKey,
+			}
+			if p.BuildHeaders != nil {
+				headers = p.BuildHeaders(headers)
+			}
+			for k, v := range headers {
+				req.Header.Set(k, v)
+			}
+			return c.http.Do(req)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ChatURL, bytes.NewReader(body))
-		if err != nil {
-			ch <- StreamEvent{Type: EventError, Error: fmt.Errorf("failed to create HTTP request: %w", err)}
-			return
+		// 已确认不支持 cache key 的 provider 直接不带该参数
+		initialKey := ""
+		if opts != nil && !providerDisablesCacheKey(providerName) {
+			initialKey = opts.CacheKey
 		}
 
-		// 组装请求头
-		headers := map[string]string{
-			"Content-Type":  "application/json",
-			"Authorization": "Bearer " + p.APIKey,
-		}
-		if p.BuildHeaders != nil {
-			headers = p.BuildHeaders(headers)
-		}
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-
-		resp, err := c.http.Do(req)
+		resp, err := send(initialKey)
 		if err != nil {
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
@@ -104,11 +126,35 @@ func (c *Client) ChatStream(
 			}}
 			return
 		}
-		defer resp.Body.Close()
 
 		// HTTP 错误
 		if resp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			// 400 且拒绝 prompt_cache_key：自动降级重发一次（不带该参数）并记忆该端点。
+			// 部分端点不忽略未知参数而是直接报错，不降级则对话永远失败。
+			if resp.StatusCode == http.StatusBadRequest && initialKey != "" &&
+				(bytes.Contains(errBody, []byte("prompt_cache_key")) || bytes.Contains(errBody, []byte("Unsupported parameter"))) {
+				noCacheKeyProviders.Store(providerName, true)
+				c.logger.Warn("端点不支持 prompt_cache_key，自动降级重发（后续请求不再发送该参数）", "provider", providerName)
+				resp, err = send("")
+				if err != nil {
+					ch <- StreamEvent{Type: EventError, Error: &APIError{
+						StatusCode: 0,
+						Message:    fmt.Sprintf("request failed: %s", err),
+						Retryable:  true,
+					}}
+					return
+				}
+				if resp.StatusCode >= 400 {
+					errBody, _ = io.ReadAll(resp.Body)
+					resp.Body.Close()
+				} else {
+					defer resp.Body.Close()
+					c.parseSSE(ch, resp.Body)
+					return
+				}
+			}
 			msg := parseDefaultError(errBody).Error()
 			if p.ParseError != nil {
 				msg = p.ParseError(errBody).Error()
@@ -121,6 +167,7 @@ func (c *Client) ChatStream(
 			return
 		}
 
+		defer resp.Body.Close()
 		// SSE 逐行解析
 		c.parseSSE(ch, resp.Body)
 	}()
