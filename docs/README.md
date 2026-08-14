@@ -51,6 +51,7 @@
 > 2026-08-14：字数扩写"一次扩到位"约束落实（真机挤牙膏复盘：第 3 章扩写 5 次 search_replace + 4 次 get_chapter_list，kernel 有规则但 word-count-calibration 是按需技能、LLM 从未 read）——三处叠加：① write 阶段 auto_skill_injection 加 main-tech-word-count-calibration（single+batch，default_phase_gate_config.go + 门禁配置示例.md 同步，切换进 write 即注入全文）；② kernel（skills/ + builtin 备份）write 段改写为自包含规则（缺口×1.2 目标 → 一次 read 一次 edit → 立即复查，重复时以当前缺口×1.2 为准，禁止小步挤牙膏）；③ agent.go 两处批量章边界字数拦截消息（wcMsg）附"一次扩到位"操作指引。生效前提：设置页门禁 Tab 点"恢复默认"（DB 已存旧配置不会被 seed 覆盖）。
 > 2026-08-14：skill 口径清理 + always 技能内置兜底——① kernel（skills/ + builtin 备份）去硬编码数量（"42 个"→"以目录为准"、阶段技能表标题"30 个"→去数字，审计遗留 #3/#4 闭环）；② main-core-ai-communication-standard 复制进 internal/skill/builtin/（审计遗留 #5：原仅用户级存在，新环境未同步时 always 注入静默缺失；内置兜底后同名优先级 novel > user > builtin 不变，用户级仍覆盖）；③ AGENTS.md 数量口径 43→44（37 auto + 5 manual + 2 always）；identity.go 系统提示词全文复核无功能性 bug（唯一措辞张力：L143"手动推进"与 L162"自动推进"并存，不改）。
 > 2026-08-14：批量审稿覆盖强化（P2 部分落地）——kernel（skills/ + builtin 备份）review 段 + 批量质量节奏段：run_subagent 报告**必须列出实际审读的章节清单**，主 agent 收到报告先核对覆盖范围，覆盖不全（漏章/只审开头）必须补审后才进入修复；已同步 ~/.goink/skills/（运行时 user 级优先）。机制说明：子代理不受阶段门禁管（门禁仅主 agent），审稿覆盖此前靠 kernel 软约束，现改为"报告清单 + 主 agent 核对"的可核验流程。
+> 2026-08-14：review 阶段修复验证门（创作质量闭环）——single/batch review 块 require 加 check_story_consistency（default_phase_gate_config.go + 门禁配置示例.md 同步）：主 agent 修复审稿问题后必须亲自跑一次程序化核对（4 类 SQL：伏笔超期/角色断档/物品冲突/死者复出）才能进 maintain——修复动作从"无验证放行"变为"客观验收"，与子代理审稿（发现视角）形成双层；子代理不受门禁管，其核对仍靠身份提示词。
 
 ## tools/ — 验证工具（可运行）
 
