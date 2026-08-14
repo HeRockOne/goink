@@ -606,7 +606,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// wordCountOK 为 nil 或未达标时注入提醒，要求先 get_chapter_list。
 								if pg.mode == "batch" && targetPhase == "write" {
 									if wc := pg.WordCountCheck(); wc == nil || !*wc {
-										wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。\n</system-reminder>"
+										wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"
 										a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 									}
 								}
@@ -635,7 +635,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 										}
 										if pg.mode == "batch" && targetPhase == "write" {
 											if wc := pg.WordCountCheck(); wc == nil || !*wc {
-												wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。\n</system-reminder>"
+												wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"
 												a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 											}
 										}

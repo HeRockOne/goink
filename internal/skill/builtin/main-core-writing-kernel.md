@@ -110,10 +110,10 @@ mode: always
 
 ### write
 
-**必读技能在动笔前已由系统就绪**（write 阶段 4 个必读技能在 set_phase("write") 时自动注入）。然后：
+**必读技能在动笔前已由系统就绪**（write 阶段 5 个必读技能在 set_phase("write") 时自动注入）。然后：
 1. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
 2. 加载技能（**必读技能必须在动笔前已加载**：技能是创作指导，先读再写。若技能内容已被滚动压缩出上下文，必须重新 auto_skill_injection，不要为了省一次 read 赌记忆——技能漏读会写崩，门禁会在你动笔时拦截）：
-   - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density（门禁强制）
+   - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration（门禁强制）
    - 情景按需（**仅本章涉及该情景时读**，普通章不读）：
      - 战斗/高潮章 → main-tech-climax-scene
      - 爽点/打脸章 → main-tech-shuangdian-pacing
@@ -121,7 +121,7 @@ mode: always
      - 情感/情绪戏 → main-tech-emotion-injection
      - 节奏紧张章 → main-tech-pacing-control
      - 关键场景现场描写 ≥300 字 → main-tech-scene-beats
-    - 字数校验用 get_chapter_list（代码校验，min/max 以设置为准）；**字数不足需扩写时，必须按 main-tech-word-count-calibration 的"一次扩到位"规则执行**（先算缺口×1.2 目标 → 一次 read 一次 edit 完成 → 禁止挤牙膏式多次小扩）
+    - 字数校验用 get_chapter_list（代码校验，min/max 以设置为准）；**字数不足必须一次扩到位，禁止挤牙膏式多次小扩**：先算出缺口（目标下限 - 当前字数），按缺口 ×1.2 设定扩写目标（预留余量，避免第二次仍差一点），一次 read 定位可扩段落、一次 edit 补足并超出目标下限，然后立即 get_chapter_list 复查；复查仍不足则重复"一次到位"流程（每次都以当前缺口 ×1.2 为目标），不要一次只补一两百字等校验打回
 4. **edit**(chapters/NNN.md)（required）— 写正文
 5. 校验字数（2500-4000，以设置中 min/max 为准，get_chapter_list 代码校验；默认下限 2500）
 6. 记录关键物品出现 → create_item_occurrence
