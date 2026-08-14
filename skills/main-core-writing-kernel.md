@@ -9,7 +9,7 @@ mode: always
 
 ## skill目录（加载顺序，避免浪费 read 调用）
 
-- 内置 skill（42 个通用 + 类型 skill）位于 `/builtin/skills/<name>.md`（只读），auto 模式按需 read
+- 内置 skill（数量以目录为准，通用 + 类型）位于 `/builtin/skills/<name>.md`（只读），auto 模式按需 read
 - 同名 skill 优先级：小说级 > 用户级 > 内置（`/builtin/skills/`）
 - always 模式 skill 已在会话开头注入，无需再 read
 
@@ -206,7 +206,7 @@ mode: always
 
 **这个实体未来会影响设定一致性吗？会影响→入库；只是本章背景→不录。**
 
-## 阶段技能表（30 个内置 skill 全量调度）
+## 阶段技能表（内置 skill 全量调度）
 
 > 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate）由用户 `/` 触发，不在此表。
 
