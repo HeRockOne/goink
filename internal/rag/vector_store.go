@@ -344,15 +344,12 @@ func (s *VectorStore) CountChunks(ctx context.Context, novelID int64) (int, erro
 
 // FtsCount 返回指定小说 FTS5 表的行数。表不存在时返回 0（不自动建表，用于存量检测）。
 func (s *VectorStore) FtsCount(ctx context.Context, novelID int64) (int, error) {
-	rows, err := s.db.QueryContext(ctx,
-		fmt.Sprintf("SELECT COUNT(*) FROM %s", s.ftsTableName(novelID)))
-	if err != nil {
-		return 0, nil // 表不存在
-	}
-	defer rows.Close()
 	var count int
-	if err := rows.Scan(&count); err != nil {
-		return 0, err
+	err := s.db.QueryRowContext(ctx,
+		fmt.Sprintf("SELECT COUNT(*) FROM %s", s.ftsTableName(novelID))).Scan(&count)
+	if err != nil {
+		// 表不存在（老库未升级）→ 返回 0，让 RebuildAll 触发重建补齐
+		return 0, nil
 	}
 	return count, nil
 }

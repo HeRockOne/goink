@@ -213,18 +213,25 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
   }
 
   const doHighlight = useCallback((view: EditorView, content: string, matchPos: number, matchLen: number) => {
+    // 防御：view 已销毁（disposed）或空文档时直接跳过，避免 dispatch 抛异常
+    if (!view || !view.state || view.state.doc.lines === 0) return
     const { line, col } = runeOffsetToLineCol(content, matchPos)
     const clampedEnd = Math.min(matchPos + matchLen, [...content].length)
     const { line: endLine, col: endCol } = runeOffsetToLineCol(content, clampedEnd)
 
     const doc = view.state.doc
-    const from = doc.line(line).from + col - 1
-    const to = doc.line(endLine).from + endCol - 1
+    // matchPos 可能超出当前文档（索引与文件不同步），clamp 到合法行号
+    const safeLine = Math.min(line, doc.lines)
+    const safeEndLine = Math.min(endLine, doc.lines)
+    const from = doc.line(safeLine).from + col - 1
+    const to = doc.line(safeEndLine).from + endCol - 1
 
-    view.dispatch({
-      selection: { anchor: from, head: to },
-      scrollIntoView: true,
-    })
+    try {
+      view.dispatch({
+        selection: { anchor: from, head: to },
+        scrollIntoView: true,
+      })
+    } catch { /* view 已销毁 */ }
   }, [])
 
   const handleEditorMount = useCallback((view: EditorView) => {
@@ -373,10 +380,11 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
     }
     const editor = editorRef.current as any
     const pending = pendingHighlightRef.current
-    // 必须检查 editor.getModel()：key 变化导致 ContentEditor 重建时，
-    // unmount/remount 之间 editorRef 可能指向已销毁的旧 editor（model 为 null），
+    // 必须检查 editor.state：key 变化导致 ContentEditor 重建时，
+    // unmount/remount 之间 editorRef 可能指向已销毁的旧 editor（state 为 null），
     // 此时不应消费 pending，留给 handleEditorMount 处理。
-    if (pending && activeTab?.content && editor?.getModel()) {
+    // （注意：getModel 是 CodeMirror 5 API，CM6 的 EditorView 用 state 检查存活）
+    if (pending && activeTab?.content && editor?.state) {
       doHighlight(editor, activeTab.content, pending.matchPos, pending.matchLen)
       pendingHighlightRef.current = null
       return
