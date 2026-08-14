@@ -55,6 +55,13 @@ Go 命令在项目根目录执行。前端构建在 `build.ps1` 中自动完成�
 - **调试日志**: `D:\Goink\goink.log`（DEBUG 级，含 LLM usage/model_usage 更新、门禁拦截、工具调用、appendMsg 落库等，排查 token/门禁问题先看这里）
 - **Git**: 每本小说独立仓库在 `{DataDir}/novels/{id}/`，含 `chapters/NNN.md`、`outlines/NNN.md`
 
+### Shell 使用约定
+
+- **主用 PowerShell 7**：本机默认 shell。构建链（build.ps1）、系统管理（进程/端口/注册表）、HTTP API 调试、DSH 交互全部是 PS 生态，除非有明确理由不要换
+- **Git Bash 备用**：`C:\Program Files\Git\bin\bash.exe`（已装，内含 git 2.55.0 + mingw64 工具链：grep/sed/awk/tar 等）。**仅两种场景切换**：① 批量文本流处理（多行 grep/sed/awk 流水线，PS 写起来啰嗦）；② 跑现成的 Linux 风格脚本
+- **调用方式**（在 PS 里）：`& "C:\Program Files\Git\bin\bash.exe" -c "命令"`，退出码看 `$LASTEXITCODE`
+- **注意**：bash 处理中文输出可能有编码坑（GBK/UTF-8 混用），发现乱码就换回 PS 的 `Get-Content -Encoding UTF8`；不要为了"统一"把 PS 能干的事硬搬到 bash
+
 ### 外部调试（HTTP API）
 
 桌面端启动后自动监听 `https://localhost:{端口}`，端口在桌面端「设置 → API 认证令牌」中查看和配置（默认 8877）。令牌也在同一页面获取。
