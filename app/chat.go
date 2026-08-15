@@ -308,6 +308,9 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 				"error":     event.ErrMsg,
 				"tool_name": event.ToolName,
 			}
+			if event.PhaseGate != nil {
+				ev["phase_gate"] = event.PhaseGate
+			}
 			eventCallback(ev)
 			// 同时通过 Wails 事件实时推送到桌面前端，实现双端同步
 			if a.ctx != nil {
@@ -680,8 +683,9 @@ func isBatchCreationIntent(msg string) bool {
 }
 
 // ChatFromAPI 供 API 服务器调用，通过 channel 推送事件。
-// 直接复用 Chat 方法，EventCallback 将事件转到 channel。
-func (a *App) ChatFromAPI(message string, novelID int64, modelKey, providerName string, events chan<- map[string]any, sessionID string) {
+// ctx 用于检测客户端断开：阻塞发送事件（防止慢客户端下丢弃中间片段导致移动端过程跳变），
+// 客户端断开（ctx.Done）时放弃写入避免 goroutine 泄漏。
+func (a *App) ChatFromAPI(ctx context.Context, message string, novelID int64, modelKey, providerName string, events chan<- map[string]any, sessionID string) {
 	// Panic recovery
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -695,11 +699,17 @@ func (a *App) ChatFromAPI(message string, novelID int64, modelKey, providerName 
 
 	// 安全检查
 	if a.llmClient == nil || a.agent == nil {
-		events <- map[string]any{"type": "error", "error": "服务未初始化，请重启 Goink"}
+		select {
+		case events <- map[string]any{"type": "error", "error": "服务未初始化，请重启 Goink"}:
+		default:
+		}
 		return
 	}
 	if a.settings == nil {
-		events <- map[string]any{"type": "error", "error": "配置未加载"}
+		select {
+		case events <- map[string]any{"type": "error", "error": "配置未加载"}:
+		default:
+		}
 		return
 	}
 
@@ -720,7 +730,10 @@ func (a *App) ChatFromAPI(message string, novelID int64, modelKey, providerName 
 	}
 
 	if provider == "" || modelID == "" {
-		events <- map[string]any{"type": "error", "error": "未配置模型，请先在电脑端设置模型"}
+		select {
+		case events <- map[string]any{"type": "error", "error": "未配置模型，请先在电脑端设置模型"}:
+		default:
+		}
 		return
 	}
 
@@ -734,11 +747,11 @@ func (a *App) ChatFromAPI(message string, novelID int64, modelKey, providerName 
 		ReasoningEffort: "",
 	}
 
-	// EventCallback 将事件转到 channel
+	// EventCallback 将事件转到 channel；客户端断开（ctx.Done）时放弃写入
 	callback := func(ev map[string]any) {
 		select {
 		case events <- ev:
-		default:
+		case <-ctx.Done():
 		}
 	}
 

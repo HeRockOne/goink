@@ -911,9 +911,10 @@ func (s *apiServer) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events := make(chan map[string]any, 64)
+	// 不 close events：客户端断开由 ctx.Done 驱动退出，chatImpl 侧可能仍在写入，
+	// close 后 send 会 panic；channel 随 goroutine 结束被 GC 回收。
 	go func() {
-		defer close(events)
-		s.app.ChatFromAPI(req.Message, req.NovelID, req.Model, req.Provider, events, req.SessionID)
+		s.app.ChatFromAPI(r.Context(), req.Message, req.NovelID, req.Model, req.Provider, events, req.SessionID)
 	}()
 
 	ctx := r.Context()

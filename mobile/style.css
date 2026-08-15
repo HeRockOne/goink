@@ -367,6 +367,7 @@ body::before, body::after, #appMain::before { display: none; }
 
 .msg-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; position: relative; }
 .msg-bubble { padding: 10px 14px; font-size: 14px; line-height: 1.6; word-break: break-word; position: relative; }
+.msg-bubble.streaming-plain { white-space: pre-wrap; }
 .msg.user .msg-bubble {
   background: var(--oak); color: #fff;
   border-radius: var(--radius) var(--radius-sm) var(--radius) var(--radius-sm);

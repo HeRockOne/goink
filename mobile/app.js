@@ -4,7 +4,7 @@ const state = {
   page: 'novels', novelId: 0, novelTitle: '', sessionId: null,
   models: [], selectedModel: '', isLoading: false, sessions: [],
   reader: { novelId: 0, chapterId: 0, idx: 0, chapters: [] },
-  chaptersCache: {}
+  chaptersCache: {}, selfStreaming: false
 };
 
 // ── 离线缓存（idb-keyval + 内存 Map）──
@@ -478,14 +478,14 @@ function handleSyncState(ev) {
       wsContent = content;
       wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
       if (thinking || content) {
-        updateStreaming(wsStreamEl, content || '思考中...', thinking);
+        updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
       }
     }).catch(() => {
       wsThinking = thinking;
       wsContent = content;
       wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
       if (thinking || content) {
-        updateStreaming(wsStreamEl, content || '思考中...', thinking);
+        updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
       }
     });
     toast('已同步到当前会话');
@@ -495,6 +495,11 @@ function handleSyncState(ev) {
 // 处理桌面端对话事件，实时更新移动端 UI
 function handleChatEvent(ev) {
   console.log('[Chat] handleChatEvent:', ev.type, 'page:', state.page, 'sessionId:', state.sessionId);
+  // 自己发消息时走 SSE 通道，屏蔽 WS 全局广播，避免双气泡/清空自己的消息
+  if (state.selfStreaming) {
+    console.log('[Chat] 自己发消息中，忽略 WS 事件');
+    return;
+  }
   if (state.page !== 'chat') {
     console.log('[Chat] 非聊天页面，忽略');
     return;
@@ -548,7 +553,7 @@ function handleChatEvent(ev) {
       if (!wsStreamEl) {
         wsStreamEl = addMessage('assistant', '思考中...', '', true);
       }
-      updateStreaming(wsStreamEl, wsContent || '思考中...', wsThinking);
+      scheduleStreamingRender(wsStreamEl, wsContent || '思考中...', wsThinking);
       break;
 
     case 'content':
@@ -558,14 +563,15 @@ function handleChatEvent(ev) {
       if (!wsStreamEl) {
         wsStreamEl = addMessage('assistant', '', '', true);
       }
-      updateStreaming(wsStreamEl, wsContent, wsThinking);
+      scheduleStreamingRender(wsStreamEl, wsContent, wsThinking);
       break;
 
     case 'done':
       // 桌面端对话完成
+      cancelPendingStream();
       if (ev.text) wsContent = ev.text;
       if (wsStreamEl) {
-        updateStreaming(wsStreamEl, wsContent, wsThinking);
+        updateStreaming(wsStreamEl, wsContent, wsThinking, true);
         wsStreamEl.dataset.streaming = '';
         wsStreamEl = null;
       }
@@ -576,8 +582,9 @@ function handleChatEvent(ev) {
       break;
 
     case 'error':
+      cancelPendingStream();
       if (wsStreamEl) {
-        updateStreaming(wsStreamEl, '❌ ' + (ev.error || '未知错误'), '');
+        updateStreaming(wsStreamEl, '❌ ' + (ev.error || '未知错误'), '', true);
         wsStreamEl.dataset.streaming = '';
         wsStreamEl = null;
       }
@@ -590,7 +597,7 @@ function handleChatEvent(ev) {
       if (wsStreamEl && ev.tool_name) {
         const toolHint = `\n\n🔧 ${ev.tool_name}...`;
         wsContent += toolHint;
-        updateStreaming(wsStreamEl, wsContent, wsThinking);
+        scheduleStreamingRender(wsStreamEl, wsContent, wsThinking);
       }
       break;
 
@@ -1293,8 +1300,8 @@ function addMessage(role, content, thinking, isStreaming) {
   qs(div, '.cm-bubble').innerHTML = marked.parse(content || '');
   if (thinking) {
     const body = qs(div, '.msg-body');
-    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▼`;
-    const tc = document.createElement('div'); tc.className = 'thinking-content hidden'; tc.textContent = thinking;
+    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▲`;
+    const tc = document.createElement('div'); tc.className = 'thinking-content'; tc.textContent = thinking;
     body.appendChild(tog); body.appendChild(tc);
   }
   container.appendChild(div);
@@ -1302,9 +1309,38 @@ function addMessage(role, content, thinking, isStreaming) {
   return div;
 }
 
-function updateStreaming(el, content, thinking) {
-  const b = el.querySelector('.msg-bubble'); if (b) b.innerHTML = marked.parse(content || '');
-  if (thinking) { let t = el.querySelector('.thinking-toggle'), c = el.querySelector('.thinking-content'); if (!t) { t = document.createElement('div'); t.className = 'thinking-toggle'; t.onclick = function(){ toggleThinking(this); }; c = document.createElement('div'); c.className = 'thinking-content hidden'; const body = el.querySelector('.msg-body'); body.insertBefore(t, body.children[1]); body.insertBefore(c, body.children[2]); } c.textContent = thinking; t.textContent = `💭 思考 (${thinking.length}字) ▼`; }
+// 流式渲染节流：60ms 合并多次增量事件，避免每 token 全量 marked 重渲染卡顿
+let pendingStream = null, streamTimer = null;
+function cancelPendingStream() {
+  if (streamTimer) { clearTimeout(streamTimer); streamTimer = null; }
+  pendingStream = null;
+}
+function scheduleStreamingRender(el, content, thinking) {
+  pendingStream = { el, content, thinking };
+  if (streamTimer) return;
+  streamTimer = setTimeout(() => {
+    streamTimer = null;
+    if (pendingStream) { const p = pendingStream; pendingStream = null; updateStreaming(p.el, p.content, p.thinking, false); }
+  }, 60);
+}
+
+// final=true 渲染完整 markdown；final=false 流式期间用纯文本（未闭合 markdown 结构不会显示异常）
+function updateStreaming(el, content, thinking, final) {
+  const b = el.querySelector('.msg-bubble');
+  if (b) {
+    if (final) { b.classList.remove('streaming-plain'); b.innerHTML = marked.parse(content || ''); }
+    else { b.classList.add('streaming-plain'); b.textContent = content || ''; }
+  }
+  if (thinking) {
+    let t = el.querySelector('.thinking-toggle'), c = el.querySelector('.thinking-content');
+    if (!t) {
+      t = document.createElement('div'); t.className = 'thinking-toggle'; t.onclick = function(){ toggleThinking(this); };
+      c = document.createElement('div'); c.className = 'thinking-content';
+      const body = el.querySelector('.msg-body');
+      body.insertBefore(t, body.children[1]); body.insertBefore(c, body.children[2]);
+    }
+    c.textContent = thinking; t.textContent = `💭 思考 (${thinking.length}字) ▲`;
+  }
   el.closest('.chat-scroll').scrollTop = el.closest('.chat-scroll').scrollHeight;
 }
 
@@ -1315,6 +1351,7 @@ async function sendMessage(text) {
   if (!text.trim() || state.isLoading) return;
   const input = document.getElementById('msgInput'); input.value = ''; input.style.height = 'auto';
   state.isLoading = true; document.getElementById('sendBtn').classList.add('hidden'); document.getElementById('stopBtn').classList.remove('hidden');
+  state.selfStreaming = true; // 自己发消息期间屏蔽 WS 通道（同一事件流会经 WS 全局广播重复推送）
   addMessage('user', text);
   currentStreamEl = addMessage('assistant', '思考中...', '', true);
   abortCtrl = new AbortController(); let thinking = '', content = '';
@@ -1327,10 +1364,48 @@ async function sendMessage(text) {
     if (token) headers['Authorization'] = 'Bearer ' + token;
     const res = await fetch(API.base + '/api/chat', { method: 'POST', headers, body: JSON.stringify(body), signal: abortCtrl.signal });
     const reader = res.body.getReader(), decoder = new TextDecoder(); let buf = '';
-    while (true) { const { done, value } = await reader.read(); if (done) break; buf += decoder.decode(value, { stream: true }); const lines = buf.split('\n'); buf = lines.pop(); for (const line of lines) { if (!line.startsWith('data: ')) continue; const js = line.slice(6).trim(); if (!js) continue; try { const ev = JSON.parse(js); switch (ev.type) { case 'started': state.sessionId = ev.session_id; break; case 'thinking': thinking += ev.data||''; updateStreaming(currentStreamEl, content||'思考中...', thinking); break; case 'content': content += ev.data||''; updateStreaming(currentStreamEl, content, thinking); break; case 'done': if (ev.text) { content = ev.text; updateStreaming(currentStreamEl, content, thinking); } break; case 'error': addMessage('assistant', '❌ ' + (ev.error||'未知错误')); currentStreamEl = null; break; } } catch (_) {} } }
-  } catch (e) { if (e.name !== 'AbortError') addMessage('assistant', '❌ 连接失败: ' + e.message); }
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const js = line.slice(6).trim(); if (!js) continue;
+        try {
+          const ev = JSON.parse(js);
+          switch (ev.type) {
+            case 'started': state.sessionId = ev.session_id; break;
+            case 'thinking': thinking += ev.data||''; scheduleStreamingRender(currentStreamEl, content||'思考中...', thinking); break;
+            case 'content': content += ev.data||''; scheduleStreamingRender(currentStreamEl, content, thinking); break;
+            case 'tool_call':
+              if (currentStreamEl && ev.tool_name) { content += `\n\n🔧 ${ev.tool_name}...`; scheduleStreamingRender(currentStreamEl, content, thinking); }
+              break;
+            case 'phase_gate':
+              if (ev.phase_gate && ev.phase_gate.phase) toast(`阶段: ${ev.phase_gate.phase}`);
+              break;
+            case 'done':
+              cancelPendingStream();
+              if (ev.text) { content = ev.text; updateStreaming(currentStreamEl, content, thinking, true); }
+              break;
+            case 'error':
+              cancelPendingStream();
+              if (currentStreamEl) { updateStreaming(currentStreamEl, '❌ ' + (ev.error||'未知错误'), '', true); currentStreamEl.dataset.streaming = ''; }
+              currentStreamEl = null;
+              break;
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      cancelPendingStream();
+      if (currentStreamEl) { updateStreaming(currentStreamEl, '❌ 连接失败: ' + e.message, thinking, true); currentStreamEl.dataset.streaming = ''; }
+      currentStreamEl = null;
+    }
+  }
   if (currentStreamEl) { currentStreamEl.dataset.streaming = ''; currentStreamEl = null; }
   state.isLoading = false; document.getElementById('sendBtn').classList.remove('hidden'); document.getElementById('stopBtn').classList.add('hidden'); abortCtrl = null;
+  state.selfStreaming = false;
 }
 
 function stopChat() { if (abortCtrl) abortCtrl.abort(); if (state.isLoading) { state.isLoading = false; document.getElementById('sendBtn').classList.remove('hidden'); document.getElementById('stopBtn').classList.add('hidden'); if (state.sessionId) api('/api/chat/cancel', { method: 'POST', body: { session_id: state.sessionId } }).catch(()=>{}); } }

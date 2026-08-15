@@ -453,6 +453,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			if event.ToolName != "" {
 				evData["tool_name"] = event.ToolName
 			}
+			if event.PhaseGate != nil {
+				evData["phase_gate"] = event.PhaseGate
+			}
 			opts.Broadcast("chat:api_event", evData)
 		}
 	}
