@@ -48,23 +48,8 @@ type Agent struct {
 	skillStore    *skill.Store
 	searchService atomic.Pointer[search.Service]
 	cancelMgr     *CancelManager
-	phaseGateMu   sync.Mutex
-	phaseGate     *PhaseGate // 从 always-mode skill 解析的阶段门禁配置（受 phaseGateMu 保护）
 	prefixHashMu  sync.RWMutex
 	prefixHash    map[string]uint64 // sessionID → 上一轮前缀哈希，用于缓存监控
-}
-
-// phaseGate 读写加锁，避免并发竞争
-func (a *Agent) getPG() *PhaseGate {
-	a.phaseGateMu.Lock()
-	defer a.phaseGateMu.Unlock()
-	return a.phaseGate
-}
-
-func (a *Agent) setPG(pg *PhaseGate) {
-	a.phaseGateMu.Lock()
-	defer a.phaseGateMu.Unlock()
-	a.phaseGate = pg
 }
 
 // RunOptions 是单次 Run() 的参数。
@@ -132,7 +117,7 @@ func (a *Agent) Cancel(sessionID string) {
 // （Anthropic fork 模式完整版）。主历史含正文/设定/NS（上一轮主请求的完整字节），
 // 子 agent 首轮即完整命中主会话缓存，miss 只余身份+指令（几 K）；
 // 且子 agent 从历史直接看到正文与设定，无需重复 read（每次重复读 = 重复 miss 4-10K）。
-func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_tools.SubAgentRequest, pg *PhaseGate) (string, error) {
+func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_tools.SubAgentRequest) (string, error) {
 	at := agentTypeFromString(req.AgentType)
 	sysPrompt := agentcfg.AgentIdentity(at)
 	allowed := agentcfg.Allowlist(at)
@@ -166,10 +151,6 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		map[string]any{"role": "user", "content": req.Instruction},
 	)
 
-	// 保存主 agent 的阶段门禁状态，子 agent 运行期间不会被清空。
-	// pg 由父 Run 传入（局部实例），恢复不再写共享字段——并发会话互不污染
-	savedPhaseGate := pg
-
 	subOpts := RunOptions{
 		TurnID:          parentOpts.TurnID,
 		SessionID:       parentOpts.SessionID,
@@ -187,9 +168,6 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		Broadcast:       parentOpts.Broadcast, // 子代理事件也广播到移动端
 	}
 	result, err := a.Run(ctx, subOpts)
-
-	// 恢复主 agent 的阶段门禁状态
-	_ = savedPhaseGate
 
 	return result.FinalText, err
 }
@@ -737,7 +715,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							})
 						},
 						RunSubAgent: func(ctx context.Context, req mcp_tools.SubAgentRequest) (string, error) {
-							return a.RunSubAgent(ctx, opts, req, pg)
+							return a.RunSubAgent(ctx, opts, req)
 						},
 						SkillStore:    a.skillStore,
 						Messages:      opts.Messages,
