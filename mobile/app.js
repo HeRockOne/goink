@@ -1,5 +1,6 @@
 // ── Goink Mobile Web Client ──
-const API = { base: location.origin, ws: null, connOk: false };
+// base 优先取扫码保存的地址（goink_api_base），否则跟随当前页面 origin
+const API = { base: localStorage.getItem('goink_api_base') || location.origin, ws: null, connOk: false };
 const state = {
   page: 'novels', novelId: 0, novelTitle: '', sessionId: null,
   models: [], selectedModel: '', isLoading: false, sessions: [],
@@ -1549,6 +1550,14 @@ function saveTokenFromSettings() {
 }
 
 // 设置页 QR 码扫描
+// 解析桌面端扫码连接串：goink://ip:port?token=xxx&tls=0|1
+// 返回 null 表示旧格式（纯令牌字符串）
+function parseConnectCode(data) {
+  const m = /^goink:\/\/([^/:]+):(\d+)\?token=([0-9a-fA-F]+)(?:&tls=([01]))?$/.exec((data || '').trim());
+  if (!m) return null;
+  return { ip: m[1], port: m[2], token: m[3], tls: m[4] === '1' };
+}
+
 function startQRScanFromSettings() {
   let overlay = document.getElementById('qrScanOverlay');
   if (overlay) overlay.remove();
@@ -1591,10 +1600,24 @@ function startQRScanFromSettings() {
         scanning = false;
         video.srcObject.getTracks().forEach(t => t.stop());
         overlay.remove();
-        const tokenField = document.getElementById('tokenField');
-        if (tokenField) tokenField.value = code.data;
-        setToken(code.data);
-        toast('扫码成功，令牌已保存');
+        const info = parseConnectCode(code.data);
+        if (info) {
+          // 新格式：一次扫码完成地址 + 令牌
+          API.base = `${info.tls ? 'https' : 'http'}://${info.ip}:${info.port}`;
+          localStorage.setItem('goink_api_base', API.base);
+          setToken(info.token);
+          // 验证连接
+          api('/api/health').then(r => {
+            if (r && r.status === 'ok') toast('✅ 扫码成功，已连接服务器');
+            else toast('⚠️ 已保存，但连接验证失败（令牌可能不对）');
+          }).catch(() => toast('⚠️ 已保存，但无法连接服务器（检查地址与端口）'));
+        } else {
+          // 旧格式：纯令牌
+          const tokenField = document.getElementById('tokenField');
+          if (tokenField) tokenField.value = code.data;
+          setToken(code.data);
+          toast('扫码成功，令牌已保存');
+        }
         loadSettings();
         return;
       }

@@ -135,6 +135,27 @@ func (a *App) SetAPIUseHTTPS(enabled bool) {
 	config.SaveSettings(a.db, a.settings)
 }
 
+// APIConnectInfo 移动端扫码连接信息（局域网 IP + API 端口 + 协议）。
+type APIConnectInfo struct {
+	IP     string `json:"ip"`
+	Port   int    `json:"port"`
+	UseTLS bool   `json:"use_tls"`
+}
+
+// GetAPIConnectInfo 返回移动端扫码连接信息（局域网 IP + API 端口 + 协议），
+// 供设置页二维码携带完整连接参数（goink://ip:port?token=xxx&tls=0|1）。
+func (a *App) GetAPIConnectInfo() APIConnectInfo {
+	port := a.settings.APIPort
+	if port == 0 {
+		port = 9323
+	}
+	return APIConnectInfo{
+		IP:     getLocalIP(),
+		Port:   port,
+		UseTLS: a.apiUseHTTPS,
+	}
+}
+
 // SetWSHub 设置 WebSocket Hub，用于双端实时同步。
 func (a *App) SetWSHub(hub *ws.Hub) {
 	a.wsHub = hub

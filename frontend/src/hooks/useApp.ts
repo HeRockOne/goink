@@ -126,6 +126,7 @@ import {
   SetAPIUseHTTPS,
   GetAPIToken,
   ResetAPIToken,
+  GetAPIConnectInfo,
 } from '@/lib/wailsjs/go/app/App'
 import type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill, lore, item, stats } from '@/lib/wailsjs/go/models'
 
@@ -257,6 +258,7 @@ export function useApp() {
     SetAPIUseHTTPS,
     GetAPIToken,
     ResetAPIToken,
+    GetAPIConnectInfo,
   }), [])
 }
 

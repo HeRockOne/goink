@@ -22,6 +22,16 @@ Authorization: Bearer f3058d5ce13f057bcb5f407f8c9abc41（当前）
 ?token=<token>
 ```
 
+**方式三：扫描二维码（设置页 → API 认证令牌）**
+
+桌面端设置页二维码携带完整连接信息，格式：
+```
+goink://<ip>:<port>?token=<token>&tls=0|1
+```
+- `tls=1` 表示 HTTPS，`0` 表示 HTTP
+- 移动端扫码后自动写入服务器地址与令牌，并验证 `/api/health` 连接
+- 兼容旧格式（纯 32 位令牌字符串，仅写入令牌）
+
 **豁免路径（无需认证）：**
 - `GET /api/health` — 健康检查
 - `/mobile/*` — 移动端静态文件

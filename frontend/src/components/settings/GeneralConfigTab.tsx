@@ -32,6 +32,7 @@ export default function GeneralConfigTab() {
   const restoreInputRef = useRef<HTMLInputElement>(null)
   const [apiPort, setApiPort] = useState('9323')
   const [apiToken, setApiToken] = useState('')
+  const [apiConnect, setApiConnect] = useState<{ ip: string; port: number; use_tls: boolean } | null>(null)
   const [loggingEnabled, setLoggingEnabled] = useState(true)
   const [useHTTPS, setUseHTTPS] = useState(true)
   const [exaApiKey, setExaApiKey] = useState('')
@@ -59,6 +60,10 @@ export default function GeneralConfigTab() {
     // 获取 API token
     app.GetAPIToken().then(token => {
       if (token) setApiToken(token)
+    }).catch(() => {})
+    // 获取扫码连接信息（局域网 IP + 端口 + 协议）
+    app.GetAPIConnectInfo().then(info => {
+      if (info) setApiConnect({ ip: info.ip, port: info.port, use_tls: info.use_tls })
     }).catch(() => {})
     app.GetSettings().then(s => {
       if (s?.last_novel_id) setSelectedID(s.last_novel_id)
@@ -449,7 +454,13 @@ export default function GeneralConfigTab() {
           </div>
           {apiToken && (
             <div className="shrink-0 p-2 bg-white rounded-lg border">
-              <QRCodeSVG value={apiToken} size={80} level="M" />
+              <QRCodeSVG
+                value={apiConnect
+                  ? `goink://${apiConnect.ip}:${apiConnect.port}?token=${apiToken}&tls=${apiConnect.use_tls ? '1' : '0'}`
+                  : apiToken}
+                size={80}
+                level="M"
+              />
             </div>
           )}
         </div>
