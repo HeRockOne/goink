@@ -195,6 +195,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       tool_name?: string
       text?: string
       session_id?: string
+      message?: string
     }
     // 跟踪当前正在构建的 streaming turn
     const apiStreamRef: {
@@ -219,7 +220,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           const newTurn: Turn = {
             id: `api-${ev.turn_id}`,
             turnId: ev.turn_id,
-            userMessage: '',
+            userMessage: ev.message || '',
             segments: [],
             status: 'streaming',
           }

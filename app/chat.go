@@ -265,7 +265,7 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 	}
 
 	// 9. 运行 Agent 循环
-	emitEvent("started", map[string]any{"session_id": sess.SessionID, "turn_id": turnID})
+	emitEvent("started", map[string]any{"session_id": sess.SessionID, "turn_id": turnID, "message": input.Message})
 
 	// 构建 Agent RunOptions
 	runOpts := agent.RunOptions{
