@@ -229,13 +229,15 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }
       // 移动端对话完成：结束 turn 状态，恢复发送按钮
       if (ev.type === 'done') {
-        const turnId = apiStreamRef.turnId
+        const tid = ev.turn_id
         if (ev.text) apiStreamRef.content = ev.text
-        apiStreamRef.toolName = ''
-        apiActiveRef.current = { turnId: null, sessionId: null }
-        setApiStreaming(false)
+        if (tid === apiStreamRef.turnId) {
+          apiStreamRef.toolName = ''
+          apiActiveRef.current = { turnId: null, sessionId: null }
+          setApiStreaming(false)
+        }
         setTurns(prev => prev.map(t =>
-          t.id === `api-${turnId}`
+          t.id === `api-${tid}`
             ? {
                 ...t,
                 status: 'done' as const,
@@ -251,11 +253,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }
       // 移动端对话出错：结束 turn 状态，恢复发送按钮
       if (ev.type === 'error') {
-        const turnId = apiStreamRef.turnId
-        apiActiveRef.current = { turnId: null, sessionId: null }
-        setApiStreaming(false)
+        const tid = ev.turn_id
+        if (tid === apiStreamRef.turnId) {
+          apiActiveRef.current = { turnId: null, sessionId: null }
+          setApiStreaming(false)
+        }
         setTurns(prev => prev.map(t =>
-          t.id === `api-${turnId}`
+          t.id === `api-${tid}`
             ? {
                 ...t,
                 status: 'failed' as const,
@@ -272,7 +276,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }
       // 更新 streaming turn 的 segments
       setTurns(prev => {
-        const idx = prev.findIndex(t => t.id === `api-${apiStreamRef.turnId}`)
+        const idx = prev.findIndex(t => t.id === `api-${ev.turn_id}`)
         if (idx < 0) return prev
         const last = prev[idx]
         if (last.status !== 'streaming') return prev
