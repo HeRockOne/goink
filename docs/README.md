@@ -54,6 +54,7 @@
 > 2026-08-14：review 阶段修复验证门（创作质量闭环）——single/batch review 块 require 加 check_story_consistency（default_phase_gate_config.go + 门禁配置示例.md 同步）：主 agent 修复审稿问题后必须亲自跑一次程序化核对（4 类 SQL：伏笔超期/角色断档/物品冲突/死者复出）才能进 maintain——修复动作从"无验证放行"变为"客观验收"，与子代理审稿（发现视角）形成双层；子代理不受门禁管，其核对仍靠身份提示词。
 > 2026-08-15：双端对话状态同步补齐（移动端/桌面端按钮与回合状态）——移动端 WS 事件 started/done/error 同步发送/停止按钮（此前桌面生成时按钮无变化，可并发再发）、stopChat 对 WS 同步流走 /api/chat/cancel；新增 syncWithDesktopState（进入聊天页与 WS 连接时查询 /api/sync/state，中途加入补流式气泡，同会话也补）；桌面端 chat:api_event 补 apiStreaming 状态（移动端生成时停止按钮点亮，此前发送/停止双灰）、done/error 正确结束 api turn（此前永远 streaming）、onStop 取消移动端会话而非桌面 sessionId；ChatInput isLoading 合并 apiStreaming。
 > 2026-08-15：build.ps1 部署补 runtime/ 全量同步（onnxruntime.dll + models/ + git/）——构建期 "未找到 ONNX Runtime 库" 是编译临时 exe 无 runtime 的误报；但部署目录缺 runtime 时向量检索与 bundled git 真实不可用（此前 D:\Goink\runtime 靠手动放置）。
+> 2026-08-15：移动端 SSE 自流按钮卡死修复——根因：服务端 /api/chat 的 events channel 永不关闭（app/api_server.go 注释明说），done 后连接保持打开；移动端 sendMessage 收到 done/error 只渲染不跳出循环，永久挂在 reader.read() 上，按钮恢复代码永不执行（且 selfStreaming 屏蔽 WS done 双重卡死）。修复：done/error 置 finished 跳出 while + abortCtrl.abort() 主动断开服务端残留连接。
 
 ## tools/ — 验证工具（可运行）
 

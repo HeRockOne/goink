@@ -1384,7 +1384,7 @@ async function sendMessage(text) {
   state.selfStreaming = true; // 自己发消息期间屏蔽 WS 通道（同一事件流会经 WS 全局广播重复推送）
   addMessage('user', text);
   currentStreamEl = addMessage('assistant', '思考中...', '', true);
-  abortCtrl = new AbortController(); let thinking = '', content = '';
+  abortCtrl = new AbortController(); let thinking = '', content = '', finished = false;
   try {
     const body = { message: text, novel_id: state.novelId };
     if (state.sessionId) body.session_id = state.sessionId;
@@ -1416,16 +1416,22 @@ async function sendMessage(text) {
             case 'done':
               cancelPendingStream();
               if (ev.text) { content = ev.text; updateStreaming(currentStreamEl, content, thinking, true); }
+              finished = true;
               break;
             case 'error':
               cancelPendingStream();
               if (currentStreamEl) { updateStreaming(currentStreamEl, '❌ ' + (ev.error||'未知错误'), '', true); currentStreamEl.dataset.streaming = ''; }
               currentStreamEl = null;
+              finished = true;
               break;
           }
         } catch (_) {}
       }
+      // done/error 是终止事件：服务端不关闭 SSE 连接（events channel 不 close），
+      // 不跳出会永久挂在 reader.read() 上，恢复按钮的代码永不执行
+      if (finished) break;
     }
+    if (finished) abortCtrl.abort(); // 主动断开服务端残留连接，触发其 ctx.Done 退出
   } catch (e) {
     if (e.name !== 'AbortError') {
       cancelPendingStream();
