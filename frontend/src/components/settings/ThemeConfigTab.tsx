@@ -25,16 +25,19 @@ function validateJSON(text: string): { ok: true; data: CustomThemeData } | { ok:
 const INITIAL_THEME_JSON = `{
   "name": "太虚·夜",
   "type": "dark",
+  "finish": "aura",
   "colors": {
-    "--background": "#0a0e17", "--foreground": "#e8eef2", "--card": "rgba(15,21,31,0.72)",
+    "--background": "#0a0e17", "--foreground": "#e8eef2", "--card": "rgba(15,21,31,0.6)",
     "--card-foreground": "#e8eef2", "--popover": "rgba(17,27,43,0.95)", "--popover-foreground": "#e8eef2",
     "--primary": "#a1c4d6", "--primary-foreground": "#0a0e17", "--secondary": "rgba(17,27,43,0.6)",
     "--secondary-foreground": "#d8e4ee", "--muted": "rgba(17,27,43,0.55)", "--muted-foreground": "#8aa8c0",
     "--accent": "rgba(161,196,214,0.1)", "--accent-foreground": "#e8eef2", "--destructive": "#d45a6a",
     "--destructive-foreground": "#f0f4f8", "--border": "rgba(161,196,214,0.16)", "--input": "rgba(17,27,43,0.6)",
-    "--ring": "#a1c4d6", "--sidebar": "rgba(11,15,24,0.78)", "--sidebar-foreground": "#e8eef2",
+    "--ring": "#a1c4d6",
+    "--chart-1": "#a1c4d6", "--chart-2": "#7aaa8a", "--chart-3": "#d4a870", "--chart-4": "#7a9ab5", "--chart-5": "#c0808a",
+    "--sidebar": "rgba(13,20,32,0.82)", "--sidebar-foreground": "#e8eef2",
     "--sidebar-primary": "#a1c4d6", "--sidebar-primary-foreground": "#0a0e17",
-    "--sidebar-accent": "rgba(161,196,214,0.1)", "--sidebar-accent-foreground": "#d8e4ee",
+    "--sidebar-accent": "rgba(17,27,43,0.6)", "--sidebar-accent-foreground": "#d8e4ee",
     "--sidebar-border": "rgba(161,196,214,0.12)", "--sidebar-ring": "#a1c4d6",
     "--tag-blue": "#14242f", "--tag-blue-foreground": "#7ab0d5",
     "--tag-green": "#142a20", "--tag-green-foreground": "#6ac09a",
@@ -42,25 +45,23 @@ const INITIAL_THEME_JSON = `{
     "--tag-rose": "#2a1418", "--tag-rose-foreground": "#d08090",
     "--tag-teal": "#142a28", "--tag-teal-foreground": "#6ab8b0",
     "--tag-purple": "#241c30", "--tag-purple-foreground": "#a88ac8",
-    "--reader-bg": "#0a0e17", "--reader-paper": "#121a28",
-    "--bubble-user": "#a1c4d6", "--bubble-user-foreground": "#0a0e17",
-    "--action-extract": "#4a6a80", "--action-extract-foreground": "#e8eef2",
-    "--action-save": "#5a9a7a", "--action-save-foreground": "#0a0e17",
-    "--success": "#12251a", "--success-foreground": "#6ac09a", "--success-border": "#244030",
-    "--danger-bg": "#281416", "--danger-border": "#4a2024",
-    "--status-warning": "#d0b060", "--status-ok": "#6ac09a",
     "--tool-blue": "#13222e", "--tool-blue-border": "#5a8ab5",
     "--tool-amber": "#282010", "--tool-amber-border": "#b59040",
     "--tool-green": "#12231a", "--tool-green-border": "#5a9a6a",
     "--tool-red": "#281416", "--tool-red-border": "#b55050",
+    "--danger-bg": "#281416", "--danger-border": "#4a2024",
+    "--reader-bg": "#0a0e17", "--reader-paper": "#111827",
+    "--bubble-user": "#a1c4d6", "--bubble-user-foreground": "#0a0e17",
+    "--bubble-ai": "rgba(161,196,214,0.08)", "--bubble-ai-border": "rgba(161,196,214,0.28)",
+    "--action-extract": "#4a6a80", "--action-extract-foreground": "#e8eef2",
+    "--action-save": "#5a9a7a", "--action-save-foreground": "#0a0e17",
+    "--success": "#12251a", "--success-foreground": "#6ac09a", "--success-border": "#244030",
+    "--status-warning": "#d0b060", "--status-ok": "#6ac09a",
+    "--usage-ok": "#6ac09a", "--usage-warn": "#d0b060", "--usage-danger": "#e06464",
+    "--narrative-card-bg": "rgba(15,24,38,0.55)", "--narrative-card-border": "rgba(161,196,214,0.18)", "--narrative-card-line": "rgba(161,196,214,0.5)",
+    "--editor-surface": "rgba(17,24,39,0.97)", "--editor-statusbar": "#0e1522",
     "--contribution-0": "#10161f", "--contribution-1": "#1a3a4a",
     "--contribution-2": "#2a5a70", "--contribution-3": "#3a7a90", "--contribution-4": "#4a9ab0"
-  },
-  "effects": {
-    "layers": [
-      { "type": "particles", "intensity": 0.4, "count": 70, "speed": 0.8 },
-      { "type": "ambient", "intensity": 0.3 }
-    ]
   }
 }`
 
