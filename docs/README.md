@@ -57,6 +57,7 @@
 > 2026-08-15：移动端 SSE 自流按钮卡死修复——根因：服务端 /api/chat 的 events channel 永不关闭（app/api_server.go 注释明说），done 后连接保持打开；移动端 sendMessage 收到 done/error 只渲染不跳出循环，永久挂在 reader.read() 上，按钮恢复代码永不执行（且 selfStreaming 屏蔽 WS done 双重卡死）。修复：done/error 置 finished 跳出 while + abortCtrl.abort() 主动断开服务端残留连接。
 > 2026-08-15：移动端用户消息即时同步桌面端——started 事件补 message 字段（app/chat.go），桌面端 chat:api_event started 分支用 ev.message 填 turn.userMessage（此前为空，用户消息要等 chat:api_done 重建才显示）。
 > 2026-08-15：API 认证二维码升级为完整连接串（goink://ip:port?token=xxx&tls=0|1）——新增 Wails 绑定 GetAPIConnectInfo（局域网 IP + API 端口 + 协议，app/handler.go）；桌面端设置页二维码携带连接参数；移动端扫码一次完成地址+令牌写入（localStorage goink_api_base 持久化，刷新不丢）并验证 /api/health，兼容旧纯令牌码；mobile/API.md 补协议说明。
+> 2026-08-15：二维码改回移动端页面完整 URL（http(s)://ip:port/mobile/?token=xxx）——goink:// 自定义协议在系统相机/浏览器扫码时无 handler 无法连接；URL 格式让系统扫码直接打开页面，页面 JS 自动写入令牌（replaceState 清理地址栏），应用内扫码同解析，兼容 goink:// 与纯令牌旧码。
 
 ## tools/ — 验证工具（可运行）
 

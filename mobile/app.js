@@ -1550,12 +1550,17 @@ function saveTokenFromSettings() {
 }
 
 // 设置页 QR 码扫描
-// 解析桌面端扫码连接串：goink://ip:port?token=xxx&tls=0|1
-// 返回 null 表示旧格式（纯令牌字符串）
+// 解析桌面端扫码连接串，返回 { base, token } 或 null
+// 支持两种格式：
+//   1. URL：http(s)://ip:port/mobile/?token=xxx（系统相机/浏览器扫码，识别为 URL 直接打开页面）
+//   2. goink:// 协议：goink://ip:port?token=xxx&tls=0|1（旧格式，应用内扫码兼容）
 function parseConnectCode(data) {
-  const m = /^goink:\/\/([^/:]+):(\d+)\?token=([0-9a-fA-F]+)(?:&tls=([01]))?$/.exec((data || '').trim());
-  if (!m) return null;
-  return { ip: m[1], port: m[2], token: m[3], tls: m[4] === '1' };
+  const s = (data || '').trim();
+  const u = /^(https?):\/\/([^/:]+):(\d+)\/mobile\/\?token=([0-9a-fA-F]+)/i.exec(s);
+  if (u) return { base: `${u[1]}://${u[2]}:${u[3]}`, token: u[4] };
+  const m = /^goink:\/\/([^/:]+):(\d+)\?token=([0-9a-fA-F]+)(?:&tls=([01]))?$/.exec(s);
+  if (m) return { base: `${m[4] === '1' ? 'https' : 'http'}://${m[1]}:${m[2]}`, token: m[3] };
+  return null;
 }
 
 function startQRScanFromSettings() {
@@ -1602,8 +1607,8 @@ function startQRScanFromSettings() {
         overlay.remove();
         const info = parseConnectCode(code.data);
         if (info) {
-          // 新格式：一次扫码完成地址 + 令牌
-          API.base = `${info.tls ? 'https' : 'http'}://${info.ip}:${info.port}`;
+          // 完整连接串：一次扫码完成地址 + 令牌
+          API.base = info.base;
           localStorage.setItem('goink_api_base', API.base);
           setToken(info.token);
           // 验证连接
@@ -1648,6 +1653,16 @@ function setupChatScroll() {
 
 // ═══════════ 初始化 ═══════════
 document.addEventListener('DOMContentLoaded', async () => {
+  // 系统相机/浏览器扫码直开：URL 带 ?token=xxx（桌面端二维码为完整 URL），
+  // 页面 origin 即服务器地址，自动写入令牌并清理地址栏（token 不残留历史/分享）
+  const q = new URLSearchParams(location.search);
+  const qToken = q.get('token');
+  if (qToken) {
+    setToken(qToken);
+    localStorage.setItem('goink_api_base', location.origin);
+    history.replaceState(null, '', location.pathname + location.hash);
+    toast('✅ 扫码成功，已连接服务器');
+  }
   document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.page)));
   const input = document.getElementById('msgInput');
   input.addEventListener('input', () => autoResize(input));

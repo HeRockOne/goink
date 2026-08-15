@@ -456,7 +456,7 @@ export default function GeneralConfigTab() {
             <div className="shrink-0 p-2 bg-white rounded-lg border">
               <QRCodeSVG
                 value={apiConnect
-                  ? `goink://${apiConnect.ip}:${apiConnect.port}?token=${apiToken}&tls=${apiConnect.use_tls ? '1' : '0'}`
+                  ? `${apiConnect.use_tls ? 'https' : 'http'}://${apiConnect.ip}:${apiConnect.port}/mobile/?token=${apiToken}`
                   : apiToken}
                 size={80}
                 level="M"
