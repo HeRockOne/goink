@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Palette, Trash2, Wand2 } from 'lucide-react'
-import { useTheme, type CustomThemeData } from '@/hooks/useTheme'
+import { Palette, Trash2, Wand2, Layers, Gauge } from 'lucide-react'
+import { useTheme, type CustomThemeData, type Finish } from '@/hooks/useTheme'
 import { checkThemeContrast, generateTheme } from '@/lib/themeColors'
+
+const FINISH_OPTIONS: { value: Finish; label: string; desc: string }[] = [
+  { value: 'plain', label: '纯净', desc: '实色面板 + 中性阴影，最省性能' },
+  { value: 'aura', label: '氛围光', desc: '多光源渐变 + 主色调投影 + 辉光 + 噪点' },
+  { value: 'glass', label: '玻璃', desc: '面板半透明毛玻璃 + 细描边（局部 blur）' },
+  { value: 'paper', label: '暖纸', desc: '纸纹纹理 + 柔和阴影 + 弱辉光' },
+]
 
 function validateJSON(text: string): { ok: true; data: CustomThemeData } | { ok: false; error: string } {
   try {
@@ -86,7 +93,7 @@ function loadGenForm(): GenForm {
 }
 
 export default function ThemeConfigTab() {
-  const { activeTheme: theme, setTheme, addCustomTheme, deleteCustomTheme, customThemes } = useTheme()
+  const { activeTheme: theme, setTheme, addCustomTheme, deleteCustomTheme, customThemes, finish, setFinish, lowFx, setLowFx } = useTheme()
   const [json, setJson] = useState('')
   const [error, setError] = useState('')
   const [warnings, setWarnings] = useState<string[]>([])
@@ -160,6 +167,35 @@ export default function ThemeConfigTab() {
       <p className="text-xs text-muted-foreground mb-3">
         选背景色 + 主色一键生成全套主题（自动保证文字对比度 ≥ 4.5:1）；或粘贴包含全部 CSS 变量的主题 JSON。未填的变量会自动派生，不会撞色。生成器设置会自动保存，下次打开记得你上次的配置。
       </p>
+
+      {/* ── 质感预设 ── */}
+      <div className="mb-3 rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Layers className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-medium text-foreground">质感</span>
+          <span className="text-[11px] text-muted-foreground">（光影/材质/纹理，独立于配色，可任意组合）</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {FINISH_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setFinish(opt.value)}
+              className={`text-left px-2.5 py-2 rounded-lg border transition-colors ${
+                finish === opt.value ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+              }`}
+            >
+              <div className={`text-xs font-medium ${finish === opt.value ? 'text-primary' : 'text-foreground'}`}>{opt.label}</div>
+              <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+        <label className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+          <input type="checkbox" checked={lowFx} onChange={e => setLowFx(e.target.checked)}
+            className="accent-[var(--primary)] cursor-pointer" />
+          <Gauge className="w-3 h-3" />
+          低性能模式（关闭毛玻璃与纹理，阴影降档；低配机器或大屏叙事面板建议开启）
+        </label>
+      </div>
 
       {/* ── 一键生成器 ── */}
       <div className="mb-3 rounded-lg border border-border bg-card p-3">

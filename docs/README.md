@@ -59,6 +59,7 @@
 > 2026-08-15：API 认证二维码升级为完整连接串（goink://ip:port?token=xxx&tls=0|1）——新增 Wails 绑定 GetAPIConnectInfo（局域网 IP + API 端口 + 协议，app/handler.go）；桌面端设置页二维码携带连接参数；移动端扫码一次完成地址+令牌写入（localStorage goink_api_base 持久化，刷新不丢）并验证 /api/health，兼容旧纯令牌码；mobile/API.md 补协议说明。
 > 2026-08-15：二维码改回移动端页面完整 URL（http(s)://ip:port/mobile/?token=xxx）——goink:// 自定义协议在系统相机/浏览器扫码时无 handler 无法连接；URL 格式让系统扫码直接打开页面，页面 JS 自动写入令牌（replaceState 清理地址栏），应用内扫码同解析，兼容 goink:// 与纯令牌旧码。
 > 2026-08-15：自定义主题质感层接管（修"自定义主题辣鸡"）——根因：--bg-layer-grad（全窗口背景渐变）与 --glow/--glow-strong（辉光）不随自定义主题派生，残留内置太虚青蓝调，与新配色打架。修复：index.css [data-theme^="custom:"] 兜底块补派生（primary 渐变 + 主色透明度发光，旧主题/手填 JSON 全部生效）；generateTheme 同步输出 3 键（71→74，themeColors.test.ts 同步）。
+> 2026-08-15：质感体系（finish）落地——四预设 plain/aura（氛围光：多光源渐变+主色调投影+噪点）/glass（局部毛玻璃）/paper（纸纹）；--fin-shadow-*/--fin-glass-*/--fin-texture token，Tailwind v4 @theme inline 把 shadow-*/backdrop-blur-* 工具类映射到 token（组件零改动，72 处组件阴影接入）；低性能模式开关（关 blur/纹理+阴影降档）；自定义主题 JSON 支持 finish 字段；theme-system.md 新增「八、质感体系」。
 
 ## tools/ — 验证工具（可运行）
 

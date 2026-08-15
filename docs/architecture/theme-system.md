@@ -417,7 +417,42 @@
 - 实现：`frontend/src/lib/themeColors.ts`（`generateTheme`），单测 `themeColors.test.ts`
 - **生成器表单设置持久化到 `localStorage("goink_theme_gen")`**，每次修改自动保存，下次打开设置记住上次配置
 
-## 八、特效系统（已移除）
+## 八、质感体系（finish，2026-08-15 新增）
+
+质感（光影/材质/纹理）独立于配色，可任意组合：`data-finish` 属性 + `--fin-*` token。
+
+### 8.1 预设（设置 → 主题 → 质感）
+
+| 预设 | 效果 | 说明 |
+|------|------|------|
+| `plain`（默认） | 纯净 | 实色面板 + 中性阴影 + 无纹理 + 无毛玻璃，保持原行为 |
+| `aura` | 氛围光 | 3 光源渐变（跟随 `--primary`）+ 主色调投影 + 强辉光 + SVG 噪点颗粒 |
+| `glass` | 玻璃 | 面板半透明 + `backdrop-filter: blur(var(--fin-glass))`（仅侧栏/聊天面板，编辑器区保持实底）+ 细描边 |
+| `paper` | 暖纸 | 纸纹纹理 + 柔和阴影 + 弱辉光 |
+
+### 8.2 Token
+
+- `--fin-shadow-sm/md/lg/xl`：投影阶梯。**Tailwind v4 `@theme inline` 把 `shadow-*`/`backdrop-blur-*` 工具类映射到 `--fin-*`**，全部组件零改动接入
+- `--fin-glass`：主面板毛玻璃总开关（默认 0px，glass 预设 12px；blur(0) 无合成开销）
+- `--fin-glass-sm/md/lg`：浮层 backdrop-blur 半径（映射 `backdrop-blur-sm/md/lg` 类）
+- `--fin-texture`：背景纹理层（`.bg-layer::after`，SVG data-URI，none 零开销）
+- 预设同时覆盖 `--bg-layer-grad`/`--glow`/`--panel-shadow`/`--editor-shadow`/`--panel-edge`
+
+### 8.3 低性能模式
+
+`[data-low-fx="1"]`（设置开关，localStorage `goink_low_fx`）：关闭毛玻璃与纹理、阴影降档。
+
+### 8.4 优先级
+
+用户注入 style（head 末尾）> 质感预设 > 自定义主题兜底派生 > 内置主题。自定义主题 JSON 可带 `finish: "aura"` 字段自带质感，优先于全局选择。
+
+### 8.5 性能约束
+
+- 毛玻璃仅 glass 预设且只作用于主面板/浮层，半径 ≤ 24px，编辑器区永不 blur
+- 纹理为静态 SVG data-URI（无动画无 JS）
+- 预设切换只改 CSS 变量，无过渡动画触发重排
+
+## 九、特效系统（已移除）
 
 > 2026-08-05（commit d032284）`remove effects module entirely`：删除 `frontend/src/components/effects/AmbientEffectLayer.tsx`、`frontend/src/lib/themeEffects.ts`、ThemeConfigTab 效果 UI、index.css 效果样式。原「八、特效系统」整节（ambient/particles/streak/glow 四层、5 预设、性能红线、特效开关）不再适用。旧主题 JSON 里的 `effects` 字段被读取时忽略；`--particle-*` 变量留在 index.css 但无渲染器。
 

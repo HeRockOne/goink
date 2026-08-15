@@ -126,6 +126,17 @@
   --editor-shadow: 0 30px 100px rgba(13, 26, 38, 0.25), 0 12px 40px rgba(13, 26, 38, 0.15), 0 4px 12px rgba(13, 26, 38, 0.08);
   --panel-shadow: 0 8px 32px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
   --panel-edge: inset 1px 0 0 rgba(255, 255, 255, 0.6), -1px 0 8px rgba(13, 26, 38, 0.04);
+
+  /* ── 质感 token（finish 体系，预设块/自定义主题可覆盖） ── */
+  --fin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --fin-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+  --fin-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.16), 0 4px 10px rgba(0, 0, 0, 0.08);
+  --fin-shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.22), 0 8px 20px rgba(0, 0, 0, 0.1);
+  --fin-glass: 0px; /* 主面板毛玻璃总开关（glass 预设才开启，0 无合成开销） */
+  --fin-glass-sm: 8px;
+  --fin-glass-md: 12px;
+  --fin-glass-lg: 20px;
+  --fin-texture: none; /* 背景纹理层（噪点/纸纹 data-URI），none 零开销 */
 }
 
 /* ── 深色主题：太虚夜色（深蓝黑 + 剑宗青） ────────────────── */
@@ -233,6 +244,17 @@
   --editor-shadow: 0 0 0 rgba(0, 0, 0, 0), 0 20px 80px rgba(0, 0, 0, 0.6), 0 6px 24px rgba(0, 0, 0, 0.35);
   --panel-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 6px rgba(0, 0, 0, 0.2);
   --panel-edge: inset 1px 0 0 rgba(161, 196, 214, 0.08), -1px 0 16px rgba(0, 0, 0, 0.25);
+
+  /* ── 质感 token（深色：阴影更深） ── */
+  --fin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --fin-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --fin-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.28);
+  --fin-shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(0, 0, 0, 0.32);
+  --fin-glass: 0px;
+  --fin-glass-sm: 8px;
+  --fin-glass-md: 12px;
+  --fin-glass-lg: 20px;
+  --fin-texture: none;
 }
 
 /* ── 自定义主题兜底派生（永不撞色） ────────────────────── */
@@ -290,6 +312,74 @@
   --glow-strong: color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
+/* ── 质感预设（finish）：aura 氛围光 / glass 玻璃 / paper 暖纸 ── */
+/* 默认（无 data-finish）= plain 纯净：维持内置阴影/辉光/无纹理/无毛玻璃。
+   预设只改 token，不触发动画；纹理为静态 SVG data-URI，无持续合成开销。 */
+
+/* 氛围光：多光源渐变 + 主色调投影 + 强辉光 + 噪点颗粒 */
+[data-finish="aura"] {
+  --bg-layer-grad: radial-gradient(ellipse at 25% 15%, color-mix(in oklch, var(--primary) 14%, transparent) 0%, transparent 55%),
+                   radial-gradient(ellipse at 75% 30%, color-mix(in oklch, var(--primary) 8%, transparent) 0%, transparent 50%),
+                   radial-gradient(ellipse at 60% 95%, color-mix(in oklch, var(--primary) 10%, transparent) 0%, transparent 60%),
+                   linear-gradient(180deg, var(--background) 0%, var(--background) 100%);
+  --glow: color-mix(in oklch, var(--primary) 40%, transparent);
+  --glow-strong: color-mix(in oklch, var(--primary) 75%, transparent);
+  --fin-shadow-sm: 0 1px 2px color-mix(in oklch, var(--primary) 16%, rgb(0 0 0 / 0.45)), 0 1px 3px color-mix(in oklch, var(--primary) 10%, rgb(0 0 0 / 0.4));
+  --fin-shadow-md: 0 4px 12px color-mix(in oklch, var(--primary) 16%, rgb(0 0 0 / 0.55)), 0 2px 4px color-mix(in oklch, var(--primary) 10%, rgb(0 0 0 / 0.45));
+  --fin-shadow-lg: 0 12px 28px color-mix(in oklch, var(--primary) 20%, rgb(0 0 0 / 0.65)), 0 4px 10px color-mix(in oklch, var(--primary) 12%, rgb(0 0 0 / 0.55));
+  --fin-shadow-xl: 0 20px 50px color-mix(in oklch, var(--primary) 22%, rgb(0 0 0 / 0.75)), 0 8px 20px color-mix(in oklch, var(--primary) 14%, rgb(0 0 0 / 0.55));
+  --panel-shadow: var(--fin-shadow-md);
+  --editor-shadow: 0 30px 100px color-mix(in oklch, var(--primary) 18%, rgb(0 0 0 / 0.6)), 0 12px 40px color-mix(in oklch, var(--primary) 12%, rgb(0 0 0 / 0.5)), 0 4px 12px color-mix(in oklch, var(--primary) 8%, rgb(0 0 0 / 0.4));
+  --fin-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+}
+
+/* 玻璃：面板半透明 + 毛玻璃（仅主面板/浮层 blur，编辑器区保持实底）+ 中性阴影 */
+[data-finish="glass"] {
+  --card: color-mix(in oklch, var(--card) 78%, transparent);
+  --popover: color-mix(in oklch, var(--popover) 86%, transparent);
+  --sidebar: color-mix(in oklch, var(--sidebar) 80%, transparent);
+  --secondary: color-mix(in oklch, var(--secondary) 82%, transparent);
+  --muted: color-mix(in oklch, var(--muted) 82%, transparent);
+  --accent: color-mix(in oklch, var(--accent) 75%, transparent);
+  --fin-glass: 12px;
+  --fin-glass-sm: 10px;
+  --fin-glass-md: 14px;
+  --fin-glass-lg: 24px;
+  --fin-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.14);
+  --fin-shadow-md: 0 4px 14px rgb(0 0 0 / 0.22), 0 2px 4px rgb(0 0 0 / 0.12);
+  --fin-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.32), 0 4px 10px rgb(0 0 0 / 0.16);
+  --fin-shadow-xl: 0 20px 56px rgb(0 0 0 / 0.42), 0 8px 20px rgb(0 0 0 / 0.2);
+  --panel-shadow: var(--fin-shadow-md);
+  --editor-shadow: 0 30px 100px rgb(0 0 0 / 0.4), 0 12px 40px rgb(0 0 0 / 0.25), 0 4px 12px rgb(0 0 0 / 0.12);
+  --panel-edge: inset 1px 0 0 color-mix(in oklch, var(--primary) 18%, transparent), -1px 0 16px rgb(0 0 0 / 0.2);
+}
+
+/* 暖纸：纸纹 + 柔和阴影 + 弱辉光 */
+[data-finish="paper"] {
+  --bg-layer-grad: linear-gradient(180deg, var(--background) 0%, color-mix(in oklch, var(--background) 94%, var(--primary)) 100%);
+  --glow: color-mix(in oklch, var(--primary) 15%, transparent);
+  --glow-strong: color-mix(in oklch, var(--primary) 32%, transparent);
+  --fin-shadow-sm: 0 1px 1px rgb(0 0 0 / 0.05), 0 1px 2px rgb(0 0 0 / 0.04);
+  --fin-shadow-md: 0 4px 10px rgb(0 0 0 / 0.07), 0 2px 3px rgb(0 0 0 / 0.05);
+  --fin-shadow-lg: 0 10px 24px rgb(0 0 0 / 0.1), 0 4px 8px rgb(0 0 0 / 0.06);
+  --fin-shadow-xl: 0 16px 40px rgb(0 0 0 / 0.14), 0 6px 14px rgb(0 0 0 / 0.08);
+  --panel-shadow: var(--fin-shadow-md);
+  --editor-shadow: 0 20px 80px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.1), 0 2px 6px rgb(0 0 0 / 0.06);
+  --fin-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23p)' opacity='0.18'/%3E%3C/svg%3E");
+}
+
+/* 低性能模式：关闭毛玻璃/纹理，阴影降一档（设置 → 质感） */
+[data-low-fx="1"] {
+  --fin-glass: 0px;
+  --fin-glass-sm: 0px;
+  --fin-glass-md: 0px;
+  --fin-glass-lg: 0px;
+  --fin-texture: none;
+  --fin-shadow-md: var(--fin-shadow-sm);
+  --fin-shadow-lg: var(--fin-shadow-sm);
+  --fin-shadow-xl: var(--fin-shadow-sm);
+}
+
 * {
   border-color: var(--border);
 }
@@ -319,6 +409,15 @@
   opacity: 0.5;
 }
 
+/* 质感纹理层：噪点/纸纹由 --fin-texture 提供（plain 为 none，零开销） */
+.bg-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--fin-texture);
+  pointer-events: none;
+}
+
 /* 山峦已移除，仅保留渐变与纹理 */
 
 /* ── 太虚字体与光感 ─────────────────────────────────────── */
@@ -339,6 +438,8 @@ h1, h2, h3, .font-display {
 .chat-panel {
   position: relative;
   box-shadow: var(--panel-shadow), var(--panel-edge);
+  /* 毛玻璃：仅 glass 预设开启（--fin-glass > 0），blur(0) 时无可见开销 */
+  backdrop-filter: blur(var(--fin-glass));
 }
 .side-panel::before,
 .chat-panel::before {
@@ -549,6 +650,15 @@ body {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* 质感体系：tailwind 阴影/模糊工具类映射到 finish token（组件零改动接入） */
+  --shadow-sm: var(--fin-shadow-sm);
+  --shadow-md: var(--fin-shadow-md);
+  --shadow-lg: var(--fin-shadow-lg);
+  --shadow-xl: var(--fin-shadow-xl);
+  --blur-sm: var(--fin-glass-sm);
+  --blur-md: var(--fin-glass-md);
+  --blur-lg: var(--fin-glass-lg);
 }
 
 @layer base {
@@ -658,7 +768,7 @@ body {
   z-index: 15;
   display: flex;
   border-right: 1px solid var(--border);
-  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  box-shadow: 2px 0 8px var(--fin-shadow-sm);
 }
 
 /* 叙事面板标题栏按钮 */
@@ -755,7 +865,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 24px rgba(161, 196, 214, 0.04);
+  box-shadow: var(--fin-shadow-md), 0 0 24px rgba(161, 196, 214, 0.04);
   transition: box-shadow 200ms, border-color 200ms;
 }
 .narrative-card::before {
@@ -769,7 +879,7 @@ body {
   pointer-events: none;
 }
 .narrative-card:hover {
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), 0 0 20px rgba(161, 196, 214, 0.18);
+  box-shadow: var(--fin-shadow-lg), 0 0 20px rgba(161, 196, 214, 0.18);
   border-color: var(--ring);
 }
 
@@ -942,7 +1052,7 @@ body {
   font-size: 0.85rem;
   line-height: 1;
   transition: all 150ms;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--fin-shadow-sm);
 }
 .canvas-btn:hover { color: var(--ring); border-color: var(--ring); box-shadow: 0 0 10px var(--glow); }
 
@@ -953,7 +1063,7 @@ body {
   background: var(--narrative-card-bg); color: var(--ring); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem; font-weight: 700; line-height: 1;
-  transition: all 150ms; box-shadow: 0 2px 6px rgba(0,0,0,0.12), 0 0 10px var(--glow);
+  transition: all 150ms; box-shadow: var(--fin-shadow-sm), 0 0 10px var(--glow);
 }
 .canvas-btn-add:hover { background: var(--primary); color: white; box-shadow: 0 0 16px var(--glow-strong); }
 
@@ -967,7 +1077,7 @@ body {
   border-radius: 0.5rem;
   padding: 0.3rem;
   z-index: 999;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 12px var(--glow);
+  box-shadow: var(--fin-shadow-md), 0 0 12px var(--glow);
   width: auto;
   min-width: auto;
   white-space: nowrap;
