@@ -53,6 +53,7 @@
 > 2026-08-14：批量审稿覆盖强化（P2 部分落地）——kernel（skills/ + builtin 备份）review 段 + 批量质量节奏段：run_subagent 报告**必须列出实际审读的章节清单**，主 agent 收到报告先核对覆盖范围，覆盖不全（漏章/只审开头）必须补审后才进入修复；已同步 ~/.goink/skills/（运行时 user 级优先）。机制说明：子代理不受阶段门禁管（门禁仅主 agent），审稿覆盖此前靠 kernel 软约束，现改为"报告清单 + 主 agent 核对"的可核验流程。
 > 2026-08-14：review 阶段修复验证门（创作质量闭环）——single/batch review 块 require 加 check_story_consistency（default_phase_gate_config.go + 门禁配置示例.md 同步）：主 agent 修复审稿问题后必须亲自跑一次程序化核对（4 类 SQL：伏笔超期/角色断档/物品冲突/死者复出）才能进 maintain——修复动作从"无验证放行"变为"客观验收"，与子代理审稿（发现视角）形成双层；子代理不受门禁管，其核对仍靠身份提示词。
 > 2026-08-15：双端对话状态同步补齐（移动端/桌面端按钮与回合状态）——移动端 WS 事件 started/done/error 同步发送/停止按钮（此前桌面生成时按钮无变化，可并发再发）、stopChat 对 WS 同步流走 /api/chat/cancel；新增 syncWithDesktopState（进入聊天页与 WS 连接时查询 /api/sync/state，中途加入补流式气泡，同会话也补）；桌面端 chat:api_event 补 apiStreaming 状态（移动端生成时停止按钮点亮，此前发送/停止双灰）、done/error 正确结束 api turn（此前永远 streaming）、onStop 取消移动端会话而非桌面 sessionId；ChatInput isLoading 合并 apiStreaming。
+> 2026-08-15：build.ps1 部署补 runtime/ 全量同步（onnxruntime.dll + models/ + git/）——构建期 "未找到 ONNX Runtime 库" 是编译临时 exe 无 runtime 的误报；但部署目录缺 runtime 时向量检索与 bundled git 真实不可用（此前 D:\Goink\runtime 靠手动放置）。
 
 ## tools/ — 验证工具（可运行）
 

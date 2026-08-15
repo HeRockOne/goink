@@ -28,6 +28,12 @@ Write-Host "[3/3] Copying to D:\Goink\..." -ForegroundColor Yellow
 $src = "build\bin\$exeName"
 Copy-Item $src "D:\Goink\$exeName" -Force
 Copy-Item $src "D:\Goink\goink.exe" -Force
+# 同步 runtime/（onnxruntime.dll + models/ + git/）。构建期 WARN
+# "未找到 ONNX Runtime 库" 是编译临时 exe 无 runtime 的误报；但部署目录
+# 缺 runtime 时向量检索（ONNX）与 bundled git 会真实不可用，故每次部署全量同步
+if (Test-Path "$PSScriptRoot\runtime") {
+  Copy-Item "$PSScriptRoot\runtime" "D:\Goink\runtime" -Recurse -Force
+}
 Start-Process "D:\Goink\goink.exe" -WindowStyle Minimized
 
 Write-Host "=== Done! $exeName ===" -ForegroundColor Green
