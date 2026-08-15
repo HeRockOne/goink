@@ -58,6 +58,7 @@
 > 2026-08-15：移动端用户消息即时同步桌面端——started 事件补 message 字段（app/chat.go），桌面端 chat:api_event started 分支用 ev.message 填 turn.userMessage（此前为空，用户消息要等 chat:api_done 重建才显示）。
 > 2026-08-15：API 认证二维码升级为完整连接串（goink://ip:port?token=xxx&tls=0|1）——新增 Wails 绑定 GetAPIConnectInfo（局域网 IP + API 端口 + 协议，app/handler.go）；桌面端设置页二维码携带连接参数；移动端扫码一次完成地址+令牌写入（localStorage goink_api_base 持久化，刷新不丢）并验证 /api/health，兼容旧纯令牌码；mobile/API.md 补协议说明。
 > 2026-08-15：二维码改回移动端页面完整 URL（http(s)://ip:port/mobile/?token=xxx）——goink:// 自定义协议在系统相机/浏览器扫码时无 handler 无法连接；URL 格式让系统扫码直接打开页面，页面 JS 自动写入令牌（replaceState 清理地址栏），应用内扫码同解析，兼容 goink:// 与纯令牌旧码。
+> 2026-08-15：自定义主题质感层接管（修"自定义主题辣鸡"）——根因：--bg-layer-grad（全窗口背景渐变）与 --glow/--glow-strong（辉光）不随自定义主题派生，残留内置太虚青蓝调，与新配色打架。修复：index.css [data-theme^="custom:"] 兜底块补派生（primary 渐变 + 主色透明度发光，旧主题/手填 JSON 全部生效）；generateTheme 同步输出 3 键（71→74，themeColors.test.ts 同步）。
 
 ## tools/ — 验证工具（可运行）
 

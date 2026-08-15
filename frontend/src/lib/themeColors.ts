@@ -229,6 +229,11 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
     contrib[`--contribution-${i}`] = hslHex(contribH, sat(dark ? 40 : 50), l)
   })
 
+  // 质感层：背景渐变 + 发光跟随主色（与 index.css 的 custom 兜底派生一致）
+  const pr = hexToRgb(primary)
+  const p = (a: number) => pr ? `rgba(${pr.r},${pr.g},${pr.b},${a})` : primary
+  const bgGrad = `radial-gradient(ellipse at 30% 20%, ${p(0.1)} 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, ${p(0.07)} 0%, transparent 55%), linear-gradient(180deg, ${bg} 0%, ${bg} 100%)`
+
   return {
     '--background': bg,
     '--foreground': fg,
@@ -273,6 +278,9 @@ export function generateTheme(input: ThemeGenInput): Record<string, string> {
     '--action-extract-foreground': readableText(surfaceFrom(bg, modeStr, dark ? 12 : 10), modeStr),
     '--action-save': success,
     '--action-save-foreground': successFg,
+    '--bg-layer-grad': bgGrad,
+    '--glow': p(dark ? 0.3 : 0.35),
+    '--glow-strong': p(dark ? 0.55 : 0.6),
     ...contrib,
   }
 }

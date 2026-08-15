@@ -281,6 +281,13 @@
   --ring: var(--primary);
   --sidebar-ring: var(--primary);
   --sidebar-primary: var(--primary);
+
+  /* 质感层派生：背景渐变与发光跟随主色（否则残留内置太虚青蓝调，与新配色打架） */
+  --bg-layer-grad: radial-gradient(ellipse at 30% 20%, color-mix(in oklch, var(--primary) 10%, transparent) 0%, transparent 60%),
+                   radial-gradient(ellipse at 70% 80%, color-mix(in oklch, var(--primary) 7%, transparent) 0%, transparent 55%),
+                   linear-gradient(180deg, var(--background) 0%, var(--background) 100%);
+  --glow: color-mix(in oklch, var(--primary) 30%, transparent);
+  --glow-strong: color-mix(in oklch, var(--primary) 60%, transparent);
 }
 
 * {

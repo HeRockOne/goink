@@ -61,9 +61,12 @@ describe('themeColors', () => {
     assertAllPairsAA(c)
   })
 
-  it('生成完整主题（71 键：核心 + tag/tool 六色 + 状态/阅读/气泡/操作/贡献图）', () => {
+  it('生成完整主题（74 键：核心 + tag/tool 六色 + 状态/阅读/气泡/操作/贡献图 + 质感层）', () => {
     const c = generateTheme({ name: 't', mode: 'dark', background: '#0f1a14', primary: '#5a9a6a' })
-    expect(Object.keys(c).length).toBe(71)
+    expect(Object.keys(c).length).toBe(74)
+    expect(c['--glow']).toBeTruthy()
+    expect(c['--glow-strong']).toBeTruthy()
+    expect(c['--bg-layer-grad']).toContain('#0f1a14')
   })
 
   it('自定义文字色：对比度达标时采用', () => {
