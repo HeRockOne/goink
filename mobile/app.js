@@ -380,7 +380,7 @@ function switchPage(page) {
     loadModels(); loadSessions();
   } else { actions.innerHTML = ''; if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none'; }
   if (page === 'novels') loadNovels();
-  if (page === 'chat') { loadModels(); loadSessions(); }
+  if (page === 'chat') { loadModels(); loadSessions(); syncWithDesktopState(); }
   if (page === 'settings') loadSettings();
   if (page === 'stats') loadStatsPage();
   if (page === 'novel-detail') loadNovelDetail();
@@ -443,11 +443,7 @@ async function connectWS() {
     API.connOk = true;
 
     // 连接成功后，查询桌面端当前流式状态
-    api('/api/sync/state').then(r => {
-      if (r.active && r.session_id) {
-        handleSyncState(r);
-      }
-    }).catch(() => {});
+    syncWithDesktopState();
   } catch (_) {
     setTimeout(connectWS, 5000);
   }
@@ -461,6 +457,20 @@ function handleSyncState(ev) {
   const thinking = ev.thinking || '';
   const content = ev.content || '';
 
+  // 已在流式同步中（WS 事件流进行中），不重复创建气泡
+  if (wsStreamEl) return;
+
+  const createBubble = () => {
+    wsThinking = thinking;
+    wsContent = content;
+    wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
+    if (thinking || content) {
+      updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
+    }
+    state.isLoading = true;
+    setChatBusy(true);
+  };
+
   // 切换到桌面端当前会话
   if (sessionId && sessionId !== state.sessionId) {
     state.sessionId = sessionId;
@@ -473,23 +483,29 @@ function handleSyncState(ev) {
           addMessage(m.role, m.content || '', m.thinking_content || '');
         }
       });
-      // 创建流式气泡并显示当前内容
-      wsThinking = thinking;
-      wsContent = content;
-      wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
-      if (thinking || content) {
-        updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
-      }
+      createBubble();
     }).catch(() => {
-      wsThinking = thinking;
-      wsContent = content;
-      wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
-      if (thinking || content) {
-        updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
-      }
+      createBubble();
     });
     toast('已同步到当前会话');
+  } else {
+    // 同一会话：桌面端生成中途进入聊天页，直接补流式气泡
+    createBubble();
   }
+}
+
+// 查询桌面端流式状态并同步按钮/气泡（WS 连接时与进入聊天页时调用）
+function syncWithDesktopState() {
+  api('/api/sync/state').then(r => {
+    if (r.active && r.session_id) {
+      if (wsStreamEl || state.selfStreaming) return;
+      handleSyncState(r);
+    } else if (!state.selfStreaming) {
+      // 桌面端无活跃流：恢复发送按钮
+      state.isLoading = false;
+      setChatBusy(false);
+    }
+  }).catch(() => {});
 }
 
 // 处理桌面端对话事件，实时更新移动端 UI
@@ -514,6 +530,8 @@ function handleChatEvent(ev) {
       state.sessionId = newSessionId;
       wsThinking = '';
       wsContent = '';
+      state.isLoading = true;
+      setChatBusy(true);
 
       // 如果是同一个会话的新消息，先加载历史再追加流式内容
       if (newSessionId && newSessionId === prevSessionId) {
@@ -577,6 +595,8 @@ function handleChatEvent(ev) {
       }
       wsThinking = '';
       wsContent = '';
+      state.isLoading = false;
+      setChatBusy(false);
       // 刷新会话列表
       loadSessions();
       break;
@@ -590,6 +610,8 @@ function handleChatEvent(ev) {
       }
       wsThinking = '';
       wsContent = '';
+      state.isLoading = false;
+      setChatBusy(false);
       break;
 
     case 'tool_call':
@@ -1346,11 +1368,19 @@ function updateStreaming(el, content, thinking, final) {
 
 function toggleThinking(el) { const c = el.nextElementSibling; if (c) { c.classList.toggle('hidden'); el.textContent = el.textContent.includes('▼') ? el.textContent.replace('▼', '▲') : el.textContent.replace('▲', '▼'); } }
 
+// 发送/停止按钮状态：busy=true 显示停止按钮，false 恢复发送按钮
+function setChatBusy(busy) {
+  const send = document.getElementById('sendBtn');
+  const stop = document.getElementById('stopBtn');
+  if (send) send.classList.toggle('hidden', busy);
+  if (stop) stop.classList.toggle('hidden', !busy);
+}
+
 let currentStreamEl = null, abortCtrl = null;
 async function sendMessage(text) {
   if (!text.trim() || state.isLoading) return;
   const input = document.getElementById('msgInput'); input.value = ''; input.style.height = 'auto';
-  state.isLoading = true; document.getElementById('sendBtn').classList.add('hidden'); document.getElementById('stopBtn').classList.remove('hidden');
+  state.isLoading = true; setChatBusy(true);
   state.selfStreaming = true; // 自己发消息期间屏蔽 WS 通道（同一事件流会经 WS 全局广播重复推送）
   addMessage('user', text);
   currentStreamEl = addMessage('assistant', '思考中...', '', true);
@@ -1404,11 +1434,11 @@ async function sendMessage(text) {
     }
   }
   if (currentStreamEl) { currentStreamEl.dataset.streaming = ''; currentStreamEl = null; }
-  state.isLoading = false; document.getElementById('sendBtn').classList.remove('hidden'); document.getElementById('stopBtn').classList.add('hidden'); abortCtrl = null;
+  state.isLoading = false; setChatBusy(false); abortCtrl = null;
   state.selfStreaming = false;
 }
 
-function stopChat() { if (abortCtrl) abortCtrl.abort(); if (state.isLoading) { state.isLoading = false; document.getElementById('sendBtn').classList.remove('hidden'); document.getElementById('stopBtn').classList.add('hidden'); if (state.sessionId) api('/api/chat/cancel', { method: 'POST', body: { session_id: state.sessionId } }).catch(()=>{}); } }
+function stopChat() { if (abortCtrl) abortCtrl.abort(); if (state.isLoading) { state.isLoading = false; setChatBusy(false); if (state.sessionId) api('/api/chat/cancel', { method: 'POST', body: { session_id: state.sessionId } }).catch(()=>{}); } }
 
 // ═══════════ 会话 ═══════════
 async function loadSessions() { if (!state.novelId) return; try { const r = await api(`/api/sessions?novel_id=${state.novelId}&page=1&size=20`); state.sessions = r.items || []; } catch (_) {} }

@@ -77,6 +77,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const compressingRef = useRef(false)
   const activeCountRef = useRef(0)
+  // 移动端（API 模式）对话同步：活跃状态 + 活跃会话（供停止按钮取消正确会话）
+  const [apiStreaming, setApiStreaming] = useState(false)
+  const apiActiveRef = useRef<{ turnId: number | null; sessionId: string | null }>({ turnId: null, sessionId: null })
   const [showSettings, setShowSettings] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<string | null | undefined>(undefined)
   const [sessions, setSessions] = useState<app.SessionMeta[]>([])
@@ -190,6 +193,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       data?: string
       error?: string
       tool_name?: string
+      text?: string
+      session_id?: string
     }
     // 跟踪当前正在构建的 streaming turn
     const apiStreamRef: {
@@ -204,6 +209,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       if (!novelId) return
       if (ev.type === 'started') {
         apiStreamRef.turnId = ev.turn_id
+        apiStreamRef.sessionId = ev.session_id || null
+        apiActiveRef.current = { turnId: ev.turn_id, sessionId: ev.session_id || null }
+        setApiStreaming(true)
         apiStreamRef.content = ''
         apiStreamRef.thinking = ''
         apiStreamRef.toolName = ''
@@ -219,10 +227,54 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         })
         return
       }
-      // 更新最后一个 streaming turn 的 segments
+      // 移动端对话完成：结束 turn 状态，恢复发送按钮
+      if (ev.type === 'done') {
+        const turnId = apiStreamRef.turnId
+        if (ev.text) apiStreamRef.content = ev.text
+        apiStreamRef.toolName = ''
+        apiActiveRef.current = { turnId: null, sessionId: null }
+        setApiStreaming(false)
+        setTurns(prev => prev.map(t =>
+          t.id === `api-${turnId}`
+            ? {
+                ...t,
+                status: 'done' as const,
+                segments: t.segments.map(s =>
+                  s.type === 'text'
+                    ? { ...s, content: ev.text || s.content, thinkingDone: true, isStreaming: false }
+                    : s
+                ),
+              }
+            : t
+        ))
+        return
+      }
+      // 移动端对话出错：结束 turn 状态，恢复发送按钮
+      if (ev.type === 'error') {
+        const turnId = apiStreamRef.turnId
+        apiActiveRef.current = { turnId: null, sessionId: null }
+        setApiStreaming(false)
+        setTurns(prev => prev.map(t =>
+          t.id === `api-${turnId}`
+            ? {
+                ...t,
+                status: 'failed' as const,
+                errorMessage: ev.error || '未知错误',
+                segments: t.segments.map(s =>
+                  s.type === 'text'
+                    ? { ...s, thinkingDone: true, isStreaming: false }
+                    : s
+                ),
+              }
+            : t
+        ))
+        return
+      }
+      // 更新 streaming turn 的 segments
       setTurns(prev => {
-        if (prev.length === 0) return prev
-        const last = prev[prev.length - 1]
+        const idx = prev.findIndex(t => t.id === `api-${apiStreamRef.turnId}`)
+        if (idx < 0) return prev
+        const last = prev[idx]
         if (last.status !== 'streaming') return prev
         const segments: TurnSegment[] = []
 
@@ -252,7 +304,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
             type: 'text' as const,
             content: apiStreamRef.content,
             thinkingContent: apiStreamRef.thinking,
-            thinkingDone: ev.type === 'done',
+            thinkingDone: ev.type === 'thinking_done',
             isStreaming: ev.type === 'content',
             toolName: '', toolId: '', toolStatus: 'completed' as const,
             displayText: '', activityKind: '', error: '',
@@ -273,19 +325,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           })
         }
 
-        // 错误段
-        if (ev.type === 'error') {
-          segments.push({
-            id: `api-err-${Date.now()}`,
-            type: 'text',
-            content: '',
-            thinkingContent: '', thinkingDone: false, isStreaming: false,
-            toolName: '', toolId: '', toolStatus: 'completed',
-            displayText: '', activityKind: '', error: ev.error || '未知错误',
-          })
-        }
-
-        return prev.map((t, i) => i === prev.length - 1 ? { ...t, segments } : t)
+        return prev.map((t, i) => i === idx ? { ...t, segments } : t)
       })
       return
     })
@@ -1348,7 +1388,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
       <ChatInput
         disabled={!hasNovel || !selectedKey}
-        isLoading={isLoading}
+        isLoading={isLoading || apiStreaming}
         placeholder={inputPlaceholder}
         slashItems={slashCommands}
         onSend={handleSend}
@@ -1359,7 +1399,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
               ? { ...t, status: 'stopped' as const }
               : t
           ))
-          app.CancelChat(sessionId)
+          // 移动端对话进行中时，取消移动端的会话；否则取消桌面端当前会话
+          app.CancelChat(apiActiveRef.current.sessionId || sessionId)
         }}
       />
 
