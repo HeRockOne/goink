@@ -8,8 +8,8 @@ const BUILTIN_THEMES = ['light', 'dark'] as const
 export type Theme = (typeof BUILTIN_THEMES)[number]
 type ActiveTheme = Theme | `custom:${string}`
 
-export type Finish = 'plain' | 'aura' | 'glass' | 'paper'
-const FINISHES: Finish[] = ['plain', 'aura', 'glass', 'paper']
+export type Finish = 'plain' | 'aura' | 'glass'
+const FINISHES: Finish[] = ['plain', 'aura', 'glass']
 
 export interface CustomThemeData {
   name: string

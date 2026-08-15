@@ -354,20 +354,6 @@
   --panel-edge: inset 1px 0 0 color-mix(in oklch, var(--primary) 18%, transparent), -1px 0 16px rgb(0 0 0 / 0.2);
 }
 
-/* 暖纸：纸纹 + 柔和阴影 + 弱辉光 */
-[data-finish="paper"] {
-  --bg-layer-grad: linear-gradient(180deg, var(--background) 0%, color-mix(in oklch, var(--background) 94%, var(--primary)) 100%);
-  --glow: color-mix(in oklch, var(--primary) 15%, transparent);
-  --glow-strong: color-mix(in oklch, var(--primary) 32%, transparent);
-  --fin-shadow-sm: 0 1px 1px rgb(0 0 0 / 0.05), 0 1px 2px rgb(0 0 0 / 0.04);
-  --fin-shadow-md: 0 4px 10px rgb(0 0 0 / 0.07), 0 2px 3px rgb(0 0 0 / 0.05);
-  --fin-shadow-lg: 0 10px 24px rgb(0 0 0 / 0.1), 0 4px 8px rgb(0 0 0 / 0.06);
-  --fin-shadow-xl: 0 16px 40px rgb(0 0 0 / 0.14), 0 6px 14px rgb(0 0 0 / 0.08);
-  --panel-shadow: var(--fin-shadow-md);
-  --editor-shadow: 0 20px 80px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.1), 0 2px 6px rgb(0 0 0 / 0.06);
-  --fin-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.05' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23p)' opacity='0.18'/%3E%3C/svg%3E");
-}
-
 /* 低性能模式：关闭毛玻璃/纹理，阴影降一档（设置 → 质感） */
 [data-low-fx="1"] {
   --fin-glass: 0px;
@@ -845,15 +831,16 @@ body {
   border-right: 1px solid var(--border);
 }
 
-/* 画布容器：点阵网格（8px 吸附可视化） */
+/* 画布容器：实色底（不透明，防背景层透出）+ 点阵网格（8px 吸附可视化） */
 .narrative-content {
   flex: 1;
   overflow: auto;
   position: relative;
   min-height: 0;
   background:
-    radial-gradient(circle, var(--narrative-card-border) 1px, transparent 1px);
-  background-size: 16px 16px;
+    radial-gradient(circle, var(--narrative-card-border) 1px, transparent 1px),
+    var(--background);
+  background-size: 16px 16px, auto;
 }
 
 /* 画布卡片：毛玻璃 + 1px 细边框 + 顶部渐变线 + 发光交互 */

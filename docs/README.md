@@ -60,6 +60,7 @@
 > 2026-08-15：二维码改回移动端页面完整 URL（http(s)://ip:port/mobile/?token=xxx）——goink:// 自定义协议在系统相机/浏览器扫码时无 handler 无法连接；URL 格式让系统扫码直接打开页面，页面 JS 自动写入令牌（replaceState 清理地址栏），应用内扫码同解析，兼容 goink:// 与纯令牌旧码。
 > 2026-08-15：自定义主题质感层接管（修"自定义主题辣鸡"）——根因：--bg-layer-grad（全窗口背景渐变）与 --glow/--glow-strong（辉光）不随自定义主题派生，残留内置太虚青蓝调，与新配色打架。修复：index.css [data-theme^="custom:"] 兜底块补派生（primary 渐变 + 主色透明度发光，旧主题/手填 JSON 全部生效）；generateTheme 同步输出 3 键（71→74，themeColors.test.ts 同步）。
 > 2026-08-15：质感体系（finish）落地——四预设 plain/aura（氛围光：多光源渐变+主色调投影+噪点）/glass（局部毛玻璃）/paper（纸纹）；--fin-shadow-*/--fin-glass-*/--fin-texture token，Tailwind v4 @theme inline 把 shadow-*/backdrop-blur-* 工具类映射到 token（组件零改动，72 处组件阴影接入）；低性能模式开关（关 blur/纹理+阴影降档）；自定义主题 JSON 支持 finish 字段；theme-system.md 新增「八、质感体系」。
+> 2026-08-15：质感体系收敛 + 叙事画布实底——① 去除 paper（暖纸）预设（CSS/类型/UI/文档四删，存量 finish=paper 自动回退 plain）；② 动态叙事面板画布 .narrative-content 背景从"纯点阵网格透明底"改为 var(--background) 实色底 + 点阵网格（防 bg-layer 渐变透出，glass 预设下也不透明）。
 
 ## tools/ — 验证工具（可运行）
 

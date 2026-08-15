@@ -7,7 +7,6 @@ const FINISH_OPTIONS: { value: Finish; label: string; desc: string }[] = [
   { value: 'plain', label: '纯净', desc: '实色面板 + 中性阴影，最省性能' },
   { value: 'aura', label: '氛围光', desc: '多光源渐变 + 主色调投影 + 辉光 + 噪点' },
   { value: 'glass', label: '玻璃', desc: '面板半透明毛玻璃 + 细描边（局部 blur）' },
-  { value: 'paper', label: '暖纸', desc: '纸纹纹理 + 柔和阴影 + 弱辉光' },
 ]
 
 function validateJSON(text: string): { ok: true; data: CustomThemeData } | { ok: false; error: string } {
