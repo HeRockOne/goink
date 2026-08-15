@@ -521,6 +521,12 @@ function handleChatEvent(ev) {
     console.log('[Chat] 非聊天页面，忽略');
     return;
   }
+  // 会话隔离：WS 广播含多会话事件，非当前会话的一律忽略（桌面端多个会话并发时
+  // 流式事件会混入；started 是会话切换信号，不过滤）
+  if (ev.type !== 'started' && ev.session_id && state.sessionId && ev.session_id !== state.sessionId) {
+    console.log('[Chat] 其他会话事件，忽略', ev.type, ev.session_id, state.sessionId);
+    return;
+  }
 
   switch (ev.type) {
     case 'started': {

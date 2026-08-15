@@ -218,7 +218,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         apiStreamRef.toolName = ''
         setTurns(prev => {
           const newTurn: Turn = {
-            id: `api-${ev.turn_id}`,
+            id: `api-${ev.session_id || apiStreamRef.sessionId || '?'}:${ev.turn_id}`,
             turnId: ev.turn_id,
             userMessage: ev.message || '',
             segments: [],
@@ -238,7 +238,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           setApiStreaming(false)
         }
         setTurns(prev => prev.map(t =>
-          t.id === `api-${tid}`
+          t.id === `api-${ev.session_id || apiStreamRef.sessionId || '?'}:${tid}`
             ? {
                 ...t,
                 status: 'done' as const,
@@ -260,7 +260,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           setApiStreaming(false)
         }
         setTurns(prev => prev.map(t =>
-          t.id === `api-${tid}`
+          t.id === `api-${ev.session_id || apiStreamRef.sessionId || '?'}:${tid}`
             ? {
                 ...t,
                 status: 'failed' as const,
@@ -277,7 +277,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }
       // 更新 streaming turn 的 segments
       setTurns(prev => {
-        const idx = prev.findIndex(t => t.id === `api-${ev.turn_id}`)
+        const idx = prev.findIndex(t => t.id === `api-${ev.session_id || apiStreamRef.sessionId || '?'}:${ev.turn_id}`)
         if (idx < 0) return prev
         const last = prev[idx]
         if (last.status !== 'streaming') return prev
@@ -1039,7 +1039,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       ))
 
       agentUnsubRef.current?.()
-      const agentCleanup = EventsOn(`agent:${data.turn_id}`, handleAgentEvent(data.turn_id))
+      // 事件名带 session_id：turn_id 按会话独立递增，并发会话会碰撞，
+      // 不带 session 前缀时两个会话的事件都发到 agent:{turnID} 互相串扰
+      const agentCleanup = EventsOn(`agent:${data.session_id}:${data.turn_id}`, handleAgentEvent(data.turn_id))
       agentUnsubRef.current = agentCleanup
     })
     startedUnsubRef.current = startedCleanup

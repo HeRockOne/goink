@@ -48,6 +48,7 @@ type WritingContext struct {
 	Chapter         WritingChapter          `json:"chapter"`
 	RecentChapters  []WritingChapterBrief   `json:"recent_chapters"`
 	Characters      []WritingCharacterBrief `json:"characters"`
+	DeadCharacters  []string                `json:"dead_characters,omitempty"` // 已死亡角色名单（写时防死者复出，醒目聚合）
 	ActiveArcs      []WritingArcBrief       `json:"active_arcs"`
 	Timeline        WritingTimeline         `json:"timeline"`
 	Reader          WritingReader           `json:"reader"`
@@ -241,8 +242,12 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		a.db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chars)
 	}
 	var charBriefs []WritingCharacterBrief
+	var deadNames []string
 	for _, c := range chars {
 		cb := WritingCharacterBrief{ID: c.ID, Name: c.Name, Status: c.Status, Desc: c.Description}
+		if c.Status == "dead" {
+			deadNames = append(deadNames, c.Name)
+		}
 		if c.LocationID != nil {
 			var l location.Location
 			if a.db.WithContext(ctx).First(&l, *c.LocationID).Error == nil {
@@ -494,6 +499,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		Chapter:         ch,
 		RecentChapters:  recent,
 		Characters:      charBriefs,
+		DeadCharacters:  deadNames,
 		ActiveArcs:      arcBriefs,
 		Timeline:        tl,
 		Reader: WritingReader{

@@ -37,9 +37,9 @@ next: write
 <!-- phase-gate-config
 mode: single
 phase: write
-tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_item_occurrence, update_writing_snapshot
+tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_item_occurrence, update_writing_snapshot, check_story_consistency
 edit_paths: chapters/*
-require: edit, get_chapter_list, read
+require: edit, get_chapter_list, read, check_story_consistency
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
 next: review
 -->
@@ -94,9 +94,9 @@ next: write
 <!-- phase-gate-config
 mode: batch
 phase: write
-tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, web_search, web_fetch, set_phase, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, check_story_consistency
 edit_paths: chapters/*
-require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, check_story_consistency
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
 next: review
 loop: true

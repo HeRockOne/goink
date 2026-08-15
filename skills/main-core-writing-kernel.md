@@ -30,9 +30,11 @@ mode: always
 > **批量质量节奏（每 3 章自检 + 批末全批审稿）**：
 > - **每 3 章自检（三章一轮，不积攒，一致性 + 文笔双向）**：write 循环中每写 3 章停笔自检一次——
 >   **一致性（重点）**：调 get_characters / get_timeline / get_writing_snapshot 读取角色状态、伏笔台账、
->   写作快照，对照最近 3 章正文检查设定矛盾（角色状态不符、时间线错乱、伏笔状态矛盾、章节衔接断裂、
->   重复内容）——AI 写作常见翻车是"前文死了的角色后文又出现、战力/地点错乱"（注意力衰减 + 遗忘机制的
->   产物），普通读者抓不住文笔，但设定矛盾一眼穿帮；**文笔（次重点）**：read main-tech-revision-pass 与
+>   写作快照，**并调 check_story_consistency（current_chapter=当前章号）做程序化核对**（四类 SQL：
+>   伏笔超期/角色断档/物品冲突/死者复出），对照最近 3 章正文检查设定矛盾（角色状态不符、时间线错乱、
+>   伏笔状态矛盾、章节衔接断裂、重复内容）——AI 写作常见翻车是"前文死了的角色后文又出现、战力/地点
+>   错乱"（注意力衰减 + 遗忘机制的产物），普通读者抓不住文笔，但设定矛盾一眼穿帮；
+>   **文笔（次重点）**：read main-tech-revision-pass 与
 >   sub-tech-anti-ai-grade 检查最近 3 章节奏、AI 味。发现问题立即 edit 修复，不攒到批末。
 >   自检不调 run_subagent（那是批末的事），不 set_phase。
 > - **批末审稿覆盖全批**：整批写完进入 review 阶段后，run_subagent 审读**本批全部 N 章**
@@ -127,6 +129,10 @@ mode: always
 4. **edit**(chapters/NNN.md)（required）— 写正文
 5. 校验字数（2500-4000，以设置中 min/max 为准，get_chapter_list 代码校验；默认下限 2500）
 6. 记录关键物品出现 → create_item_occurrence
+6.5. **check_story_consistency**（required）— 写完立即程序化核对（current_chapter=本章章号）：四类硬错误
+   （伏笔超期/角色断档/物品冲突/死者复出）由 SQL 实证输出，发现错误立即定位修复，修复后重跑核对直到
+   通过——门禁 require 强制，不核对无法转出 review（写时把关，不等审稿阶段才发现设定硬伤；
+   get_writing_context 的 dead_characters 名单写作前就要记住，死者不得复出）
 7. **set_phase("review")**
 
 ### review

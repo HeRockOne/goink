@@ -63,6 +63,8 @@
 > 2026-08-15：质感体系收敛 + 叙事画布实底——① 去除 paper（暖纸）预设（CSS/类型/UI/文档四删，存量 finish=paper 自动回退 plain）；② 动态叙事面板画布 .narrative-content 背景从"纯点阵网格透明底"改为 var(--background) 实色底 + 点阵网格（防 bg-layer 渐变透出，glass 预设下也不透明）。
 > 2026-08-16：重建"太虚·夜"示例主题 JSON——消除与内置 dark 的漂移（--card 0.72→0.6、--sidebar 0.78→rgba(13,20,32,0.82)、--sidebar-accent 蓝调→rgba(17,27,43,0.6)、--reader-paper #121a28→#111827）；删除已移除特效系统的 effects 遗留字段；补全 chart/usage/narrative/editor/bubble-ai 等扩展 token；新增 finish: "aura" 字段（质感层变量留空走派生，不锁死质感预设）。
 > 2026-08-16：门禁并发清理 + 批量配置审查——① 删 Agent.phaseGate/phaseGateMu/getPG/setPG 死代码（pg 已 Run 局部化，共享字段残留零调用）；② 删 RunSubAgent 的 pg 参数与 savedPhaseGate 残留（子代理不受门禁管，参数从未使用）；③ 批量门禁配置审查：write require 含 miniMaintain 六件套（create_scene/update_character/create_timeline_entry/update_timeline_entry/create_item_occurrence/update_writing_snapshot）+ loop 循环 + 每章 set_phase("write") 字数校验提醒；观察点（不动）：batch write require 按阶段累计不按章，第 2-N 章 miniMaintain 靠软约束。
+> 2026-08-16：事件通道会话隔离（并发串台真修复）——turn_id 按会话独立递增会碰撞，桌面端 agent:{turnID} 事件名改 agent:{sessionID}:{turnID}（agent.go + ChatPanel 订阅同步）；chat:api_event 全事件补 session_id（chat.go EventCallback + done 事件）；桌面端 api 回合 id 改 api-{session}:{turn}；移动端 WS 按 ev.session_id 过滤非当前会话事件（started 切换信号除外）。
+> 2026-08-16：写时把关落地——① get_writing_context 新增 dead_characters 聚合字段（status=dead 角色名，写前防死者复出，工具描述同步）；② 门禁 single+batch write 转出 require 加 check_story_consistency（写完必须 SQL 实证核对四类硬错误才能进 review，current_chapter 必填防敷衍，default_phase_gate_config.go + 门禁配置示例.md 同步）；③ kernel（skills/+builtin+~/.goink/skills 三处同步）write 段加"写完核对"步骤、批量每 3 章自检加 check_story_consistency。
 
 ## tools/ — 验证工具（可运行）
 

@@ -398,7 +398,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	a.prefixHash[opts.SessionID] = prefixHash
 	a.prefixHashMu.Unlock()
 
-	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
+	// Wails 事件名带 session_id：turn_id 按会话独立递增，并发会话会碰撞，
+	// 不带 session 前缀时两个会话的事件都发到同一个 agent:{turnID} 通道互相串扰。
+	agentEventName := "agent:" + opts.SessionID + ":" + strconv.Itoa(opts.TurnID)
 	eventSeq := opts.EventSeq
 	if eventSeq == nil {
 		seq := 0

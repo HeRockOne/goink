@@ -302,11 +302,12 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 	if eventCallback != nil {
 		runOpts.EventCallback = func(event agent.AgentEvent) {
 			ev := map[string]any{
-				"type":      eventTypeString(event.Type),
-				"turn_id":   event.TurnID,
-				"data":      event.Data,
-				"error":     event.ErrMsg,
-				"tool_name": event.ToolName,
+				"type":       eventTypeString(event.Type),
+				"turn_id":    event.TurnID,
+				"session_id": sess.SessionID,
+				"data":       event.Data,
+				"error":      event.ErrMsg,
+				"tool_name":  event.ToolName,
 			}
 			if event.PhaseGate != nil {
 				ev["phase_gate"] = event.PhaseGate
@@ -356,7 +357,7 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 	a.ExportToOutputs(input.NovelID, "txt")
 
 	// 12. 发送完成事件
-	emitEvent("done", map[string]any{"turn_id": turnID, "text": result.FinalText})
+	emitEvent("done", map[string]any{"turn_id": turnID, "session_id": sess.SessionID, "text": result.FinalText})
 
 	// API 模式（移动端对话）结束后，通过 Wails 事件通知桌面前端刷新
 	if eventCallback != nil && a.ctx != nil {

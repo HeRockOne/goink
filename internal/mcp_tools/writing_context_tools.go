@@ -41,6 +41,7 @@ func (t *GetWritingContextTool) Description() string {
 		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数, characters_in=本章出场角色ID数组JSON, arc_ids=本章涉及弧线ID数组JSON}]\n" +
 		"scenes[]: 本章场景 [{title, summary, word_count, location={name=地点名, type=地点类型}, arc_node={title=节点标题, arc_name=所属弧线名}}]\n" +
 		"characters[]: 出场角色 [{name, status=角色状态(alive/dead/missing/unknown，dead=已死亡不得出场), location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
+		"dead_characters[]: 已死亡角色名单（status=dead 的聚合，写作时严禁让其中任何角色再次出场/说话/被提及为在场）\n" +
 		"active_arcs[]: 活跃弧线 [{name, type_zh=类型中文(主线/支线/角色弧/背景), nodes_done=已完成节点数, nodes_total=总节点数, related_lore=[关联设定ID], related_items=[关联物品ID]}]\n" +
 		"global_lore[]: 全局设定索引（arc_id 为空、跨弧线根基设定，如修炼体系/势力格局/天道法则）[{id, name}]——写作用到这些设定时用 get_lore 取详情\n" +
 		"timeline.pending[]: 待回收伏笔 [{title, category=foreshadowing/user_directive, target_chapter=目标回收章节, importance=重要度1-5}]\n" +
