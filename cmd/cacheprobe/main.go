@@ -20,7 +20,9 @@ func main() {
 	cachePrice := flag.Float64("cache", 0.02, "缓存命中价格（元/百万 token）")
 	inputPrice := flag.Float64("input", 1.0, "输入（未命中）价格（元/百万 token）")
 	outputPrice := flag.Float64("output", 2.0, "输出价格（元/百万 token）")
+	firstHit := flag.Float64("firsthit", cacheprobe.SimFirstHitRatio, "首轮固定前缀被动缓存命中率（0-1，mimo 实测 0.84，DeepSeek 可设 0）")
 	flag.Parse()
+	cacheprobe.SimFirstHitRatio = *firstHit
 
 	args := flag.Args()
 	if len(args) > 0 && args[0] == "matrix" {

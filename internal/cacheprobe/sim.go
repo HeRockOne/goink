@@ -347,6 +347,12 @@ func (c *TokenCache) markWindow(total int64) {
 	}
 }
 
+// SimFirstHitRatio 首轮固定前缀（tools + 系统消息）的服务端被动缓存命中率。
+// 真机实测（mimo-v2.5 批量 5 章，2026-08-16）：首轮输入 34.3K 命中 28.7K（83.7%）——
+// MiniMax 对固定字节前缀有服务端被动缓存；DeepSeek 磁盘缓存首轮通常不命中，
+// 用 -firsthit 0 恢复保守口径。默认 0.84 贴近真机（模拟主要服务 mimo 场景）。
+var SimFirstHitRatio = 0.84
+
 func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64, int64) {
 	transformed := false
 	if applyTransform && c.transform != nil {
@@ -367,6 +373,25 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 			c.MissByCat["fixed"] += toolsN
 		}
 		c.miss += total
+		// 首轮固定前缀被动缓存建模（真机 mimo 实测 ~84%）：fixed 类消息与 tools 部分命中。
+		// 只影响首轮 ~30K，对长会话影响 <0.1%，对短场景（单章 1 轮/批量首轮）显著。
+		hitPart := int64(0)
+		if SimFirstHitRatio > 0 {
+			var fixedN int64
+			if c.missCat != nil {
+				for _, m := range messages {
+					if c.missCat(m) == "fixed" {
+						fixedN += int64(msgTokens(m))
+					}
+				}
+			}
+			hitPart = int64(float64(fixedN+toolsN) * SimFirstHitRatio)
+			c.hit += hitPart
+			c.miss -= hitPart
+			if c.missCat != nil {
+				c.MissByCat["fixed"] -= hitPart
+			}
+		}
 		c.reqCount++
 		c.lastTotal = total
 		c.markWindow(total)
@@ -374,7 +399,7 @@ func (c *TokenCache) step(messages []map[string]any, applyTransform bool) (int64
 		c.prevMsgs = append([]map[string]any{}, messages...)
 		c.prevMsgsN = msgsN
 		c.prevMsgEnd = len(reqBytes) - len(requestTail)
-		return 0, total
+		return hitPart, total - hitPart
 	}
 
 	// 与真实 buildPayload 一致：完整请求体字节用于连续性判定
