@@ -68,6 +68,7 @@
 > 2026-08-16：会话历史删除后最近会话列表不刷新（ChatPanel.sessions 是 RecentSessions 数据源，SessionHistory 删除只刷新自身列表）——新增 onDeleted 回调（SessionHistory deleteSelected 成功后触发）+ ChatPanel refreshSessions，删除后立即同步最近会话。
 > 2026-08-16：cacheprobe 同步写时把关（建模镜随业务更新）——write 段 plays 补 check_story_consistency（writeBodyPlays 一处覆盖 single+batch 全部章，current_chapter 参数，结果 ~1K token），消除"门禁 require 已加但模拟器未建模"的成本低估漂移。
 > 2026-08-16：cacheprobe miss 构成审计修复（update 45.9% 异常）——根因：8/9 阶段技能改系统注入（auto-inject）后，模拟器 plays 的 auto_skill_injection 工具调用残留（read_required 改名后 filterReadRequired/各过滤点条件未同步），技能全文被重复计数。修复：filterReadRequired 及全部过滤点匹配 auto_skill_injection（sim.go 5 处 + api.go 6 处 + 测试 5 处）、批量路径（buildBatchWithRounds/buildBatchLoopCompress）补过滤、missCatOf 按工具名分类（正文不再混入 outline）。修正后全场景 miss 降 8-23%（单章 1 轮 135.9K→93.3K、批量 5 章×2批 227.8K→175.1K）；README 表更新。遗留：批量查询 miss 随章数暴涨为真实行为（get_chapter_list 每章 2 次真实返回全量列表 + check_story_consistency），优化空间 = get_chapter_list 字数校验不需要摘要字段。
+> 2026-08-16：批量查询 miss 随章数暴涨根因修正（用户质疑"写了 100 章就查 100 章？"）——**是模拟器失真非真实行为**：get_chapter_list 工具真实业务支持分页且描述强制"检查字数用 size=1"，但模拟器 plays 传 `{}` → 真实执行按默认 size=50 返回全量列表（含摘要）→ 查询 miss 随章数线性暴涨。修复：plays 全部 get_chapter_list 补 size 参数（prepare size=5 浏览、字数校验 size=1）。修正后批量 60 章成本 ¥4.54→¥1.78（-61%），批量每章成本随章数摊薄至 ~¥0.030 不再爆炸；README 表二次更新。
 
 ## tools/ — 验证工具（可运行）
 

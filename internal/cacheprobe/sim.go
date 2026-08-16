@@ -1661,7 +1661,7 @@ func gateScript(turn int) []play {
 func preparePlays(ch int) []play {
 	return []play{
 		{tool: "get_writing_context", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: longContext(ch)},
-		{tool: "get_chapter_list", args: `{}`, result: chapterList(ch)},
+		{tool: "get_chapter_list", args: `{"size":5}`, result: chapterList(ch)},
 		{tool: "get_characters", args: `{"brief":true}`, result: `{"characters":[{"id":1,"name":"陈昊","desc":"主角","location_id":3},{"id":2,"name":"林雪","desc":"师姐","location_id":3}]}`},
 		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
 		{tool: "get_story_arcs", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"arcs":[{"id":1,"name":"登天之路","type_zh":"主线","nodes_done":2,"nodes_total":10}]}`},
@@ -1723,9 +1723,9 @@ func writeBodyPlays(ch int) []play {
 		})
 	}
 	plays = append(plays,
-		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simMinWords-100, false)},
+		play{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(ch, simMinWords-100, false)},
 		play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: fmt.Sprintf("补写 400 字，当前 %d/%d", target, target)},
-		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, target, true)},
+		play{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(ch, target, true)},
 		play{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
 		// 写时把关（2026-08-16 门禁 require 新增）：write 转出前必须 check_story_consistency
 		// 程序化核对四类硬错误（伏笔超期/角色断档/物品冲突/死者复出），current_chapter 必填
@@ -1770,7 +1770,7 @@ func reviewPlays(ch int) []play {
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：调整对话节奏，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：前文伏笔在此回收，强化悬念。"), result: "已修复问题 2"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "修改：删减冗余描写，收紧节奏。"), result: "已修复问题 3"},
-		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, simChapterTarget[ch-1], true)},
+		{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(ch, simChapterTarget[ch-1], true)},
 		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
 	}
 }
@@ -1965,7 +1965,7 @@ func reviewPlaysBatch(chapters int) []play {
 		)
 	}
 	plays = append(plays,
-		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chapters, simChapterTarget[chapters-1], true)},
+		play{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(chapters, simChapterTarget[chapters-1], true)},
 	)
 	return plays
 }
@@ -1982,7 +1982,7 @@ func batchCheckPlays(chStart, chEnd int) []play {
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：调整对话节奏，去除 AI 味，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：伏笔衔接，强化章末悬念。"), result: "已修复问题 2"},
-		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
+		{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
 		{tool: "set_phase", args: `{"phase":"write"}`, result: `{"success":true,"phase":"write"}`},
 	}
 }
@@ -1999,7 +1999,7 @@ func batchFullCheckPlays(chStart, chEnd int) []play {
 		{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, chEnd), result: chapterBodies[chEnd-1][0] + chapterBodies[chEnd-1][1]},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：调整对话节奏，去除 AI 味，补充情绪铺垫。"), result: "已修复问题 1"},
 		{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", chEnd), "批次检查修复：伏笔衔接，强化章末悬念。"), result: "已修复问题 2"},
-		{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
+		{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(chEnd, simChapterTarget[chEnd-1], true)},
 		{tool: "set_phase", args: `{"phase":"maintain"}`, result: `{"success":true,"phase":"maintain"}`},
 	}
 	// 该批状态结算（maintain 13 项），出口 set_phase("write") 回写
