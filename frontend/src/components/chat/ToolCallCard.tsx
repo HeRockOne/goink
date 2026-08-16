@@ -4,6 +4,14 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import './ToolCallCard.css'
 
+// ToolCallDetail 合并卡片中被合并的单个调用明细（展开查看）。
+export interface ToolCallDetail {
+  displayText: string
+  status: 'executing' | 'awaiting_approval' | 'completed' | 'failed'
+  activityKind?: string
+  error?: string
+}
+
 interface Props {
   toolName: string
   displayText: string
@@ -12,6 +20,7 @@ interface Props {
   error?: string
   compact?: boolean
   count?: number // 合并的并行调用数（>1 显示 ×N）
+  details?: ToolCallDetail[] // 被合并调用的明细（count>1 时可展开查看）
   // approval
   approvalType?: string
   approvalPayload?: Record<string, unknown>
@@ -156,8 +165,9 @@ function ToolErrorDisplay({ error }: { error: string }) {
   )
 }
 
-export default memo(function ToolCallCard({ displayText, status, activityKind, error, compact, count, approvalType, approvalPayload, onApprove, onReject }: Props) {
+export default memo(function ToolCallCard({ displayText, status, activityKind, error, compact, count, details, approvalType, approvalPayload, onApprove, onReject }: Props) {
   const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
 
   // 审批中状态
   if (status === 'awaiting_approval' && onApprove && onReject) {
@@ -184,7 +194,14 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
         <span className="tool-label">{displayText}</span>
 
         {count !== undefined && count > 1 && (
-          <span className="tool-count" title={`${count} 次并行调用`}>×{count}</span>
+          <button
+            className="tool-count cursor-pointer select-none"
+            title={expanded ? '收起调用明细' : '查看调用明细'}
+            onClick={e => { e.stopPropagation(); setExpanded(!expanded) }}
+          >
+            ×{count}
+            {expanded ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+          </button>
         )}
 
         {!isExecuting && (
@@ -193,6 +210,26 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
           </span>
         )}
       </div>
+
+      {/* 合并明细：点击 ×N 展开查看每个并行调用 */}
+      {expanded && details && details.length > 0 && (
+        <div className="tool-details">
+          {details.map((d, i) => {
+            const DI = d.activityKind ? activityIcon(d.activityKind) : Wrench
+            return (
+              <div key={i} className="tool-detail-row">
+                <span className="tool-detail-icon"><DI size={10} /></span>
+                <span className="tool-detail-label">{d.displayText}</span>
+                <span
+                  className={`tool-detail-dot ${d.status === 'failed' ? 'failed' : d.status === 'executing' ? 'executing' : ''}`}
+                  title={d.status}
+                />
+                {d.error && <span className="tool-detail-error">{d.error}</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {isFailed && error && (
         <ToolErrorDisplay error={error} />

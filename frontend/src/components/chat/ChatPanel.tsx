@@ -10,7 +10,7 @@ import ChatInput from './ChatInput'
 import ChatControls from './ChatControls'
 import MessageBubble from './MessageBubble'
 import ThinkingBlock from './ThinkingBlock'
-import ToolCallCard from './ToolCallCard'
+import ToolCallCard, { type ToolCallDetail } from './ToolCallCard'
 import WebSearchCard from './WebSearchCard'
 import WebFetchCard from './WebFetchCard'
 import SubagentCard from './SubagentCard'
@@ -1119,6 +1119,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   // 工具卡片合并计数（每次渲染重建：连续同名同状态 tool 段 → 一张卡 ×N）
   const toolCounts = new Map<string, number>()
   const toolMergeIds = new Set<string>()
+  const toolDetails = new Map<string, ToolCallDetail[]>()
 
 
   const inputPlaceholder = !hasNovel
@@ -1264,6 +1265,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                     {(() => {
                       toolCounts.clear()
                       toolMergeIds.clear()
+                      toolDetails.clear()
                       for (let i = 0; i < turn.segments.length; i++) {
                         const s = turn.segments[i]
                         if (s.type !== 'tool' || s.toolName === 'run_subagent' || s.toolName === 'web_search' || s.toolName === 'web_fetch') continue
@@ -1274,6 +1276,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                         if (mergeable) {
                           toolMergeIds.add(s.id)
                           toolCounts.set(prev.id, (toolCounts.get(prev.id) ?? 1) + 1)
+                          const list = toolDetails.get(prev.id) ?? []
+                          list.push({ displayText: s.displayText, status: s.toolStatus, activityKind: s.activityKind, error: s.error })
+                          toolDetails.set(prev.id, list)
                         } else {
                           toolCounts.set(s.id, 1)
                         }
@@ -1316,6 +1321,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                             activityKind={seg.activityKind}
                             error={seg.error}
                             count={count}
+                            details={toolDetails.get(seg.id)}
                             approvalType={seg.approvalType}
                             approvalPayload={seg.approvalPayload}
                             onApprove={
