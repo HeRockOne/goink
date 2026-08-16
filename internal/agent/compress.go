@@ -85,7 +85,7 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 		"msg_count", len(opts.Messages),
 	)
 
-	a.emitCompression(ctx, opts.TurnID, "compressing", "", "")
+	a.emitCompression(ctx, opts.SessionID, opts.TurnID, "compressing", "", "")
 
 	summary, retained, err := a.generateSummary(ctx, opts)
 	if err != nil {
@@ -141,7 +141,7 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	clear(runningTokens)
 	maps.Copy(runningTokens, newTokens)
 
-	a.emitCompression(ctx, opts.TurnID, "done", summary, "")
+	a.emitCompression(ctx, opts.SessionID, opts.TurnID, "done", summary, "")
 
 	a.logger.Info("上下文压缩完成",
 		"session_id", opts.SessionID,
@@ -163,7 +163,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 		"msg_count", len(opts.Messages),
 	)
 
-	a.emitCompression(ctx, opts.TurnID, "compressing", "", opts.SubTaskID)
+	a.emitCompression(ctx, opts.SessionID, opts.TurnID, "compressing", "", opts.SubTaskID)
 
 	summary, retained, err := a.generateSummary(ctx, opts)
 	if err != nil {
@@ -215,7 +215,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 
 	opts.SubAgentVersion++
 
-	a.emitCompression(ctx, opts.TurnID, "done", summary, opts.SubTaskID)
+	a.emitCompression(ctx, opts.SessionID, opts.TurnID, "done", summary, opts.SubTaskID)
 
 	a.logger.Info("子Agent上下文压缩完成",
 		"session_id", opts.SessionID,
@@ -364,8 +364,9 @@ func apiMsgToMessage(m map[string]any, sessionID string, turnID, version int) *s
 }
 
 // emitCompression 推送压缩事件到前端。
-func (a *Agent) emitCompression(ctx context.Context, turnID int, phase, summary, subTaskID string) {
-	wails.EventsEmit(ctx, "agent:"+strconv.Itoa(turnID), AgentEvent{
+// 事件名带 session_id，与 agent.go emit 保持一致（turn_id 按会话独立递增，不带会话前缀会串台）。
+func (a *Agent) emitCompression(ctx context.Context, sessionID string, turnID int, phase, summary, subTaskID string) {
+	wails.EventsEmit(ctx, "agent:"+sessionID+":"+strconv.Itoa(turnID), AgentEvent{
 		TurnID:           turnID,
 		Type:             EventCompression,
 		CompressionPhase: phase,

@@ -298,7 +298,7 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		runOpts.PhaseMode = "batch"
 	}
 
-	// API 模式需要 EventCallback 转发事件；Wails 模式让 agent.go 自己 emit 到 "agent:${turnID}"
+	// API 模式需要 EventCallback 转发事件；Wails 模式让 agent.go 自己 emit 到 "agent:{sessionID}:{turnID}"
 	if eventCallback != nil {
 		runOpts.EventCallback = func(event agent.AgentEvent) {
 			ev := map[string]any{

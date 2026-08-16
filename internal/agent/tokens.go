@@ -251,7 +251,8 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		return
 	}
 
-	wails.EventsEmit(ctx, "agent:"+strconv.Itoa(opts.TurnID), AgentEvent{
+	// 事件名带 session_id，与 agent.go emit 保持一致（turn_id 按会话独立递增，不带会话前缀会串台）
+	wails.EventsEmit(ctx, "agent:"+opts.SessionID+":"+strconv.Itoa(opts.TurnID), AgentEvent{
 		TurnID:    opts.TurnID,
 		Type:      EventUsage,
 		Usage:     usage,
