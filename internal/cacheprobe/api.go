@@ -509,63 +509,45 @@ func skipReadRequired(mode string) bool { return mode == "auto" || mode == "opt"
 // 再跑目标流程，返回目标部分（增量）成本——历史构建成本不计入（真机中已发生）。
 
 // runInitRounds 开书流程：历史累积，结果丢弃（真机中开书早已发生）。
+// 与 buildGateWithRounds 同路径：runPlays 分组并行（一组最多 10 个工具调用一个请求，
+// 对齐真机 LLM 并行行为——逐 play 串行会把请求数放大 3-5 倍、hit 虚高数倍）。
 func runInitRounds(cache *TokenCache, history *[]map[string]any) {
 	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
 	cur = append(cur, sysMsg(novelState(0)))
 	cur = append(cur, sysMsg(initInject)) // auto：init 必读技能直接注入
-	for i, p := range initScript() {
+	plays := make([]play, 0, len(initScript()))
+	for _, p := range initScript() {
 		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue // auto：init 技能已系统注入，跳过技能读取工具
 		}
-		req := append(append([]map[string]any{}, (*history)...), cur...)
-		cache.Step(req)
-		if p.tool == "set_phase" {
-			simPhase = p.args
-			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
-				cur = append(cur, sysMsg(sk))
-			}
-			cur = appendPhase(cur, p.args, true)
-		}
-		cur = append(cur,
-			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
-			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
-		)
+		plays = append(plays, p)
 	}
+	var discarded [][2]int64
+	cur = runPlays(cache, *history, cur, plays, &discarded, nil, nil, phaseInjectOn)
 	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
 	req := append(append([]map[string]any{}, (*history)...), cur...)
 	cache.Step(req)
 	*history = append(*history, cur...)
 }
 
+// phaseInjectOn auto 模式阶段切换注入回调（与 buildGateWithRounds 的 set_phase 注入一致）。
+func phaseInjectOn(c []map[string]any, phase string) []map[string]any {
+	if sk, ok := phaseInjectSkills[phase]; ok && sk != "" {
+		c = append(c, sysMsg(sk))
+	}
+	return c
+}
+
 // runGateRound 一轮完整单章（auto 模式）：历史累积 + 返回该轮增量结果。
-// turn 与 buildGateWithRounds 语义一致：写第 turn+1 章。
+// turn 与 buildGateWithRounds 语义一致：写第 turn+1 章。runPlays 分组并行。
 func runGateRound(cache *TokenCache, history *[]map[string]any, turn int) [][2]int64 {
 	results := [][2]int64{}
 	cur := []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章，继续推进剧情。", turn+1))}
 	cur = append(cur, sysMsg(novelState(turn)))
-	plays := gateScript(turn)
-	for i, p := range plays {
-		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
-			continue // auto：技能在进入阶段时系统注入
-		}
-		req := append(append([]map[string]any{}, (*history)...), cur...)
-		hit, miss := cache.Step(req)
-		results = append(results, [2]int64{hit, miss})
-		id := fmt.Sprintf("call_t%d_p%d", turn, i)
-		if p.tool == "set_phase" {
-			simPhase = p.args
-			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
-				cur = append(cur, sysMsg(sk))
-			}
-			cur = appendPhase(cur, p.args, true)
-		}
-		cur = append(cur, asstToolCall(id, p.tool, p.args))
-		if p.tool == "run_subagent" {
-			subResults := simulateSubagent(cache, *history, cur, turn)
-			results = append(results, subResults...)
-		}
-		cur = append(cur, toolMsg(id, p.tool, playResult(p)))
-	}
+	cur = runPlays(cache, *history, cur, gateScript(turn), &results,
+		func(subCur []map[string]any) [][2]int64 {
+			return simulateSubagent(cache, *history, subCur, turn)
+		}, nil, phaseInjectOn)
 	cur = append(cur, asstText(finalAssistant(turn)))
 	req := append(append([]map[string]any{}, (*history)...), cur...)
 	hit, miss := cache.Step(req)
@@ -575,34 +557,15 @@ func runGateRound(cache *TokenCache, history *[]map[string]any, turn int) [][2]i
 }
 
 // runBatchRounds 批量流程（auto 模式）：从当前历史继续，返回批量增量结果。
-// baseChapter = 历史轮数（续写批量从 base+1 章起写）。
+// baseChapter = 历史轮数（续写批量从 base+1 章起写）。runPlays 分组并行。
 func runBatchRounds(cache *TokenCache, history *[]map[string]any, chapters, baseChapter int) [][2]int64 {
 	results := [][2]int64{}
 	cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", chapters))}
 	cur = append(cur, sysMsg(novelState(baseChapter)))
-	plays := batchLightEndReviewBase(chapters, baseChapter)
-	for i, p := range plays {
-		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
-			continue
-		}
-		req := append(append([]map[string]any{}, (*history)...), cur...)
-		hit, miss := cache.Step(req)
-		results = append(results, [2]int64{hit, miss})
-		id := fmt.Sprintf("call_b%d_p%d", baseChapter, i)
-		if p.tool == "set_phase" {
-			simPhase = p.args
-			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
-				cur = append(cur, sysMsg(sk))
-			}
-			cur = appendPhase(cur, p.args, true)
-		}
-		cur = append(cur, asstToolCall(id, p.tool, p.args))
-		if p.tool == "run_subagent" {
-			subResults := simulateSubagentChapters(cache, *history, cur, baseChapter+chapters, chapters)
-			results = append(results, subResults...)
-		}
-		cur = append(cur, toolMsg(id, p.tool, playResult(p)))
-	}
+	cur = runPlays(cache, *history, cur, batchLightEndReviewBase(chapters, baseChapter), &results,
+		func(subCur []map[string]any) [][2]int64 {
+			return simulateSubagentChapters(cache, *history, subCur, baseChapter+chapters, chapters)
+		}, nil, phaseInjectOn)
 	cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", chapters)))
 	req := append(append([]map[string]any{}, (*history)...), cur...)
 	hit, miss := cache.Step(req)
