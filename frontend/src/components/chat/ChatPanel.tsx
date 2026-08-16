@@ -18,7 +18,6 @@ import CompressionBlock from './CompressionBlock'
 import RetryNotification from './RetryNotification'
 import type { UsageInfo } from './ContextRing'
 import SettingsDialog from '@/components/settings/SettingsDialog'
-import RecentSessions from './RecentSessions'
 import SessionHistory from './SessionHistory'
 
 interface Props {
@@ -81,9 +80,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const [apiStreaming, setApiStreaming] = useState(false)
   const apiActiveRef = useRef<{ turnId: number | null; sessionId: string | null }>({ turnId: null, sessionId: null })
   const [showSettings, setShowSettings] = useState(false)
-  const [activeSessionId, setActiveSessionId] = useState<string | null | undefined>(undefined)
-  const [sessions, setSessions] = useState<app.SessionMeta[]>([])
-  const [sessionsTotal, setSessionsTotal] = useState(0)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   // 历史消息分页渲染：默认只渲染最近 N 轮，点"加载更早"递增
@@ -150,40 +147,20 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   // 加载会话列表（不自动选中）
   useEffect(() => {
     if (!novelId) return
-    setActiveSessionId(undefined)
+    setActiveSessionId(null)
     setTurns([])
     setSessionId('')
     setSessionTitle('')
-    app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
-      if (r) {
-        setSessions(r.items)
-        setSessionsTotal(r.total)
-      }
-    }).catch((err) => {
-      console.error('Load sessions failed', err)
-    })
   }, [app, novelId])
 
-  // 刷新最近会话列表（会话删除/对话完成后调用，RecentSessions 数据源）
-  const refreshSessions = useCallback(() => {
-    if (!novelId) return
-    app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
-      if (r) {
-        setSessions(r.items)
-        setSessionsTotal(r.total)
-      }
-    }).catch(() => {})
-  }, [app, novelId])
+  // 启动时恢复上次活跃会话（方案 A：重启回到上次聊到一半的会话）。
+  // 仅首次挂载且 last_session_id 属于当前小说时恢复；切小说保持清空行为。
+  const restoredLastSessionRef = useRef(false)
 
-  // 监听移动端对话完成事件，自动刷新会话列表
+  // 监听移动端对话完成事件：当前打开的会话被更新时刷新消息
   useEffect(() => {
     const refreshOnDone = (data: { session_id: string }) => {
       if (!novelId) return
-      // 刷新会话列表
-      app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
-        if (r) setSessions(r.items)
-      }).catch(() => {})
-      // 如果当前打开的会话被更新，刷新消息
       if (activeSessionId === data.session_id) {
         app.GetSessionMessages(data.session_id).then(msgs => {
           if (msgs) setTurns(rebuildTurns(msgs))
@@ -470,17 +447,29 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     }).catch(() => {})
   }, [app, onUsage, models, selectedKey])
 
+  // 启动时恢复上次活跃会话（方案 A：重启回到上次聊到一半的会话）。
+  // 仅首次挂载且 last_session_id 属于当前小说时恢复；切小说保持清空行为。
+  useEffect(() => {
+    if (!novelId || restoredLastSessionRef.current) return
+    restoredLastSessionRef.current = true
+    app.GetSettings().then(s => {
+      const last = s?.last_session_id
+      if (!last) return
+      app.GetSession(last).then(detail => {
+        if (detail && detail.novel_id === novelId) {
+          handleSelectSession(last)
+        }
+      }).catch(() => {})
+    }).catch(() => {})
+  }, [app, novelId, handleSelectSession])
+
   const handleNewChat = useCallback(() => {
     setActiveSessionId(null)
     setTurns([])
     setSessionId('')
+    setSessionTitle('')
     onUsage?.(null)
-    app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
-      if (r) { setSessions(r.items); setSessionsTotal(r.total) }
-    }).catch((err) => {
-      console.error('Refresh sessions failed', err)
-    })
-  }, [novelId, app])
+  }, [])
 
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true)
@@ -1076,12 +1065,6 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         model_id: m,
         reasoning_effort: reasoningEffort,
       })
-      // 刷新会话列表
-      app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
-        if (r) { setSessions(r.items); setSessionsTotal(r.total) }
-      }).catch((err) => {
-        console.error('Post-send refresh sessions failed', err)
-      })
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err)
       setTurns(prev => prev.map(t => {
@@ -1186,9 +1169,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         <SessionHistory
           open={showHistoryPanel}
           novelId={novelId}
+          activeSessionId={activeSessionId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
-          onDeleted={refreshSessions}
         />
       </div>
 
@@ -1209,38 +1192,29 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
             </div>
           </div>
         ) : showRecent ? (
-          sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full px-8 text-center">
-              <MessageSquare className="w-12 h-12 text-muted-foreground/20 mb-4" />
-              <h3 className="text-base font-medium text-foreground mb-2">{t('chat.welcomeTitle')}</h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">{t('chat.welcomeDesc')}</p>
-              <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
-                <div className="rounded-lg border bg-card p-4 text-left">
-                  <p className="text-xs font-medium text-foreground mb-1">📝 {t('chat.hintWrite')}</p>
-                  <p className="text-[11px] text-muted-foreground">{t('chat.hintWriteDesc')}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4 text-left">
-                  <p className="text-xs font-medium text-foreground mb-1">📖 {t('chat.hintCreate')}</p>
-                  <p className="text-[11px] text-muted-foreground">{t('chat.hintCreateDesc')}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4 text-left">
-                  <p className="text-xs font-medium text-foreground mb-1">🌍 {t('chat.hintWorld')}</p>
-                  <p className="text-[11px] text-muted-foreground">{t('chat.hintWorldDesc')}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-4 text-left">
-                  <p className="text-xs font-medium text-foreground mb-1">🔍 {t('chat.hintSearch')}</p>
-                  <p className="text-[11px] text-muted-foreground">{t('chat.hintSearchDesc')}</p>
-                </div>
+          <div className="flex flex-col items-center justify-center h-full px-8 text-center">
+            <MessageSquare className="w-12 h-12 text-muted-foreground/20 mb-4" />
+            <h3 className="text-base font-medium text-foreground mb-2">{t('chat.welcomeTitle')}</h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm leading-relaxed">{t('chat.welcomeDesc')}</p>
+            <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
+              <div className="rounded-lg border bg-card p-4 text-left">
+                <p className="text-xs font-medium text-foreground mb-1">📝 {t('chat.hintWrite')}</p>
+                <p className="text-[11px] text-muted-foreground">{t('chat.hintWriteDesc')}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 text-left">
+                <p className="text-xs font-medium text-foreground mb-1">📖 {t('chat.hintCreate')}</p>
+                <p className="text-[11px] text-muted-foreground">{t('chat.hintCreateDesc')}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 text-left">
+                <p className="text-xs font-medium text-foreground mb-1">🌍 {t('chat.hintWorld')}</p>
+                <p className="text-[11px] text-muted-foreground">{t('chat.hintWorldDesc')}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 text-left">
+                <p className="text-xs font-medium text-foreground mb-1">🔍 {t('chat.hintSearch')}</p>
+                <p className="text-[11px] text-muted-foreground">{t('chat.hintSearchDesc')}</p>
               </div>
             </div>
-          ) : (
-            <RecentSessions
-              sessions={sessions}
-              total={sessionsTotal}
-              onSelectSession={handleSelectSession}
-              onViewAll={handleOpenHistory}
-            />
-          )
+          </div>
         ) : isLoadingHistory ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

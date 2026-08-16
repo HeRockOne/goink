@@ -8,12 +8,13 @@ import { useApp } from '@/hooks/useApp'
 interface Props {
   open: boolean
   novelId: number
+  activeSessionId?: string | null
   onClose: () => void
   onSelectSession: (sessionId: string) => void
   onDeleted?: () => void
 }
 
-export default function SessionHistory({ open, novelId, onClose, onSelectSession, onDeleted }: Props) {
+export default function SessionHistory({ open, novelId, activeSessionId, onClose, onSelectSession, onDeleted }: Props) {
   const { t } = useTranslation()
   const app = useApp()
   const [mounted, setMounted] = useState(false)
@@ -157,7 +158,7 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     setIsDeleting(false)
     setSelectedIds(new Set())
     loadPageRef.current?.(1)
-    // 通知父组件刷新最近会话列表（RecentSessions 数据源在 ChatPanel）
+    // 通知父组件（可选，如父级需要同步其他数据源）
     onDeleted?.()
   }, [selectedIds, app, t, onDeleted])
 
@@ -272,11 +273,11 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
                 </button>
                 <button
                   onClick={() => { onSelectSession(s.session_id); onClose() }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left transition-colors cursor-pointer select-none ${s.session_id === activeSessionId ? 'bg-muted/60' : 'hover:bg-muted/50'}`}
                 >
-                  <MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  <MessageSquare className={`w-4 h-4 shrink-0 ${s.session_id === activeSessionId ? 'text-primary' : 'text-muted-foreground'}`} />
                   <div className="min-w-0 flex-1">
-                    <div className={`text-xs truncate ${isSelected ? 'text-primary' : ''}`}>{s.title || t('chat.newChat')}</div>
+                    <div className={`text-xs truncate ${isSelected ? 'text-primary' : s.session_id === activeSessionId ? 'text-primary font-medium' : ''}`}>{s.title || t('chat.newChat')}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(s.updated_at)}</div>
                   </div>
                 </button>
