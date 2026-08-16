@@ -107,6 +107,21 @@
   background: color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 
+/* ── Expand button（所有卡片可展开看详情）── */
+.tool-expand {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+.tool-expand:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
 /* ── Merged details（合并卡片展开的调用明细）── */
 .tool-details {
   padding: 0.15rem 0.6rem 0.4rem;
@@ -159,6 +174,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--tool-red-border);
+}
+.tool-detail-error-text {
+  color: var(--tool-red-border);
+}
+.tool-detail-sep {
+  height: 1px;
+  margin: 0.15rem 0;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.tool-detail-label.mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.66rem;
+}
+
+/* ── Tool result（展开的调用结果 JSON）── */
+.tool-result {
+  margin: 0.15rem 0 0.1rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-contain: contain;
 }
 
 /* ── Error line ── */

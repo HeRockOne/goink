@@ -1320,6 +1320,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                             status={seg.toolStatus}
                             activityKind={seg.activityKind}
                             error={seg.error}
+                            result={seg.result}
                             count={count}
                             details={toolDetails.get(seg.id)}
                             approvalType={seg.approvalType}
