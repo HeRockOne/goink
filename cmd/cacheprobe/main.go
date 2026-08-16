@@ -21,8 +21,15 @@ func main() {
 	inputPrice := flag.Float64("input", 1.0, "输入（未命中）价格（元/百万 token）")
 	outputPrice := flag.Float64("output", 2.0, "输出价格（元/百万 token）")
 	firstHit := flag.Float64("firsthit", cacheprobe.SimFirstHitRatio, "首轮固定前缀被动缓存命中率（0-1，mimo 实测 0.84，DeepSeek 可设 0）")
+	effort := flag.String("effort", "low", "reasoning effort 档位（low/high，high 按 2026-08-16 真机 mimo-v2.5 high 会话校准）")
 	flag.Parse()
 	cacheprobe.SimFirstHitRatio = *firstHit
+	if *effort == "high" || *effort == "low" {
+		cacheprobe.SetSimEffort(*effort)
+	} else {
+		fmt.Fprintln(os.Stderr, "无效 effort（应为 low/high）:", *effort)
+		os.Exit(1)
+	}
 
 	args := flag.Args()
 	if len(args) > 0 && args[0] == "matrix" {

@@ -773,16 +773,38 @@ func toolMsg(id, name, content string) map[string]any {
 // 初始为开书阶段，处理 set_phase 时更新（真实：模型每次输出都带思考，长度随阶段不同）。
 var simPhase = "init"
 
-// phaseThinkChars 各门禁阶段 assistant 消息 thinking 基数（字符，reasoning low 口径）。
+// simEffort 当前模拟的 reasoning effort 档位（"low"/"high"，CLI -effort 可调，默认 low）。
+var simEffort = "low"
+
+// SetSimEffort 设置 reasoning effort 档位（CLI/API 入口）。
+func SetSimEffort(effort string) {
+	simEffort = effort
+}
+
+// phaseThinkCharsLow 各门禁阶段 assistant 消息 thinking 基数（字符，reasoning low 口径）。
 // 基线：统计自真实 DB messages.thinking_content（204 条，均值 472、范围 6-5629，高度右偏）；
 // 阶段基数按 2026-08-08 真机窗口实测校准（mimo-v2.5 reasoning low 分阶段均值）。
-var phaseThinkChars = map[string]int{
+var phaseThinkCharsLow = map[string]int{
 	"init":     250,
 	"prepare":  370,
 	"outline":  437,
 	"write":    145,
 	"review":   701,
 	"maintain": 164,
+}
+
+// phaseThinkCharsHigh 各门禁阶段 thinking 基数（reasoning high 口径）。
+// 2026-08-16 真机批量会话（mimo-v2.5 reasoning_effort=high）反推：主会话 read 请求
+// comp 2.1-2.5K/次（参数仅 ~20 token，其余为思考），review 阶段读正文思考 ~2.2K →
+// review 基数 2100；其余阶段按 low 同比例（×3）放大。工具参数输出（大纲/审稿报告）
+// 由 plays 内容本身建模，不在此表内。
+var phaseThinkCharsHigh = map[string]int{
+	"init":     750,
+	"prepare":  1110,
+	"outline":  1311,
+	"write":    435,
+	"review":   2100,
+	"maintain": 492,
 }
 
 // simThinkRNG thinking 采样随机源（固定 seed 42，可复现）。
@@ -794,9 +816,13 @@ var simThinkRNG = rand.New(rand.NewSource(42))
 // 少数超长）：以阶段基数为中位锚点，按对数分布采样（固定 seed 可复现），
 // 替代固定均值——固定均值高估了多数请求的 thinking（占 miss 15%）。
 func thinkingForPhase(phase string) int {
-	base, ok := phaseThinkChars[phase]
+	table := phaseThinkCharsLow
+	if simEffort == "high" {
+		table = phaseThinkCharsHigh
+	}
+	base, ok := table[phase]
 	if !ok {
-		base = phaseThinkChars["write"]
+		base = table["write"]
 	}
 	if base <= 0 {
 		return 0
@@ -2057,8 +2083,41 @@ func writePlaysLean(ch int) []play {
 	}, writeBodyPlays(ch)...)
 }
 
+// outlineText 生成第 ch 章大纲（模拟 edit 输出）。
+// 长度按 2026-08-16 真机批量会话校准：5 章大纲单请求输出 10,986 token（≈2.2K token/章），
+// 结构对齐真机大纲模板（开篇切入/场景/情感锚点/对白/钩子/感官/温度）。
 func outlineText(ch int) string {
-	return fmt.Sprintf("# 第 %d 章 %s\n\n## 场景设计\n秘境初探：陈昊独自进入，遭遇仇敌偷袭，危机中突破金丹。\n\n## 关键事件\n1. 入秘境\n2. 遇仇敌\n3. 破金丹\n\n## 重点角色\n陈昊（主角）、仇敌（新登场）\n\n## 伏笔操作\n玉佩异动（新伏笔）\n\n## 章末钩子\n玉佩发出异光", ch, chapterTitle(ch))
+	return fmt.Sprintf(`# 第 %d 章 %s
+
+## 开篇
+动作切入——陈昊踏入秘境入口，石门在身后合拢，四周骤然安静下来。
+
+## 场景
+秘境第一层（昏暗石殿）→ 甬道（潮湿逼仄）→ 核心祭坛（开阔明亮），从压抑到豁然开朗。
+
+## 关键事件
+1. 入秘境
+2. 遇仇敌
+3. 破金丹
+
+## 重点角色
+陈昊（主角）：谨慎试探，遇袭后爆发
+仇敌（新登场）：阴鸷，惯用暗器，话少
+
+## 情感
+紧张探索→遇袭惊变→生死一线的压迫→突破后的释然，情绪锚点为金丹凝聚时的心跳停滞
+
+## 对白
+全章对白极少——仇敌冷笑两句，陈昊全程沉默，靠动作与环境推进
+
+## 伏笔操作
+玉佩异动（新伏笔）：祭坛光芒亮起时玉佩发热，与宗门秘辛产生关联
+
+## 章末钩子
+玉佩发出异光，祭坛深处传来沉闷的机关转动声，仿佛有什么被惊醒了
+
+## 感官
+视觉（石壁苔藓、祭坛符文、金丹金光）、听觉（滴水声、机关轰鸣）、触觉（玉佩灼热、气流涌动）、嗅觉（潮土味、铁锈味）、温度（地底阴冷到金丹凝聚时的灼热）`, ch, chapterTitle(ch))
 }
 
 func chapterTitle(ch int) string {
@@ -2133,17 +2192,24 @@ func compressionSummary() string {
 // 然后子 agent 内部工具循环（read 章节、查角色/伏笔/弧线）在尾部增长。
 // 子 agent 消息不落库（ToAPI=false），不影响主历史。
 func simulateSubagent(cache *TokenCache, history, cur []map[string]any, turn int) [][2]int64 {
-	return simulateSubagentCustom(cache, history, cur, turn, false)
+	return simulateSubagentCustom(cache, history, cur, turn, false, 1)
 }
 
 // simulateSubagentTrimmed 精简版子代理：不带完整主历史，只带 fixedSystem + 本章 cur。
 // 用于验证"精简子代理历史"对主会话缓存的影响。
 func simulateSubagentTrimmed(cache *TokenCache, history, cur []map[string]any, turn int) [][2]int64 {
-	return simulateSubagentCustom(cache, history, cur, turn, true)
+	return simulateSubagentCustom(cache, history, cur, turn, true, 1)
 }
 
-// simulateSubagentCustom 子代理审稿核心。trimmed=true 时精简历史。
-func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, turn int, trimmed bool) [][2]int64 {
+// simulateSubagentChapters 批量审稿子代理：读全批正文后再出报告。
+// 真机 8/16 批量会话实证：review 子代理 fork 完整主历史后并行 read 全部 5 章
+// （每章 ~1.5K 字符正文，fork 后新增字节 ≈ 正文量，全部计入 miss）。
+func simulateSubagentChapters(cache *TokenCache, history, cur []map[string]any, turn, chapters int) [][2]int64 {
+	return simulateSubagentCustom(cache, history, cur, turn, false, chapters)
+}
+
+// simulateSubagentCustom 子代理审稿核心。trimmed=true 时精简历史；chapters>1 时子代理读全批。
+func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, turn int, trimmed bool, chapters int) [][2]int64 {
 	var results [][2]int64
 
 	var sub []map[string]any
@@ -2168,13 +2234,21 @@ func simulateSubagentCustom(cache *TokenCache, history, cur []map[string]any, tu
 
 	// 子 agent 内部工具调用：fork 完整主历史（正文/writing_context 已在上下文中），
 	// 只需少量定向核对（真机 8/8 实测：审稿子代理查询 ~200-700 字符/次）+
-	// check_story_consistency 自动核对 + 输出审读报告
-	subPlays := []play{
-		{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBodies[6][0] + chapterBodies[6][1]},
-		{tool: "get_characters", args: `{"brief":true,"size":10}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
-		{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
-		{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
+	// check_story_consistency 自动核对 + 输出审读报告。
+	// 批量审稿（chapters>1）：子代理 read 全批正文（真机 8/16 实证并行 read 5 章）。
+	subPlays := []play{}
+	if chapters > 1 {
+		for c := 1; c <= chapters; c++ {
+			subPlays = append(subPlays, play{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md","start_line":1,"end_line":100}`, c), result: chapterBodies[c-1][0] + chapterBodies[c-1][1]})
+		}
+	} else {
+		subPlays = append(subPlays, play{tool: "read", args: `{"path":"chapters/007.md","start_line":1,"end_line":100}`, result: chapterBodies[6][0] + chapterBodies[6][1]})
 	}
+	subPlays = append(subPlays,
+		play{tool: "get_characters", args: `{"brief":true,"size":10}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
+		play{tool: "get_timeline", args: fmt.Sprintf(`{"current_chapter":%d}`, turn), result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
+		play{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
+	)
 	for i, sp := range subPlays {
 		hit, miss := cache.StepRaw(sub)
 		results = append(results, [2]int64{hit, miss})

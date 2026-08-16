@@ -58,6 +58,7 @@ type Result struct {
 func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
+	simPhase = "init" // 每个场景独立（table 多场景串跑时防止 thinking 阶段串扰）
 
 	if gateRounds < 0 {
 		gateRounds = 5
@@ -610,7 +611,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 		plays := batchAsIs(chapters)
 		cur = runPlays(cache, history, cur, filterReadRequired(plays, mode), &results,
 			func(subCur []map[string]any) [][2]int64 {
-				return simulateSubagent(cache, history, subCur, batch*chapters+chapters)
+				return simulateSubagentChapters(cache, history, subCur, batch*chapters+chapters, chapters)
 			}, nil, nil)
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", chapters)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -664,7 +665,7 @@ func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, c
 		plays := batchAsIsBase(perBatch, base)
 		cur = runPlays(cache, history, cur, filterReadRequired(plays, mode), &results,
 			func(subCur []map[string]any) [][2]int64 {
-				return simulateSubagent(cache, history, subCur, base+perBatch)
+				return simulateSubagentChapters(cache, history, subCur, base+perBatch, perBatch)
 			}, nil, nil)
 		cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", perBatch)))
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -1212,7 +1213,7 @@ func buildMixedSessionCore(mode string, cache *TokenCache, gateRounds, qaRounds,
 			cur = append(cur, sysMsg(novelState(base)))
 			cur = runPlays(cache, history, cur, filterReadRequired(batchAsIsBase(batchChapters, base), mode), &results,
 				func(subCur []map[string]any) [][2]int64 {
-					return simulateSubagent(cache, history, subCur, base+batchChapters)
+					return simulateSubagentChapters(cache, history, subCur, base+batchChapters, batchChapters)
 				},
 				nil, func(c []map[string]any, phase string) []map[string]any {
 					return injectPhaseOn(mode, history, c, phase)

@@ -876,17 +876,17 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				a.appendMsg("assistant", responseBuffer, thinkingBuffer,
 					nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
+			// 请求结束：统一处理最终 usage（无工具调用轮同样累计计费与消息审计，
+			// 否则纯文本回答轮的 token 消耗既不落 model_usage 表也不写消息 usage）
+			if pendingUsage != nil {
+				a.updateUsage(ctx, pendingUsage, runningTokens, toolTokens, opts)
+				pendingUsage = nil
+			}
 			// 自动推进：require 满足则推进+注入+提醒，不 break——LLM 在新阶段继续干活
 			if a.autoAdvancePhase(pg, &opts, runningTokens, emit) {
 				continue
 			}
 			break
-		}
-
-		// 请求结束：统一处理最终 usage（过滤流式中途的部分值，避免显示回跳与重复累计）
-		if pendingUsage != nil {
-			a.updateUsage(ctx, pendingUsage, runningTokens, toolTokens, opts)
-			pendingUsage = nil
 		}
 
 		// 1. assistant + tool_calls + tool_displays
@@ -896,6 +896,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				"tool_calls":    buildToolCalls(toolOutputs),
 				"tool_displays": buildToolDisplay(toolOutputs),
 			}, &opts, runningTokens)
+
+		// 请求结束：统一处理最终 usage（过滤流式中途的部分值，避免显示回跳与重复累计）。
+		// 必须在 appendMsg 之后：UpdateMessageUsage 按"最新 assistant 消息"定位，
+		// 先更新后插入会命中上一条消息，导致每条消息的 usage 滞后一个请求、末条丢失
+		if pendingUsage != nil {
+			a.updateUsage(ctx, pendingUsage, runningTokens, toolTokens, opts)
+			pendingUsage = nil
+		}
 
 		// 2. tool 结果
 		for _, to := range toolOutputs {
