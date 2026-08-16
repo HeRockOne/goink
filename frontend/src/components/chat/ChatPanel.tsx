@@ -809,7 +809,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
               error: event.error || '',
               approvalType: approvalType ?? segments[idx].approvalType,
               approvalPayload: approvalPayload ?? segments[idx].approvalPayload,
-              result: toolStatus === 'completed' ? (event.metadata || segments[idx].result) : segments[idx].result,
+              // 工具返回结果（后端 EventToolCall completed/failed 推送 tool_result）
+              result: (toolStatus === 'completed' || toolStatus === 'failed') ? (event.tool_result || segments[idx].result) : segments[idx].result,
             }
           } else {
             segments.push({
@@ -823,7 +824,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
               error: event.error || '',
               approvalType,
               approvalPayload,
-              result: toolStatus === 'completed' ? event.metadata : undefined,
+              result: (toolStatus === 'completed' || toolStatus === 'failed') ? event.tool_result : undefined,
             })
           }
 

@@ -31,6 +31,7 @@ type AgentEvent struct {
 	ToolArgs         map[string]any `json:"tool_args,omitempty"`         // 工具参数快照
 	Success          bool           `json:"success,omitempty"`           // 工具执行结果摘要
 	ErrMsg           string         `json:"error,omitempty"`             // 失败时的错误信息
+	ToolResult       map[string]any `json:"tool_result,omitempty"`       // 工具执行返回（completed/failed 时，前端展开查看详情）
 	DisplayText      string         `json:"display_text,omitempty"`      // buildDisplay 产出的展示文本
 	ActivityKind     string         `json:"activity_kind,omitempty"`     // 展示类别
 	Metadata         map[string]any `json:"metadata,omitempty"`          // buildDisplay 产出的附加信息（如 sub_agent_type）

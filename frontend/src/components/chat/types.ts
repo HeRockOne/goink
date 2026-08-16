@@ -36,6 +36,7 @@ export interface AgentEvent {
   tool_args?: Record<string, unknown>
   success?: boolean
   error?: string
+  tool_result?: Record<string, unknown> // 工具执行返回（completed/failed，展开查看详情）
   display_text?: string
   activity_kind?: string
   metadata?: Record<string, unknown>

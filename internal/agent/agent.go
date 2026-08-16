@@ -770,6 +770,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						TurnID: opts.TurnID, Type: EventToolCall,
 						ToolName: name, ToolID: id, Phase: phase,
 						ToolArgs: args, Success: result.Success, ErrMsg: result.Error,
+						ToolResult: map[string]any{
+							"success": result.Success,
+							"error":   result.Error,
+							"data":    result.Data,
+						},
 						DisplayText: display.DisplayText, ActivityKind: display.ActivityKind,
 						Metadata: metadata, Timestamp: time.Now(),
 					})
