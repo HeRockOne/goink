@@ -157,13 +157,21 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   // 仅首次挂载且 last_session_id 属于当前小说时恢复；切小说保持清空行为。
   const restoredLastSessionRef = useRef(false)
 
-  // 监听移动端对话完成事件：当前打开的会话被更新时刷新消息
+  // 监听对话完成事件：当前打开的会话被更新时刷新消息
   useEffect(() => {
     const refreshOnDone = (data: { session_id: string }) => {
       if (!novelId) return
       if (activeSessionId === data.session_id) {
         app.GetSessionMessages(data.session_id).then(msgs => {
-          if (msgs) setTurns(rebuildTurns(msgs))
+          if (msgs) {
+            setTurns(prev => {
+              // 桌面端自己流式构建的 turns（id 非 hist_ 前缀）已含完整工具结果；
+              // 整体重建会丢失 result 与展开状态（DB 不落库结果、段 id 变化重挂载）——
+              // 仅当本地无实时数据时才重建（移动端写入、桌面纯查看场景）
+              const hasLiveTurns = prev.some(t => !t.id.startsWith('hist_'))
+              return hasLiveTurns ? prev : rebuildTurns(msgs)
+            })
+          }
         }).catch(() => {})
       }
     }
@@ -348,9 +356,14 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey])
 
-  // 加载历史消息
+  // 加载历史消息：仅在显式选择会话（handleSelectSession/恢复）时触发。
+  // chat:started 也会改 activeSessionId，但不能重建——流式构建的 turns 含工具结果与
+  // 展开状态，中途 rebuildTurns 会替换段（result 丢失、key 变化导致展开关闭）
+  const loadOnSessionRef = useRef(false)
   useEffect(() => {
     if (!activeSessionId || !novelId) return
+    if (!loadOnSessionRef.current) return
+    loadOnSessionRef.current = false
     setSessionId(activeSessionId)
     setHistoryLoadError(false)
     setIsLoadingHistory(true)
@@ -424,6 +437,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   }, [])
 
   const handleSelectSession = useCallback((sid: string) => {
+    loadOnSessionRef.current = true // 显式选会话 → 消息加载 effect 执行重建
     setActiveSessionId(sid)
     setVisibleTurnCount(30)
     app.SetLastSession(sid).catch(() => {})
@@ -1232,7 +1246,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                 <div className="text-center">
                   <p className="text-sm text-red-500 mb-2">{t('chat.loadMessagesFailed')}</p>
                   <button
-                    onClick={() => setHistoryLoadRetry(n => n + 1)}
+                    onClick={() => { loadOnSessionRef.current = true; setHistoryLoadRetry(n => n + 1) }}
                     className="text-xs text-primary underline cursor-pointer"
                   >
                     {t('chat.retry')}
