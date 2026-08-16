@@ -26,6 +26,7 @@
 | [provider-status.md](architecture/provider-status.md) | 内置 Provider 配置状态（7 个 provider，联网核实） |
 | [theme-system.md](architecture/theme-system.md) | 主题系统文档（50+ CSS 变量清单 + 派生关系 + 自定义主题 + Apple 白示例） |
 | [cache-simulation.md](architecture/cache-simulation.md) | 缓存命中模拟库（cacheprobe）实现原理、成本估算口径与验证结论 |
+| [writing-mode-guide.md](architecture/writing-mode-guide.md) | 创作模式决策与质量底线成本区间（规范基准每章成本、决策树、三道质量硬约束、真机核查方法） |
 
 ## design/ — 方案（长存，参考用）
 
