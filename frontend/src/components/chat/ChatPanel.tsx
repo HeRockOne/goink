@@ -164,6 +164,17 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     })
   }, [app, novelId])
 
+  // 刷新最近会话列表（会话删除/对话完成后调用，RecentSessions 数据源）
+  const refreshSessions = useCallback(() => {
+    if (!novelId) return
+    app.GetSessions({ novel_id: novelId, page: 1, size: 5, search: '' }).then(r => {
+      if (r) {
+        setSessions(r.items)
+        setSessionsTotal(r.total)
+      }
+    }).catch(() => {})
+  }, [app, novelId])
+
   // 监听移动端对话完成事件，自动刷新会话列表
   useEffect(() => {
     const refreshOnDone = (data: { session_id: string }) => {
@@ -1167,6 +1178,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           novelId={novelId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
+          onDeleted={refreshSessions}
         />
       </div>
 

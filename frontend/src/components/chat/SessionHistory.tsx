@@ -10,9 +10,10 @@ interface Props {
   novelId: number
   onClose: () => void
   onSelectSession: (sessionId: string) => void
+  onDeleted?: () => void
 }
 
-export default function SessionHistory({ open, novelId, onClose, onSelectSession }: Props) {
+export default function SessionHistory({ open, novelId, onClose, onSelectSession, onDeleted }: Props) {
   const { t } = useTranslation()
   const app = useApp()
   const [mounted, setMounted] = useState(false)
@@ -156,7 +157,9 @@ export default function SessionHistory({ open, novelId, onClose, onSelectSession
     setIsDeleting(false)
     setSelectedIds(new Set())
     loadPageRef.current?.(1)
-  }, [selectedIds, app, t])
+    // 通知父组件刷新最近会话列表（RecentSessions 数据源在 ChatPanel）
+    onDeleted?.()
+  }, [selectedIds, app, t, onDeleted])
 
   // 导出单个会话为 Markdown
   const [exportingId, setExportingId] = useState<string | null>(null)
