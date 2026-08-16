@@ -37,7 +37,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 > **批量状态实时性（迷你维护）**：每章 write 完成后立即执行"迷你维护"——只写不查，把本章事实写入 DB
 > （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
 > 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
-> 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
+> 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（14 项 require + 15 项检查清单 + goink.md 指纹）收尾核对。
 
 ## require 清单（必须成功调用，失败不算）
 
@@ -48,7 +48,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 | outline | edit | 大纲必须写入 outlines/NNN.md |
 | write | edit, get_chapter_list | 正文必须写入 chapters/NNN.md + 字数校验前置检查 |
 | review | run_subagent | 审稿子 Agent 必须启动 |
-| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations | 13 项强制清单，设定/伏笔/关系全量维护 |
+| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency | 14 项强制清单，设定/伏笔/关系全量维护 + 一致性核对 |
 
 > require 只统计**成功调用**——调了但失败不算，防止蒙混过关。
 
@@ -56,7 +56,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 - **prepare**：允许 edit（一般编辑自由用）；9 项必查满足后主动 `set_phase("outline")`
 - **write 转出字数校验**：`set_phase("review")` 前必须调用过 `get_chapter_list`（返回 `word_count_ok`），字数不在用户设定范围会被阻塞，需扩写后重新检查；进入 write 阶段时字数状态重置，每章独立校验
-- **maintain**：每章必做 15 项检查（查询 A-G + 更新 1-15，见 main-core-writing-kernel.md），宁多调工具不可漏维护
+- **maintain**：每章必做 15 项检查（查询 A-G + 更新 1-15，含内容校准，见 main-core-writing-kernel.md 与 main-tech-data-hygiene），宁多调工具不可漏维护
 
 ## 配置格式
 
@@ -81,7 +81,7 @@ next: outline
 | edit_paths | 否 | edit 工具的路径范围（如 "outlines/*, goink.md"，"*"=不限制） |
 | loop | 否 | "true" 表示 batch 模式下可循环（write 可回退 outline，连续多章写作） |
 
-配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density、maintain anti-repetition+foreshadow-cycle（系统在 set_phase 进入该阶段时自动注入，技能名从门禁配置读取，不硬编码）。
+配置存在数据库（phase_gate_config），出厂自动 seed 默认配置（single + batch），用户可在设置面板修改。AI 可用 `get_phase_gate_config` 查看、`update_phase_gate_config` 编辑。各阶段默认必读技能：init 5 个开书技能、prepare common-sense-logic、outline hook-enhanced+title-design、write show-dont-tell+anti-ai-writing+pov-purity+info-density+word-count-calibration、maintain anti-repetition+foreshadow-cycle+data-hygiene（系统在 set_phase 进入该阶段时自动注入，技能名从门禁配置读取，不硬编码）。
 
 ## 配置设计指南（怎么配一套门禁）
 
@@ -110,7 +110,7 @@ next: outline
 | outline | edit |
 | write | edit, get_chapter_list, read（字数校验转出时自动强制，无需配置） |
 | review | run_subagent |
-| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations |
+| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency |
 
 ### auto_skill_injection 设计（该阶段核心方法论，对照 main-core-writing-kernel 阶段技能表）
 
@@ -119,9 +119,9 @@ next: outline
 | init | main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system |
 | prepare | main-tech-common-sense-logic |
 | outline | main-tech-chapter-hook-enhanced, main-tech-chapter-title-design |
-| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density |
+| write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration |
 | review | 空（sub-* 技能由系统自动注入子代理） |
-| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
+| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle, main-tech-data-hygiene |
 
 情景类技能（climax-scene/shuangdian-pacing/foreshadow-cycle/emotion-injection/pacing-control/scene-beats 等）不进 auto_skill_injection，由 kernel 按需引导。
 

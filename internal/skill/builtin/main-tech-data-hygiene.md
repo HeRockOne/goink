@@ -22,22 +22,23 @@ mode: auto
 
 ## 规则二：字段校准
 
-每次 update_character / update_item 修改 status 时：
+每次 update_character / update_item 修改 status 时，或查询 A 发现角色/物品字段与剧情不符时：
 
-1. 同步检查 description / lore / personality 字段是否还匹配实际剧情
+1. 同步检查角色 description / personality / abilities、物品 description / lore 是否还匹配实际剧情
 2. 如果字段描述的是"未来计划"（如"第20章从公司翻出工作牌"）而实际剧情已偏离，必须修正
 3. 禁止 description/lore 写"预测性剧情"——只写已发生的事实
 
-**触发条件**：每次 status 变更时必做
+**触发条件**：status 变更时必做；查询 A 返回后顺带核对关键实体字段（不额外查询）
 
 ## 规则三：读者认知去重
 
 每次 create_reader_perspective_entry 前：
 
 1. 必须先 get_reader_perspective 查已有条目
-2. 如果新条目内容与已有条目重叠（同一事实的不同角度），优先 update 已有条目，不新建
-3. 只有全新信息才 create 新条目
-4. 合并后归档被替代的旧条目（update_reader_perspective_entry 标记 revealed_chapter——归档保留历史，勿物理删除；确需删除才用 delete_record）
+2. 判定"重叠"：新信息与已有条目描述的是同一事实/同一悬念（措辞不同但核心相同）即算重叠
+3. 重叠时优先 update 已有条目——把新进展并入该条目 content，不另开新条目
+4. 只有全新信息（库里没有的事实/悬念）才 create 新条目
+5. 合并后归档被替代的旧条目（update_reader_perspective_entry 标记 revealed_chapter——归档保留历史，勿物理删除；确需删除才用 delete_record）
 
 **触发条件**：每次新增读者认知前必做
 
@@ -46,7 +47,7 @@ mode: auto
 每次 get_story_arcs 后：
 
 1. 对比 volume detail_json 中的章节规划与 arc node 的 target_chapter
-2. 偏差超过 3 章的节点，以 volume detail_json 为准校准 arc node
+2. 偏差超过 3 章的节点，以 volume detail_json 为准校准 arc node（update_arc_node 改 target_chapter）
 3. volume 是精确规划（每卷结束前确定），arc node 是粗略估计——冲突时以 volume 为准
 
 **触发条件**：每章 maintain 阶段 get_story_arcs 后必做
