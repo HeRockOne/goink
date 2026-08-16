@@ -252,7 +252,7 @@ func phaseCleanVersion(messages []map[string]any, cleared map[string]bool) []map
 			continue
 		}
 		name, _ := m["name"].(string)
-		if name != "read_required" && name != "read" {
+		if name != "auto_skill_injection" && name != "read_required" && name != "read" {
 			continue
 		}
 		id, _ := m["tool_call_id"].(string)
@@ -567,6 +567,8 @@ func longestCommonPrefix(a, b []byte) int {
 // 分类:skill_inject(阶段技能注入 system)/thinking(assistant reasoning_content)
 //       body(正文 edit)/outline(大纲 edit)/query(get_*/search_*)/update(create_*/update_*)
 //       fixed(固定前缀+NS)/other
+// 注意：assistant 消息按 tool_calls 的【工具名】逐条判定（并行组混工具时整条消息归
+// 第一个命中的类——正文/大纲/查询的 token 可能互相污染，但 miss 总量不受影响）。
 func missCatOf(m map[string]any) string {
 	role, _ := m["role"].(string)
 	if role == "system" {
@@ -577,16 +579,18 @@ func missCatOf(m map[string]any) string {
 		return "fixed"
 	}
 	if role == "assistant" {
-		// 工具调用消息的 arguments 含正文/大纲全文（LLM 输出），优先于 thinking 分类
+		// 工具调用消息的 arguments 含正文/大纲全文（LLM 输出），优先于 thinking 分类。
+		// 按工具名 + 路径判定：edit chapters/ → body，edit outlines/ → outline。
 		if tcs, ok := m["tool_calls"].([]any); ok {
 			for _, tc := range tcs {
 				tcm, _ := tc.(map[string]any)
 				fn, _ := tcm["function"].(map[string]any)
+				name, _ := fn["name"].(string)
 				args, _ := fn["arguments"].(string)
-				if strings.Contains(args, "chapters/") && len(args) > 100 {
+				if name == "edit" && strings.Contains(args, "chapters/") {
 					return "body"
 				}
-				if strings.Contains(args, "outlines/") {
+				if name == "edit" && strings.Contains(args, "outlines/") {
 					return "outline"
 				}
 			}
@@ -1334,7 +1338,7 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 				}
 				simPhase = phase
 				cur = appendPhase(cur, simPhase, true)
-			case "read", "read_required":
+			case "read", "read_required", "auto_skill_injection":
 				if onRead != nil {
 					onRead(ids[k])
 				}
@@ -1350,14 +1354,15 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 	return cur
 }
 
-// filterReadRequired auto 模式下过滤 read_required play（技能已在 set_phase 时注入）。
+// filterReadRequired auto 模式下过滤技能读取 play（技能已在 set_phase 时系统注入）。
+// 兼容两代工具名：read_required（旧）与 auto_skill_injection（8/9 改名，技能全文）。
 func filterReadRequired(plays []play, mode string) []play {
 	if mode != "auto" {
 		return plays
 	}
 	out := make([]play, 0, len(plays))
 	for _, p := range plays {
-		if p.tool == "read_required" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue
 		}
 		out = append(out, p)
@@ -1597,7 +1602,7 @@ func injectSkillsPlays(plays []play) ([]play, []string) {
 	var injects []string
 	seen := map[string]bool{}
 	for _, p := range plays {
-		if p.tool == "read_required" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue // 技能改为 system 注入，不再工具调用
 		}
 		if p.tool == "set_phase" && !seen[p.args] {

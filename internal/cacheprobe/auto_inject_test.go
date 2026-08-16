@@ -20,7 +20,7 @@ func TestSubagentHistory(t *testing.T) {
 	cur := []map[string]any{userMsg("开始创作")}
 	cur = append(cur, sysMsg(novelState(0)))
 	for _, p := range initScript() {
-		if p.tool == "read_required" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue
 		}
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -69,7 +69,7 @@ func TestSubagentHistory(t *testing.T) {
 	curB := []map[string]any{userMsg("开始创作")}
 	curB = append(curB, sysMsg(novelState(0)))
 	for _, p := range initScript() {
-		if p.tool == "read_required" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue
 		}
 		req := append(append([]map[string]any{}, historyB...), curB...)

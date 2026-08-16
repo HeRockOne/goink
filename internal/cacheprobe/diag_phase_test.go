@@ -72,7 +72,7 @@ func TestDiagSkillTokensByPhase(t *testing.T) {
 	playStep := func(p play) {
 		step()
 		cur = append(cur, asstToolCall("call_x", p.tool, p.args), toolMsg("call_x", p.tool, p.result))
-		if p.tool == "read_required" || p.tool == "read" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" || p.tool == "read" {
 			trackRead(curPhase, []string{p.result})
 		}
 		if p.tool == "set_phase" {

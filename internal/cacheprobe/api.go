@@ -414,8 +414,8 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 		cur = append(cur, sysMsg(initInject)) // auto：init 必读技能直接注入
 	}
 	for i, p := range initScript() {
-		if mode == "auto" && p.tool == "read_required" {
-			continue // auto：init 技能已注入，跳过 read_required
+		if mode == "auto" && (p.tool == "auto_skill_injection" || p.tool == "read_required") {
+			continue // auto：init 技能已系统注入，跳过技能读取工具
 		}
 		req := append(append([]map[string]any{}, history...), cur...)
 		hit, miss := cache.Step(req)
@@ -454,8 +454,8 @@ func buildGateWithRounds(mode string, cache *TokenCache, rounds int) [][2]int64 
 
 		plays := gateScript(turn)
 		for i, p := range plays {
-			if mode == "auto" && p.tool == "read_required" {
-				continue // auto：技能在进入阶段时注入，跳过 read_required
+			if mode == "auto" && (p.tool == "auto_skill_injection" || p.tool == "read_required") {
+				continue // auto：技能在进入阶段时系统注入，跳过技能读取工具
 			}
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
@@ -530,7 +530,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 	cur = append(cur, sysMsg(novelState(0)))
 	cur = append(cur, sysMsg(initInject))
 	for _, p := range initScript() {
-		if p.tool == "read_required" {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 			continue
 		}
 		req := append(append([]map[string]any{}, history...), cur...)
@@ -556,7 +556,7 @@ func buildOptWithPrefixAndSub(cache *TokenCache, rounds int, prefix []map[string
 		cur = append(cur, sysMsg(novelState(turn)))
 		plays := gateScript(turn)
 		for _, p := range plays {
-			if p.tool == "read_required" {
+			if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 				continue
 			}
 			req := append(append([]map[string]any{}, history...), cur...)
@@ -600,7 +600,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", chapters))}
 		cur = append(cur, sysMsg(novelState(batch * chapters)))
 		if batch == 0 {
-			cur = runPlays(cache, history, cur, initScript(), &results, nil, nil, nil)
+			cur = runPlays(cache, history, cur, filterReadRequired(initScript(), mode), &results, nil, nil, nil)
 		} else {
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
@@ -608,7 +608,7 @@ func buildBatchWithRounds(mode string, cache *TokenCache, chapters int) [][2]int
 		}
 
 		plays := batchAsIs(chapters)
-		cur = runPlays(cache, history, cur, plays, &results,
+		cur = runPlays(cache, history, cur, filterReadRequired(plays, mode), &results,
 			func(subCur []map[string]any) [][2]int64 {
 				return simulateSubagent(cache, history, subCur, batch*chapters+chapters)
 			}, nil, nil)
@@ -654,7 +654,7 @@ func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, c
 		cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", perBatch))}
 		cur = append(cur, sysMsg(novelState(base)))
 		if b == 0 {
-			cur = runPlays(cache, history, cur, initScript(), &results, nil, nil, nil)
+			cur = runPlays(cache, history, cur, filterReadRequired(initScript(), mode), &results, nil, nil, nil)
 		} else {
 			req := append(append([]map[string]any{}, history...), cur...)
 			hit, miss := cache.Step(req)
@@ -662,7 +662,7 @@ func buildBatchLoopCompress(mode string, cache *TokenCache, perBatch, batches, c
 		}
 
 		plays := batchAsIsBase(perBatch, base)
-		cur = runPlays(cache, history, cur, plays, &results,
+		cur = runPlays(cache, history, cur, filterReadRequired(plays, mode), &results,
 			func(subCur []map[string]any) [][2]int64 {
 				return simulateSubagent(cache, history, subCur, base+perBatch)
 			}, nil, nil)
@@ -826,7 +826,7 @@ func cleanVersion(messages []map[string]any, retain int) []map[string]any {
 			continue
 		}
 		name, _ := m["name"].(string)
-		if name == "read_required" || name == "read" {
+		if name == "auto_skill_injection" || name == "read_required" || name == "read" {
 			idx = append(idx, i)
 		}
 	}

@@ -40,7 +40,7 @@ func TestDiagTokenBreakdown(t *testing.T) {
 			return "other"
 		}
 		name, _ := m["name"].(string)
-		if name == "read_required" || name == "read" {
+		if name == "auto_skill_injection" || name == "read_required" || name == "read" {
 			return "skill"
 		}
 		if name == "edit" {
@@ -264,7 +264,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 			cur = append(cur, sysMsg(initInject))
 		}
 		for i, p := range initScript() {
-			if p.tool == "read_required" {
+			if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 				continue
 			}
 			cache.Step(append(append([]map[string]any{}, history...), cur...))
@@ -283,7 +283,7 @@ func TestDiagBatchSelfReview(t *testing.T) {
 			cur = append(cur, sysMsg(novelState(turn)))
 			plays := gateScript(turn)
 			for i, p := range plays {
-				if p.tool == "read_required" {
+				if p.tool == "auto_skill_injection" || p.tool == "read_required" {
 					continue
 				}
 				cache.Step(append(append([]map[string]any{}, history...), cur...))
