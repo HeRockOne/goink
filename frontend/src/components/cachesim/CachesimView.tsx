@@ -131,7 +131,7 @@ export default function CachesimView() {
     setError('')
     setPresetResults([])
     try {
-      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, effort: simEffort, context_window: windowK * 1000 })))
+      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, effort: simEffort, hist_chapters: p.scenario.hist_chapters ?? 0, context_window: windowK * 1000 })))
     } catch (e) {
       setError(String(e))
       setPresetRunning(false)
@@ -194,7 +194,7 @@ export default function CachesimView() {
     setRunning(true)
     setError('')
     setResults([])
-    const req = scenarios.map(sc => ({ ...sc, effort: simEffort, context_window: windowK * 1000 }))
+    const req = scenarios.map(sc => ({ ...sc, effort: simEffort, hist_chapters: sc.hist_chapters ?? 0, context_window: windowK * 1000 }))
     try {
       await StartCacheSimScenarios(req)
     } catch (e) {
