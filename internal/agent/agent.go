@@ -302,6 +302,30 @@ func agentTypeFromString(s string) agentcfg.AgentType {
 	}
 }
 
+// lastCompletedChapter 返回小说最新已完成章节号（批量章边界自检提醒用）。
+func (a *Agent) lastCompletedChapter(novelID int64) int {
+	var n int
+	a.db.Table("chapters").Where("novel_id = ?", novelID).Select("COALESCE(MAX(chapter_number), 0)").Scan(&n)
+	return n
+}
+
+// handleBatchChapterBoundary 批量 write 章边界（同阶段 set_phase("write") 声明下一章）：
+// SetPhase 已检查上一章 miniMaintain 六件套，此处重置计数与字数状态（强制本章重新结算），
+// 并注入每 3 章轻量自检提醒（三章一轮，对齐 kernel 批量质量节奏）。
+func (a *Agent) handleBatchChapterBoundary(pg *PhaseGate, from, target string, opts *RunOptions, runningTokens map[string]int) {
+	if pg == nil || pg.mode != "batch" || target != "write" || from != target {
+		return
+	}
+	// 上一章 miniMaintain 已被 SetPhase 检查通过；重置计数与字数校验状态，
+	// 让 require 语义变为"本章内必须完成"（而非跨章累计）
+	pg.ResetPhaseCounts()
+	// 每 3 章轻量自检（三章一轮，不积攒）：已完成章号为 3 的倍数时提醒
+	if lastCh := a.lastCompletedChapter(opts.NovelID); lastCh > 0 && lastCh%3 == 0 {
+		checkMsg := fmt.Sprintf("<system-reminder>\n已完成第 %d 章（每 3 章一轮）：先执行轻量自检再继续下一章——并行调 get_characters/get_timeline/get_writing_snapshot 对照最近 3 章正文查设定矛盾（角色状态/时间线/伏笔/衔接），调 check_story_consistency（current_chapter=%d）程序化核对，read main-tech-revision-pass 与 sub-tech-anti-ai-grade 查文笔节奏与 AI 味；发现问题立即 edit 修复，不攒到批末。\n</system-reminder>", lastCh, lastCh)
+		a.appendMsg("user", checkMsg, "", nil, opts, runningTokens)
+	}
+}
+
 // Run 执行 Agent 循环，返回最终文本和轮数。
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, error) {
 	if opts.MaxTurns <= 0 {
@@ -584,9 +608,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								if from != targetPhase {
 									a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 								}
-								// 批量 write 章边界：强制每章字数校验（真机验证：LLM 整批写完才
-								// 在转出 review 时被字数拦截，被迫一次性扩写全部正文）。
-								// wordCountOK 为 nil 或未达标时注入提醒，要求先 get_chapter_list。
+								// 批量 write 章边界：重置计数 + 每 3 章自检提醒 + 字数校验提醒。
+								// 重置后 wordCountOK=nil，字数提醒自然每章触发（要求先 get_chapter_list）。
+								a.handleBatchChapterBoundary(pg, from, targetPhase, &opts, runningTokens)
 								if pg.mode == "batch" && targetPhase == "write" {
 									if wc := pg.WordCountCheck(); wc == nil || !*wc {
 										wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"
@@ -616,6 +640,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 										if from != targetPhase {
 											a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 										}
+										a.handleBatchChapterBoundary(pg, from, targetPhase, &opts, runningTokens)
 										if pg.mode == "batch" && targetPhase == "write" {
 											if wc := pg.WordCountCheck(); wc == nil || !*wc {
 												wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"

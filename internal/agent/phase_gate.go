@@ -176,6 +176,35 @@ func (g *PhaseGate) OnSkillInjected(skillName string) {
 	g.readsByPhase[g.currentPhase][skillName] = true
 }
 
+// miniMaintainTools 批量 write 每章必须完成的状态结算六件套（miniMaintain）。
+var miniMaintainTools = []string{
+	"create_scene", "update_character", "create_timeline_entry",
+	"update_timeline_entry", "create_item_occurrence", "update_writing_snapshot",
+}
+
+// missingMiniMaintain 返回当前阶段尚未成功调用的 miniMaintain 工具列表。
+func (g *PhaseGate) missingMiniMaintain() []string {
+	var missing []string
+	for _, t := range miniMaintainTools {
+		if g.successfulTools[t] == 0 {
+			missing = append(missing, t)
+		}
+	}
+	return missing
+}
+
+// ResetPhaseCounts 批量章边界调用：清空本阶段工具调用统计与字数校验状态，
+// 强制每章重新满足 require（miniMaintain 六件套按章结算，而非跨章累计）。
+// readsByPhase 不重置——技能已注入，无需重复读取。
+func (g *PhaseGate) ResetPhaseCounts() {
+	if g == nil || !g.active {
+		return
+	}
+	g.calledTools = make(map[string]int)
+	g.successfulTools = make(map[string]int)
+	g.wordCountOK = nil
+}
+
 // SetWordCountOK 设置字数校验结果。get_chapter_list 工具调用后由 agent 注入。
 func (g *PhaseGate) SetWordCountOK(ok bool) {
 	if g == nil || !g.active {
@@ -328,8 +357,16 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		return false, fmt.Sprintf("未知阶段: %s", targetPhase)
 	}
 
-	// 同阶段切换：直接成功，不检查 require
+	// 同阶段切换：直接成功，不检查 require。
+	// 例外：批量 write 章边界（同阶段 set_phase("write") 声明下一章）——上一章的
+	// miniMaintain 六件套必须完成才能继续，否则第 2-N 章的状态结算被跳过
+	// （require 按阶段累计，第 1 章调过后面章不调也能转出，真机验证确认）。
 	if g.currentPhase == targetPhase {
+		if g.mode == "batch" && targetPhase == "write" {
+			if missing := g.missingMiniMaintain(); len(missing) > 0 {
+				return false, fmt.Sprintf("上一章迷你维护未完成，缺少: %v。请先完成本章状态结算（create_scene/update_character/create_timeline_entry/update_timeline_entry/create_item_occurrence/update_writing_snapshot）再声明下一章", missing)
+			}
+		}
 		return true, ""
 	}
 

@@ -88,6 +88,78 @@ next: outline
 	}
 }
 
+// 批量 write 章边界：上一章 miniMaintain 六件套未完成时拒绝声明下一章。
+func TestBatchChapterBoundaryRequiresMiniMaintain(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+next: review
+loop: true
+-->
+`, "batch")
+
+	// 模拟上一章只做了 2 件：edit + create_scene
+	gate.OnToolCall("edit", true)
+	gate.OnToolCall("create_scene", true)
+	ok, warning := gate.SetPhase("write")
+	if ok {
+		t.Fatal("chapter boundary should be rejected when miniMaintain incomplete")
+	}
+	if !strings.Contains(warning, "迷你维护") {
+		t.Errorf("warning should mention miniMaintain, got: %s", warning)
+	}
+
+	// 补齐剩余 4 件后章边界通过
+	for _, tool := range []string{"update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+		gate.OnToolCall(tool, true)
+	}
+	ok, _ = gate.SetPhase("write")
+	if !ok {
+		t.Fatal("chapter boundary should pass after miniMaintain complete")
+	}
+}
+
+// 章边界通过后 ResetPhaseCounts：require 计数清零，下章必须重新结算。
+func TestBatchChapterBoundaryResetCounts(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+next: review
+loop: true
+-->
+`, "batch")
+
+	// 上一章完成全部六件套
+	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+		gate.OnToolCall(tool, true)
+	}
+	gate.SetWordCountOK(true)
+	// 章边界通过
+	if ok, _ := gate.SetPhase("write"); !ok {
+		t.Fatal("chapter boundary should pass")
+	}
+	// 模拟 agent 章边界重置
+	gate.ResetPhaseCounts()
+	// 重置后：字数状态清空、require 计数清零
+	if gate.WordCountCheck() != nil {
+		t.Error("wordCountOK should be reset to nil")
+	}
+	if missing := gate.missingMiniMaintain(); len(missing) != len(miniMaintainTools) {
+		t.Errorf("all miniMaintain tools should be missing after reset, got %v", missing)
+	}
+	// 下章转出（write→review 非同阶段）应被拦：六件套未完成
+	ok, _ := gate.SetPhase("review")
+	if ok {
+		t.Error("exiting write without chapter miniMaintain should be blocked")
+	}
+}
+
 func TestPhaseGateSetPhaseUnknown(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
