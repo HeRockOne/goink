@@ -11,6 +11,7 @@ interface Props {
   activityKind?: string
   error?: string
   compact?: boolean
+  count?: number // 合并的并行调用数（>1 显示 ×N）
   // approval
   approvalType?: string
   approvalPayload?: Record<string, unknown>
@@ -155,7 +156,7 @@ function ToolErrorDisplay({ error }: { error: string }) {
   )
 }
 
-export default memo(function ToolCallCard({ displayText, status, activityKind, error, compact, approvalType, approvalPayload, onApprove, onReject }: Props) {
+export default memo(function ToolCallCard({ displayText, status, activityKind, error, compact, count, approvalType, approvalPayload, onApprove, onReject }: Props) {
   const { t } = useTranslation()
 
   // 审批中状态
@@ -182,9 +183,13 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
 
         <span className="tool-label">{displayText}</span>
 
+        {count !== undefined && count > 1 && (
+          <span className="tool-count" title={`${count} 次并行调用`}>×{count}</span>
+        )}
+
         {!isExecuting && (
           <span className={`tool-badge ${isCompleted ? 'tool-badge-done' : 'tool-badge-failed'}`}>
-            {isCompleted ? t('chat.done') : t('chat.failed')}
+            {isCompleted ? <><Check size={9} strokeWidth={3} /> {t('chat.done')}</> : <><XCircle size={9} /> {t('chat.failed')}</>}
           </span>
         )}
       </div>

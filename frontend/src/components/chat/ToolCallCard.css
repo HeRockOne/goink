@@ -16,7 +16,7 @@
 .tool-card.completed {
   border-left: 3px solid var(--tool-green-border);
   background: var(--tool-green);
-  opacity: 0.85;
+  opacity: 1; /* 0.85 太低，与卡片底色同色系时文字对比不足 */
 }
 .tool-card.failed {
   border-left: 3px solid var(--tool-red-border);
@@ -81,10 +81,25 @@
 .tool-badge-done {
   color: var(--tool-green-border);
   background: color-mix(in oklab, var(--tool-green-border) 10%, transparent);
+  font-weight: 600;
 }
 .tool-badge-failed {
   color: var(--tool-red-border);
   background: color-mix(in oklab, var(--tool-red-border) 8%, transparent);
+  font-weight: 600;
+}
+
+/* ── Count badge（并行调用合并数）── */
+.tool-count {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
 /* ── Error line ── */

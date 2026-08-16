@@ -1116,6 +1116,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const hasTurns = turns.length > 0
   const hasActiveSession = activeSessionId !== undefined && activeSessionId !== null
   const showRecent = !hasActiveSession && !hasTurns && !isLoading
+  // 工具卡片合并计数（每次渲染重建：连续同名同状态 tool 段 → 一张卡 ×N）
+  const toolCounts = new Map<string, number>()
+  const toolMergeIds = new Set<string>()
 
 
   const inputPlaceholder = !hasNovel
@@ -1257,6 +1260,27 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                       <MessageBubble role="user" content={turn.userMessage} timestamp={turn.id} />
                     )}
 
+                    {/* 工具卡片合并计数：连续同名同状态的普通工具段合并（并行调用去噪） */}
+                    {(() => {
+                      toolCounts.clear()
+                      toolMergeIds.clear()
+                      for (let i = 0; i < turn.segments.length; i++) {
+                        const s = turn.segments[i]
+                        if (s.type !== 'tool' || s.toolName === 'run_subagent' || s.toolName === 'web_search' || s.toolName === 'web_fetch') continue
+                        const prev = i > 0 ? turn.segments[i - 1] : null
+                        const mergeable = prev !== null && prev.type === 'tool'
+                          && prev.toolName === s.toolName && prev.toolStatus === s.toolStatus
+                          && prev.toolName !== 'run_subagent' && prev.toolName !== 'web_search' && prev.toolName !== 'web_fetch'
+                        if (mergeable) {
+                          toolMergeIds.add(s.id)
+                          toolCounts.set(prev.id, (toolCounts.get(prev.id) ?? 1) + 1)
+                        } else {
+                          toolCounts.set(s.id, 1)
+                        }
+                      }
+                      return null
+                    })()}
+
                     {turn.segments.map(seg => {
                       if (seg.type === 'subagent' && seg.agentType) {
                         return (
@@ -1269,8 +1293,11 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                         )
                       }
 
+                      // 工具卡片合并：连续同名同状态的普通工具段合并为一张卡
+                      // （同一轮并行调用如 get_lore ×4，避免 4 张重复卡片堆叠）
                       if (seg.type === 'tool') {
-                        // run_subagent 已由 subagent 段渲染，跳过纯工具卡
+                        if (toolMergeIds.has(seg.id)) return null
+                        const count = toolCounts.get(seg.id) ?? 1
                         if (seg.toolName === 'run_subagent') return null
 
                         if (seg.toolName === 'web_search' && seg.toolStatus === 'completed' && seg.result) {
@@ -1288,6 +1315,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                             status={seg.toolStatus}
                             activityKind={seg.activityKind}
                             error={seg.error}
+                            count={count}
                             approvalType={seg.approvalType}
                             approvalPayload={seg.approvalPayload}
                             onApprove={
@@ -1377,15 +1405,17 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
         <div ref={messagesEndRef} />
 
-        {/* 跳到底部按钮 */}
+        {/* 跳到底部按钮：贴右下角、不遮挡消息内容（sticky 容器占满宽，内容左对齐） */}
         {showScrollBtn && (
-          <button
-            onClick={scrollToBottom}
-            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-3 py-1.5 rounded-full bg-popover/90 border border-border/50 shadow-md text-xs text-muted-foreground hover:text-foreground hover:bg-popover transition-all cursor-pointer backdrop-blur-sm"
-          >
-            <ArrowDown className="w-3.5 h-3.5" />
-            <span>底部</span>
-          </button>
+          <div className="sticky bottom-2 z-10 flex justify-end pointer-events-none">
+            <button
+              onClick={scrollToBottom}
+              className="pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full bg-popover/80 border border-border/50 shadow-md text-xs text-muted-foreground hover:text-foreground transition-all cursor-pointer backdrop-blur-sm"
+            >
+              <ArrowDown className="w-3 h-3" />
+              <span>底部</span>
+            </button>
+          </div>
         )}
       </div>
 
