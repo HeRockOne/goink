@@ -121,6 +121,13 @@ func (c *TokenCache) SetMissCat(fn func(m map[string]any) string) {
 	c.MissByCat = map[string]int64{}
 }
 
+// ResetMissByCat 清空 miss 分类累计（续写场景：历史构建轮的 miss 不计入目标统计）。
+func (c *TokenCache) ResetMissByCat() {
+	if c.MissByCat != nil {
+		c.MissByCat = map[string]int64{}
+	}
+}
+
 // MarkCleared 标记 tool_call_id 为可清理（阶段切换时调用：上一阶段的 read 结果）。
 func (c *TokenCache) MarkCleared(ids ...string) {
 	if c.clearedIDs == nil {
@@ -1893,6 +1900,9 @@ func batchEndReview(chapters int) []play { return batchCore(chapters, 4, 0) }
 // 但设定矛盾一眼穿帮）+ 批末全批审稿（子代理覆盖全批）。零阶段切换。
 func batchLightEndReview(chapters int) []play { return batchCore(chapters, 5, 3) }
 
+// batchLightEndReviewBase 续写批量版：章号从 base+1 起（历史 base 章后写新批）。
+func batchLightEndReviewBase(chapters, base int) []play { return batchCore(chapters, 5, 3, base) }
+
 // batchLightCheckPlays 每 N 章轻量自检（一致性 + 文笔双向）：
 // 1) 一致性（重点，普通用户一眼穿帮）：get_characters/get_timeline/get_writing_snapshot 读状态，
 //    对照最近 N 章正文检查设定矛盾（角色状态不符、时间线错乱、伏笔矛盾、章节衔接断裂、重复）
@@ -1921,7 +1931,7 @@ func batchCore(chapters int, checkKind int, checkEvery int, baseChapter ...int) 
 		base = baseChapter[0]
 	}
 	var plays []play
-	plays = append(plays, preparePlays(1)...)
+	plays = append(plays, preparePlays(base+1)...) // 续写批量（base>0）从 base+1 章准备，base=0 时不变
 
 	// outline：一次性出 N 章大纲（连续 edit，require 只查 edit 存在）
 	plays = append(plays,
@@ -1987,7 +1997,7 @@ func batchCore(chapters int, checkKind int, checkEvery int, baseChapter ...int) 
 	// review：整批统一一次。checkKind=4/5 覆盖全批（查 N 修 N），其余只审第 1 章。
 	// 章号用 base+1（批次循环打点：reviewPlays(1) 的 edit chapters/001.md 会污染 simCurrentChapter）
 	if checkKind == 4 || checkKind == 5 {
-		plays = append(plays, reviewPlaysBatch(chapters)...)
+		plays = append(plays, reviewPlaysBatch(chapters, base)...)
 	} else {
 		plays = append(plays, reviewPlays(base+1)...)
 	}
@@ -1998,10 +2008,11 @@ func batchCore(chapters int, checkKind int, checkEvery int, baseChapter ...int) 
 
 // reviewPlaysBatch 批末审稿覆盖全批（简单方案）：子代理 fork 完整主历史（正文已在上下文中，
 // 无需额外注入），主会话"查 N 修 N"——每章 read 自查 + 修复 1 处，末尾字数复查。
-// 对齐单章 reviewPlays 的"子代理 + 自查重读 + 修复 + 复查"模式。
-func reviewPlaysBatch(chapters int) []play {
+// 对齐单章 reviewPlays 的"子代理 + 自查重读 + 修复 + 复查"模式。base 支持续写批量
+// （章号偏移，如历史 4 章后续写批量 → base=4，审稿读第 5-9 章）。
+func reviewPlaysBatch(chapters, base int) []play {
 	plays := []play{
-		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(chapters)},
+		{tool: "run_subagent", args: `{"agent_type":"review"}`, result: reviewReport(base + chapters)},
 		// 审稿核对（真机批量会话 8/8 实测序列：全套状态核对 + 一致性检查）
 		{tool: "get_characters", args: `{}`, result: `{"characters":[{"id":1,"name":"陈昊","status":"突破金丹"}]}`},
 		{tool: "get_timeline", args: `{}`, result: `{"foreshadow":[{"id":5,"title":"玉佩来历","target_chapter":8,"status":"pending"}]}`},
@@ -2009,14 +2020,15 @@ func reviewPlaysBatch(chapters int) []play {
 		{tool: "get_reader_perspective", args: `{}`, result: `{"known":["陈昊身怀异火"],"suspense":["玉佩来历"]}`},
 		{tool: "check_story_consistency", args: `{}`, result: `{"ok":true,"issues":[]}`},
 	}
-	for ch := 1; ch <= chapters; ch++ {
+	for i := 1; i <= chapters; i++ {
+		ch := base + i
 		plays = append(plays,
 			play{tool: "read", args: fmt.Sprintf(`{"path":"chapters/%03d.md"}`, ch), result: chapterBodies[ch-1][0] + chapterBodies[ch-1][1]},
 			play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "审稿修复：调整节奏，去除 AI 味，补强章末悬念。"), result: "已修复问题"},
 		)
 	}
 	plays = append(plays,
-		play{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(chapters, simChapterTarget[chapters-1], true)},
+		play{tool: "get_chapter_list", args: `{"size":1}`, result: chapterListCheck(base+chapters, simChapterTarget[base+chapters-1], true)},
 	)
 	return plays
 }

@@ -287,31 +287,34 @@ func runCompare(cachePrice, inputPrice, outputPrice float64) {
 	}
 }
 
-// tableScenario 表格场景：单章轮数 / 短对话轮数 / 批量章数 / 展示名。
+// tableScenario 表格场景：单章轮数 / 短对话轮数 / 批量章数 / 历史章数（续写场景） / 展示名。
 type tableScenario struct {
-	g, q, b int
-	name    string
+	g, q, b, hist int
+	name          string
 }
 
 // runTable 跑一组常用工作负载场景，输出 Markdown 表格（now 协议，含输出计费 + miss 构成）。
 // 含"上下文规模维度"：批量 5/10/20/30/40/50/60 章，观察每章成本随对话窗口累积的变化。
+// 含"续写维度"（hist>0）：带历史续写单章/批量（对齐真机常态，只统计目标部分增量成本）。
 // 标注 1M 窗口 × 0.7 压缩阈值 ≈ 700K token 的位置（模拟器不建模压缩，阈值后真机每章成本会跳升）。
 func runTable(cachePrice, inputPrice, outputPrice float64) {
 	scenarios := []tableScenario{
-		{1, 0, 0, "单章 1 轮"},
-		{3, 0, 0, "单章 3 轮"},
-		{5, 0, 0, "单章 5 轮"},
-		{5, 3, 0, "单章 5 轮 + 短对话 3"},
-		{0, 0, 5, "批量 5 章"},
-		{0, 2, 5, "批量 5 章 + 短对话 2"},
-		{3, 2, 3, "混合 3+2+3"},
-		{5, 5, 5, "混合 5+5+5"},
-		{0, 0, 10, "批量 10 章"},
-		{0, 0, 20, "批量 20 章"},
-		{0, 0, 30, "批量 30 章"},
-		{0, 0, 40, "批量 40 章（≈1M×0.7 压缩阈值边缘）"},
-		{0, 0, 50, "批量 50 章（超阈值，真机需压缩）"},
-		{0, 0, 60, "批量 60 章（超阈值，真机需压缩）"},
+		{1, 0, 0, 0, "单章 1 轮"},
+		{3, 0, 0, 0, "单章 3 轮"},
+		{5, 0, 0, 0, "单章 5 轮"},
+		{5, 3, 0, 0, "单章 5 轮 + 短对话 3"},
+		{0, 0, 5, 0, "批量 5 章"},
+		{0, 2, 5, 0, "批量 5 章 + 短对话 2"},
+		{3, 2, 3, 0, "混合 3+2+3"},
+		{5, 5, 5, 0, "混合 5+5+5"},
+		{0, 0, 0, 3, "续写单章（历史 3 章）"},
+		{0, 0, 5, 4, "续写批量 5 章（历史 4 章）"},
+		{0, 0, 10, 0, "批量 10 章"},
+		{0, 0, 20, 0, "批量 20 章"},
+		{0, 0, 30, 0, "批量 30 章"},
+		{0, 0, 40, 0, "批量 40 章（≈1M×0.7 压缩阈值边缘）"},
+		{0, 0, 50, 0, "批量 50 章（超阈值，真机需压缩）"},
+		{0, 0, 60, 0, "批量 60 章（超阈值，真机需压缩）"},
 	}
 
 	type row struct {
@@ -330,7 +333,18 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 	fmt.Printf("|------|-----|-------|------|---------|----------|---------|--------|--------|--------|\n")
 
 	for _, sc := range scenarios {
-		res, err := cacheprobe.Run(sc.g, sc.q, sc.b, 0)
+		var res *cacheprobe.Result
+		var err error
+		if sc.hist > 0 {
+			// 续写场景：历史章数 + 目标（单章 1 章 / 批量 sc.b 章），只统计目标增量
+			if sc.b > 0 {
+				res, err = cacheprobe.RunContinue(0, sc.hist, sc.b)
+			} else {
+				res, err = cacheprobe.RunContinue(sc.hist, 0, 0)
+			}
+		} else {
+			res, err = cacheprobe.Run(sc.g, sc.q, sc.b, 0)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "场景 %s 模拟失败: %v\n", sc.name, err)
 			continue
@@ -371,7 +385,17 @@ func runTable(cachePrice, inputPrice, outputPrice float64) {
 		if sc.b > 0 {
 			mode = "batch"
 		}
-		warns := cacheprobe.ValidatePlays(sc.g, sc.q, sc.b, mode)
+		// 续写场景的 plays 与同构的新会话场景一致（gateScript/batchCore + base 偏移），
+		// 校验用等效参数（续写单章 = 单章 1 轮；续写批量 = 批量 5 章）
+		vg, vq, vb := sc.g, sc.q, sc.b
+		if sc.hist > 0 {
+			if sc.b > 0 {
+				vg, vq, vb = 0, 0, 5
+			} else {
+				vg, vq, vb = 1, 0, 0
+			}
+		}
+		warns := cacheprobe.ValidatePlays(vg, vq, vb, mode)
 		if len(warns) == 0 {
 			fmt.Printf("- %s：✓ 全部工具调用在阶段白名单内\n", sc.name)
 			continue

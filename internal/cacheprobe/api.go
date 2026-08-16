@@ -502,6 +502,195 @@ func isOptMode(mode string) bool { return mode == "opt" }
 // skipReadRequired 判断是否跳过 read_required（auto 和 opt 模式）
 func skipReadRequired(mode string) bool { return mode == "auto" || mode == "opt" }
 
+// ── 续写场景（对齐真机"带历史续写"用法）──────────────────────────────
+// 真机常态：已有 N 章历史（技能/查询/正文都在上下文前缀里）再续写下一章/下一批，
+// 只 miss 新增内容。模拟器既有场景全部从空会话起步（开书 + 技能全量注入），
+// miss/输出与真机续写结构性差异大（单章 2 倍+）。续写场景先跑完整单章轮建立历史，
+// 再跑目标流程，返回目标部分（增量）成本——历史构建成本不计入（真机中已发生）。
+
+// runInitRounds 开书流程：历史累积，结果丢弃（真机中开书早已发生）。
+func runInitRounds(cache *TokenCache, history *[]map[string]any) {
+	cur := []map[string]any{userMsg("请开始创作：这是一本仙侠小说《登天之路》。")}
+	cur = append(cur, sysMsg(novelState(0)))
+	cur = append(cur, sysMsg(initInject)) // auto：init 必读技能直接注入
+	for i, p := range initScript() {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
+			continue // auto：init 技能已系统注入，跳过技能读取工具
+		}
+		req := append(append([]map[string]any{}, (*history)...), cur...)
+		cache.Step(req)
+		if p.tool == "set_phase" {
+			simPhase = p.args
+			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+				cur = append(cur, sysMsg(sk))
+			}
+			cur = appendPhase(cur, p.args, true)
+		}
+		cur = append(cur,
+			asstToolCall(fmt.Sprintf("call_init_p%d", i), p.tool, p.args),
+			toolMsg(fmt.Sprintf("call_init_p%d", i), p.tool, playResult(p)),
+		)
+	}
+	cur = append(cur, asstText("开书完成：世界观、角色、总纲、第一卷弧线已建立，进入第一章创作。"))
+	req := append(append([]map[string]any{}, (*history)...), cur...)
+	cache.Step(req)
+	*history = append(*history, cur...)
+}
+
+// runGateRound 一轮完整单章（auto 模式）：历史累积 + 返回该轮增量结果。
+// turn 与 buildGateWithRounds 语义一致：写第 turn+1 章。
+func runGateRound(cache *TokenCache, history *[]map[string]any, turn int) [][2]int64 {
+	results := [][2]int64{}
+	cur := []map[string]any{userMsg(fmt.Sprintf("请创作第 %d 章，继续推进剧情。", turn+1))}
+	cur = append(cur, sysMsg(novelState(turn)))
+	plays := gateScript(turn)
+	for i, p := range plays {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
+			continue // auto：技能在进入阶段时系统注入
+		}
+		req := append(append([]map[string]any{}, (*history)...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		id := fmt.Sprintf("call_t%d_p%d", turn, i)
+		if p.tool == "set_phase" {
+			simPhase = p.args
+			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+				cur = append(cur, sysMsg(sk))
+			}
+			cur = appendPhase(cur, p.args, true)
+		}
+		cur = append(cur, asstToolCall(id, p.tool, p.args))
+		if p.tool == "run_subagent" {
+			subResults := simulateSubagent(cache, *history, cur, turn)
+			results = append(results, subResults...)
+		}
+		cur = append(cur, toolMsg(id, p.tool, playResult(p)))
+	}
+	cur = append(cur, asstText(finalAssistant(turn)))
+	req := append(append([]map[string]any{}, (*history)...), cur...)
+	hit, miss := cache.Step(req)
+	results = append(results, [2]int64{hit, miss})
+	*history = append(*history, cur...)
+	return results
+}
+
+// runBatchRounds 批量流程（auto 模式）：从当前历史继续，返回批量增量结果。
+// baseChapter = 历史轮数（续写批量从 base+1 章起写）。
+func runBatchRounds(cache *TokenCache, history *[]map[string]any, chapters, baseChapter int) [][2]int64 {
+	results := [][2]int64{}
+	cur := []map[string]any{userMsg(fmt.Sprintf("请批量创作 %d 章：先出全部大纲，再逐章写正文，全部完成后统一审稿与维护。", chapters))}
+	cur = append(cur, sysMsg(novelState(baseChapter)))
+	plays := batchLightEndReviewBase(chapters, baseChapter)
+	for i, p := range plays {
+		if p.tool == "auto_skill_injection" || p.tool == "read_required" {
+			continue
+		}
+		req := append(append([]map[string]any{}, (*history)...), cur...)
+		hit, miss := cache.Step(req)
+		results = append(results, [2]int64{hit, miss})
+		id := fmt.Sprintf("call_b%d_p%d", baseChapter, i)
+		if p.tool == "set_phase" {
+			simPhase = p.args
+			if sk, ok := phaseInjectSkills[p.args]; ok && sk != "" {
+				cur = append(cur, sysMsg(sk))
+			}
+			cur = appendPhase(cur, p.args, true)
+		}
+		cur = append(cur, asstToolCall(id, p.tool, p.args))
+		if p.tool == "run_subagent" {
+			subResults := simulateSubagentChapters(cache, *history, cur, baseChapter+chapters, chapters)
+			results = append(results, subResults...)
+		}
+		cur = append(cur, toolMsg(id, p.tool, playResult(p)))
+	}
+	cur = append(cur, asstText(fmt.Sprintf("批量创作完成：%d 章正文已写入，审稿与维护已统一完成。", chapters)))
+	req := append(append([]map[string]any{}, (*history)...), cur...)
+	hit, miss := cache.Step(req)
+	results = append(results, [2]int64{hit, miss})
+	*history = append(*history, cur...)
+	return results
+}
+
+// buildContinueSingle 续写单章：historyChapters 轮历史 + 目标 1 章。
+// 返回目标轮增量 results + 历史构建结束时的 output 基线（目标输出 = Output() - 基线）。
+// 历史轮数语义 = 真机"已有 N 章历史"（模拟器每轮写一章，第 1 章由 init 开书覆盖缺失为模拟器既有简化）。
+func buildContinueSingle(cache *TokenCache, historyChapters int) ([][2]int64, int64) {
+	history := append([]map[string]any{}, fixedSystem()...)
+	runInitRounds(cache, &history)
+	for t := 1; t <= historyChapters; t++ {
+		runGateRound(cache, &history, t) // 历史轮：结果丢弃
+	}
+	cache.ResetMissByCat() // 目标统计从历史基线之后开始
+	base := cache.Output()
+	return runGateRound(cache, &history, historyChapters+1), base // 目标章
+}
+
+// buildContinueBatch 续写批量：historyChapters 轮历史 + 批量 chapters 章。
+// 返回目标批量增量 results + 历史构建结束时的 output 基线。
+func buildContinueBatch(cache *TokenCache, historyChapters, chapters int) ([][2]int64, int64) {
+	history := append([]map[string]any{}, fixedSystem()...)
+	runInitRounds(cache, &history)
+	for t := 1; t <= historyChapters; t++ {
+		runGateRound(cache, &history, t) // 历史轮：结果丢弃
+	}
+	cache.ResetMissByCat() // 目标统计从历史基线之后开始
+	base := cache.Output()
+	return runBatchRounds(cache, &history, chapters, historyChapters), base
+}
+
+// RunContinue 续写场景（now 协议，只跑当前版 auto 行为）。
+// histSingle>0：续写单章（历史 histSingle 章 + 目标 1 章）；histBatch>0 且 batchChapters>0：续写批量。
+func RunContinue(histSingle, histBatch, batchChapters int) (*Result, error) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	initTools()
+	simPhase = "init"
+
+	res := &Result{}
+	if histSingle > 0 {
+		cache := NewTokenCache()
+		cache.SetMissCat(missCatOf)
+		r, outBase := buildContinueSingle(cache, histSingle)
+		var h, m int64
+		for _, pr := range r {
+			h += pr[0]
+			m += pr[1]
+		}
+		res.Scenarios = append(res.Scenarios, ScenarioResult{
+			Name: fmt.Sprintf("续写单章（历史 %d 章）", histSingle),
+			NowHit: h, NowMiss: m, NowOutput: cache.Output() - outBase,
+			NowMissByCat: cache.MissByCat,
+		})
+	}
+	if histBatch > 0 && batchChapters > 0 {
+		cache := NewTokenCache()
+		cache.SetMissCat(missCatOf)
+		r, outBase := buildContinueBatch(cache, histBatch, batchChapters)
+		var h, m int64
+		for _, pr := range r {
+			h += pr[0]
+			m += pr[1]
+		}
+		res.Scenarios = append(res.Scenarios, ScenarioResult{
+			Name: fmt.Sprintf("续写批量 %d 章（历史 %d 章）", batchChapters, histBatch),
+			NowHit: h, NowMiss: m, NowOutput: cache.Output() - outBase,
+			NowMissByCat: cache.MissByCat,
+		})
+	}
+
+	for _, s := range res.Scenarios {
+		res.TotalNowHit += s.NowHit
+		res.TotalNowMiss += s.NowMiss
+		res.TotalNowOutput += s.NowOutput
+		if res.TotalNowMissByCat == nil {
+			res.TotalNowMissByCat = map[string]int64{}
+		}
+		for k, v := range s.NowMissByCat {
+			res.TotalNowMissByCat[k] += v
+		}
+	}
+	return res, nil
+}
+
 // buildGateWithRoundsOpt 优化模式：auto-inject + set_phase 自动推进（不生成消息）+ 去掉成功提醒。
 func buildGateWithRoundsOpt(cache *TokenCache, rounds int) [][2]int64 {
 	return buildOptWithPrefix(cache, rounds, fixedSystem())
