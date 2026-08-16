@@ -66,6 +66,7 @@
 > 2026-08-16：事件通道会话隔离（并发串台真修复）——turn_id 按会话独立递增会碰撞，桌面端 agent:{turnID} 事件名改 agent:{sessionID}:{turnID}（agent.go + ChatPanel 订阅同步）；chat:api_event 全事件补 session_id（chat.go EventCallback + done 事件）；桌面端 api 回合 id 改 api-{session}:{turn}；移动端 WS 按 ev.session_id 过滤非当前会话事件（started 切换信号除外）。
 > 2026-08-16：写时把关落地——① get_writing_context 新增 dead_characters 聚合字段（status=dead 角色名，写前防死者复出，工具描述同步）；② 门禁 single+batch write 转出 require 加 check_story_consistency（写完必须 SQL 实证核对四类硬错误才能进 review，current_chapter 必填防敷衍，default_phase_gate_config.go + 门禁配置示例.md 同步）；③ kernel（skills/+builtin+~/.goink/skills 三处同步）write 段加"写完核对"步骤、批量每 3 章自检加 check_story_consistency。
 > 2026-08-16：会话历史删除后最近会话列表不刷新（ChatPanel.sessions 是 RecentSessions 数据源，SessionHistory 删除只刷新自身列表）——新增 onDeleted 回调（SessionHistory deleteSelected 成功后触发）+ ChatPanel refreshSessions，删除后立即同步最近会话。
+> 2026-08-16：cacheprobe 同步写时把关（建模镜随业务更新）——write 段 plays 补 check_story_consistency（writeBodyPlays 一处覆盖 single+batch 全部章，current_chapter 参数，结果 ~1K token），消除"门禁 require 已加但模拟器未建模"的成本低估漂移。
 
 ## tools/ — 验证工具（可运行）
 

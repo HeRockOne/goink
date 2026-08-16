@@ -1722,6 +1722,9 @@ func writeBodyPlays(ch int) []play {
 		play{tool: "edit", args: editArgs(fmt.Sprintf("chapters/%03d.md", ch), "补写段落：主角凝视远方，回忆方才的惊险，掌心仍有余温。夜色中一道人影掠过屋檐，他握紧长剑，悄然跟了上去。"), result: fmt.Sprintf("补写 400 字，当前 %d/%d", target, target)},
 		play{tool: "get_chapter_list", args: `{}`, result: chapterListCheck(ch, target, true)},
 		play{tool: "create_item_occurrence", args: `{"item_id":3,"chapter_id":` + fmt.Sprintf("%d", ch) + `,"action":"主角服用聚气丹"}`, result: "已记录"},
+		// 写时把关（2026-08-16 门禁 require 新增）：write 转出前必须 check_story_consistency
+		// 程序化核对四类硬错误（伏笔超期/角色断档/物品冲突/死者复出），current_chapter 必填
+		play{tool: "check_story_consistency", args: fmt.Sprintf(`{"current_chapter":%d}`, ch), result: `{"ok":true,"issues":[]}`},
 	)
 	return plays
 }
