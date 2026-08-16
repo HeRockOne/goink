@@ -1185,10 +1185,10 @@ func RunWindowMode(mode string, gateRounds, shortQARounds, batchChapters, batchR
 	}
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
-	// 门禁拦截建模：默认按真机 set_phase 失败率 25% 注入拦截（require 未满足），
-	// 失败消息全 miss 且带动重试——让成本口径贴近真机（真机日志 28 次 set_phase 7 次失败）。
-	simGateBlockRate = 0.25
-	defer func() { simGateBlockRate = 0 }()
+	// 门禁拦截建模：规范基准下不启用（simGateBlockRate 保持默认 0）。
+	// 真机 set_phase 25% 失败率 = LLM 在 require 未满足时强行切换的不规范行为，
+	// 属于"发癫/偷工减料"范畴，不纳入严格门禁规范基准（用户拍板 2026-08-16）。
+	// 如需对照研究可临时置 simGateBlockRate = 0.25。
 
 	simWindowThresholds = []int64{128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024}
 	simCurrentChapter = 0

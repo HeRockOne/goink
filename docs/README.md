@@ -72,6 +72,7 @@
 > 2026-08-16：批量 5 章真机验证（sess_2_18cc3abdae039518）发现两个软约束失效缺口并硬约束化——① 每 3 章轻量自检完全未触发（kernel 软约束，LLM 不遵守）→ agent.go 章边界注入自检提醒（handleBatchChapterBoundary，已完成章号 N%3==0 时注入状态对照+一致性+文笔自检提醒）；② miniMaintain 六件套只执行 2/6 件（require 按阶段累计，第 1 章满足后后续章不调也能转出，真机确认）→ SetPhase 批量 write 章边界（同阶段）检查 missingMiniMaintain，缺件拒绝声明下一章 + ResetPhaseCounts 按章重置 require 与字数状态（每章独立结算，含最后章转出 review）。新增 TestBatchChapterBoundaryRequiresMiniMaintain/TestBatchChapterBoundaryResetCounts；模拟器 miniMaintainPlays 每章已建模（对齐硬约束后真机）。
 > 2026-08-16：模拟器首轮固定前缀被动缓存建模（真机对齐第三次校准）——真机 mimo-v2.5 批量 5 章首轮输入 34.3K 命中 28.7K（83.7%，MiniMax 对固定字节前缀有服务端被动缓存），模拟此前首轮全 miss 高估 ~30K/会话。新增 SimFirstHitRatio（默认 0.84，CLI -firsthit 可调，DeepSeek 场景可设 0），step() 首轮分支对 fixed 类消息+tools 按比例拆分 hit/miss 并同步 MissByCat；新增 TestFirstRoundHitRatio。建模后批量 5 章 miss 184.7K→159.1K 与真机 167.0K 差 4.7%，命中率 95.7% vs 真机 98.3%（剩余差距 = mimo 每轮新增固定内容的被动缓存，字节前缀口径未建模）；输出口径差异（真机 60.7K vs 模拟 23.7K）为审稿拖沓真实行为非失真。
 > 2026-08-16：**模拟器定位明确：严格门禁阶段规范基准**（用户拍板）——plays 建模"LLM 严格按门禁配置与 kernel 规范执行"的应有成本；真机低于模拟 = LLM 偷工减料（软约束失效、缺大纲、miniMaintain 2/6），高于模拟 = 发癫（抽风思考、拖沓重试、人工介入），个别 LLM 发癫行为不纳入模拟，对标时先剔除（如批量 ~35K 抽风输出）。
+> 2026-08-16：**移除门禁拦截行为建模**（用户"不要把发癫行为放进来"）——RunWindowMode 原先默认 simGateBlockRate=0.25（真机 set_phase 失败率 25%：LLM require 未满足即强行切换），属不规范行为建模，已删除启用点（默认 0 恒放行，代码保留供对照研究）；phaseThinkCharsHigh/outlineText 注释标注"剔除抽风消息后校准"（大纲 11K 为规范产物保留）。window/设置面板成本口径变为纯规范基准。
 > 2026-08-16：续写场景**请求数爆炸修复**（用户质疑"差别巨大"后深挖）——首版续写场景
 > 循环逐 play 串行（每工具调用一次请求），未走 runPlays 分组并行（≤10 调用合并一请求，
 > 对齐真机并行行为）→ 请求数放大 5 倍（单章轮 89 vs 真机 18、批量 182 vs 72）、hit 虚高

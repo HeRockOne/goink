@@ -802,9 +802,10 @@ var phaseThinkCharsLow = map[string]int{
 
 // phaseThinkCharsHigh 各门禁阶段 thinking 基数（reasoning high 口径）。
 // 2026-08-16 真机批量会话（mimo-v2.5 reasoning_effort=high）反推：主会话 read 请求
-// comp 2.1-2.5K/次（参数仅 ~20 token，其余为思考），review 阶段读正文思考 ~2.2K →
-// review 基数 2100；其余阶段按 low 同比例（×3）放大。工具参数输出（大纲/审稿报告）
-// 由 plays 内容本身建模，不在此表内。
+// comp 2.1-2.5K/次（参数仅 ~20 token，其余为思考）→ review 基数 2100；其余阶段按
+// low 同比例（×3）放大。**read 2.2K 思考为剔除抽风消息后的正常 high 行为**
+// （该会话另有 4 条超长抽风思考 ~35K token，不参与本表校准）。工具参数输出
+// （大纲/审稿报告）由 plays 内容本身建模，不在此表内。
 var phaseThinkCharsHigh = map[string]int{
 	"init":     750,
 	"prepare":  1110,
@@ -1312,9 +1313,10 @@ func phaseOfArgs(args string) string {
 	return args
 }
 
-// simGateBlockRate 门禁拦截建模概率（0=关闭；真机实测 set_phase 失败率 25%——
-// require 未满足/技能未读/字数未校验时拦截，失败消息全 miss 且带动重试）。
-// 包级开关（单线程模拟器），RunWindowMode/CLI 可配置；固定 seed 可复现。
+// simGateBlockRate 门禁拦截建模概率（0=关闭，规范基准默认 0）。
+// 真机实测 set_phase 失败率 25%（require 未满足/技能未读/字数未校验时拦截，
+// 失败消息全 miss 且带动重试）——那是 LLM 不守规矩的行为，不属于严格门禁
+// 规范基准（2026-08-16 用户拍板：不发癫行为进模拟器）。代码保留供对照研究。
 var simGateBlockRate float64
 
 // simBlockRNG 拦截建模随机源（固定 seed 42，可复现）。
@@ -1383,8 +1385,8 @@ func runPlays(cache *TokenCache, history, cur []map[string]any, plays []play, re
 				// 同步真实 agent.go：只真切换（from != to）注入技能，同阶段 set_phase
 				// （批量 write 章边界）跳过——技能已在上下文，重复注入纯浪费。
 				phase := phaseOfArgs(p.args)
-				// 门禁拦截建模：真机 set_phase 25% 失败（require 未满足/技能未读/字数未校验），
-				// 失败注入 reminder 且不切换阶段；LLM 下轮重试（重试请求自然计入 miss）。
+				// 门禁拦截建模：规范基准下 simGateBlockRate=0 恒放行（blockGateTransition
+				// 直接返回 ok）。真机 25% 拦截 = LLM 不规范行为，不纳入规范基准。
 				var ok bool
 				cur, ok = blockGateTransition(cur, phase)
 				if !ok {
@@ -2096,8 +2098,10 @@ func writePlaysLean(ch int) []play {
 }
 
 // outlineText 生成第 ch 章大纲（模拟 edit 输出）。
-// 长度按 2026-08-16 真机批量会话校准：5 章大纲单请求输出 10,986 token（≈2.2K token/章），
-// 结构对齐真机大纲模板（开篇切入/场景/情感锚点/对白/钩子/感官/温度）。
+// 长度按 2026-08-16 真机批量会话校准：5 章大纲单请求输出 10,986 token（≈2.2K token/章）。
+// **大纲是门禁规范产物（LLM 一次性出 N 章完整大纲），数值取自抽风会话中的正常输出
+// （4827 请求，非抽风消息），保留**。结构对齐真机大纲模板（开篇切入/场景/情感锚点/
+// 对白/钩子/感官/温度）。
 func outlineText(ch int) string {
 	return fmt.Sprintf(`# 第 %d 章 %s
 
