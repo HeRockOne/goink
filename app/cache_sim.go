@@ -51,6 +51,8 @@ type SimScenarioReq struct {
 	BatchChapters  int    `json:"batch_chapters"`  // 批量章数（batch/mixed 用）
 	BatchRounds    int    `json:"batch_rounds"`    // 批量轮数（mixed 用）
 	ContextWindow  int    `json:"context_window"`  // 模拟窗口 token，0=按设置选中模型
+	Effort         string `json:"effort"`          // reasoning effort 档位（low/high，空=low）
+	HistChapters   int    `json:"hist_chapters"`   // 续写场景历史章数（>0 = 带历史续写，只统计目标增量）
 }
 
 // CacheSimStage 阶段打点快照（mixed 模式，按创作阶段边界记录）。
@@ -74,7 +76,7 @@ func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds in
 	go func() {
 		simMu.Lock()
 		defer simMu.Unlock()
-		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow)
+		res := a.runCacheSimulationSync(mode, gateRounds, shortQARounds, batchChapters, batchRounds, contextWindow, "")
 		wails.EventsEmit(a.ctx, "cachesim:done", res)
 	}()
 	return nil
@@ -88,6 +90,15 @@ func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
 		defer simMu.Unlock()
 		results := make([]CacheSimResult, 0, len(scenarios))
 		for _, sc := range scenarios {
+			// 续写场景（hist>0）：带历史续写，只统计目标增量（RunContinue，无窗口刻度）
+			if sc.HistChapters > 0 {
+				r := a.runContinueSimulationSync(sc.HistChapters, sc.BatchChapters, sc.ContextWindow, sc.Effort)
+				if sc.Name != "" {
+					r.Label = sc.Name
+				}
+				results = append(results, *r)
+				continue
+			}
 			mode := "mixed"
 			switch {
 			case sc.BatchChapters > 0 && sc.GateRounds == 0:
@@ -98,7 +109,7 @@ func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
 			if sc.BatchRounds < 1 {
 				sc.BatchRounds = 1
 			}
-			r := a.runCacheSimulationSync(mode, sc.GateRounds, sc.ShortQARounds, sc.BatchChapters, sc.BatchRounds, sc.ContextWindow)
+			r := a.runCacheSimulationSync(mode, sc.GateRounds, sc.ShortQARounds, sc.BatchChapters, sc.BatchRounds, sc.ContextWindow, sc.Effort)
 			if sc.Name != "" {
 				r.Label = sc.Name
 			}
@@ -110,7 +121,13 @@ func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
 }
 
 // runCacheSimulationSync 同步执行模拟并附带价格估算与窗口刻度（供 StartCacheSimulation 后台调用）。
-func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int, contextWindow int) *CacheSimResult {
+func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds int, batchChapters int, batchRounds int, contextWindow int, effort string) *CacheSimResult {
+	// reasoning effort 档位（CLI -effort 同源；空=low 保守口径），跑完恢复默认防串扰
+	if effort == "" {
+		effort = "low"
+	}
+	cacheprobe.SetSimEffort(effort)
+	defer cacheprobe.SetSimEffort("low")
 	// 上下文窗口：前端传入 >0 用传入值；否则按设置选中模型推断
 	// （SelectedModelKey 格式 provider/modelID，解析后匹配内置定义），
 	// 仍匹配不到默认 1M（DeepSeek）。
@@ -224,6 +241,73 @@ func (a *App) runCacheSimulationSync(mode string, gateRounds int, shortQARounds 
 		"compresses", res.Compresses,
 	)
 	return res
+}
+
+// runContinueSimulationSync 续写场景模拟（对齐真机"带历史续写"）：histChapters 轮历史
+// 建立前缀 + 目标（单章 1 章 / 批量 batchChapters 章），只统计目标增量成本。
+// 无窗口刻度（续写窗口由历史决定，刻度无意义），返回汇总 + miss 构成。
+func (a *App) runContinueSimulationSync(histChapters int, batchChapters int, contextWindow int, effort string) *CacheSimResult {
+	if effort == "" {
+		effort = "low"
+	}
+	cacheprobe.SetSimEffort(effort)
+	defer cacheprobe.SetSimEffort("low")
+
+	var histSingle, histBatch int
+	if batchChapters > 0 {
+		histBatch = histChapters // 续写批量（历史 hist 章 + 批量 batchChapters 章）
+	} else {
+		histSingle = histChapters // 续写单章（历史 hist 章 + 目标 1 章）
+	}
+	res, err := cacheprobe.RunContinue(histSingle, histBatch, batchChapters)
+	if err != nil || len(res.Scenarios) == 0 {
+		a.Logger().Error("cachesim continue failed", "hist", histChapters, "batch", batchChapters, "err", err)
+		return &CacheSimResult{Cost: -1} // 失败标记
+	}
+	sc := res.Scenarios[0]
+
+	// 价格：从设置读（与 runCacheSimulationSync 同源）
+	inputPrice, outputPrice, cachePrice := 1.0, 2.0, 0.02
+	if s, err := config.LoadSettings(a.db); err == nil {
+		if s.PriceInput > 0 {
+			inputPrice = s.PriceInput
+		}
+		if s.PriceOutput > 0 {
+			outputPrice = s.PriceOutput
+		}
+		if s.CachePrice > 0 {
+			cachePrice = s.CachePrice
+		}
+	}
+
+	label := fmt.Sprintf("续写单章（历史 %d 章）", histChapters)
+	if batchChapters > 0 {
+		label = fmt.Sprintf("续写批量 %d 章（历史 %d 章）", batchChapters, histChapters)
+	}
+	c := costOf(sc.NowHit, sc.NowMiss, sc.NowOutput, cachePrice, inputPrice, outputPrice)
+	r := &CacheSimResult{
+		Mode:  "continue",
+		Label: label,
+		TotalHit: sc.NowHit, TotalMiss: sc.NowMiss, TotalOut: sc.NowOutput,
+		HitRate: hitRate(sc.NowHit, sc.NowMiss),
+		Cost:    c,
+		FinalTotal: sc.NowHit + sc.NowMiss,
+		FinalCost:  c,
+		FinalHitRate: hitRate(sc.NowHit, sc.NowMiss),
+		MissByCat: sc.NowMissByCat,
+	}
+	a.Logger().Info("cachesim continue done",
+		"hist", histChapters,
+		"batch", batchChapters,
+		"effort", effort,
+		"label", r.Label,
+		"hit_rate", r.HitRate,
+		"cost", r.Cost,
+		"total_hit", r.TotalHit,
+		"total_miss", r.TotalMiss,
+		"total_out", r.TotalOut,
+	)
+	return r
 }
 
 // modelContextWindow 按模型 key 查内置定义的上下文窗口（token）。

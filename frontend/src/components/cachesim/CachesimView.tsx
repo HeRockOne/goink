@@ -37,6 +37,8 @@ interface SimScenario {
   short_qa_rounds: number
   batch_chapters: number
   batch_rounds: number
+  effort?: string
+  hist_chapters?: number
 }
 
 // ── 三档预设（普通用户视角：写法 → 参数自动映射）──
@@ -56,11 +58,13 @@ const PRESETS: Preset[] = [
   { key: 'mixed', title: '边写边聊', desc: '一个会话窗口里：写 3 章精修 → 聊 2 轮设定 → 再批量写 3 章，贴近日常边写边调整', icon: <MessagesSquare className="w-4 h-4" />, scenario: { name: '边写边聊', gate_rounds: 3, short_qa_rounds: 2, batch_chapters: 3, batch_rounds: 1 } },
 ]
 
-// ── 高级详情：自定义场景（保留原能力）──
+// ── 高级详情：自定义场景（保留原能力 + 续写场景）──
 const DEFAULT_SCENARIOS: SimScenario[] = [
   { name: '单章 1 章', gate_rounds: 1, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
   { name: '单章 3 章', gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
   { name: '单章 5 章', gate_rounds: 5, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 },
+  { name: '续写单章（历史 3 章）', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1, hist_chapters: 3 },
+  { name: '续写批量 5 章（历史 4 章）', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 5, batch_rounds: 1, hist_chapters: 4 },
   { name: '批量 20 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 20, batch_rounds: 1 },
   { name: '批量 40 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 40, batch_rounds: 1 },
   { name: '批量 60 章', gate_rounds: 0, short_qa_rounds: 0, batch_chapters: 60, batch_rounds: 1 },
@@ -117,6 +121,8 @@ export default function CachesimView() {
   const [prices, setPrices] = useState({ input: 1, output: 2, cache: 0.02 })
   const [hitAdjust, setHitAdjust] = useState(0.95)
   const [hitAdjustSaved, setHitAdjustSaved] = useState(true)
+  // 推理深度（reasoning effort）：low=保守口径 / high=思考密集（对标 mimo high 会话）
+  const [simEffort, setSimEffort] = useState<'low' | 'high'>('low')
   const mountedRef = useRef(true)
 
   // 跑三档预设（进面板自动 + 校准系数变化后手动重跑）
@@ -125,12 +131,12 @@ export default function CachesimView() {
     setError('')
     setPresetResults([])
     try {
-      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, context_window: windowK * 1000 })))
+      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, effort: simEffort, context_window: windowK * 1000 })))
     } catch (e) {
       setError(String(e))
       setPresetRunning(false)
     }
-  }, [windowK])
+  }, [windowK, simEffort])
 
   // 进面板自动跑三档预设
   useEffect(() => {
@@ -188,14 +194,14 @@ export default function CachesimView() {
     setRunning(true)
     setError('')
     setResults([])
-    const req = scenarios.map(sc => ({ ...sc, context_window: windowK * 1000 }))
+    const req = scenarios.map(sc => ({ ...sc, effort: simEffort, context_window: windowK * 1000 }))
     try {
       await StartCacheSimScenarios(req)
     } catch (e) {
       setError(String(e))
       setRunning(false)
     }
-  }, [scenarios, windowK])
+  }, [scenarios, windowK, simEffort])
 
   const updateScenario = (i: number, patch: Partial<SimScenario>) => {
     setScenarios(prev => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
@@ -398,6 +404,17 @@ export default function CachesimView() {
                   />
                   <span className="text-[10px] text-muted-foreground/70">0=按选中模型</span>
                 </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground shrink-0" title="推理深度：low=保守思考口径，high=思考密集（对标 mimo high 会话，输出与成本偏高）">
+                  推理深度
+                  <select
+                    value={simEffort}
+                    onChange={e => setSimEffort(e.target.value as 'low' | 'high')}
+                    className="px-2 py-1 rounded border bg-background text-sm text-foreground"
+                  >
+                    <option value="low">low</option>
+                    <option value="high">high</option>
+                  </select>
+                </label>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground shrink-0" title="真机命中率（89-93%）低于模拟器（96-97%），系数把模拟命中率乘此值：0.95=按 95% 折算，1=不校准">
                   命中率校准 ×
                   <input
@@ -442,7 +459,7 @@ export default function CachesimView() {
               {/* 场景编辑器 */}
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm font-medium text-foreground">场景集（可自定义）</span>
-                <span className="text-[10px] text-muted-foreground/70">单章章数 g · 短对话轮 q · 批量章 b · 批量批数 r</span>
+                <span className="text-[10px] text-muted-foreground/70">单章章数 g · 短对话轮 q · 批量章 b · 批量批数 r · 历史章 h（续写场景，只统计目标增量）</span>
                 <div className="flex-1" />
                 <button
                   onClick={() => setScenarios(prev => [...prev, { name: `新场景 ${prev.length + 1}`, gate_rounds: 3, short_qa_rounds: 0, batch_chapters: 0, batch_rounds: 1 }])}
@@ -476,6 +493,9 @@ export default function CachesimView() {
                     </span>
                     <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       批量批{numInput(sc.batch_rounds, n => updateScenario(i, { batch_rounds: n }))}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground" title="续写场景历史章数（>0 = 带历史续写，只统计目标增量；批量章>0 时为续写批量）">
+                      历史章{numInput(sc.hist_chapters ?? 0, n => updateScenario(i, { hist_chapters: n }))}
                     </span>
                     <button
                       onClick={() => setScenarios(prev => prev.filter((_, idx) => idx !== i))}
