@@ -26,40 +26,40 @@
 [data-theme="light"] {
   --background: #eef3f8;
   --foreground: #0e1a26;
-  --card: rgba(255, 255, 255, 0.62);
+  --card: rgba(255, 255, 255, 0.8);
   --card-foreground: #0e1a26;
   --popover: rgba(255, 255, 255, 0.94);
   --popover-foreground: #0e1a26;
-  --primary: #6b8fad;
+  --primary: #4a7da6;
   --primary-foreground: #f0f4f8;
   --secondary: rgba(220, 228, 237, 0.6);
   --secondary-foreground: #1f3345;
   --muted: rgba(220, 228, 237, 0.5);
-  --muted-foreground: #4a6a80;
-  --accent: rgba(107, 143, 173, 0.14);
+  --muted-foreground: #3d5a70;
+  --accent: rgba(74, 125, 166, 0.16);
   --accent-foreground: #0e1a26;
   --destructive: #b53a4a;
   --destructive-foreground: #f0f4f8;
-  --border: rgba(14, 26, 38, 0.12);
+  --border: rgba(14, 26, 38, 0.15);
   --input: rgba(255, 255, 255, 0.6);
-  --ring: #6b8fad;
-  --chart-1: #6b8fad;
+  --ring: #4a7da6;
+  --chart-1: #4a7da6;
   --chart-2: #5a9a7a;
   --chart-3: #c4956a;
   --chart-4: #7a9ab5;
   --chart-5: #b57a8a;
-  --sidebar: rgba(255, 255, 255, 0.85);
+  --sidebar: rgba(255, 255, 255, 0.92);
   --sidebar-foreground: #0e1a26;
-  --sidebar-primary: #6b8fad;
+  --sidebar-primary: #4a7da6;
   --sidebar-primary-foreground: #f0f4f8;
   --sidebar-accent: rgba(220, 228, 237, 0.6);
   --sidebar-accent-foreground: #1f3345;
-  --sidebar-border: rgba(14, 26, 38, 0.1);
-  --sidebar-ring: #6b8fad;
+  --sidebar-border: rgba(14, 26, 38, 0.12);
+  --sidebar-ring: #4a7da6;
   --tag-blue: #dbe6f0;
   --tag-blue-foreground: #3a6b8c;
-  --tag-green: #d8e8e0;
-  --tag-green-foreground: #3a7a5a;
+  --tag-green: #d6e8de;
+  --tag-green-foreground: #2f8a5e;
   --tag-amber: #f0e4cc;
   --tag-amber-foreground: #8a6a2a;
   --tag-rose: #f0dcd8;
@@ -72,23 +72,23 @@
   --tool-blue-border: #8aaec8;
   --tool-amber: #f4ecdc;
   --tool-amber-border: #c8a860;
-  --tool-green: #e0ece4;
-  --tool-green-border: #7aa88a;
+  --tool-green: #dcebe2;
+  --tool-green-border: #5f9a75;
   --tool-red: #f4e4e0;
   --tool-red-border: #c87a6a;
   --danger-bg: #f4e4e0;
   --danger-border: #e0c0b8;
-  --bubble-user: #6b8fad;
+  --bubble-user: #4a7da6;
   --bubble-user-foreground: #f0f4f8;
   --action-extract: #5a7a94;
   --action-extract-foreground: #f0f4f8;
   --action-save: #5a9a7a;
   --action-save-foreground: #f0f4f8;
-  --success: #dcece2;
-  --success-foreground: #3a7a5a;
-  --success-border: #b8d8c0;
+  --success: #d4e8da;
+  --success-foreground: #2e8a5e;
+  --success-border: #aed8bc;
   --status-warning: #b58a3a;
-  --status-ok: #4a8a6a;
+  --status-ok: #3d8a63;
   --contribution-0: #e8eef4;
   --contribution-1: #a8c8e0;
   --contribution-2: #68a0c0;
@@ -99,30 +99,30 @@
   --reader-paper: #ffffff;
 
   /* ── 太虚扩展 token ── */
-  --glow: rgba(107, 143, 173, 0.35);
-  --glow-strong: rgba(107, 143, 173, 0.6);
-  --usage-ok: #2f7a54;
+  --glow: rgba(74, 125, 166, 0.35);
+  --glow-strong: rgba(74, 125, 166, 0.6);
+  --usage-ok: #278a58;
   --usage-warn: #8a6a2a;
   --usage-danger: #b53a4a;
   --font-display: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif SC', serif;
-  --particle-color: rgba(74, 123, 156, 0.4);
-  --particle-glow: rgba(74, 123, 156, 0.12);
-  --particle-line: rgba(74, 123, 156, 0.15);
-  --bg-layer-grad: radial-gradient(ellipse at 30% 20%, rgba(74, 123, 156, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(74, 123, 156, 0.05) 0%, transparent 50%),
+  --particle-color: rgba(64, 110, 150, 0.4);
+  --particle-glow: rgba(64, 110, 150, 0.12);
+  --particle-line: rgba(64, 110, 150, 0.15);
+  --bg-layer-grad: radial-gradient(ellipse at 30% 20%, rgba(64, 110, 150, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(64, 110, 150, 0.05) 0%, transparent 50%),
     linear-gradient(180deg, #eef3f8 0%, #e2e9f2 40%, #e6ecf4 70%, #eef3f8 100%);
   --mountain1: rgba(150, 175, 195, 0.55);
   --mountain2: rgba(160, 180, 200, 0.4);
   --mountain3: rgba(170, 190, 210, 0.5);
   --mountain4: rgba(150, 170, 190, 0.32);
   --mountain5: rgba(175, 195, 215, 0.45);
-  --narrative-card-bg: rgba(255, 255, 255, 0.6);
-  --narrative-card-border: rgba(107, 143, 173, 0.2);
-  --narrative-card-line: rgba(107, 143, 173, 0.45);
+  --narrative-card-bg: rgba(255, 255, 255, 0.75);
+  --narrative-card-border: rgba(74, 125, 166, 0.25);
+  --narrative-card-line: rgba(74, 125, 166, 0.5);
   --editor-surface: #ffffff;
   --editor-statusbar: #f7fafd;
   --bubble-ai: rgba(238, 243, 248, 0.9);
-  --bubble-ai-border: rgba(107, 143, 173, 0.3);
+  --bubble-ai-border: rgba(74, 125, 166, 0.35);
   --editor-shadow: 0 30px 100px rgba(13, 26, 38, 0.25), 0 12px 40px rgba(13, 26, 38, 0.15), 0 4px 12px rgba(13, 26, 38, 0.08);
   --panel-shadow: 0 8px 32px rgba(13, 26, 38, 0.1), 0 2px 8px rgba(13, 26, 38, 0.05);
   --panel-edge: inset 1px 0 0 rgba(255, 255, 255, 0.6), -1px 0 8px rgba(13, 26, 38, 0.04);
@@ -226,8 +226,8 @@
   --particle-color: rgba(161, 196, 214, 0.5);
   --particle-glow: rgba(161, 196, 214, 0.16);
   --particle-line: rgba(161, 196, 214, 0.18);
-  --bg-layer-grad: radial-gradient(ellipse at 30% 20%, rgba(107, 143, 173, 0.1) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(107, 143, 173, 0.06) 0%, transparent 50%),
+  --bg-layer-grad: radial-gradient(ellipse at 30% 20%, rgba(161, 196, 214, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(161, 196, 214, 0.06) 0%, transparent 50%),
     linear-gradient(180deg, #0a0e17 0%, #0e1522 40%, #0d1522 70%, #0a0e17 100%);
   --mountain1: rgba(15, 21, 31, 0.92);
   --mountain2: rgba(15, 21, 31, 0.75);
