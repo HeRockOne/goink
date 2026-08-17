@@ -138,10 +138,12 @@ func (c *ModelsDevClient) ensureCache() {
 	if c.cache != nil && time.Since(c.cache.FetchedAt) < modelsDevCacheTTL {
 		return
 	}
-	if c.loadFromDisk() {
-		return
+	// 从磁盘加载（不限年龄），先确保有数据可用
+	c.loadFromDisk()
+	// 磁盘数据过期，尝试网络刷新；网络失败不影响已加载的磁盘数据
+	if c.cache == nil || time.Since(c.cache.FetchedAt) >= modelsDevCacheTTL {
+		c.fetchFromNetwork()
 	}
-	c.fetchFromNetwork()
 }
 
 func (c *ModelsDevClient) loadFromDisk() bool {
@@ -152,9 +154,6 @@ func (c *ModelsDevClient) loadFromDisk() bool {
 	}
 	var cache modelsDevCache
 	if err := json.Unmarshal(data, &cache); err != nil {
-		return false
-	}
-	if time.Since(cache.FetchedAt) > modelsDevCacheTTL {
 		return false
 	}
 	c.cache = &cache
