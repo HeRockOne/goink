@@ -249,7 +249,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">输出</span>
-                  <span className="tabular-nums">{formatTokens(usage.completion_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.outCost)}</span></span>
+                  <span className="tabular-nums">{formatTokens(usage.acc_completion_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.outCost)}</span></span>
                 </div>
               </div>
             </div>
