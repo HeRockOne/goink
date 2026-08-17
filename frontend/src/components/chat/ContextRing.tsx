@@ -231,7 +231,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
 
 {/* 上下文占比 */}
           {hasUsage && costs && (
-            <div className="border-t pt-2">
+            <div className="border-t-2 pt-2">
               <button
                 className="flex justify-between items-center text-xs w-full text-left"
                 onClick={() => setShowRoles(!showRoles)}
@@ -263,7 +263,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
 
           {/* 成本估算 */}
           {hasUsage && costs && (
-            <div className="border-t pt-2">
+            <div className="border-t-2 pt-2">
               <div className="flex justify-between items-center text-xs mb-1">
                 <span className="text-muted-foreground">💰 成本估算</span>
                 <span className="font-semibold text-primary">{formatCost(costs.totalCost)}</span>
@@ -289,7 +289,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
 
           {/* 按模型 */}
           {hasUsage && costs && costs.modelCosts && Object.keys(costs.modelCosts).length > 0 && (
-            <div className="border-t pt-2">
+            <div className="border-t-2 pt-2">
               <div className="flex flex-col gap-1 text-xs">
                 {Object.entries(costs.modelCosts).map(([modelID, mc]) => (
                   <div key={modelID} className="flex justify-between">
@@ -304,7 +304,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
           )}
 
           {/* 价格配置 */}
-          <div className="border-t pt-2">
+          <div className="border-t-2 pt-2">
             <button
               className="flex justify-between items-center text-xs w-full text-left"
               onClick={() => setShowPrices(!showPrices)}
@@ -377,7 +377,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
           )}
 
           {/* 压缩阈值 */}
-          <div className="border-t pt-2 mt-1">
+          <div className="border-t-2 pt-2 mt-1">
             <div className="flex justify-between items-center text-xs mb-1">
               <span className="text-muted-foreground">压缩阈值</span>
               <span className="tabular-nums font-medium">{threshold}%</span>
