@@ -27,6 +27,7 @@ import (
 	"novel/internal/lore"
 	"novel/internal/mcp_tools"
 	"novel/internal/migrate"
+	"novel/internal/netutil"
 	"novel/internal/novel"
 	"novel/internal/rag"
 	"novel/internal/reader"
@@ -154,6 +155,29 @@ func (a *App) GetAPIConnectInfo() APIConnectInfo {
 		Port:   port,
 		UseTLS: a.apiUseHTTPS,
 	}
+}
+
+// NetworkInterfaceInfo is network interface info for frontend selection.
+type NetworkInterfaceInfo struct {
+	Name  string `json:"name"`
+	IP    string `json:"ip"`
+	IsLAN bool   `json:"is_lan"`
+	IsVPN bool   `json:"is_vpn"`
+}
+
+// GetLocalInterfaces returns all available IPv4 network interfaces for the frontend to select.
+func (a *App) GetLocalInterfaces() []NetworkInterfaceInfo {
+	ifaces := netutil.GetLocalInterfaces()
+	result := make([]NetworkInterfaceInfo, len(ifaces))
+	for i, iface := range ifaces {
+		result[i] = NetworkInterfaceInfo{
+			Name:  iface.Name,
+			IP:    iface.IP,
+			IsLAN: iface.IsLAN,
+			IsVPN: iface.IsVPN,
+		}
+	}
+	return result
 }
 
 // SetWSHub 设置 WebSocket Hub，用于双端实时同步。

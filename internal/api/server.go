@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+
+	"novel/internal/netutil"
 	"strconv"
 	"sync"
 )
@@ -119,19 +121,7 @@ func parseIntQuery(r *http.Request, key string) int64 {
 }
 
 func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "127.0.0.1"
-	}
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			ip := ipnet.IP.String()
-			if len(ip) > 4 && ip[:4] != "169." {
-				return ip
-			}
-		}
-	}
-	return "127.0.0.1"
+	return netutil.GetLocalIP()
 }
 
 func withCORS(next http.Handler) http.Handler {

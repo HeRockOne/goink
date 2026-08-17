@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/grandcat/zeroconf"
 	"golang.org/x/net/webdav"
+
+	"novel/internal/netutil"
 )
 
 // Server WebDAV 服务器 + mDNS 广播
@@ -136,33 +137,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 }
 
 func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "127.0.0.1"
-	}
-	// 优先取局域网 IP（192.168.x.x / 10.x.x.x / 172.16-31.x.x）
-	var fallback string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			ip := ipnet.IP.String()
-			// 跳过 APIPA 地址（169.254.x.x）
-			if strings.HasPrefix(ip, "169.254.") {
-				continue
-			}
-			// 优先局域网地址
-			if strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") ||
-				(strings.HasPrefix(ip, "172.") && len(ip) > 4) {
-				return ip
-			}
-			if fallback == "" {
-				fallback = ip
-			}
-		}
-	}
-	if fallback != "" {
-		return fallback
-	}
-	return "127.0.0.1"
+	return netutil.GetLocalIP()
 }
 
 func getHostname() string {

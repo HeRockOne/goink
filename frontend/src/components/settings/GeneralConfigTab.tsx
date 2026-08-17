@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
-import { SaveGitConfig, SetChapterWordLimit, GetSystemFonts } from '@/lib/wailsjs/go/app/App'
+import { SaveGitConfig, SetChapterWordLimit, GetSystemFonts, GetLocalInterfaces } from '@/lib/wailsjs/go/app/App'
 import { useApp, type novel } from '@/hooks/useApp'
 
 export default function GeneralConfigTab() {
@@ -33,6 +33,7 @@ export default function GeneralConfigTab() {
   const [apiPort, setApiPort] = useState('9323')
   const [apiToken, setApiToken] = useState('')
   const [apiConnect, setApiConnect] = useState<{ ip: string; port: number; use_tls: boolean } | null>(null)
+  const [netInterfaces, setNetInterfaces] = useState<{ name: string; ip: string; is_lan: boolean; is_vpn: boolean }[]>([])
   const [loggingEnabled, setLoggingEnabled] = useState(true)
   const [useHTTPS, setUseHTTPS] = useState(true)
   const [exaApiKey, setExaApiKey] = useState('')
@@ -64,6 +65,10 @@ export default function GeneralConfigTab() {
     // 获取扫码连接信息（局域网 IP + 端口 + 协议）
     app.GetAPIConnectInfo().then(info => {
       if (info) setApiConnect({ ip: info.ip, port: info.port, use_tls: info.use_tls })
+    }).catch(() => {})
+    // 获取可用网络接口
+    GetLocalInterfaces().then(ifaces => {
+      if (ifaces && ifaces.length > 0) setNetInterfaces(ifaces)
     }).catch(() => {})
     app.GetSettings().then(s => {
       if (s?.last_novel_id) setSelectedID(s.last_novel_id)
@@ -430,6 +435,25 @@ export default function GeneralConfigTab() {
           API 认证令牌
         </label>
         <p className="text-[11px] text-muted-foreground">移动端首次连接时需输入此令牌，或扫描下方二维码。丢失可重新生成。</p>
+        {netInterfaces.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-12 shrink-0">网卡</span>
+            <select
+              value={apiConnect?.ip || ''}
+              onChange={e => {
+                const ip = e.target.value
+                if (apiConnect) setApiConnect({ ...apiConnect, ip })
+              }}
+              className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none"
+            >
+              {netInterfaces.map(iface => (
+                <option key={iface.ip} value={iface.ip}>
+                  {iface.name} - {iface.ip}{iface.is_lan ? ' (LAN)' : ''}{iface.is_vpn ? ' (VPN)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-start gap-4">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2">
