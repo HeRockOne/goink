@@ -229,33 +229,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
             {hasUsage && <>{' · '}{t('chat.totalSize')}: {formatTokens(usage.context_window)}</>}
           </div>
 
-          {/* 成本估算 */}
-          {hasUsage && costs && (
-            <div className="border-t pt-2">
-              <div className="flex justify-between items-center text-xs mb-1">
-                <span className="text-muted-foreground">💰 成本估算</span>
-                <span className="font-semibold text-primary">{formatCost(costs.totalCost)}</span>
-              </div>
-
-              {/* token 明细 */}
-              <div className="flex flex-col gap-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">缓存读取</span>
-                  <span className="tabular-nums">{formatTokens(usage.prompt_cache_hit_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.hitCost)}</span></span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">未命中</span>
-                  <span className="tabular-nums">{formatTokens(usage.prompt_cache_miss_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.missCost)}</span></span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">输出</span>
-                  <span className="tabular-nums">{formatTokens(usage.acc_completion_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.outCost)}</span></span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 分角色金额 */}
+{/* 上下文占比 */}
           {hasUsage && costs && (
             <div className="border-t pt-2">
               <button
@@ -279,11 +253,37 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                       <span className="tabular-nums">{formatTokens(usage.overhead_tokens)}</span>
                     </div>
                   ) : null}
-<div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
                      上下文窗口按角色分布，非计费分摊。系统为固定前缀精确值，其余为本地估算。
                    </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 成本估算 */}
+          {hasUsage && costs && (
+            <div className="border-t pt-2">
+              <div className="flex justify-between items-center text-xs mb-1">
+                <span className="text-muted-foreground">💰 成本估算</span>
+                <span className="font-semibold text-primary">{formatCost(costs.totalCost)}</span>
+              </div>
+
+              {/* token 明细 */}
+              <div className="flex flex-col gap-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">缓存读取</span>
+                  <span className="tabular-nums">{formatTokens(usage.prompt_cache_hit_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.hitCost)}</span></span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">未命中</span>
+                  <span className="tabular-nums">{formatTokens(usage.prompt_cache_miss_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.missCost)}</span></span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">输出</span>
+                  <span className="tabular-nums">{formatTokens(usage.acc_completion_tokens || 0)}<span className="text-muted-foreground/60 ml-2">{formatCost(costs.outCost)}</span></span>
+                </div>
+              </div>
             </div>
           )}
 
