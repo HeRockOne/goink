@@ -444,11 +444,20 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     app.GetSession(sid).then(detail => {
       if (detail) {
         setSessionTitle(detail.title || '')
+        // 恢复该会话持久化的模型（sessions.model 存纯 modelID，匹配 AvailableModel.ModelName）
+        let restoredModel: llm.AvailableModel | undefined
+        if (detail.model) {
+          const match = models.find(m => m.ModelName === detail.model)
+          if (match) {
+            setSelectedKey(match.Key)
+            restoredModel = match
+          }
+        }
         // 恢复该会话持久化的推理程度（sessions 表按会话保存，切换会话必须还原，
         // 否则沿用全局设置/默认值，后续发送的 reasoning_effort 与历史不一致）。
         // 当前模型不支持该级别时不强行覆盖（如模型已更换）
         if (detail.reasoning_effort) {
-          const model = models.find(m => m.Key === selectedKey)
+          const model = restoredModel ?? models.find(m => m.Key === selectedKey)
           if (!model || !model.ReasoningLevels || model.ReasoningLevels.includes(detail.reasoning_effort)) {
             setReasoningEffort(detail.reasoning_effort)
             setThinkingEnabled(detail.reasoning_effort !== '' && (model?.SupportsThinking ?? false))
