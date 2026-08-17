@@ -14,6 +14,7 @@ import (
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
 // 从 chatURL 推导 modelsURL（去掉 /chat/completions，拼接 /models），
 // 解析标准 OpenAI 格式及 Kimi 等扩展字段。返回的 ModelInfo 中未获取到的字段留零值。
+// 对于上游未提供的参数，会尝试从 models.dev 全球模型数据库补充。
 func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, error) {
 	chatURL = normalizeURL(chatURL)
 	baseURL := strings.TrimSuffix(chatURL, "/chat/completions")
@@ -58,6 +59,9 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 		return nil, fmt.Errorf("解析模型列表失败（该端点可能不支持 /models）: %w", err)
 	}
 
+	// 获取 models.dev 客户端用于补充参数
+	modelsDevClient := globalModelsDev
+
 	models := make([]ModelInfo, 0, len(result.Data))
 	for _, item := range result.Data {
 		if item.ID == "" {
@@ -78,6 +82,28 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 		} else if item.SupportsVideoIn != nil && *item.SupportsVideoIn {
 			m.SupportsVision = true
 		}
+
+		// 从 models.dev 补充参数（仅当上游未提供时）
+		if modelsDevClient != nil {
+			if spec := modelsDevClient.LookupModelSpec(item.ID); spec != nil {
+				if m.ContextWindow == 0 && spec.ContextWindow > 0 {
+					m.ContextWindow = spec.ContextWindow
+				}
+				if m.MaxOutputTokens == 0 && spec.MaxOutputTokens > 0 {
+					m.MaxOutputTokens = spec.MaxOutputTokens
+				}
+				if !m.SupportsThinking && spec.SupportsThinking {
+					m.SupportsThinking = spec.SupportsThinking
+				}
+				if !m.SupportsVision && spec.SupportsVision {
+					m.SupportsVision = spec.SupportsVision
+				}
+				if len(m.ReasoningLevels) == 0 && len(spec.ReasoningLevels) > 0 {
+					m.ReasoningLevels = spec.ReasoningLevels
+				}
+			}
+		}
+
 		models = append(models, m)
 	}
 
