@@ -437,10 +437,6 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   }, [])
 
   const handleSelectSession = useCallback((sid: string) => {
-    // 切换会话时取消当前正在进行的请求
-    if (sessionId) {
-      app.CancelChat(sessionId)
-    }
     loadOnSessionRef.current = true // 显式选会话 → 消息加载 effect 执行重建
     setActiveSessionId(sid)
     setVisibleTurnCount(30)
@@ -475,7 +471,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         }
       }
     }).catch(() => {})
-  }, [app, onUsage, models, selectedKey, sessionId])
+  }, [app, onUsage, models, selectedKey])
 
   // 启动时恢复上次活跃会话（方案 A：重启回到上次聊到一半的会话）。
   // 仅首次挂载且 last_session_id 属于当前小说时恢复；切小说保持清空行为。
