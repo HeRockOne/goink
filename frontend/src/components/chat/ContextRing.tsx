@@ -262,7 +262,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                 className="flex justify-between items-center text-xs w-full text-left"
                 onClick={() => setShowRoles(!showRoles)}
               >
-                <span className="text-muted-foreground">分角色 token {usage.detail_is_estimate ? '(估算)' : ''}</span>
+                <span className="text-muted-foreground">上下文占比 {usage.detail_is_estimate ? '(估算)' : ''}</span>
                 <span className="text-muted-foreground/60">{showRoles ? '▲' : '▼'}</span>
               </button>
               {showRoles && (
@@ -279,9 +279,9 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                       <span className="tabular-nums">{formatTokens(usage.overhead_tokens)}</span>
                     </div>
                   ) : null}
-                  <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    系统为固定前缀精确值；其余为本地估算。成本按缓存/未命中/输出计，不按角色分摊。
-                  </div>
+<div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                     上下文窗口按角色分布，非计费分摊。系统为固定前缀精确值，其余为本地估算。
+                   </div>
                 </div>
               )}
             </div>
