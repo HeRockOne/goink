@@ -74,7 +74,11 @@ export default function ModelDiscoveryPanel({ chatUrl, apiKey, existingIds, onAd
       max_output_tokens: m.max_output_tokens || DEFAULT_MAX,
       supports_thinking: m.supports_thinking ?? false,
     } as unknown as llm.ModelInfo))
-    setPendingImports(withDefaults)
+    // 有完整参数（models.dev 填充的）直接导入，不完整的进编辑表单
+    const complete = withDefaults.filter(m => m.context_window > 0 && m.max_output_tokens > 0)
+    const incomplete = withDefaults.filter(m => !(m.context_window > 0 && m.max_output_tokens > 0))
+    complete.forEach(m => onAddModel(m))
+    setPendingImports(incomplete)
     setDiscoveredModels([])
     setSelectedForImport(new Set())
     setDiscoverError('')
