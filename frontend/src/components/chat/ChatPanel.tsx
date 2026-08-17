@@ -440,6 +440,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     loadOnSessionRef.current = true // 显式选会话 → 消息加载 effect 执行重建
     setActiveSessionId(sid)
     setVisibleTurnCount(30)
+    setIsLoading(false)
+    setRetryInfo(null)
+    setApiStreaming(false)
     app.SetLastSession(sid).catch(() => {})
     app.GetSession(sid).then(detail => {
       if (detail) {
@@ -491,6 +494,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     setTurns([])
     setSessionId('')
     setSessionTitle('')
+    setIsLoading(false)
+    setRetryInfo(null)
+    setApiStreaming(false)
     onUsage?.(null)
   }, [])
 
@@ -1200,6 +1206,11 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           activeSessionId={activeSessionId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
+          onDeleted={() => {
+            setIsLoading(false)
+            setRetryInfo(null)
+            setApiStreaming(false)
+          }}
         />
       </div>
 
@@ -1463,6 +1474,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
               ? { ...t, status: 'stopped' as const }
               : t
           ))
+          setIsLoading(false)
+          setRetryInfo(null)
+          setApiStreaming(false)
           // 移动端对话进行中时，取消移动端的会话；否则取消桌面端当前会话
           app.CancelChat(apiActiveRef.current.sessionId || sessionId)
         }}
