@@ -81,17 +81,29 @@ func (c *ModelsDevClient) LookupModelSpec(modelID string) *ModelSpec {
 	if c.cache == nil {
 		return nil
 	}
+	// 提取不含组织前缀的模型名（如 "deepseek-ai/DeepSeek-V3" -> "DeepSeek-V3"）
+	bareID := modelID
+	if idx := strings.LastIndex(modelID, "/"); idx >= 0 {
+		bareID = modelID[idx+1:]
+	}
+	// 第一轮：精确匹配（完整 ID 和去掉前缀的 ID）
 	for _, provider := range c.cache.Providers {
 		for key, m := range provider.Models {
-			if key == modelID || m.ID == modelID {
+			if key == modelID || m.ID == modelID || key == bareID || m.ID == bareID {
 				return c.toSpec(m)
 			}
 		}
 	}
+	// 第二轮：模糊匹配（双向 contains，覆盖大小写差异和版本后缀）
 	lowerID := strings.ToLower(modelID)
+	lowerBare := strings.ToLower(bareID)
 	for _, provider := range c.cache.Providers {
 		for key, m := range provider.Models {
-			if strings.Contains(strings.ToLower(key), lowerID) || strings.Contains(strings.ToLower(m.Name), lowerID) {
+			lk := strings.ToLower(key)
+			ln := strings.ToLower(m.Name)
+			if strings.Contains(lk, lowerID) || strings.Contains(ln, lowerID) ||
+				strings.Contains(lk, lowerBare) || strings.Contains(ln, lowerBare) ||
+				strings.Contains(lowerID, lk) || strings.Contains(lowerBare, lk) {
 				return c.toSpec(m)
 			}
 		}
