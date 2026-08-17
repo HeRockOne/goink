@@ -447,7 +447,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         // 恢复该会话持久化的模型（sessions.model 存纯 modelID，匹配 AvailableModel.ModelName）
         let restoredModel: llm.AvailableModel | undefined
         if (detail.model) {
-          const match = models.find(m => m.ModelName === detail.model)
+          const match = models.find(m => splitModelKey(m.Key)[1] === detail.model)
           if (match) {
             setSelectedKey(match.Key)
             restoredModel = match
