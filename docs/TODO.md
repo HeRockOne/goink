@@ -267,7 +267,10 @@ CREATE TABLE outline_beats (
   - 第0步：从"写 book-outline.md"改为"写 outlines + outline_beats 表"
   - 一致性校验：去掉第8条（文件vs数据库同步），因为不再有文件
   - 允许使用的工具：新增 `update_outline` / `get_outline`
-- `main-tech-book-outline.md`：从 Markdown 模板改为数据库字段说明
+- `main-tech-book-outline.md`：从 Markdown 模板改为数据库字段填写规范
+  - outlines 表：核心矛盾/成长弧线/结局方向/篇幅规划的填写要求
+  - outline_beats 表：chapter/description/beat_type/importance 的填写要求
+  - 大爽点格式规范：`{chapter: N, desc: "具体描述", beat_type: "shuangdian"}`
 
 ### P3. init_consistency 检查
 
