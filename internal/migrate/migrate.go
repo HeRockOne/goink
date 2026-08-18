@@ -14,6 +14,7 @@ import (
 	"novel/internal/location"
 	"novel/internal/lore"
 	"novel/internal/novel"
+	"novel/internal/outline"
 	"novel/internal/reader"
 	"novel/internal/rollback"
 	"novel/internal/scene"
@@ -63,6 +64,8 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&scene.Scene{},
 		&chapter.ChapterArc{},
 		&itemoccurrence.ItemOccurrence{},
+		&outline.Outline{},
+		&outline.OutlineBeat{},
 	}
 
 	for _, m := range models {

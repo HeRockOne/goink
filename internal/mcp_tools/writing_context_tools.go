@@ -15,6 +15,7 @@ import (
 	"novel/internal/itemoccurrence"
 	"novel/internal/location"
 	"novel/internal/lore"
+	"novel/internal/outline"
 	"novel/internal/reader"
 	"novel/internal/scene"
 	"novel/internal/storage"
@@ -333,11 +334,33 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	// ── 9. 全书总纲摘要（方向层，防 AI 偏离主线） ──
 	// 从 book-outline.md 读取前 N 字注入；约束单向：总纲→卷纲→章纲。
 	outlineMap := map[string]any{}
-	if bo, err := git.ReadFile(nid, git.BookOutlinePath()); err == nil && bo != "" {
+	// 优先读取数据库中的总纲
+	oStore := outline.NewStore(db)
+	if o, err := oStore.GetByNovelID(ctx, nid); err == nil {
+		outlineMap["core_conflict"] = o.CoreConflict
+		outlineMap["growth_arc"] = o.GrowthArc
+		outlineMap["ending_direction"] = o.EndingDirection
+		outlineMap["word_count_plan"] = o.WordCountPlan
+		outlineMap["source"] = "database"
+
+		// 读取大爽点
+		beats, _ := oStore.ListBeats(ctx, nid)
+		beatList := make([]map[string]any, 0, len(beats))
+		for _, b := range beats {
+			beatList = append(beatList, map[string]any{
+				"chapter":     b.Chapter,
+				"description": b.Description,
+				"beat_type":   b.BeatType,
+				"importance":  b.Importance,
+			})
+		}
+		outlineMap["beats"] = beatList
+	} else if bo, err := git.ReadFile(nid, git.BookOutlinePath()); err == nil && bo != "" {
+		// 向后兼容：读取 book-outline.md
 		outlineMap["summary"] = truncateRunes(bo, 400)
 		outlineMap["source"] = "book-outline.md"
 	} else {
-		outlineMap["summary"] = "（未写入全书总纲。创作前应先创建 book-outline.md，含核心矛盾/主角成长弧线/结局方向/篇幅规划。）"
+		outlineMap["summary"] = "（未写入全书总纲。创作前应先创建总纲，含核心矛盾/主角成长弧线/结局方向/篇幅规划。）"
 		outlineMap["source"] = ""
 	}
 	result["outline"] = outlineMap
