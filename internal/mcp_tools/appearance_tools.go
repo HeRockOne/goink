@@ -773,6 +773,48 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 		}
 	}
 
+	// golden_rule: 金手指 vs 世界观铁则
+	var lores []lore.LoreEntry
+	db.WithContext(ctx).Where("novel_id = ? AND category = '天道法则'", novelID).Find(&lores)
+	if len(lores) > 0 {
+		// 有世界观铁则，检查金手指是否存在
+		var items []item.Item
+		db.WithContext(ctx).Where("novel_id = ? AND item_type = '法宝'", novelID).Find(&items)
+		if len(items) == 0 {
+			results = append(results, "[WARNING] golden_rule：存在世界观铁则但无金手指物品（法宝），请确认金手指设定")
+		}
+	}
+
+	// taboo_violation: 禁忌 vs 大爽点描述
+	for _, p := range prefs {
+		if p.Category != "禁忌" && p.Category != "禁忌事项" {
+			continue
+		}
+		for _, b := range beats {
+			if strings.Contains(b.Description, p.Content) || strings.Contains(p.Content, b.Description) {
+				results = append(results, fmt.Sprintf("[WARNING] taboo_violation：禁忌「%s」与大爽点「第%d章 %s」可能冲突",
+					p.Content, b.Chapter, b.Description))
+			}
+		}
+	}
+
+	// means_power: 主角力量等级 vs 手段类型（需要人工确认，标记为 WARNING）
+	if len(beats) > 0 {
+		// 检查主角是否存在
+		var chars []character.Character
+		db.WithContext(ctx).Where("novel_id = ? AND status = 'alive'", novelID).Find(&chars)
+		protagonistFound := false
+		for _, c := range chars {
+			if strings.Contains(c.Description, "主角") || strings.Contains(c.Description, "protagonist") {
+				protagonistFound = true
+				break
+			}
+		}
+		if !protagonistFound && len(chars) > 0 {
+			results = append(results, "[INFO] means_power：未找到明确的主角标记（description 含'主角'），请确认主角设定")
+		}
+	}
+
 	return results
 }
 

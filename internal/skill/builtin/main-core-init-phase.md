@@ -18,7 +18,8 @@ mode: auto
 
 ## init 阶段允许使用的工具（与门禁白名单一致）
 
-- 编辑：`edit`（仅限 book-outline.md）
+- 总纲：`update_outline`、`create_outline_beat`、`update_outline_beat`、`delete_outline_beat`、`get_outline`
+- 编辑：`edit`（仅限 book-outline.md，向后兼容）
 - 创建：`create_story_arc`、`create_arc_node`、`create_location`、`create_character`、`create_lore`、`create_item`、`create_timeline_entry`、`create_preference`
 - 查询验证：`get_characters`、`get_locations`、`get_story_arcs`、`get_lore`、`get_items`、`get_timeline`、`get_preferences`（**这 7 项就是门禁 require，阶段结束前必须全部调用过**）
 - 系统：`auto_skill_injection`、`set_phase`
@@ -28,7 +29,7 @@ mode: auto
 ## 总体流程
 
 ```
-信息采集（分波次提问）→ 写总纲 book-outline.md → 创建卷弧线 → 弧线/地点/角色/节点 → 世界观/物品 → 偏好/伏笔 → 一致性校验 → 用户确认 → 结构验证(7项查询) → set_phase("prepare")
+信息采集（分波次提问）→ 写总纲（update_outline + create_outline_beat）→ 创建卷弧线 → 弧线/地点/角色/节点 → 世界观/物品 → 偏好/伏笔 → 一致性校验 → 用户确认 → 结构验证(7项查询) → set_phase("prepare")
 ```
 
 **三条铁律**：
@@ -54,14 +55,14 @@ mode: auto
 
 ## 二、设定入库（依赖链，顺序不可颠倒）
 
-### 第 0 步：写全书总纲 book-outline.md（edit，最先写）
+### 第 0 步：写全书总纲（update_outline + create_outline_beat，最先写）
 
-用 main-tech-book-outline 的「第一级：总纲」模板，1000-3000 字，必须包含：
-- 核心矛盾一句话
-- 主角成长弧线（起点→试探→突破→成型→终局，每阶段标注章节范围）
-- 主题立意
-- 结局方向
-- 篇幅规划（总章数 + 分卷规划）
+用 update_outline 写入总纲数据，用 create_outline_beat 创建大爽点。必须包含：
+- 核心矛盾一句话（core_conflict）
+- 主角成长弧线（growth_arc）
+- 结局方向（ending_direction）
+- 篇幅规划（word_count_plan，单位：万字）
+- 大爽点列表（每个大爽点调用 create_outline_beat，含 chapter + description）
 
 **总纲写完先自查（一致性校验第 1-6 条），通过后把浓缩版展示给用户确认，用户确认前不创建任何数据库实体。**
 
