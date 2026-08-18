@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"novel/internal/chapter"
+	"novel/internal/outline"
 	"novel/internal/storyarc"
 
 	"gorm.io/driver/sqlite"
@@ -18,7 +19,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.AutoMigrate(&chapter.Chapter{}, &storyarc.StoryArc{}, &storyarc.ArcNode{})
+	db.AutoMigrate(&chapter.Chapter{}, &storyarc.StoryArc{}, &storyarc.ArcNode{}, &outline.OutlineBeat{})
 	return db
 }
 
@@ -367,4 +368,137 @@ func TestPacingGap_XuanhuanNoTrigger(t *testing.T) {
 		t.Error("不应该触发节奏拖沓")
 	}
 	t.Logf("✓ 玄幻题材连续有冲突/战斗场景，正确不触发")
+}
+
+// ── init_consistency 测试 ──────────────────────────────────
+
+func TestInitConsistency_FileDBSync(t *testing.T) {
+	db := setupTestDB(t)
+	novelID := int64(1)
+	ctx := context.Background()
+
+	// 创建 outline_beats（数据库中的大爽点）
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 5, Description: "碾压守卫", BeatType: "shuangdian"})
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 10, Description: "击败天才", BeatType: "shuangdian"})
+
+	// 创建卷弧线，detail_json.big_shuangdian 包含一个数据库中不存在的章号
+	detailJSON := map[string]any{
+		"big_shuangdian": []map[string]any{
+			{"chapter": 5, "desc": "碾压守卫"},
+			{"chapter": 10, "desc": "击败天才"},
+			{"chapter": 15, "desc": "获得长老认可"}, // 这个在 outline_beats 中不存在
+		},
+	}
+	detailBytes, _ := json.Marshal(detailJSON)
+	db.Create(&storyarc.StoryArc{
+		NovelID:    novelID,
+		Name:       "第一卷",
+		ArcType:    "volume",
+		Status:     "active",
+		DetailJSON: string(detailBytes),
+	})
+
+	tool := &CheckStoryConsistencyTool{}
+	args := &CheckStoryConsistencyArgs{
+		CurrentChapter: 1,
+		CheckTypes:     `["init_consistency"]`,
+	}
+
+	result, err := tool.Execute(ctx, args, ToolContext{DB: db, NovelID: novelID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := result.Data["content"].(string)
+	t.Logf("=== init_consistency file_db_sync 测试 ===")
+	t.Logf("outline_beats: 第5章, 第10章")
+	t.Logf("detail_json: 第5章, 第10章, 第15章")
+	t.Logf("结果：%s", content)
+
+	if !contains(content, "[ERROR] file_db_sync") {
+		t.Error("应该触发 file_db_sync 错误")
+	}
+	if !contains(content, "第15章") {
+		t.Error("应该提到第15章")
+	}
+	t.Logf("✓ 正确检测到 outline_beats 与 detail_json 不一致")
+}
+
+func TestInitConsistency_TypePacing(t *testing.T) {
+	db := setupTestDB(t)
+	novelID := int64(1)
+	ctx := context.Background()
+
+	// 创建 outline_beats，间距过大
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 5, Description: "首个大爽点", BeatType: "shuangdian"})
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 25, Description: "第二个大爽点", BeatType: "shuangdian"}) // 间距20章
+
+	tool := &CheckStoryConsistencyTool{}
+	args := &CheckStoryConsistencyArgs{
+		CurrentChapter: 1,
+		CheckTypes:     `["init_consistency"]`,
+		Genre:          "xuanhuan",
+	}
+
+	result, err := tool.Execute(ctx, args, ToolContext{DB: db, NovelID: novelID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := result.Data["content"].(string)
+	t.Logf("=== init_consistency type_pacing 测试 ===")
+	t.Logf("大爽点：第5章, 第25章（间距20章）")
+	t.Logf("结果：%s", content)
+
+	if !contains(content, "[WARNING] type_pacing") {
+		t.Error("应该触发 type_pacing 警告")
+	}
+	t.Logf("✓ 正确检测到大爽点间距过大")
+}
+
+func TestInitConsistency_Pass(t *testing.T) {
+	db := setupTestDB(t)
+	novelID := int64(1)
+	ctx := context.Background()
+
+	// 创建 outline_beats，间距合理
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 5, Description: "首个大爽点", BeatType: "shuangdian"})
+	db.Create(&outline.OutlineBeat{NovelID: novelID, Chapter: 12, Description: "第二个大爽点", BeatType: "shuangdian"})
+
+	// 创建卷弧线，detail_json 与 outline_beats 一致
+	detailJSON := map[string]any{
+		"big_shuangdian": []map[string]any{
+			{"chapter": 5, "desc": "首个大爽点"},
+			{"chapter": 12, "desc": "第二个大爽点"},
+		},
+	}
+	detailBytes, _ := json.Marshal(detailJSON)
+	db.Create(&storyarc.StoryArc{
+		NovelID:    novelID,
+		Name:       "第一卷",
+		ArcType:    "volume",
+		Status:     "active",
+		DetailJSON: string(detailBytes),
+	})
+
+	tool := &CheckStoryConsistencyTool{}
+	args := &CheckStoryConsistencyArgs{
+		CurrentChapter: 1,
+		CheckTypes:     `["init_consistency"]`,
+		Genre:          "xuanhuan",
+	}
+
+	result, err := tool.Execute(ctx, args, ToolContext{DB: db, NovelID: novelID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := result.Data["content"].(string)
+	t.Logf("=== init_consistency 通过测试 ===")
+	t.Logf("结果：%s", content)
+
+	if contains(content, "[ERROR]") || contains(content, "[WARNING]") {
+		t.Error("不应该触发任何错误或警告")
+	}
+	t.Logf("✓ init_consistency 检查通过")
 }
