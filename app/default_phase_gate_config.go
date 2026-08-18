@@ -12,7 +12,7 @@ const defaultPhaseGateConfig = `<!-- phase-gate-config
 mode: single
 phase: init
 tools: auto_skill_injection, edit, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase, update_outline, get_outline, create_outline_beat, update_outline_beat, delete_outline_beat
-edit_paths: book-outline.md, goink.md
+edit_paths: goink.md
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
 auto_skill_injection: main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system
 next: prepare
@@ -29,7 +29,7 @@ next: outline
 mode: single
 phase: outline
 tools: read, auto_skill_injection, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, search_story_memory, web_search, web_fetch, set_phase
-edit_paths: outlines/*, goink.md, book-outline.md
+edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
 next: write
@@ -69,7 +69,7 @@ tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
 mode: batch
 phase: init
 tools: auto_skill_injection, edit, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase, update_outline, get_outline, create_outline_beat, update_outline_beat, delete_outline_beat
-edit_paths: book-outline.md, goink.md
+edit_paths: goink.md
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
 auto_skill_injection: main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system
 next: prepare
@@ -86,7 +86,7 @@ next: outline
 mode: batch
 phase: outline
 tools: read, auto_skill_injection, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, search_story_memory, web_search, web_fetch, set_phase
-edit_paths: outlines/*, goink.md, book-outline.md
+edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
 next: write
