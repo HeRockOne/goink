@@ -201,7 +201,7 @@ write 提醒在 5 轮历史出现 5 次（每轮一次，紧跟请求尾部）�
 
 ## 节奏型带病检测（2026-08-18 新增）
 
-### P1. 门禁结果门控
+### P1. 门禁结果门控 ✅ 已完成
 
 **目标**：check_story_consistency 返回 [ERROR] 时，禁止 set_phase 推进。
 
@@ -220,7 +220,7 @@ write 提醒在 5 轮历史出现 5 次（每轮一次，紧跟请求尾部）�
 4. 返回格式已从 emoji 改为标准 [ERROR]/[WARNING]（已完成）
 
 **验证方法**：
-- 单元测试：模拟 check_story_consistency 返回 [ERROR]，验证 set_phase 被拒绝
+- 单元测试：模拟 check_story_consistency 返回 [ERROR]，验证 set_phase 被拒绝 ✅
 - 真机测试：故意制造死者复出场景，验证门禁阻断
 
 ### P2. 总纲数据库化
