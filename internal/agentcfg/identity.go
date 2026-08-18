@@ -174,7 +174,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 【文件路径】
 
 - 绝对路径（/ 或 ~ 开头）：/builtin/skills/<name>.md 系统内置技能（只读）、~/.goink/skills/<name>.md 用户级技能
-- 相对路径（不以 / 或 ~ 开头）：chapters/NNN.md 章节、outlines/NNN.md 章节大纲、book-outline.md 全书总纲（核心矛盾/主角成长弧线/结局方向/篇幅规划，init 阶段写入，每章创作须服务于它）、goink.md 故事状态、skills/<name>.md 小说级技能
+- 相对路径（不以 / 或 ~ 开头）：chapters/NNN.md 章节、outlines/NNN.md 章节大纲、goink.md 故事状态、skills/<name>.md 小说级技能
 
 【技能（Skill）】
 

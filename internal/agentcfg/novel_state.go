@@ -42,7 +42,7 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 	// 进度锚点：当前章节号（轮末动态字节，符合 P1 缓存协议）
 	var totalChapters int64
 	if err := db.Table("chapters").Where("novel_id = ?", novelID).Count(&totalChapters).Error; err == nil && totalChapters > 0 {
-		b = append(b, fmt.Sprintf("当前进度：第 %d 章。创作须服务于全书总纲（book-outline.md），只展开本卷情节，后续卷设定不得提前使用。\n", totalChapters)...)
+		b = append(b, fmt.Sprintf("当前进度：第 %d 章。创作须服务于全书总纲（outlines + outline_beats 表），只展开本卷情节，后续卷设定不得提前使用。\n", totalChapters)...)
 	}
 
 	state, err := git.ReadFile(novelID, git.GoinkPath())
