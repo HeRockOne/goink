@@ -81,7 +81,7 @@ func TestPacingGap_Demo(t *testing.T) {
 	t.Logf("结果：%s", content)
 
 	// 验证：应该触发警告（连续5章无动作场景）
-	if !contains(content, "🟡 节奏拖沓") {
+	if !contains(content, "[WARNING] 节奏拖沓") {
 		t.Errorf("应该触发节奏拖沓警告，但没有")
 	}
 	t.Logf("✓ 正确触发了 pacing_gap 警告")
@@ -225,10 +225,10 @@ func TestCombined_Demo(t *testing.T) {
 	t.Logf("结果：\n%s", content)
 
 	// 应该同时触发两个问题
-	if !contains(content, "🟡 节奏拖沓") {
+	if !contains(content, "[WARNING] 节奏拖沓") {
 		t.Error("应该触发 pacing_gap")
 	}
-	if !contains(content, "🔴 承诺未兑现") {
+	if !contains(content, "[ERROR] 承诺未兑现") {
 		t.Error("应该触发 promise_fulfillment")
 	}
 	t.Logf("✓ 同时触发了 pacing_gap 警告 + promise_fulfillment 硬错误")
@@ -284,7 +284,7 @@ func TestPacingGap_RomanceGenre(t *testing.T) {
 	t.Logf("=== 言情题材 pacing_gap ===")
 	t.Logf("结果：%s", content)
 
-	if !contains(content, "🟡 节奏拖沓") {
+	if !contains(content, "[WARNING] 节奏拖沓") {
 		t.Error("应该触发节奏拖沓")
 	}
 	t.Logf("✓ 言情题材正确检测到连续无情感场景")
@@ -324,7 +324,7 @@ func TestPacingGap_SuspenseGenre(t *testing.T) {
 	t.Logf("=== 悬疑题材 pacing_gap ===")
 	t.Logf("结果：%s", content)
 
-	if !contains(content, "🟡 节奏拖沓") {
+	if !contains(content, "[WARNING] 节奏拖沓") {
 		t.Error("应该触发节奏拖沓")
 	}
 	t.Logf("✓ 悬疑题材正确检测到连续无推理/线索场景")
@@ -363,7 +363,7 @@ func TestPacingGap_XuanhuanNoTrigger(t *testing.T) {
 	t.Logf("=== 玄幻题材 pacing_gap（无触发） ===")
 	t.Logf("结果：%s", content)
 
-	if contains(content, "🟡 节奏拖沓") {
+	if contains(content, "[WARNING] 节奏拖沓") {
 		t.Error("不应该触发节奏拖沓")
 	}
 	t.Logf("✓ 玄幻题材连续有冲突/战斗场景，正确不触发")

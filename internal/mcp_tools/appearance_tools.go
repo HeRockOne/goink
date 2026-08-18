@@ -320,7 +320,7 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 			tc.NovelID, a.CurrentChapter).Find(&overdue)
 		if len(overdue) > 0 {
 			for _, e := range overdue {
-				findings = append(findings, fmt.Sprintf("🔴 伏笔超期未回收：%s（目标第%d章，当前第%d章）", e.Title, e.TargetChapter, a.CurrentChapter))
+				findings = append(findings, fmt.Sprintf("[ERROR] 伏笔超期未回收：%s（目标第%d章，当前第%d章）", e.Title, e.TargetChapter, a.CurrentChapter))
 			}
 		}
 	}
@@ -328,21 +328,21 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 	if checkTypes["character_vanished"] {
 		vanished := findVanishedCharacters(ctx, db, tc.NovelID, a.CurrentChapter)
 		for _, v := range vanished {
-			warnings = append(warnings, fmt.Sprintf("🟡 角色出场断档：%s 近30章未出场（最近出场第%d章）", v.Name, v.LastChapter))
+			warnings = append(warnings, fmt.Sprintf("[WARNING] 角色出场断档：%s 近30章未出场（最近出场第%d章）", v.Name, v.LastChapter))
 		}
 	}
 
 	if checkTypes["item_conflict"] {
 		conflicts := findItemConflicts(ctx, db, tc.NovelID)
 		for _, c := range conflicts {
-			findings = append(findings, fmt.Sprintf("🔴 物品状态冲突：%s 状态为%s，但之后章节仍出现", c.Name, c.Status))
+			findings = append(findings, fmt.Sprintf("[ERROR] 物品状态冲突：%s 状态为%s，但之后章节仍出现", c.Name, c.Status))
 		}
 	}
 
 	if checkTypes["dead_appeared"] {
 		dead := findDeadAppeared(ctx, db, tc.NovelID, a.CurrentChapter)
 		for _, d := range dead {
-			findings = append(findings, fmt.Sprintf("🔴 死者复出：%s 状态为 dead（第%d章死亡），但第%d章出场列表中仍包含该角色", d.Name, d.DeathChapter, d.AppearedChapter))
+			findings = append(findings, fmt.Sprintf("[ERROR] 死者复出：%s 状态为 dead（第%d章死亡），但第%d章出场列表中仍包含该角色", d.Name, d.DeathChapter, d.AppearedChapter))
 		}
 	}
 
@@ -592,7 +592,7 @@ func findPacingGap(ctx context.Context, db *gorm.DB, novelID int64, currentChapt
 		if genre != "" {
 			genreHint = "（题材：" + genre + "）"
 		}
-		return fmt.Sprintf("🟡 节奏拖沓：第%d-%d章连续%d章无高密度场景%s（回溯窗口%d章，阈值%d章）", startIdx, currentChapter, consecutiveNoAction, genreHint, lookback, minGap)
+		return fmt.Sprintf("[WARNING] 节奏拖沓：第%d-%d章连续%d章无高密度场景%s（回溯窗口%d章，阈值%d章）", startIdx, currentChapter, consecutiveNoAction, genreHint, lookback, minGap)
 	}
 	return ""
 }
@@ -681,7 +681,7 @@ func findPromiseUnfulfilled(ctx context.Context, db *gorm.DB, novelID int64, cur
 		}
 
 		overdueBy := currentChapter - p.Chapter
-		results = append(results, fmt.Sprintf("🔴 承诺未兑现：第%d章承诺「%s」已过期%d章（当前第%d章，容差%d章）", p.Chapter, p.Desc, overdueBy, currentChapter, tolerance))
+		results = append(results, fmt.Sprintf("[ERROR] 承诺未兑现：第%d章承诺「%s」已过期%d章（当前第%d章，容差%d章）", p.Chapter, p.Desc, overdueBy, currentChapter, tolerance))
 	}
 	return results
 }
