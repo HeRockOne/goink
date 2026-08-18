@@ -133,6 +133,7 @@ mode: always
    （伏笔超期/角色断档/物品冲突/死者复出）由 SQL 实证输出，发现错误立即定位修复，修复后重跑核对直到
    通过——门禁 require 强制，不核对无法转出 review（写时把关，不等审稿阶段才发现设定硬伤；
    get_writing_context 的 dead_characters 名单写作前就要记住，死者不得复出）
+   **注意**：check_types 可选，留空=全部检查；review 阶段建议传 `["pacing_gap"]`，maintain 阶段建议传 `["promise_fulfillment"]`
 7. **set_phase("review")**
 
 ### review
