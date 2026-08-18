@@ -347,10 +347,19 @@ body::before, body::after, #appMain::before { display: none; }
 /* ═══════════════ 对话区 ═══════════════ */
 .chat-banner {
   padding: 8px 16px; font-size: 12px; color: var(--text);
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; justify-content: space-between;
   background: var(--surface2); border-bottom: 1px solid var(--border);
   flex-shrink: 0; font-weight: 500;
 }
+.chat-banner-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-banner-cost {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  cursor: pointer; padding: 2px 8px; border-radius: 12px;
+  background: var(--bg); transition: background 0.2s;
+}
+.chat-banner-cost:active { background: var(--border); }
+.cost-value { font-family: monospace; font-weight: 600; color: var(--ice); font-size: 12px; }
+.cost-tokens { font-family: monospace; font-size: 10px; color: var(--text3); }
 
 /* 快捷操作栏 */
 .quick-bar {
@@ -765,9 +774,7 @@ body::before, body::after, #appMain::before { display: none; }
 .ch-list-words { font-size: 11px; color: var(--text3); margin-left: auto; flex-shrink: 0; }
 
 /* ═══════════════ 快捷栏金额按钮 ═══════════════ */
-.quick-btn-money { margin-left: auto; }
-.quick-btn-money .quick-label { font-family: monospace; font-weight: 600; }
-.quick-btn-money .quick-sub { font-size: 10px; opacity: 0.7; margin-left: 4px; font-family: monospace; }
+
 
 /* ═══════════════ Token弹窗 ═══════════════ */
 .modal {
@@ -795,16 +802,18 @@ body::before, body::after, #appMain::before { display: none; }
 }
 .modal-body { padding: 16px; }
 
-.token-section { margin-bottom: 16px; }
+.token-section { margin-bottom: 12px; }
 .token-title {
   font-size: 12px; color: var(--text3); margin-bottom: 8px;
-  font-weight: 500; text-transform: uppercase;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
 }
 .token-row {
   display: flex; justify-content: space-between; padding: 6px 0;
   font-size: 13px; color: var(--text2);
 }
 .token-row span:last-child { font-family: monospace; font-weight: 500; }
+.token-divider { height: 1px; background: var(--border); margin: 8px 0; }
+.token-daily-scroll { max-height: 200px; overflow-y: auto; }
 .token-total {
   border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;
   font-weight: 600; color: var(--text);

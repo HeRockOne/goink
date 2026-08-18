@@ -13,7 +13,7 @@ import (
 type UpdateChapterMetaArgs struct {
 	ChapterID    int64   `json:"chapter_id"    jsonschema:"required,description=章节ID" validate:"required,min=1"`
 	Summary      string  `json:"summary"       jsonschema:"required,description=章节摘要/概述，50-200字，让下一章 AI 快速了解本章发生了什么"`
-	KeyEvents    string  `json:"key_events"    jsonschema:"required,description=JSON数组，本章关键事件列表，如[\"发现祭坛\",\"激活封印\"]"`
+	KeyEvents    string  `json:"key_events"    jsonschema:"required,description=JSON数组，本章关键事件列表。必须使用标签格式：[类型]事件描述。类型枚举：[冲突][对话][伏笔][转折][日常][探索][情感][战斗][成长]。示例：[\"[冲突]碾压守卫\",\"[伏笔]发现神秘祭坛\",\"[对话]与长老博弈\"]"`
 	CharactersIn string  `json:"characters_in" jsonschema:"required,description=JSON数组，本章出场角色ID列表，如[127,128,129]"`
 	ArcIDs       string  `json:"arc_ids"       jsonschema:"required,description=JSON数组，本章涉及的弧线ID列表，如[68]"`
 }
@@ -25,6 +25,9 @@ func (t *UpdateChapterMetaTool) Description() string {
 	return "更新章节的元数据（摘要、关键事件、出场角色、关联弧线）。" +
 		"每次写完一章后，必须调用此工具更新 summary 和 key_events，" +
 		"否则下一章 get_writing_context 的 recent_chapters 中看不到本章摘要。" +
+		"【关键事件格式】key_events 必须使用标签格式：[类型]事件描述。类型枚举：[冲突][对话][伏笔][转折][日常][探索][情感][战斗][成长]。" +
+		"示例：[\"[冲突]碾压守卫\",\"[伏笔]发现神秘祭坛\",\"[对话]与长老博弈\"]。" +
+		"标签用途：pacing_gap 检查通过 [冲突][战斗] 标签识别动作场景，判断节奏是否拖沓。" +
 		"【关联场景】写完正文后，在 maintain 阶段调用此工具，让后续创作知道本章发生了什么。"
 }
 func (t *UpdateChapterMetaTool) Category() ToolCategory { return CategoryWritingAssistant }

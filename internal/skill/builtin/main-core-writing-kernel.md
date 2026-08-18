@@ -173,12 +173,12 @@ mode: always
 | 5 | **更新章节计划** | 每章必做 | update_chapter_plan（main-cmd-next 触发） |
 | 6 | **创建场景条目** | 查询 E 发现有**关键**场景时（判定见下方标准） | create_scene（title + summary required） |
 | 7 | **记录物品流转** | 查询 F 发现有**关键**物品易主时（判定见下方标准） | create_item_occurrence（item_id + chapter_id + action 全部 required） |
-| 8 | **更新角色状态** | 查询 A 发现有**关键**角色变化时（判定见下方标准） | update_character |
+| 8 | **更新角色状态（含内容校准）** | 查询 A 发现有**关键**角色变化时（判定见下方标准） | update_character（改 status 时同步校准 description/personality 与当前剧情一致；只写已发生事实，禁止"预测性剧情"描述） |
 | 9 | **更新角色关系** | 查询 G 发现有变化时 | update_character_relationship（relation_describe required） |
-| 10 | **推进弧线节点** | 查询 C 发现有变化时 | update_arc_node |
+| 10 | **推进弧线节点（含规划对齐）** | 查询 C 发现有变化时 | update_arc_node（target_chapter 与卷纲 detail_json 章节规划对齐，偏差>3章以 volume 为准校准——volume 是精确规划，arc node 是粗略估计） |
 | 11 | **新伏笔/悬念** | 有新**关键**伏笔时（判定见下方标准） | create_timeline_entry（title + category + target_chapter 全部 required） |
-| 12 | **回收伏笔** | 查询 B 发现有要回收的时 | update_timeline_entry（resolved_chapter_id） |
-| 13 | **更新读者认知** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry |
+| 12 | **回收/校准伏笔** | 查询 B 发现有要回收/校准的时 | update_timeline_entry：回收（status=resolved + resolved_chapter_id）；校准（title/content/target_chapter 与当前剧情不符时修正——禁止过时伏笔静默存在，僵尸数据会误导后续章节） |
+| 13 | **更新读者认知（含去重）** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry（create 前先核对已有条目，同一事实不同角度优先 update 不新建，杜绝冗余条目） |
 | 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹，格式见 anti-repetition skill：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行。必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
 | 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
 
@@ -226,7 +226,7 @@ mode: always
 | **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（九条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
 | **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
 | **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（22项判定） |
-| **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔） |
+| **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔）, main-tech-data-hygiene（数据卫生：内容校准） |
 | **完结** | main-tech-book-completion（完本清单） |
 
 ## 硬约束

@@ -240,6 +240,84 @@ const LANGS = {
     // toast消息
     phase_gate_enabled: '门禁已开启', phase_gate_disabled: '门禁已关闭',
     approval_mode_set: '审批模式', thinking_effort_set: '思考深度', setting_failed: '设置失败',
+    // Token弹窗
+    token_usage_title: 'Token用量', session_breakdown: '当前会话分类统计',
+    input_tokens: '输入 tokens', output_tokens: '输出', cache_miss: '未命中',
+    cache_hit: '缓存读取', total: '总计',
+    total_cost_by_model: '总成本（按模型）', subtotal: '小计',
+    daily_cumulative: '今日统计', today_sessions: '今日 {n} 个会话',
+    // 删除小说
+    delete_novel: '删除小说', delete_novel_confirm: '此操作不可恢复。请输入小说名称确认删除：',
+    delete_novel_placeholder: '输入小说名称', confirm_delete: '删除',
+    novel_deleted: '小说已删除', delete_failed: '删除失败',
+    // 新建小说
+    create_novel: '新建作品', novel_name: '作品名称', name_placeholder: '输入小说名称',
+    genre: '类型', select_genre: '选择类型',
+    genre_xuanhuan: '玄幻', genre_sf: '科幻', genre_urban: '都市', genre_history: '历史',
+    genre_suspense: '悬疑', genre_wuxia: '武侠', genre_romance: '言情', genre_other: '其他',
+    synopsis: '简介', optional: '可选', create: '创建',
+    please_enter_name: '请输入作品名称', creating: '创建中...', created: '已创建', create_failed: '创建失败',
+    // 扫描二维码/认证
+    auth_verification: '🔐 访问验证', token_prompt_desc: '首次连接需输入令牌，请在桌面端「设置」中查看或扫描二维码。',
+    token_input_placeholder: '输入 32 位令牌', connect: '连接', skip: '跳过',
+    scan_qr: '📷 扫描二维码', qr_instruction: '将二维码放入框内',
+    camera_error: '无法访问摄像头', scan_success: '扫码成功，令牌已保存',
+    token_saved: '令牌已保存', verify_failed: '连接验证失败（令牌可能不对）',
+    connect_failed: '无法连接服务器（检查地址与端口）', scan_connected: '扫码成功，已连接服务器',
+    // Sheet标题
+    select_model: '选择模型', history_sessions: '历史会话',
+    // Reader
+    font_size: '字号', line_height: '行距', toc: '目录', reader_settings: '设置',
+    // Stats
+    total_chapters: '总章节', total_words: '总字数', avg_words: '均章字数',
+    arc_progress: '弧线进度', foreshadow_rate: '伏笔回收',
+    char_count: '角色数', loc_count: '地点数',
+    no_data: '暂无数据', no_novel_hint: '请先打开一本小说',
+    latest_chapter: '最新章节：第{ch}章 {title}',
+    // 格式化标签
+   已解决: '已解决', 待处理: '待处理',
+    target_prefix: '目标:', source_prefix: '来源:', resolved_prefix: '解决:',
+    // 角色
+    role_position: '职位', role_personality: '性格', role_background: '背景',
+    role_importance: '重要度', role_source: '来源',
+    // 时间线
+    timeline_type: '类型', timeline_content: '内容', timeline_category: '分类',
+    // 弧线
+    arc_arc_type: '弧线类型', arc_status: '状态', arc_nodes: '节点',
+    // 读者认知
+    reader_known: '已知信息', reader_suspense: '悬念', reader_misconception: '误解',
+    reader_planted: '埋设章节', reader_revealed: '揭示章节', reader_related: '关联真相',
+    // 偏好
+    pref_category: '分类', pref_scope: '范围',
+    // 地点
+    loc_type: '地点类型', loc_tags: '标签',
+    // 设定
+    lore_category: '分类', lore_revealed: '揭示章节', lore_arc: '关联弧线',
+    lore_hidden: '隐藏',
+    // 物品
+    item_type: '类型', item_quality: '品级', item_status: '状态',
+    item_narrative: '叙事角色', item_key_item: '关键道具',
+    item_holder: '持有者', item_ability: '能力', item_origin: '来历',
+    // 场景
+    scene_chapter: '章节', scene_location: '地点', scene_arc: '关联弧线', scene_node: '弧线节点',
+    // Chat
+    chat_me: '我', chat_ai: 'AI',
+    thinking_words: '思考 ({n}字)', thinking_toggle: '▲',
+    thinking_placeholder: '思考中...',
+    // 通用
+    already_copied: '已复制', copy_failed: '复制失败',
+    model_switched: '模型已切换', sync_done: '已同步到当前会话',
+    session_loaded: '已加载会话', model_badge: '思考',
+    unknown_error: '未知错误', offline_mode: '离线模式，显示缓存数据',
+    no_arc: '无名弧线', no_location: '无名', scene_node_prefix: '节点',
+    scene_default: '场景', load_error: '加载失败',
+    // 重试
+    retrying: '正在重试 ({n}次)',
+    // 阶段
+    phase_prefix: '阶段:',
+    // 设置页
+    api_auth: 'API 认证', cache_label: '缓存', auto_sync: '在线自动同步',
+    no_model: '未选择', switch_to: '切换到',
   },
   en: {
     bookshelf: 'Bookshelf', chat: 'Chat', settings: 'Settings', detail: 'Novel Detail',
@@ -283,11 +361,93 @@ const LANGS = {
     // Toast messages
     phase_gate_enabled: 'Gate enabled', phase_gate_disabled: 'Gate disabled',
     approval_mode_set: 'Approval mode', thinking_effort_set: 'Thinking effort', setting_failed: 'Setting failed',
+    // Token modal
+    token_usage_title: 'Token Usage', session_breakdown: 'Session Breakdown',
+    input_tokens: 'Input tokens', output_tokens: 'Output', cache_miss: 'Cache Miss',
+    cache_hit: 'Cache Hit', total: 'Total',
+    total_cost_by_model: 'Cost by Model', subtotal: 'Subtotal',
+    daily_cumulative: 'Today', today_sessions: 'Today, {n} sessions',
+    // Delete novel
+    delete_novel: 'Delete Novel', delete_novel_confirm: 'This cannot be undone. Enter the novel name to confirm:',
+    delete_novel_placeholder: 'Enter novel name', confirm_delete: 'Delete',
+    novel_deleted: 'Novel deleted', delete_failed: 'Delete failed',
+    // Create novel
+    create_novel: 'New Novel', novel_name: 'Title', name_placeholder: 'Enter novel title',
+    genre: 'Genre', select_genre: 'Select genre',
+    genre_xuanhuan: 'Xuanhuan', genre_sf: 'Sci-Fi', genre_urban: 'Urban', genre_history: 'History',
+    genre_suspense: 'Suspense', genre_wuxia: 'Wuxia', genre_romance: 'Romance', genre_other: 'Other',
+    synopsis: 'Synopsis', optional: 'Optional', create: 'Create',
+    please_enter_name: 'Please enter a title', creating: 'Creating...', created: 'Created', create_failed: 'Create failed',
+    // QR scan / auth
+    auth_verification: '🔐 Verification', token_prompt_desc: 'Enter the token from desktop Settings, or scan QR code.',
+    token_input_placeholder: 'Enter 32-char token', connect: 'Connect', skip: 'Skip',
+    scan_qr: '📷 Scan QR Code', qr_instruction: 'Align QR code within frame',
+    camera_error: 'Camera access denied', scan_success: 'Scan success, token saved',
+    token_saved: 'Token saved', verify_failed: 'Verification failed (wrong token?)',
+    connect_failed: 'Cannot connect (check address & port)', scan_connected: 'Scan success, connected',
+    // Sheet titles
+    select_model: 'Select Model', history_sessions: 'History',
+    // Reader
+    font_size: 'Size', line_height: 'Spacing', toc: 'TOC', reader_settings: 'Settings',
+    // Stats
+    total_chapters: 'Chapters', total_words: 'Words', avg_words: 'Avg Words',
+    arc_progress: 'Arc Progress', foreshadow_rate: 'Foreshadow Rate',
+    char_count: 'Characters', loc_count: 'Locations',
+    no_data: 'No data yet', no_novel_hint: 'Open a novel first',
+    latest_chapter: 'Latest: Ch.{ch} {title}',
+    // Format labels
+    已解决: 'Resolved', 待处理: 'Pending',
+    target_prefix: 'Target:', source_prefix: 'Source:', resolved_prefix: 'Resolved:',
+    // Characters
+    role_position: 'Role', role_personality: 'Personality', role_background: 'Background',
+    role_importance: 'Importance', role_source: 'Source',
+    // Timeline
+    timeline_type: 'Type', timeline_content: 'Content', timeline_category: 'Category',
+    // Arcs
+    arc_arc_type: 'Arc Type', arc_status: 'Status', arc_nodes: 'Nodes',
+    // Reader
+    reader_known: 'Known', reader_suspense: 'Suspense', reader_misconception: 'Misconception',
+    reader_planted: 'Planted', reader_revealed: 'Revealed', reader_related: 'Related',
+    // Preferences
+    pref_category: 'Category', pref_scope: 'Scope',
+    // Locations
+    loc_type: 'Type', loc_tags: 'Tags',
+    // Lore
+    lore_category: 'Category', lore_revealed: 'Revealed', lore_arc: 'Arc',
+    lore_hidden: 'Hidden',
+    // Items
+    item_type: 'Type', item_quality: 'Quality', item_status: 'Status',
+    item_narrative: 'Role', item_key_item: 'Key Item',
+    item_holder: 'Holder', item_ability: 'Ability', item_origin: 'Origin',
+    // Scenes
+    scene_chapter: 'Chapter', scene_location: 'Location', scene_arc: 'Arc', scene_node: 'Node',
+    // Chat
+    chat_me: 'Me', chat_ai: 'AI',
+    thinking_words: 'Thinking ({n} chars)', thinking_toggle: '▲',
+    thinking_placeholder: 'Thinking...',
+    // Common
+    already_copied: 'Copied', copy_failed: 'Copy failed',
+    model_switched: 'Model switched', sync_done: 'Synced to current session',
+    session_loaded: 'Session loaded', model_badge: 'Think',
+    unknown_error: 'Unknown error', offline_mode: 'Offline, showing cache',
+    no_arc: 'Unnamed arc', no_location: 'Unnamed', scene_node_prefix: 'Node',
+    scene_default: 'Scene', load_error: 'Load failed',
+    // Retry
+    retrying: 'Retrying ({n})',
+    // Phase
+    phase_prefix: 'Phase:',
+    // Settings
+    api_auth: 'API Auth', cache_label: 'Cache', auto_sync: 'Auto Sync',
+    no_model: 'None', switch_to: 'Switch to',
   }
 };
 function getLang() { return localStorage.getItem('goink_lang') || 'zh'; }
 function setLang(lang) { localStorage.setItem('goink_lang', lang); }
-function t(key) { const lang = getLang(); return (LANGS[lang] && LANGS[lang][key]) || LANGS.zh[key] || key; }
+function t(key, vars) { const lang = getLang(); let s = (LANGS[lang] && LANGS[lang][key]) || LANGS.zh[key] || key; if (vars) { for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v); } return s; }
+function applyI18n(root) {
+  (root || document).querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  (root || document).querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+}
 function toggleLang() {
   const next = getLang() === 'zh' ? 'en' : 'zh';
   setLang(next);
@@ -305,14 +465,14 @@ function closeSheet(id) { const el = document.getElementById(id); if (el) el.cla
 // 复制文本
 function copyText(t) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(() => toast('已复制')).catch(() => fallbackCopy(t));
+    navigator.clipboard.writeText(t).then(() => toast(t('copied'))).catch(() => fallbackCopy(t));
   } else { fallbackCopy(t); }
 }
 function fallbackCopy(t) {
   const ta = document.createElement('textarea');
   ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast('已复制'); } catch (_) { toast('复制失败'); }
+  try { document.execCommand('copy'); toast(t('copied')); } catch (_) { toast(t('copy_fail')); }
   document.body.removeChild(ta);
 }
 
@@ -326,13 +486,23 @@ function updateQuickBar() {
     gateBtn.className = `quick-btn ${state.phaseGateEnabled ? 'active' : ''}`;
     gateLabel.textContent = state.phaseGateEnabled ? t('phase_gate_on') : t('phase_gate_off');
   }
-  // 思考深度
+  // 思考深度 - 动态读取当前模型的 reasoning_levels
   const thinkingBtn = document.getElementById('quickThinking');
   const thinkingLabel = document.getElementById('quickThinkingLabel');
   if (thinkingBtn && thinkingLabel) {
-    const effortNames = { '': t('effort_off'), 'low': t('effort_low'), 'medium': t('effort_medium'), 'high': t('effort_high'), 'max': t('effort_max') };
-    thinkingBtn.className = `quick-btn ${state.reasoningEffort ? 'active' : ''}`;
-    thinkingLabel.textContent = effortNames[state.reasoningEffort] || t('effort_off');
+    const curModel = state.models.find(m => m.key === state.selectedModel);
+    const supportsThinking = curModel?.thinking;
+    if (!supportsThinking) {
+      thinkingBtn.style.display = 'none';
+    } else {
+      thinkingBtn.style.display = '';
+      const levels = curModel?.reasoning_levels?.length ? curModel.reasoning_levels : ['low', 'high', 'max'];
+      state.effortOptions = levels;
+      const effortNames = { '': t('effort_off') };
+      levels.forEach(l => { effortNames[l] = t('effort_' + l); });
+      thinkingBtn.className = `quick-btn ${state.reasoningEffort ? 'active' : ''}`;
+      thinkingLabel.textContent = effortNames[state.reasoningEffort] || t('effort_off');
+    }
   }
   // 审批模式
   const approvalBtn = document.getElementById('quickApproval');
@@ -347,18 +517,36 @@ function updateQuickBar() {
     const found = state.models.find(m => m.key === state.selectedModel);
     modelLabel.textContent = found ? (found.name || 'Model') : t('model');
   }
-  // Token用量 - 按模型计算成本
-  const moneyLabel = document.getElementById('quickMoneyLabel');
-  if (moneyLabel) {
-    const usage = state.sessionUsage || {};
-    state.sessionCost = calcSessionCost(usage);
-    moneyLabel.textContent = state.sessionCost > 0 ? `¥${state.sessionCost.toFixed(4)}` : '¥0.00';
-    const tokensLabel = document.getElementById('quickTokensLabel');
-    if (tokensLabel) {
-      const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
-      tokensLabel.textContent = total > 0 ? fmtTokens(total) : '';
-    }
+  // 更新书名栏成本
+  updateChatBannerCost();
+}
+
+// ── 书名栏（书名 + 成本） ──
+function updateChatBanner() {
+  const banner = document.getElementById('chatBanner');
+  const titleEl = document.getElementById('chatBannerTitle');
+  if (!banner || !titleEl) return;
+  if (state.novelTitle) {
+    titleEl.textContent = '📖 ' + state.novelTitle;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
   }
+  updateChatBannerCost();
+}
+function updateChatBannerCost() {
+  const costEl = document.getElementById('chatBannerCost');
+  if (!costEl) return;
+  const usage = state.sessionUsage || {};
+  state.sessionCost = calcSessionCost(usage);
+  const cacheHit = usage.prompt_cache_hit_tokens || 0;
+  const cacheMiss = usage.prompt_cache_miss_tokens || 0;
+  const output = usage.acc_completion_tokens || usage.completion_tokens || 0;
+  const totalTokens = cacheHit + cacheMiss + output;
+  const costText = state.sessionCost > 0 ? `¥${state.sessionCost.toFixed(4)}` : '';
+  const tokenText = totalTokens > 0 ? fmtTokens(totalTokens) : '';
+  costEl.innerHTML = costText ? `<span class="cost-value">${costText}</span>${tokenText ? `<small class="cost-tokens">${tokenText}</small>` : ''}` : '';
+  costEl.style.display = costText ? '' : 'none';
 }
 
 // ── Token用量显示 ──
@@ -390,15 +578,14 @@ function calcSessionCost(usage) {
 
 function updateTokenModal() {
   const usage = state.sessionUsage || {};
-  const prompt = usage.prompt_tokens || 0;
-  const completion = usage.completion_tokens || 0;
-  const cache = usage.prompt_cache_hit_tokens || 0;
-  const total = (usage.total_tokens || 0) || (prompt + completion);
+  const cacheHit = usage.prompt_cache_hit_tokens || 0;
+  const cacheMiss = usage.prompt_cache_miss_tokens || 0;
+  const output = usage.acc_completion_tokens || usage.completion_tokens || 0;
   
-  document.getElementById('tokenInput').textContent = fmtTokens(prompt);
-  document.getElementById('tokenOutput').textContent = fmtTokens(completion);
-  document.getElementById('tokenCache').textContent = fmtTokens(cache);
-  document.getElementById('tokenTotal').textContent = fmtTokens(total);
+  document.getElementById('tokenInput').textContent = fmtTokens(cacheMiss);
+  document.getElementById('tokenOutput').textContent = fmtTokens(output);
+  document.getElementById('tokenCache').textContent = fmtTokens(cacheHit);
+  document.getElementById('tokenTotal').textContent = fmtTokens(cacheHit + cacheMiss + output);
   
   // 当前会话按模型成本
   const perModel = usage.per_model || {};
@@ -478,11 +665,11 @@ async function confirmDeleteNovel() {
       method: 'DELETE',
       body: { id: deleteNovelId, title: deleteNovelTitle }
     });
-    toast('小说已删除');
+    toast(t('novel_deleted'));
     hideDeleteNovel();
     loadNovels();
   } catch (_) {
-    toast('删除失败');
+    toast(t('delete_failed'));
   }
 }
 
@@ -595,9 +782,8 @@ async function switchPage(page) {
   document.getElementById('pageTitle').textContent = titles[page] || 'Goink';
   const actions = document.getElementById('headerActions');
   if (page === 'chat') {
-    actions.innerHTML = '<button onclick="newChat()" title="新对话"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button onclick="showSessions()" title="历史"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></button>';
-    const banner = document.getElementById('chatBanner');
-    if (state.novelTitle) { banner.innerHTML = '<span>📖</span> ' + esc(state.novelTitle); banner.style.display = 'flex'; } else { banner.style.display = 'none'; }
+    actions.innerHTML = '<button onclick="newChat()" title="' + t('new_chat') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button onclick="showSessions()" title="' + t('history') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></button>';
+    updateChatBanner();
     loadModels(); loadSessions();
   } else { actions.innerHTML = ''; if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none'; }
   if (page === 'novels') loadNovels();
@@ -605,6 +791,7 @@ async function switchPage(page) {
   if (page === 'settings') loadSettings();
   if (page === 'stats') loadStatsPage();
   if (page === 'novel-detail') loadNovelDetail();
+  applyI18n();
 }
 
 // ── WebSocket (wspulse) ──
@@ -961,14 +1148,14 @@ function showCreateNovel() {
 function hideCreateNovel() { document.getElementById('createNovelOverlay').classList.add('hidden'); }
 async function doCreateNovel() {
   const title = document.getElementById('createNovelTitle').value.trim();
-  if (!title) { toast('请输入作品名称'); return; }
+  if (!title) { toast(t('please_enter_name')); return; }
   hideCreateNovel();
-  toast('创建中…');
+  toast(t('creating'));
   try {
     const r = await api('/api/novels', { method: 'POST', body: { title, genre: document.getElementById('createNovelGenre').value.trim(), description: document.getElementById('createNovelDesc').value.trim() } });
-    if (r.novel) { toast('✅ 已创建'); loadNovels(); }
-    else { toast('❌ ' + (r.error || '创建失败')); }
-  } catch (_) { toast('❌ 创建失败'); }
+    if (r.novel) { toast(t('created')); loadNovels(); }
+    else { toast(r.error || t('create_failed')); }
+  } catch (_) { toast(t('create_failed')); }
 }
 
 // ═══════════ 小说详情 ═══════════
@@ -1895,7 +2082,7 @@ async function toggleApprovalMode() {
 }
 
 async function cycleReasoningEffort() {
-  const efforts = ['', 'low', 'medium', 'high', 'max'];
+  const efforts = ['', ...(state.effortOptions || ['low', 'high', 'max'])];
   const idx = efforts.indexOf(state.reasoningEffort);
   const newEffort = efforts[(idx + 1) % efforts.length];
   try {
@@ -1904,7 +2091,8 @@ async function cycleReasoningEffort() {
       body: { reasoning_effort: newEffort }
     });
     state.reasoningEffort = newEffort;
-    const names = { '': t('effort_off'), 'low': t('effort_low'), 'medium': t('effort_medium'), 'high': t('effort_high'), 'max': t('effort_max') };
+    const names = { '': t('effort_off') };
+    efforts.slice(1).forEach(e => { names[e] = t('effort_' + e); });
     toast(`${t('thinking_effort_set')}: ${names[newEffort]}`);
     updateQuickBar();
   } catch (_) { toast(t('setting_failed')); }

@@ -15,6 +15,7 @@ import (
 	"novel/internal/itemoccurrence"
 	"novel/internal/lore"
 	"novel/internal/scene"
+	"novel/internal/storyarc"
 	"novel/internal/timeline"
 )
 
@@ -257,21 +258,27 @@ func foreshadowAppearances(ctx context.Context, db *gorm.DB, novelID, entryID in
 
 type CheckStoryConsistencyArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"required,description=当前章节号" validate:"required,min=1"`
-	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\"]。留空=全部"`
+	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\",\"pacing_gap\",\"promise_fulfillment\"]。留空=全部"`
+	Lookback       int    `json:"lookback" jsonschema:"description=pacing_gap 回溯窗口章数，默认5"`
+	MinGap         int    `json:"min_gap" jsonschema:"description=pacing_gap 连续无动作场景触发阈值，默认3"`
+	Tolerance      int    `json:"tolerance" jsonschema:"description=promise_fulfillment 承诺章+tolerance后仍未兑现才报警，默认3"`
+	Genre          string `json:"genre" jsonschema:"description=pacing_gap 题材类型，影响检测标签：xuanhuan(冲突+战斗)/suspense(推理+反转)/romance(告白+误会)/urban(职场+商战)/default(冲突+战斗)"`
 }
 
 type CheckStoryConsistencyTool struct{}
 
 func (t *CheckStoryConsistencyTool) Name() string { return "check_story_consistency" }
 func (t *CheckStoryConsistencyTool) Description() string {
-	return "程序化一致性检查，用 SQL 实证返回四类问题：\n" +
+	return "程序化一致性检查，用 SQL 实证返回六类问题：\n" +
 		"1. foreshadow_overdue：超过目标章仍未回收的伏笔（硬错误）\n" +
 		"2. character_vanished：近30章未出场但有历史戏份的角色（出场断档，疑似被遗忘）\n" +
 		"3. item_conflict：已销毁/丢失的物品在之后章节又出现（硬错误）\n" +
 		"4. dead_appeared：已死亡（status=dead）的角色在死亡章节之后又被写入章节出场列表（硬错误，死者复出）\n" +
+		"5. pacing_gap：连续多章无冲突/战斗场景，节奏拖沓（警告）\n" +
+		"6. promise_fulfillment：卷纲承诺的大爽点到期未兑现（硬错误）\n" +
 		"review 阶段调用，作为审稿的硬数据支撑。" +
 		"【使用时机】审稿/每 3 章自检时调用（自动核对，输出问题条目）；发现问题后按条目定位修复。" +
-		"【注意】检查是程序化 SQL 核对，不含文笔/节奏判断——文笔问题仍需人工审读。"
+		"【注意】检查是程序化 SQL 核对，不含文笔判断——文笔问题仍需人工审读。"
 }
 func (t *CheckStoryConsistencyTool) Category() ToolCategory { return CategoryConsistencyCheck }
 func (t *CheckStoryConsistencyTool) JSONSchema() json.RawMessage {
@@ -284,12 +291,24 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 	a := args.(*CheckStoryConsistencyArgs)
 	db := tc.DB.WithContext(ctx)
 
-	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true}
+	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true, "pacing_gap": true, "promise_fulfillment": true}
 	if a.CheckTypes != "" {
 		checkTypes = map[string]bool{}
 		for _, c := range parseJSONStringArray(a.CheckTypes) {
 			checkTypes[c] = true
 		}
+	}
+	lookback := a.Lookback
+	if lookback <= 0 {
+		lookback = 5
+	}
+	minGap := a.MinGap
+	if minGap <= 0 {
+		minGap = 3
+	}
+	tolerance := a.Tolerance
+	if tolerance <= 0 {
+		tolerance = 3
 	}
 
 	var findings []string
@@ -327,9 +346,23 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 		}
 	}
 
+	if checkTypes["pacing_gap"] {
+		pacingWarn := findPacingGap(ctx, db, tc.NovelID, a.CurrentChapter, lookback, minGap, a.Genre)
+		if pacingWarn != "" {
+			warnings = append(warnings, pacingWarn)
+		}
+	}
+
+	if checkTypes["promise_fulfillment"] {
+		promiseFinds := findPromiseUnfulfilled(ctx, db, tc.NovelID, a.CurrentChapter, tolerance)
+		for _, f := range promiseFinds {
+			findings = append(findings, f)
+		}
+	}
+
 	var content string
 	if len(findings) == 0 && len(warnings) == 0 {
-		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出。"
+		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出、节奏拖沓。"
 	} else {
 		parts := append([]string{}, findings...)
 		parts = append(parts, warnings...)
@@ -510,6 +543,147 @@ func findDeadAppeared(ctx context.Context, db *gorm.DB, novelID int64, currentCh
 		}
 	}
 	return out
+}
+
+// findPacingGap 检测连续多章无高密度场景（节奏拖沓）。
+// 通过 key_events 中的标签识别场景类型，根据题材动态调整检测标签。
+func findPacingGap(ctx context.Context, db *gorm.DB, novelID int64, currentChapter, lookback, minGap int, genre string) string {
+	// 根据题材选择检测标签
+	actionTags := getActionTags(genre)
+
+	startCh := currentChapter - lookback + 1
+	if startCh < 1 {
+		startCh = 1
+	}
+	var chapters []chapter.Chapter
+	db.WithContext(ctx).Where("novel_id = ? AND chapter_number >= ? AND chapter_number <= ?",
+		novelID, startCh, currentChapter).Order("chapter_number").Find(&chapters)
+
+	if len(chapters) == 0 {
+		return ""
+	}
+
+	// 从当前章往前统计连续无动作场景章数
+	consecutiveNoAction := 0
+	for i := len(chapters) - 1; i >= 0; i-- {
+		ch := chapters[i]
+		keyEvents := ch.KeyEvents
+		if keyEvents == "" {
+			consecutiveNoAction++
+			continue
+		}
+		// 检查是否包含动作标签
+		hasAction := false
+		for _, tag := range actionTags {
+			if strings.Contains(keyEvents, tag) {
+				hasAction = true
+				break
+			}
+		}
+		if hasAction {
+			break
+		}
+		consecutiveNoAction++
+	}
+
+	if consecutiveNoAction >= minGap {
+		startIdx := currentChapter - consecutiveNoAction + 1
+		genreHint := ""
+		if genre != "" {
+			genreHint = "（题材：" + genre + "）"
+		}
+		return fmt.Sprintf("🟡 节奏拖沓：第%d-%d章连续%d章无高密度场景%s（回溯窗口%d章，阈值%d章）", startIdx, currentChapter, consecutiveNoAction, genreHint, lookback, minGap)
+	}
+	return ""
+}
+
+// getActionTags 根据题材返回检测标签
+func getActionTags(genre string) []string {
+	switch strings.ToLower(genre) {
+	case "xuanhuan", "xianxia", "wuxia", "fantasy":
+		// 玄幻/仙侠/武侠：冲突、战斗、碾压
+		return []string{"[冲突]", "[战斗]", "[碾压]"}
+	case "suspense", "mystery", "detective":
+		// 悬疑/推理/侦探：推理、线索、反转、揭秘
+		return []string{"[推理]", "[线索]", "[反转]", "[揭秘]"}
+	case "romance", "love":
+		// 言情：告白、误会、心动、冲突
+		return []string{"[告白]", "[误会]", "[心动]", "[冲突]"}
+	case "urban", "modern":
+		// 都市：职场、商战、冲突
+		return []string{"[职场]", "[商战]", "[冲突]"}
+	case "horror":
+		// 恐怖：惊吓、悬疑、冲突
+		return []string{"[惊吓]", "[悬疑]", "[冲突]"}
+	default:
+		// 默认：冲突、战斗（适合动作类）
+		return []string{"[冲突]", "[战斗]"}
+	}
+}
+
+// findPromiseUnfulfilled 检查卷纲承诺的大爽点是否已兑现。
+// 读取当前 volume 弧线的 detail_json.big_shuangdian，检查承诺章+tolerance后是否已发生。
+func findPromiseUnfulfilled(ctx context.Context, db *gorm.DB, novelID int64, currentChapter, tolerance int) []string {
+	var results []string
+
+	// 查询当前活跃的 volume 弧线
+	var vol storyarc.StoryArc
+	err := db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND status = 'active' AND start_chapter <= ? AND end_chapter >= ?",
+		novelID, currentChapter, currentChapter).First(&vol).Error
+	if err != nil {
+		return nil // 没有活跃 volume，跳过
+	}
+
+	// 解析 detail_json
+	if vol.DetailJSON == "" {
+		return nil
+	}
+	var detail struct {
+		BigShuangdian []struct {
+			Chapter int    `json:"chapter"`
+			Desc    string `json:"desc"`
+		} `json:"big_shuangdian"`
+	}
+	if err := json.Unmarshal([]byte(vol.DetailJSON), &detail); err != nil {
+		return nil
+	}
+
+	for _, p := range detail.BigShuangdian {
+		if p.Chapter <= 0 || p.Desc == "" {
+			continue
+		}
+		// 承诺章 + tolerance < 当前章 才检查
+		if p.Chapter+tolerance > currentChapter {
+			continue
+		}
+
+		// 检查是否有对应的 completed arc_node
+		var node storyarc.ArcNode
+		err := db.WithContext(ctx).Where("story_arc_id = ? AND status = 'completed' AND actual_chapter >= ? AND actual_chapter <= ?",
+			vol.ID, p.Chapter, currentChapter).First(&node).Error
+		if err == nil {
+			continue // 已兑现
+		}
+
+		// 检查最近3章 key_events 是否含承诺关键词
+		var recent []chapter.Chapter
+		db.WithContext(ctx).Where("novel_id = ? AND chapter_number >= ? AND chapter_number <= ?",
+			novelID, currentChapter-3, currentChapter).Find(&recent)
+		found := false
+		for _, ch := range recent {
+			if strings.Contains(ch.KeyEvents, p.Desc) || strings.Contains(ch.Summary, p.Desc) {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue // 剧情已写但节点漏标
+		}
+
+		overdueBy := currentChapter - p.Chapter
+		results = append(results, fmt.Sprintf("🔴 承诺未兑现：第%d章承诺「%s」已过期%d章（当前第%d章，容差%d章）", p.Chapter, p.Desc, overdueBy, currentChapter, tolerance))
+	}
+	return results
 }
 
 // ── 注册 ──────────────────────────────────────────────

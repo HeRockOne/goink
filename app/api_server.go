@@ -1066,12 +1066,13 @@ func (s *apiServer) handleModelSettings(w http.ResponseWriter, r *http.Request) 
 		models := []any{}
 		if s.app.llmClient != nil {
 			for _, m := range llm.Models(s.app.llmClient.Providers()) {
-				models = append(models, map[string]any{
-					"key":      m.Key,
-					"name":     m.ModelName,
-					"provider": m.ProviderName,
-					"thinking": m.SupportsThinking,
-				})
+			models = append(models, map[string]any{
+				"key":              m.Key,
+				"name":             m.ModelName,
+				"provider":         m.ProviderName,
+				"thinking":         m.SupportsThinking,
+				"reasoning_levels": m.ReasoningLevels,
+			})
 			}
 		}
 		writeJSON(w, map[string]any{

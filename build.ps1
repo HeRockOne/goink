@@ -13,10 +13,14 @@ $sqliteVer = (Select-String -Path "$PSScriptRoot\go.mod" -Pattern "mattn/go-sqli
 if (-not $sqliteVer) { Write-Host "go.mod 中未找到 mattn/go-sqlite3 版本" -ForegroundColor Red; exit 1 }
 $env:CGO_CFLAGS = "-I$(go env GOMODCACHE)\github.com\mattn\go-sqlite3@$sqliteVer"
 Set-Location "$PSScriptRoot"
-# sqlite_fts5: mattn/go-sqlite3 的 FTS5 模块（全文检索，rag/vector_store.go 建 fts5 表必需，
-# 缺该 tag 时真机日志报 "no such module: fts5" 并禁用全文检索，搜索降级为向量+LIKE）
-wails build -tags "webkit2_41 sqlite_fts5" -o $exeName 2>&1 | Select-String -NotMatch "KnownStructs|Not found"
-if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED" -ForegroundColor Red; exit 1 }
+Write-Host "  CGO_CFLAGS=$env:CGO_CFLAGS" -ForegroundColor DarkGray
+Write-Host "  sqlite_ver=$sqliteVer" -ForegroundColor DarkGray
+$buildOutput = wails build -tags "webkit2_41 sqlite_fts5" -o $exeName 2>&1
+$buildOutput | Out-Host
+if ($LASTEXITCODE -ne 0) { Write-Host "BUILD FAILED (exit code $LASTEXITCODE)" -ForegroundColor Red; exit 1 }
+$src = "build\bin\$exeName"
+if (-not (Test-Path $src)) { Write-Host "BUILD FAILED: $src not found" -ForegroundColor Red; exit 1 }
+Write-Host "  Built: $src ($(Get-Item $src).Length / 1MB) MB" -ForegroundColor DarkGray
 
 # Step 2: Stop
 Write-Host "[2/3] Stopping goink..." -ForegroundColor Yellow

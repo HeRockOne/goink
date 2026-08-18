@@ -50,28 +50,26 @@
 
     <!-- 对话页 -->
     <div id="page-chat" class="page">
-      <div id="chatBanner" class="chat-banner"></div>
+      <div id="chatBanner" class="chat-banner">
+        <span id="chatBannerTitle" class="chat-banner-title"></span>
+        <span id="chatBannerCost" class="chat-banner-cost" onclick="showTokenUsage()"></span>
+      </div>
       <div id="quickBar" class="quick-bar">
         <button class="quick-btn" onclick="togglePhaseGate()" id="quickGate">
           <span class="quick-icon">🛡️</span>
-          <span class="quick-label" id="quickGateLabel">门禁</span>
+          <span class="quick-label" id="quickGateLabel"></span>
         </button>
         <button class="quick-btn" onclick="cycleReasoningEffort()" id="quickThinking">
           <span class="quick-icon">🧠</span>
-          <span class="quick-label" id="quickThinkingLabel">思考</span>
+          <span class="quick-label" id="quickThinkingLabel"></span>
         </button>
         <button class="quick-btn" onclick="toggleApprovalMode()" id="quickApproval">
           <span class="quick-icon">✋</span>
-          <span class="quick-label" id="quickApprovalLabel">审批</span>
+          <span class="quick-label" id="quickApprovalLabel"></span>
         </button>
         <button class="quick-btn" onclick="showModels()" id="quickModel">
           <span class="quick-icon">🤖</span>
-          <span class="quick-label" id="quickModelLabel">模型</span>
-        </button>
-        <button class="quick-btn quick-btn-money" onclick="showTokenUsage()" id="quickMoney">
-          <span class="quick-icon">💰</span>
-          <span class="quick-label" id="quickMoneyLabel">¥0.00</span>
-          <span class="quick-sub" id="quickTokensLabel"></span>
+          <span class="quick-label" id="quickModelLabel"></span>
         </button>
       </div>
       <div id="chatMessages" class="scroll-area chat-scroll"></div>
@@ -104,19 +102,19 @@
   <nav id="bottomNav">
     <button class="nav-item active" data-page="novels">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-      <span>书架</span>
+      <span data-i18n="bookshelf">书架</span>
     </button>
     <button class="nav-item" data-page="chat">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-      <span>对话</span>
+      <span data-i18n="chat">对话</span>
     </button>
     <button class="nav-item" data-page="stats">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
-      <span>统计</span>
+      <span data-i18n="stats_label">统计</span>
     </button>
     <button class="nav-item" data-page="settings">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-      <span>设置</span>
+      <span data-i18n="settings">设置</span>
     </button>
   </nav>
 
@@ -125,7 +123,7 @@
     <div class="sheet-overlay" onclick="closeSheet('modelSheet')"></div>
     <div class="sheet-content">
       <div class="sheet-handle"></div>
-      <h3>选择模型</h3>
+      <h3 data-i18n="select_model">选择模型</h3>
       <div id="modelList" class="model-list"></div>
     </div>
   </div>
@@ -135,7 +133,7 @@
     <div class="sheet-overlay" onclick="closeSheet('sessionSheet')"></div>
     <div class="sheet-content">
       <div class="sheet-handle"></div>
-      <h3>历史会话</h3>
+      <h3 data-i18n="history_sessions">历史会话</h3>
       <div id="sessionList" class="session-list"></div>
     </div>
   </div>
@@ -152,29 +150,24 @@
 
   <!-- 全屏阅读器 -->
   <div id="readerSheet" class="reader-sheet hidden">
-    <!-- 阅读器顶部栏 -->
     <div class="reader-header">
-      <button onclick="closeReader()" class="reader-close" title="关闭">✕</button>
-      <span id="readerTitle" class="reader-title">章节标题</span>
-      <button onclick="showChapterList()" class="reader-close" title="目录">☰</button>
-      <button onclick="toggleReaderSettings()" class="reader-close" title="设置">⚙</button>
+      <button onclick="closeReader()" class="reader-close" title="Close">✕</button>
+      <span id="readerTitle" class="reader-title"></span>
+      <button onclick="showChapterList()" class="reader-close" title="TOC">☰</button>
+      <button onclick="toggleReaderSettings()" class="reader-close" title="Settings">⚙</button>
     </div>
-    <!-- 阅读器设置（默认隐藏） -->
     <div class="reader-settings hidden" id="readerSettingsPanel">
-      <div class="reader-setting"><label>字号</label><input type="range" id="rsFontSize" min="14" max="24" value="17" oninput="updateReaderSetting('fontSize', this.value)"><span id="rsFontSizeVal" class="reader-val">17</span></div>
-      <div class="reader-setting"><label>行距</label><input type="range" id="rsLineHeight" min="1.4" max="2.4" step="0.1" value="1.8" oninput="updateReaderSetting('lineHeight', this.value)"><span id="rsLineHeightVal" class="reader-val">1.8</span></div>
+      <div class="reader-setting"><label data-i18n="font_size">字号</label><input type="range" id="rsFontSize" min="14" max="24" value="17" oninput="updateReaderSetting('fontSize', this.value)"><span id="rsFontSizeVal" class="reader-val">17</span></div>
+      <div class="reader-setting"><label data-i18n="line_height">行距</label><input type="range" id="rsLineHeight" min="1.4" max="2.4" step="0.1" value="1.8" oninput="updateReaderSetting('lineHeight', this.value)"><span id="rsLineHeightVal" class="reader-val">1.8</span></div>
     </div>
-    <!-- 章节目录面板（内嵌，默认隐藏） -->
     <div id="chapterListPanel" class="chapter-list-panel hidden">
       <div id="chapterListBody" class="scroll-area" style="max-height:50vh"></div>
     </div>
-    <!-- 阅读内容 -->
     <div id="readerContent" class="reader-content"></div>
-    <!-- 底部工具栏 -->
     <div class="reader-toolbar">
-      <button id="readerPrev" onclick="prevChapter()" class="reader-nav-btn">‹ 上一章</button>
+      <button id="readerPrev" onclick="prevChapter()" class="reader-nav-btn" data-i18n="prev_ch">‹ 上一章</button>
       <span id="readerProgress" class="reader-progress">1/1</span>
-      <button id="readerNext" onclick="nextChapter()" class="reader-nav-btn">下一章 ›</button>
+      <button id="readerNext" onclick="nextChapter()" class="reader-nav-btn" data-i18n="next_ch">下一章 ›</button>
     </div>
   </div>
 
@@ -329,33 +322,33 @@
   <div id="createNovelOverlay" class="overlay hidden" onclick="if(event.target===this)hideCreateNovel()">
     <div class="dialog">
       <div class="dialog-header">
-        <span>新建作品</span>
+        <span data-i18n="create_novel">新建作品</span>
         <button class="dialog-close" onclick="hideCreateNovel()">✕</button>
       </div>
       <div class="dialog-body">
         <div class="form-group">
-          <label>作品名称</label>
-          <input id="createNovelTitle" type="text" placeholder="输入小说名称" class="form-input" />
+          <label data-i18n="novel_name">作品名称</label>
+          <input id="createNovelTitle" type="text" data-i18n-placeholder="name_placeholder" placeholder="输入小说名称" class="form-input" />
         </div>
         <div class="form-group">
-          <label>类型</label>
+          <label data-i18n="genre">类型</label>
           <select id="createNovelGenre" class="form-input">
-            <option value="">选择类型</option>
-            <option value="玄幻">玄幻</option>
-            <option value="科幻">科幻</option>
-            <option value="都市">都市</option>
-            <option value="历史">历史</option>
-            <option value="悬疑">悬疑</option>
-            <option value="武侠">武侠</option>
-            <option value="言情">言情</option>
-            <option value="其他">其他</option>
+            <option value="" data-i18n="select_genre">选择类型</option>
+            <option value="玄幻" data-i18n="genre_xuanhuan">玄幻</option>
+            <option value="科幻" data-i18n="genre_sf">科幻</option>
+            <option value="都市" data-i18n="genre_urban">都市</option>
+            <option value="历史" data-i18n="genre_history">历史</option>
+            <option value="悬疑" data-i18n="genre_suspense">悬疑</option>
+            <option value="武侠" data-i18n="genre_wuxia">武侠</option>
+            <option value="言情" data-i18n="genre_romance">言情</option>
+            <option value="其他" data-i18n="genre_other">其他</option>
           </select>
         </div>
         <div class="form-group">
-          <label>简介</label>
-          <textarea id="createNovelDesc" rows="3" placeholder="可选" class="form-input"></textarea>
+          <label data-i18n="synopsis">简介</label>
+          <textarea id="createNovelDesc" rows="3" data-i18n-placeholder="optional" placeholder="可选" class="form-input"></textarea>
         </div>
-        <button class="btn-primary" onclick="doCreateNovel()">创建</button>
+        <button class="btn-primary" onclick="doCreateNovel()" data-i18n="create">创建</button>
       </div>
     </div>
   </div>
@@ -364,36 +357,38 @@
   <div id="tokenModal" class="modal hidden">
     <div class="modal-content token-modal">
       <div class="modal-header">
-        <span>Token用量</span>
+        <span data-i18n="token_usage_title">Token用量</span>
         <button class="modal-close" onclick="hideTokenUsage()">✕</button>
       </div>
       <div class="modal-body">
         <div class="token-section">
-          <div class="token-title">当前会话</div>
+          <div class="token-title" data-i18n="session_breakdown">当前会话分类统计</div>
           <div class="token-row">
-            <span>输入 tokens</span>
+            <span data-i18n="cache_hit">缓存读取</span>
+            <span id="tokenCache">0</span>
+          </div>
+          <div class="token-row">
+            <span data-i18n="cache_miss">未命中</span>
             <span id="tokenInput">0</span>
           </div>
           <div class="token-row">
-            <span>输出 tokens</span>
+            <span data-i18n="output_tokens">输出</span>
             <span id="tokenOutput">0</span>
           </div>
-          <div class="token-row">
-            <span>缓存命中</span>
-            <span id="tokenCache">0</span>
-          </div>
           <div class="token-row token-total">
-            <span>总计</span>
+            <span data-i18n="total">总计</span>
             <span id="tokenTotal">0</span>
           </div>
         </div>
+        <div class="token-divider"></div>
         <div class="token-section">
-          <div class="token-title">总成本（按模型）</div>
+          <div class="token-title" data-i18n="total_cost_by_model">总成本（按模型）</div>
           <div id="perModelCost"></div>
         </div>
+        <div class="token-divider"></div>
         <div class="token-section">
-          <div class="token-title">今日累计</div>
-          <div id="perModelDaily"></div>
+          <div class="token-title" data-i18n="daily_cumulative">今日统计</div>
+          <div id="perModelDaily" class="token-daily-scroll"></div>
         </div>
       </div>
     </div>
@@ -403,15 +398,15 @@
   <div id="deleteNovelModal" class="modal hidden">
     <div class="modal-content delete-modal">
       <div class="modal-header">
-        <span>删除小说</span>
+        <span data-i18n="delete_novel">删除小说</span>
         <button class="modal-close" onclick="hideDeleteNovel()">✕</button>
       </div>
       <div class="modal-body">
-        <p class="delete-warning">此操作不可恢复。请输入小说名称确认删除：</p>
-        <input id="deleteNovelTitle" type="text" placeholder="输入小说名称" class="form-input" />
+        <p class="delete-warning" data-i18n="delete_novel_confirm">此操作不可恢复。请输入小说名称确认删除：</p>
+        <input id="deleteNovelTitle" type="text" data-i18n-placeholder="delete_novel_placeholder" placeholder="输入小说名称" class="form-input" />
         <div class="delete-actions">
-          <button class="btn-secondary" onclick="hideDeleteNovel()">取消</button>
-          <button class="btn-danger" id="deleteNovelBtn" disabled onclick="confirmDeleteNovel()">删除</button>
+          <button class="btn-secondary" onclick="hideDeleteNovel()" data-i18n="cancel">取消</button>
+          <button class="btn-danger" id="deleteNovelBtn" disabled onclick="confirmDeleteNovel()" data-i18n="confirm_delete">删除</button>
         </div>
       </div>
     </div>
