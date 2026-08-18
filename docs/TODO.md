@@ -196,3 +196,84 @@ write 提醒在 5 轮历史出现 5 次（每轮一次，紧跟请求尾部）�
 - 三章一轮·批内检查（旧方案）：5 章覆盖 60%（触发 1 次），6 章覆盖 100%——已被业界组合取代
 - 单章性价比最低（32.7）：质量 9 分但贵 3.1 倍
 - 批量现状性价比 46.3 但质量 4.1（第 2-N 章零审稿），不可取
+
+---
+
+## 节奏型带病检测（2026-08-18 新增）
+
+### P1. 门禁结果门控
+
+**目标**：check_story_consistency 返回 [ERROR] 时，禁止 set_phase 推进。
+
+**技术实现**：
+1. 修改 `internal/agent/phase_gate.go` 的 `SetPhase` 方法
+2. 在 require 检查之后，增加结果检查：
+   ```go
+   // 检查上次 check_story_consistency 调用结果
+   if lastResult, ok := g.lastToolResults["check_story_consistency"]; ok {
+       if strings.Contains(lastResult, "[ERROR]") {
+           return false, "check_story_consistency 存在硬错误，禁止切换阶段"
+       }
+   }
+   ```
+3. 需要在 `OnToolCall` 中缓存工具调用结果（当前只记录调用次数）
+4. 返回格式已从 emoji 改为标准 [ERROR]/[WARNING]（已完成）
+
+**验证方法**：
+- 单元测试：模拟 check_story_consistency 返回 [ERROR]，验证 set_phase 被拒绝
+- 真机测试：故意制造死者复出场景，验证门禁阻断
+
+### P2. 总纲数据库化
+
+**目标**：将 book-outline.md 迁移到数据库表，支持 init_consistency 检查。
+
+**数据库设计**：
+```sql
+-- 总纲表
+CREATE TABLE outlines (
+    id INTEGER PRIMARY KEY,
+    novel_id INTEGER NOT NULL UNIQUE,
+    core_conflict TEXT,      -- 核心矛盾
+    growth_arc TEXT,         -- 成长弧线
+    ending_direction TEXT,   -- 结局方向
+    word_count_plan INTEGER, -- 篇幅规划（万字）
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- 大爽点表
+CREATE TABLE outline_beats (
+    id INTEGER PRIMARY KEY,
+    novel_id INTEGER NOT NULL,
+    chapter INTEGER NOT NULL,        -- 承诺章号
+    description TEXT NOT NULL,       -- 描述
+    beat_type TEXT DEFAULT 'shuangdian', -- shuangdian/turning/climax
+    importance INTEGER DEFAULT 3,    -- 1-5
+    created_at TIMESTAMP
+);
+```
+
+**实施步骤**：
+1. 新建 outlines + outline_beats 表（migrate.go）
+2. 新建 MCP 工具 update_outline / get_outline
+3. 修改 init 阶段：AI 写数据库而不是 book-outline.md
+4. 修改 get_writing_context：返回 outline 数据
+5. 前端：outline 编辑界面（Wails 绑定）
+6. 旧小说迁移脚本（从 book-outline.md 解析导入）
+
+### P3. init_consistency 检查
+
+**目标**：init 阶段收尾时检查总纲/偏好/卷纲三方冲突。
+
+**依赖**：P2（总纲数据库化）完成后实施。
+
+**7项子检查**：
+1. type_pacing：查 outline_beats 计算间距
+2. pref_conflict：查 preferences + outline_beats 关键词比对
+3. promise_consistency：查 outlines.growth_arc + outline_beats
+4. golden_rule：查 lore(category=天道法则)
+5. taboo_violation：查 preferences(category=禁忌) + outline_beats
+6. means_power：查 characters.abilities + outline_beats
+7. file_db_sync：查 outline_beats + story_arcs.detail_json
+
+**实施位置**：appearance_tools.go，check_types 新增 init_consistency
