@@ -283,4 +283,7 @@ CREATE TABLE outline_beats (
 **已实现的子检查**：
 1. file_db_sync：outline_beats vs story_arcs.detail_json.big_shuangdian ✅
 2. type_pacing：大爽点间距检查（根据题材） ✅
-3. pref_conflict：preferences vs outline_beats（占位，复杂匹配需人工确认）
+3. pref_conflict：preferences vs outline_beats（占位，复杂匹配需人工确认） ✅
+4. golden_rule：金手指 vs 世界观铁则 ✅
+5. taboo_violation：禁忌 vs 大爽点描述 ✅
+6. means_power：主角标记检查 ✅
