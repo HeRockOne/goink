@@ -356,8 +356,16 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 	// 11. 对话结束后自动导出到 outputs 目录（供 WebDAV 阅读）
 	a.ExportToOutputs(input.NovelID, "txt")
 
-	// 12. 发送完成事件
-	emitEvent("done", map[string]any{"turn_id": turnID, "session_id": sess.SessionID, "text": result.FinalText})
+	// 12. 获取 session 的 usage 数据
+	usage := a.session.GetSessionCumulativeUsage(ctx, sess.SessionID)
+
+	// 13. 发送完成事件
+	emitEvent("done", map[string]any{
+		"turn_id":    turnID,
+		"session_id": sess.SessionID,
+		"text":       result.FinalText,
+		"usage":      usage,
+	})
 
 	// API 模式（移动端对话）结束后，通过 Wails 事件通知桌面前端刷新
 	if eventCallback != nil && a.ctx != nil {

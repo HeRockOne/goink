@@ -49,6 +49,13 @@ func (s *Service) SetMode(mode string) {
 	s.logger.Info("审批模式切换", "mode", mode)
 }
 
+// GetMode 返回当前审批模式。
+func (s *Service) GetMode() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mode
+}
+
 // RequestApproval 工具端调用，阻塞等待用户审批或 ctx 取消。
 // mode 为 "auto" 时直接返回批准。
 func (s *Service) RequestApproval(ctx context.Context, toolID string, payload any) (Approval, error) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Folder, RefreshCw, GitFork, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
+import { Folder, RefreshCw, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
 import { SaveGitConfig, SetChapterWordLimit, GetSystemFonts, GetLocalInterfaces } from '@/lib/wailsjs/go/app/App'
@@ -228,515 +228,262 @@ export default function GeneralConfigTab() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto">
-      <h3 className="text-sm font-medium mb-5">{t('settings.basicConfig')}</h3>
+    <div className="flex-1 flex flex-col overflow-y-auto space-y-6">
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Folder className="w-3.5 h-3.5" />
-          {t('settings.dataDir')}
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            value={dataDir}
-            readOnly
-            className="flex-1 h-8 rounded-md border bg-muted/50 px-3 text-xs font-mono focus:outline-none cursor-default"
-          />
-        </div>
-      </div>
-
-      {/* 章节字数范围 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          章节字数范围
-        </label>
-        <p className="text-[11px] text-muted-foreground">AI 写完章节后自动校验字数，不达标会自动修复</p>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-12 shrink-0">最少</span>
-          <input
-            value={minChapterWords}
-            onChange={e => setMinChapterWords(e.target.value)}
-            type="number"
-            min="100"
-            max="10000"
-            className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <span className="text-xs text-muted-foreground">字</span>
-          <span className="text-xs text-muted-foreground mx-1">~</span>
-          <span className="text-xs text-muted-foreground w-12 shrink-0">最多</span>
-          <input
-            value={maxChapterWords}
-            onChange={e => setMaxChapterWords(e.target.value)}
-            type="number"
-            min="100"
-            max="20000"
-            className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <span className="text-xs text-muted-foreground">字</span>
-          <button
-            onClick={handleSaveWordLimit}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-          >
-            保存
-          </button>
-        </div>
-      </div>
-
-      {/* 移动端连接端口 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Wifi className="w-3.5 h-3.5" />
-          移动端连接端口
-        </label>
-        <p className="text-[11px] text-muted-foreground">手机 App 连接此端口。修改后需重启 Goink 生效。</p>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-16 shrink-0">API 端口</span>
-          <input
-            value={apiPort}
-            onChange={e => setApiPort(e.target.value)}
-            type="number"
-            min="1024"
-            max="65535"
-            className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <button
-            onClick={handleSaveAPIPort}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-          >
-            保存
-          </button>
-        </div>
-      </div>
-
-      {/* HTTPS 开关 */}
-      <div className="mt-4 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5" />
-          HTTPS
-        </label>
-        <p className="text-[11px] text-muted-foreground">移动端 API 使用 HTTPS。关掉后使用 HTTP（无需证书，适合局域网调试）。</p>
-        <button
-          onClick={async () => {
-            const newValue = !useHTTPS
-            setUseHTTPS(newValue)
-            try {
-              await app.SetAPIUseHTTPS(newValue)
-            } catch (err) {
-              setUseHTTPS(!newValue)
-              console.error('Failed to toggle HTTPS:', err)
-            }
-          }}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useHTTPS ? 'bg-primary' : 'bg-muted'}`}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useHTTPS ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-      </div>
-
-      {/* Exa 网络搜索 API Key */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Search className="w-3.5 h-3.5" />
-          Exa 网络搜索 API Key
-        </label>
-        <p className="text-[11px] text-muted-foreground">用于 AI 联网搜索（web_search）。留空使用 Exa 免费额度（有速率限制），填写后可解除限制。到 <span className="text-primary">dashboard.exa.ai/api-keys</span> 获取。</p>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            value={exaApiKey}
-            onChange={e => { setExaApiKey(e.target.value); setExaKeySaved(false) }}
-            placeholder="exa-xxx（可选）"
-            className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none"
-          />
-          <button
-            onClick={async () => {
-              try {
-                await app.SaveSettings({ exa_api_key: exaApiKey.trim() })
-                setExaKeySaved(true)
-                setTimeout(() => setExaKeySaved(false), 2000)
-              } catch (err) {
-                console.error('Failed to save Exa API key:', err)
-              }
-            }}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-          >
-            {exaKeySaved ? '已保存' : '保存'}
-          </button>
-        </div>
-      </div>
-
-      {/* 显示字体 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <span className="text-sm">文</span>
-          显示字体
-        </label>
-        <p className="text-[11px] text-muted-foreground">全局字体，影响所有界面文字。选择系统已安装字体，留空使用默认楷体。</p>
-        <div className="flex items-center gap-2">
-          <select
-            value={displayFont}
-            onChange={e => { setDisplayFont(e.target.value); setFontSaved(false) }}
-            className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none"
-          >
-            <option value="">默认（楷体）</option>
-            {systemFonts.map(f => (
-              <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
-            ))}
-          </select>
-          <button
-            onClick={async () => {
-              const val = displayFont.trim()
-              localStorage.setItem('global_display_font', val)
-              applyFont(val)
-              try {
-                await app.SaveSettings({ display_font: val })
-              } catch (err) {
-                console.error('Failed to save font:', err)
-              }
-              setFontSaved(true)
-              setTimeout(() => setFontSaved(false), 2000)
-            }}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-          >
-            {fontSaved ? '已保存' : '保存'}
-          </button>
-        </div>
-      </div>
-
-      {/* 全局字号 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <span className="text-sm">A</span>
-          全局字号
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type="range"
-            min="12"
-            max="24"
-            value={fontSize}
-            onChange={e => {
-              const v = parseInt(e.target.value)
-              setFontSize(v)
-              const px = v + 'px'
-              document.documentElement.style.setProperty('--font-size', px)
-              localStorage.setItem('global_font_size', px)
-            }}
-            className="flex-1 h-8"
-          />
-          <span className="text-xs text-muted-foreground w-8 text-right">{fontSize}px</span>
-        </div>
-      </div>
-
-      {/* API 认证令牌 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          API 认证令牌
-        </label>
-        <p className="text-[11px] text-muted-foreground">移动端首次连接时需输入此令牌，或扫描下方二维码。丢失可重新生成。</p>
-        {netInterfaces.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12 shrink-0">网卡</span>
-            <select
-              value={apiConnect?.ip || ''}
-              onChange={e => {
-                const ip = e.target.value
-                if (apiConnect) setApiConnect({ ...apiConnect, ip })
-              }}
-              className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none"
-            >
-              {netInterfaces.map(iface => (
-                <option key={iface.ip} value={iface.ip}>
-                  {iface.name} - {iface.ip}{iface.is_lan ? ' (LAN)' : ''}{iface.is_vpn ? ' (VPN)' : ''}
-                </option>
-              ))}
-            </select>
+      {/* ── 基础 ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">基础</h4>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Folder className="w-3.5 h-3.5" />
+              {t('settings.dataDir')}
+            </label>
+            <input value={dataDir} readOnly className="w-full h-8 rounded-md border bg-muted/50 px-3 text-xs font-mono focus:outline-none cursor-default" />
           </div>
-        )}
-        <div className="flex items-start gap-4">
-          <div className="flex-1 space-y-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              章节字数范围
+            </label>
+            <p className="text-[11px] text-muted-foreground">AI 写完章节后自动校验字数，不达标会自动修复</p>
             <div className="flex items-center gap-2">
-              <input
-                value={apiToken}
-                readOnly
-                className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none"
-              />
-              <button
-                onClick={() => { navigator.clipboard.writeText(apiToken) }}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors"
-              >
-                复制
-              </button>
-              <button
-                onClick={handleResetToken}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors text-destructive"
-              >
-                重置
-              </button>
+              <span className="text-xs text-muted-foreground w-12 shrink-0">最少</span>
+              <input value={minChapterWords} onChange={e => setMinChapterWords(e.target.value)} type="number" min="100" max="10000" className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+              <span className="text-xs text-muted-foreground">字 ~</span>
+              <span className="text-xs text-muted-foreground w-12 shrink-0">最多</span>
+              <input value={maxChapterWords} onChange={e => setMaxChapterWords(e.target.value)} type="number" min="100" max="20000" className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+              <span className="text-xs text-muted-foreground">字</span>
+              <button onClick={handleSaveWordLimit} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">保存</button>
             </div>
           </div>
-          {apiToken && (
-            <div className="shrink-0 p-2 bg-white rounded-lg border">
-              <QRCodeSVG
-                value={apiConnect
-                  ? `${apiConnect.use_tls ? 'https' : 'http'}://${apiConnect.ip}:${apiConnect.port}/mobile/?token=${apiToken}`
-                  : apiToken}
-                size={80}
-                level="M"
-              />
-            </div>
-          )}
         </div>
-      </div>
+      </section>
 
-      {/* WebDAV 局域网阅读 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Wifi className="w-3.5 h-3.5" />
-          WebDAV 局域网阅读
-        </label>
-        <p className="text-[11px] text-muted-foreground">手机文件管理器连接后可阅读小说（只读模式）</p>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12 shrink-0">端口</span>
-            <input
-              value={webdavPort}
-              onChange={e => setWebdavPort(e.target.value)}
-              className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={webdavRunning}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12 shrink-0">用户名</span>
-            <input
-              value={webdavUser}
-              onChange={e => setWebdavUser(e.target.value)}
-              className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={webdavRunning}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12 shrink-0">密码</span>
-            <input
-              value={webdavPass}
-              onChange={e => setWebdavPass(e.target.value)}
-              type="password"
-              className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={webdavRunning}
-            />
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={toggleWebDAV}
-              className={`inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs transition-colors ${
-                webdavRunning
-                  ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'bg-primary text-primary-foreground hover:opacity-90'
-              }`}
-            >
-              {webdavRunning ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
-              {webdavRunning ? '停止 WebDAV' : '启动 WebDAV'}
-            </button>
-          </div>
-          {webdavRunning && webdavInfo && (
-            <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-xs text-green-700 dark:text-green-300 whitespace-pre-line">
-              {webdavInfo}
+      <hr className="border-border/50" />
+
+      {/* ── 移动端连接 ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">移动端连接</h4>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Wifi className="w-3.5 h-3.5" />
+              端口
+            </label>
+            <p className="text-[11px] text-muted-foreground">手机 App 连接此端口。修改后需重启 Goink 生效。</p>
+            <div className="flex items-center gap-2">
+              <input value={apiPort} onChange={e => setApiPort(e.target.value)} type="number" min="1024" max="65535" className="w-24 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
+              <button onClick={handleSaveAPIPort} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">保存</button>
             </div>
-          )}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              HTTPS
+            </label>
+            <p className="text-[11px] text-muted-foreground">开启后走 HTTPS + 认证令牌；关闭后走 HTTP 直连（无需证书，适合局域网调试）。</p>
+            <div className="flex items-center gap-2">
+              <button onClick={async () => { const v = !useHTTPS; setUseHTTPS(v); try { await app.SetAPIUseHTTPS(v) } catch { setUseHTTPS(!v) } }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useHTTPS ? 'bg-primary' : 'bg-muted'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useHTTPS ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-[11px] text-muted-foreground">{useHTTPS ? 'HTTPS + 认证' : 'HTTP 直连'}</span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              认证令牌
+            </label>
+            <p className="text-[11px] text-muted-foreground">移动端首次连接时需输入此令牌，或扫描下方二维码。丢失可重新生成。</p>
+            {netInterfaces.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-12 shrink-0">网卡</span>
+                <select value={apiConnect?.ip || ''} onChange={e => { const ip = e.target.value; if (apiConnect) setApiConnect({ ...apiConnect, ip }) }} className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none">
+                  {netInterfaces.map(iface => (<option key={iface.ip} value={iface.ip}>{iface.name} - {iface.ip}{iface.is_lan ? ' (LAN)' : ''}{iface.is_vpn ? ' (VPN)' : ''}</option>))}
+                </select>
+              </div>
+            )}
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <input value={apiToken} readOnly className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none" />
+                  <button onClick={() => { navigator.clipboard.writeText(apiToken) }} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">复制</button>
+                  <button onClick={handleResetToken} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors text-destructive">重置</button>
+                </div>
+              </div>
+              {apiToken && (
+                <div className="shrink-0 p-2 bg-white rounded-lg border">
+                  <QRCodeSVG value={apiConnect ? `${apiConnect.use_tls ? 'https' : 'http'}://${apiConnect.ip}:${apiConnect.port}/mobile/?token=${apiToken}` : apiToken} size={80} level="M" />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* 生成日志开关 */}
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5" />
-          生成日志
-        </label>
-        <p className="text-[11px] text-muted-foreground">AI 对话生成过程的日志写入文件。关闭后仅输出到控制台。</p>
-        <button
-          onClick={handleLoggingToggle}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            loggingEnabled ? 'bg-primary' : 'bg-muted'
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              loggingEnabled ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
-        </button>
-      </div>
+      <hr className="border-border/50" />
 
-      {/* HTTPS 开关 */}
-      <div className="mt-4 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5" />
-          HTTPS
-        </label>
-        <p className="text-[11px] text-muted-foreground">移动端 API 使用 HTTPS。关掉后使用 HTTP（无需证书，适合局域网调试）。</p>
-        <button
-          onClick={async () => {
-            const newValue = !useHTTPS
-            setUseHTTPS(newValue)
-            try {
-              await app.SetAPIUseHTTPS(newValue)
-            } catch (err) {
-              setUseHTTPS(!newValue)
-              console.error('Failed to toggle HTTPS:', err)
-            }
-          }}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useHTTPS ? 'bg-primary' : 'bg-muted'}`}
-        >
-          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useHTTPS ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-      </div>
+      {/* ── AI ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">AI</h4>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Search className="w-3.5 h-3.5" />
+            Exa 网络搜索 API Key
+          </label>
+          <p className="text-[11px] text-muted-foreground">用于 AI 联网搜索（web_search）。留空使用 Exa 免费额度（有速率限制），填写后可解除限制。到 <span className="text-primary">dashboard.exa.ai/api-keys</span> 获取。</p>
+          <div className="flex items-center gap-2">
+            <input type="password" value={exaApiKey} onChange={e => { setExaApiKey(e.target.value); setExaKeySaved(false) }} placeholder="exa-xxx（可选）" className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none" />
+            <button onClick={async () => { try { await app.SaveSettings({ exa_api_key: exaApiKey.trim() }); setExaKeySaved(true); setTimeout(() => setExaKeySaved(false), 2000) } catch {} }} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">{exaKeySaved ? '已保存' : '保存'}</button>
+          </div>
+        </div>
+      </section>
 
-      <div className="mt-6 space-y-3">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <GitFork className="w-3.5 h-3.5" />
-          {t('settings.gitConfig')}
-        </label>
-        <p className="text-[11px] text-muted-foreground">{t('settings.gitConfigDesc')}</p>
+      <hr className="border-border/50" />
+
+      {/* ── 显示 ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">显示</h4>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <span className="text-sm">文</span> 显示字体
+            </label>
+            <p className="text-[11px] text-muted-foreground">全局字体，影响所有界面文字。选择系统已安装字体，留空使用默认楷体。</p>
+            <div className="flex items-center gap-2">
+              <select value={displayFont} onChange={e => { setDisplayFont(e.target.value); setFontSaved(false) }} className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none">
+                <option value="">默认（楷体）</option>
+                {systemFonts.map(f => (<option key={f} value={f} style={{ fontFamily: f }}>{f}</option>))}
+              </select>
+              <button onClick={async () => { const val = displayFont.trim(); localStorage.setItem('global_display_font', val); applyFont(val); try { await app.SaveSettings({ display_font: val }) } catch {} setFontSaved(true); setTimeout(() => setFontSaved(false), 2000) }} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">{fontSaved ? '已保存' : '保存'}</button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <span className="text-sm">A</span> 全局字号
+            </label>
+            <div className="flex items-center gap-2">
+              <input type="range" min="12" max="24" value={fontSize} onChange={e => { const v = parseInt(e.target.value); setFontSize(v); const px = v + 'px'; document.documentElement.style.setProperty('--font-size', px); localStorage.setItem('global_font_size', px) }} className="flex-1 h-8" />
+              <span className="text-xs text-muted-foreground w-8 text-right">{fontSize}px</span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Languages className="w-3.5 h-3.5" />
+              {t('settings.language')}
+            </label>
+            <div className="inline-flex items-center gap-1 rounded-lg bg-muted/60 p-0.5">
+              <button onClick={() => i18n.changeLanguage('zh-CN')} className={`h-7 px-3 rounded-md text-xs transition-colors ${i18n.language.startsWith('zh') ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>中文</button>
+              <button onClick={() => i18n.changeLanguage('en')} className={`h-7 px-3 rounded-md text-xs transition-colors ${i18n.language === 'en' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>English</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <hr className="border-border/50" />
+
+      {/* ── Git ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">{t('settings.gitConfig')}</h4>
+        <p className="text-[11px] text-muted-foreground mb-3">{t('settings.gitConfigDesc')}</p>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground w-12 shrink-0">{t('settings.nickname')}</span>
-            <input
-              value={gitName}
-              onChange={e => setGitName(e.target.value)}
-              placeholder="Goink"
-              className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <input value={gitName} onChange={e => setGitName(e.target.value)} placeholder="Goink" className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground w-12 shrink-0">{t('settings.email')}</span>
-            <input
-              value={gitEmail}
-              onChange={e => setGitEmail(e.target.value)}
-              placeholder="goink@local"
-              className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <input value={gitEmail} onChange={e => setGitEmail(e.target.value)} placeholder="goink@local" className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
           <div className="flex items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-2">
-              {gitError && <span className="text-[11px] text-rose-500">{gitError}</span>}
-            </div>
-            <button
-              onClick={handleSaveGit}
-              disabled={gitSaving}
-              className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50"
-            >
+            {gitError && <span className="text-[11px] text-rose-500">{gitError}</span>}
+            <button onClick={handleSaveGit} disabled={gitSaving} className="inline-flex items-center h-8 px-4 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50 ml-auto">
               {gitSaving ? t('common.saving') : gitSaved ? t('common.saved') : t('common.save')}
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Languages className="w-3.5 h-3.5" />
-          {t('settings.language')}
-        </label>
-        <div className="inline-flex items-center gap-1 rounded-lg bg-muted/60 p-0.5">
-          <button
-            onClick={() => i18n.changeLanguage('zh-CN')}
-            className={`h-7 px-3 rounded-md text-xs transition-colors ${
-              i18n.language.startsWith('zh') ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            中文
-          </button>
-          <button
-            onClick={() => i18n.changeLanguage('en')}
-            className={`h-7 px-3 rounded-md text-xs transition-colors ${
-              i18n.language === 'en' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            English
-          </button>
-        </div>
-      </div>
+      <hr className="border-border/50" />
 
-      <div className="mt-6 space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">{t('settings.maintenance')}</label>
-        <p className="text-[11px] text-muted-foreground">{t('settings.rebuildIndexDesc')}</p>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedID}
-            onChange={e => setSelectedID(Number(e.target.value))}
-            className="h-8 rounded-md border bg-background px-2 text-xs focus:outline-none"
-          >
-            {novels.map(n => (
-              <option key={n.id} value={n.id}>{n.title}</option>
-            ))}
-          </select>
-          <button
-            onClick={handleRebuild}
-            disabled={rebuilding || !selectedID}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${rebuilding ? 'animate-spin' : ''}`} />
-            {rebuilding ? t('settings.rebuilding') : t('settings.rebuildIndex')}
-          </button>
-        </div>
-      </div>
-
-      {/* 数据备份与恢复 */}
-      <div className="mt-6 space-y-3">
-        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Archive className="w-3.5 h-3.5" />
-          数据备份与恢复
-        </label>
-        <p className="text-[11px] text-muted-foreground">备份包含数据库、小说文件和技能。恢复会先自动备份当前数据。</p>
-
+      {/* ── WebDAV ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">WebDAV 局域网阅读</h4>
+        <p className="text-[11px] text-muted-foreground mb-3">手机文件管理器连接后可阅读小说（只读模式）</p>
         <div className="space-y-2">
-          <button
-            onClick={handleBackup}
-            disabled={backing}
-            className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs bg-primary text-primary-foreground hover:opacity-90 transition-colors disabled:opacity-50"
-          >
-            {backing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
-            {backing ? '备份中...' : '立即备份'}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-12 shrink-0">端口</span>
+            <input value={webdavPort} onChange={e => setWebdavPort(e.target.value)} className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" disabled={webdavRunning} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-12 shrink-0">用户名</span>
+            <input value={webdavUser} onChange={e => setWebdavUser(e.target.value)} className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" disabled={webdavRunning} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-12 shrink-0">密码</span>
+            <input value={webdavPass} onChange={e => setWebdavPass(e.target.value)} type="password" className="flex-1 h-8 rounded-md border bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary" disabled={webdavRunning} />
+          </div>
+          <button onClick={toggleWebDAV} className={`inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs transition-colors ${webdavRunning ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-primary text-primary-foreground hover:opacity-90'}`}>
+            {webdavRunning ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
+            {webdavRunning ? '停止 WebDAV' : '启动 WebDAV'}
           </button>
-          {backupPath && (
-            <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-xs text-green-700 dark:text-green-300">
-              备份成功：<span className="font-mono break-all">{backupPath}</span>
-            </div>
-          )}
-          {backupError && (
-            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs text-red-600">
-              {backupError}
-            </div>
-          )}
+          {webdavRunning && webdavInfo && <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-xs text-green-700 dark:text-green-300 whitespace-pre-line">{webdavInfo}</div>}
         </div>
+      </section>
 
-        <div className="space-y-2">
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept=".zip"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) handleRestore(file)
-              e.target.value = ''
-            }}
-          />
-          <button
-            onClick={() => restoreInputRef.current?.click()}
-            disabled={restoring}
-            className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-            {restoring ? '恢复中...' : '选择备份文件恢复'}
-          </button>
-          {restoreMsg && (
-            <div className={`p-2 rounded-lg text-xs ${restoreMsg.includes('成功') ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600'}`}>
-              {restoreMsg}
+      <hr className="border-border/50" />
+
+      {/* ── 维护 ── */}
+      <section>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">维护</h4>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              生成日志
+            </label>
+            <p className="text-[11px] text-muted-foreground">AI 对话生成过程的日志写入文件。关闭后仅输出到控制台。</p>
+            <button onClick={handleLoggingToggle} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${loggingEnabled ? 'bg-primary' : 'bg-muted'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${loggingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">{t('settings.maintenance')}</label>
+            <p className="text-[11px] text-muted-foreground">{t('settings.rebuildIndexDesc')}</p>
+            <div className="flex items-center gap-2">
+              <select value={selectedID} onChange={e => setSelectedID(Number(e.target.value))} className="h-8 rounded-md border bg-background px-2 text-xs focus:outline-none">
+                {novels.map(n => (<option key={n.id} value={n.id}>{n.title}</option>))}
+              </select>
+              <button onClick={handleRebuild} disabled={rebuilding || !selectedID} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50">
+                <RefreshCw className={`w-3.5 h-3.5 ${rebuilding ? 'animate-spin' : ''}`} />
+                {rebuilding ? t('settings.rebuilding') : t('settings.rebuildIndex')}
+              </button>
             </div>
-          )}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5" />
+              数据备份与恢复
+            </label>
+            <p className="text-[11px] text-muted-foreground">备份包含数据库、小说文件和技能。恢复会先自动备份当前数据。</p>
+            <div className="flex items-center gap-2">
+              <button onClick={handleBackup} disabled={backing} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs bg-primary text-primary-foreground hover:opacity-90 transition-colors disabled:opacity-50">
+                {backing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                {backing ? '备份中...' : '立即备份'}
+              </button>
+              <button onClick={() => restoreInputRef.current?.click()} disabled={restoring} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-md text-xs border hover:bg-muted transition-colors disabled:opacity-50">
+                {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                {restoring ? '恢复中...' : '选择备份文件恢复'}
+              </button>
+              <input ref={restoreInputRef} type="file" accept=".zip" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) handleRestore(file); e.target.value = '' }} />
+            </div>
+            {backupPath && <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-xs text-green-700 dark:text-green-300">备份成功：<span className="font-mono break-all">{backupPath}</span></div>}
+            {backupError && <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs text-red-600">{backupError}</div>}
+            {restoreMsg && <div className={`p-2 rounded-lg text-xs ${restoreMsg.includes('成功') ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-600'}`}>{restoreMsg}</div>}
+          </div>
         </div>
-      </div>
+      </section>
 
     </div>
   )

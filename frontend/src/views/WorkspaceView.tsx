@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import { useApp } from '@/hooks/useApp'
 import type { imp, novel, chapter } from '@/hooks/useApp'
 import type { git } from '@/lib/wailsjs/go/models'
@@ -145,6 +146,16 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       setPhaseGateEnabled(!next)
     }
   }, [phaseGateEnabled])
+
+  // 监听门禁开关变更事件（移动端切换时桌面端实时更新）
+  useEffect(() => {
+    const cleanup = EventsOn('settings:phase_gate_enabled_changed', (data: { enabled?: boolean }) => {
+      if (data.enabled !== undefined) {
+        setPhaseGateEnabled(data.enabled)
+      }
+    })
+    return () => { cleanup() }
+  }, [])
 
   // ── 启动时加载字体设置（localStorage 持久化） ────────────
 

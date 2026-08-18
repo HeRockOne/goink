@@ -271,7 +271,7 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 	if pg == nil || !pg.Active() {
 		return false
 	}
-	ready, next := pg.CheckTransitionReady()
+	ready, next := pg.ShouldAutoAdvance()
 	if !ready || next == "" || pg.CurrentPhase() == next {
 		return false
 	}

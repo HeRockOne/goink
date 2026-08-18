@@ -68,7 +68,7 @@ export default function PopSelect({ value, options, onChange, onOpen, className 
                 setOpen(false)
               }}
               className={`w-full text-left px-2.5 py-1.5 text-xs hover:bg-muted transition-colors ${
-                opt.value === value ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground'
+                opt.value === value ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'
               }`}
             >
               {opt.label}

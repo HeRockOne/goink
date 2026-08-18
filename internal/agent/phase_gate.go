@@ -579,6 +579,25 @@ func (g *PhaseGate) CheckTransitionReady() (bool, string) {
 	return false, ""
 }
 
+// ShouldAutoAdvance 判断当前阶段是否应该自动推进到下一阶段。
+// 与 CheckTransitionReady 的区别：CheckTransitionReady 只检查 require 是否满足，
+// ShouldAutoAdvance 额外检查是否处于 batch 循环模式（Loop=true）。
+// batch 循环阶段（如 write）的 require 满足只代表本章完成，不代表整批完成，
+// 由 LLM 通过 set_phase 手动控制章边界。
+func (g *PhaseGate) ShouldAutoAdvance() (bool, string) {
+	if g == nil || !g.active {
+		return false, ""
+	}
+	// batch 模式下有 loop 标记的阶段（如 write），由 LLM 通过 set_phase 手动控制，
+	// 不自动推进——require 满足只代表本章完成，不代表整批完成
+	if g.mode == "batch" {
+		if cur := g.findPhase(g.currentPhase); cur != nil && cur.Loop {
+			return false, ""
+		}
+	}
+	return g.CheckTransitionReady()
+}
+
 // findPhase 按名称查找阶段配置。
 func (g *PhaseGate) findPhase(name string) *PhaseConfig {
 	for i := range g.phases {

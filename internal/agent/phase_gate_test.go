@@ -160,6 +160,78 @@ loop: true
 	}
 }
 
+// batch+loop 阶段（write）require 满足后不应自动推进，需 LLM 手动 set_phase。
+func TestBatchLoopPhaseNoAutoAdvance(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+next: review
+loop: true
+-->
+`, "batch")
+
+	// 模拟完成全部 require 工具
+	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+		gate.OnToolCall(tool, true)
+	}
+	gate.SetWordCountOK(true)
+
+	// CheckTransitionReady 应该返回 ready（require 已满足）
+	if ready, next := gate.CheckTransitionReady(); !ready || next != "review" {
+		t.Errorf("CheckTransitionReady should return ready=true, next=review, got ready=%v next=%s", ready, next)
+	}
+
+	// ShouldAutoAdvance 应该返回 false（batch+loop 不自动推进）
+	if ready, _ := gate.ShouldAutoAdvance(); ready {
+		t.Error("ShouldAutoAdvance should return false for batch+loop phase")
+	}
+
+	// 同阶段切换 set_phase("write") 应该成功（章边界）
+	if ok, _ := gate.SetPhase("write"); !ok {
+		t.Error("same-phase set_phase('write') should succeed for chapter boundary")
+	}
+
+	// 模拟 agent 侧 handleBatchChapterBoundary 调用 ResetPhaseCounts 重置计数
+	gate.ResetPhaseCounts()
+
+	// 切换后 require 计数应被重置
+	if missing := gate.missingMiniMaintain(); len(missing) != len(miniMaintainTools) {
+		t.Errorf("all miniMaintain tools should be missing after reset, got %v", missing)
+	}
+}
+
+// 单章模式 write 阶段（无 loop）ShouldAutoAdvance 应正常工作。
+func TestSinglePhaseShouldAutoAdvance(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: single
+phase: write
+tools: read, edit, get_chapter_list, check_story_consistency, set_phase
+require: edit, get_chapter_list, read, check_story_consistency
+next: review
+-->
+`, "single")
+
+	// 模拟完成全部 require 工具
+	for _, tool := range []string{"edit", "get_chapter_list", "read", "check_story_consistency"} {
+		gate.OnToolCall(tool, true)
+	}
+	gate.SetWordCountOK(true)
+
+	// CheckTransitionReady 应该返回 ready
+	if ready, next := gate.CheckTransitionReady(); !ready || next != "review" {
+		t.Errorf("CheckTransitionReady should return ready=true, next=review, got ready=%v next=%s", ready, next)
+	}
+
+	// ShouldAutoAdvance 也应该返回 true（单章无 loop，正常自动推进）
+	if ready, next := gate.ShouldAutoAdvance(); !ready || next != "review" {
+		t.Errorf("ShouldAutoAdvance should return ready=true for single phase, got ready=%v next=%s", ready, next)
+	}
+}
+
 func TestPhaseGateSetPhaseUnknown(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config

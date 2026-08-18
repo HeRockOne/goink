@@ -8,6 +8,24 @@
 
 ### 新增
 
+- **移动端 Token 弹窗重构**：总成本按模型分类显示（miss×input_price + hit×cache_price + comp×output_price），今日累计列出当天每个会话费用
+- **快捷栏成本显示统一**：使用 per_model 数据计算，与弹窗一致
+- **fmtTokens 格式化函数**：token 数量 >= 100万显示 `x.x m`，>= 1000显示 `x.x k`
+- **桌面端设置分组优化**：基础/移动端连接/AI/显示/Git/WebDAV/维护，分组标题+分隔线
+- **HTTPS 开关说明改进**：开启=HTTPS+认证，关闭=HTTP直连；新增状态文字
+- **delete_record 支持 item_occurrence**：物品出现记录删除
+- **models.dev 模型发现集成**：自动从 models.dev 全球模型数据库补充参数（ContextWindow/MaxOutputTokens/SupportsThinking），支持离线缓存兜底
+- **会话级模型持久化**：打开历史会话时恢复该会话使用的模型
+- **网络接口智能选择**：优先返回 WLAN 192.168.x.x 地址，排除 VPN TUN 适配器
+
+### 修复
+
+- **output token 显示修正**：使用累计 acc_completion_tokens 而非 last-turn completion_tokens
+- **models.dev 模型 ID 匹配**：支持中转商组织前缀（如 deepseek-ai/DeepSeek-V3）
+- **切换会话状态重置**：stop/session switch/delete/new chat 时重置 loading/retry/streaming 状态
+
+### 新增
+
 - **卷纲体系**（长篇宏观一致性）：`story_arc` 加 `arc_type=volume` 枚举、`detail_json` 卷纲数据、`start_chapter`/`end_chapter` 卷边界
   - `create_story_arc` 强制校验：`arc_type=volume` 必须填起止章，否则报错
   - 前端弧线面板：卷类型筛选 + 起止章表单输入 + 前端校验

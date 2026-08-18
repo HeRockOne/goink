@@ -10,6 +10,7 @@ import (
 
 	"novel/internal/character"
 	"novel/internal/item"
+	"novel/internal/itemoccurrence"
 	"novel/internal/location"
 	"novel/internal/lore"
 	"novel/internal/novel"
@@ -34,11 +35,12 @@ table 可选值与对应工具映射：
   preference                — create_preference / get_preferences / update_preference
   scene                     — create_scene / get_scenes / update_scene
   lore                      — create_lore / get_lore / update_lore
-  item                      — create_item / get_items / update_item`
+  item                      — create_item / get_items / update_item
+  item_occurrence           — create_item_occurrence / get_item_occurrences`
 
 // DeleteRecordArgs 是 delete_record 的参数。
 type DeleteRecordArgs struct {
-	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference,enum=scene,enum=lore,enum=item" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference scene lore item"`
+	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference,enum=scene,enum=lore,enum=item,enum=item_occurrence" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference scene lore item item_occurrence"`
 	ID    int64  `json:"id"    jsonschema:"required,description=主键ID"                                                                validate:"required,min=1"`
 }
 
@@ -88,6 +90,8 @@ func (t *DeleteRecordTool) Execute(ctx context.Context, args any, tc ToolContext
 	case "item":
 		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&item.Item{})
 		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+	case "item_occurrence":
+		return t.deleteItemOccurrence(ctx, a, tc)
 	default:
 		return &ToolResult{Success: false, Error: fmt.Sprintf("不支持的表：%s", a.Table)}, nil
 	}
@@ -450,6 +454,36 @@ func (t *DeleteRecordTool) deletePreference(ctx context.Context, a *DeleteRecord
 
 	if err := tc.DB.WithContext(ctx).Delete(&rec).Error; err != nil {
 		return nil, fmt.Errorf("delete preference: %w", err)
+	}
+
+	return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
+}
+
+func (t *DeleteRecordTool) deleteItemOccurrence(ctx context.Context, a *DeleteRecordArgs, tc ToolContext) (*ToolResult, error) {
+	var rec itemoccurrence.ItemOccurrence
+	if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).First(&rec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("物品流转记录 %d 不存在或不属于当前小说", a.ID)}, nil
+		}
+		return nil, fmt.Errorf("query item occurrence: %w", err)
+	}
+
+	meta := map[string]any{
+		"id":         rec.ID,
+		"item_id":    rec.ItemID,
+		"chapter_id": rec.ChapterID,
+		"action":     rec.Action,
+		"type":       "item_occurrence",
+	}
+	injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{
+		"table": a.Table, "id": a.ID, "deleted": meta,
+	})
+	if err != nil || result != nil {
+		return result, err
+	}
+
+	if err := tc.DB.WithContext(ctx).Delete(&rec).Error; err != nil {
+		return nil, fmt.Errorf("delete item occurrence: %w", err)
 	}
 
 	return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil

@@ -1112,7 +1112,151 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 26. WebSocket
+## 26. 价格设置
+
+### GET /api/settings/pricing
+
+获取当前价格配置（元/百万token）。
+
+**响应:**
+```json
+{
+  "price_input": 2,
+  "price_output": 8,
+  "cache_price": 0.5
+}
+```
+
+**字段说明:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| price_input | float | 输入token价格（元/百万token） |
+| price_output | float | 输出token价格（元/百万token） |
+| cache_price | float | 缓存命中价格（元/百万token） |
+
+**成本计算公式:**
+
+按模型分类计算，每个模型单独计费：
+```
+单模型成本 = miss_tokens × price_input + hit_tokens × cache_price + comp_tokens × price_output
+总会话成本 = 所有模型成本之和
+```
+
+其中：
+- `miss_tokens`: 缓存未命中，按输入价格计费
+- `hit_tokens`: 缓存命中，按缓存价格计费
+- `comp_tokens`: 输出 tokens，按输出价格计费
+
+---
+
+## 27. 门禁开关
+
+### GET /api/settings/phase-gate-enabled
+
+获取门禁开关状态。
+
+**响应:**
+```json
+{ "enabled": true }
+```
+
+### POST /api/settings/phase-gate-enabled
+
+设置门禁开关。设置后通过 WebSocket 广播到所有连接的客户端。
+
+**请求体:**
+```json
+{ "enabled": false }
+```
+
+**响应:**
+```json
+{ "ok": true, "enabled": false }
+```
+
+---
+
+## 27. 审批模式
+
+### GET /api/settings/approval-mode
+
+获取当前审批模式。
+
+**响应:**
+```json
+{ "mode": "manual" }
+```
+
+### POST /api/settings/approval-mode
+
+设置审批模式。设置后通过 WebSocket 广播到所有连接的客户端。
+
+**请求体:**
+```json
+{ "mode": "auto" }
+```
+
+| 值 | 说明 |
+|------|------|
+| auto | 自动批准所有工具调用 |
+| manual | 等待用户手动批准 |
+
+**响应:**
+```json
+{ "ok": true, "mode": "auto" }
+```
+
+---
+
+## 28. 思考深度
+
+### POST /api/settings/reasoning-effort
+
+设置推理深度。设置后通过 WebSocket 广播到所有连接的客户端。
+
+**请求体:**
+```json
+{ "reasoning_effort": "high" }
+```
+
+| 值 | 说明 |
+|------|------|
+| "" | 关闭 |
+| low | 低 |
+| medium | 中 |
+| high | 高 |
+| max | 最高 |
+
+**响应:**
+```json
+{ "ok": true, "reasoning_effort": "high" }
+```
+
+---
+
+## 29. 重试事件
+
+当 LLM 请求遇到 429/402 错误时，系统会自动重试，并通过 SSE 和 WebSocket 推送重试状态。
+
+**事件数据:**
+```json
+{
+  "type": "retry",
+  "retry_count": 3,
+  "retry_max": 10,
+  "retry_wait": 15
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| retry_count | 当前第几次重试 |
+| retry_max | 最大重试次数（10） |
+| retry_wait | 等待秒数 |
+
+---
+
+## 30. WebSocket
 
 ### WebSocket /api/ws
 

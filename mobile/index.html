@@ -51,6 +51,29 @@
     <!-- 对话页 -->
     <div id="page-chat" class="page">
       <div id="chatBanner" class="chat-banner"></div>
+      <div id="quickBar" class="quick-bar">
+        <button class="quick-btn" onclick="togglePhaseGate()" id="quickGate">
+          <span class="quick-icon">🛡️</span>
+          <span class="quick-label" id="quickGateLabel">门禁</span>
+        </button>
+        <button class="quick-btn" onclick="cycleReasoningEffort()" id="quickThinking">
+          <span class="quick-icon">🧠</span>
+          <span class="quick-label" id="quickThinkingLabel">思考</span>
+        </button>
+        <button class="quick-btn" onclick="toggleApprovalMode()" id="quickApproval">
+          <span class="quick-icon">✋</span>
+          <span class="quick-label" id="quickApprovalLabel">审批</span>
+        </button>
+        <button class="quick-btn" onclick="showModels()" id="quickModel">
+          <span class="quick-icon">🤖</span>
+          <span class="quick-label" id="quickModelLabel">模型</span>
+        </button>
+        <button class="quick-btn quick-btn-money" onclick="showTokenUsage()" id="quickMoney">
+          <span class="quick-icon">💰</span>
+          <span class="quick-label" id="quickMoneyLabel">¥0.00</span>
+          <span class="quick-sub" id="quickTokensLabel"></span>
+        </button>
+      </div>
       <div id="chatMessages" class="scroll-area chat-scroll"></div>
       <button id="scrollToBottom" class="scroll-bottom-btn hidden" onclick="scrollToBottom()">↓</button>
       <div id="chatInput" class="chat-input">
@@ -333,6 +356,63 @@
           <textarea id="createNovelDesc" rows="3" placeholder="可选" class="form-input"></textarea>
         </div>
         <button class="btn-primary" onclick="doCreateNovel()">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token用量弹窗 -->
+  <div id="tokenModal" class="modal hidden">
+    <div class="modal-content token-modal">
+      <div class="modal-header">
+        <span>Token用量</span>
+        <button class="modal-close" onclick="hideTokenUsage()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="token-section">
+          <div class="token-title">当前会话</div>
+          <div class="token-row">
+            <span>输入 tokens</span>
+            <span id="tokenInput">0</span>
+          </div>
+          <div class="token-row">
+            <span>输出 tokens</span>
+            <span id="tokenOutput">0</span>
+          </div>
+          <div class="token-row">
+            <span>缓存命中</span>
+            <span id="tokenCache">0</span>
+          </div>
+          <div class="token-row token-total">
+            <span>总计</span>
+            <span id="tokenTotal">0</span>
+          </div>
+        </div>
+        <div class="token-section">
+          <div class="token-title">总成本（按模型）</div>
+          <div id="perModelCost"></div>
+        </div>
+        <div class="token-section">
+          <div class="token-title">今日累计</div>
+          <div id="perModelDaily"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 小说删除确认弹窗 -->
+  <div id="deleteNovelModal" class="modal hidden">
+    <div class="modal-content delete-modal">
+      <div class="modal-header">
+        <span>删除小说</span>
+        <button class="modal-close" onclick="hideDeleteNovel()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">此操作不可恢复。请输入小说名称确认删除：</p>
+        <input id="deleteNovelTitle" type="text" placeholder="输入小说名称" class="form-input" />
+        <div class="delete-actions">
+          <button class="btn-secondary" onclick="hideDeleteNovel()">取消</button>
+          <button class="btn-danger" id="deleteNovelBtn" disabled onclick="confirmDeleteNovel()">删除</button>
+        </div>
       </div>
     </div>
   </div>

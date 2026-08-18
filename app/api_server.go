@@ -95,7 +95,11 @@ func newAPIServer(port int, useHTTPS bool, app *App, logger *slog.Logger, fronte
 	s.mux.HandleFunc("/api/arc-nodes", s.handleArcNodes)
 	s.mux.HandleFunc("/api/chat/cancel", s.handleChatCancel)
 	s.mux.HandleFunc("/api/settings/model", s.handleModelSettings) // 模型切换
-	s.mux.HandleFunc("/api/ws", s.handleWebSocket)                 // 双端同步 WebSocket
+	s.mux.HandleFunc("/api/settings/pricing", s.handlePricing)   // 价格设置
+	s.mux.HandleFunc("/api/settings/phase-gate-enabled", s.handlePhaseGateEnabled) // 门禁开关
+	s.mux.HandleFunc("/api/settings/approval-mode", s.handleApprovalMode)           // 审批模式
+	s.mux.HandleFunc("/api/settings/reasoning-effort", s.handleReasoningEffort)     // 思考深度
+	s.mux.HandleFunc("/api/ws", s.handleWebSocket)                                   // 双端同步 WebSocket
 	// 前端静态文件
 	if s.frontend != nil {
 		sub, err := fs.Sub(s.frontend, "frontend/dist")
@@ -250,17 +254,52 @@ func (s *apiServer) handleNovels(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"novels": []any{}})
 		return
 	}
-	if r.Method == "POST" {
+	switch r.Method {
+	case "GET":
+		ns := novel.NewStore(s.app.db, s.logger)
+		result, err := ns.List(r.Context(), novel.ListNovelsOptions{})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"novels": result.Items, "total": result.Total})
+	case "POST":
 		s.handleCreateNovel(w, r)
+	case "DELETE":
+		s.handleDeleteNovel(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *apiServer) handleDeleteNovel(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID    int64  `json:"id"`
+		Title string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, map[string]any{"error": "无效的请求体"})
 		return
 	}
-	ns := novel.NewStore(s.app.db, s.logger)
-	result, err := ns.List(r.Context(), novel.ListNovelsOptions{})
-	if err != nil {
+	if input.ID == 0 {
+		writeJSON(w, map[string]any{"error": "小说ID不能为空"})
+		return
+	}
+	// 验证标题匹配
+	var n novel.Novel
+	if err := s.app.db.Where("id = ?", input.ID).First(&n).Error; err != nil {
+		writeJSON(w, map[string]any{"error": "小说不存在"})
+		return
+	}
+	if input.Title != n.Title {
+		writeJSON(w, map[string]any{"error": "标题不匹配"})
+		return
+	}
+	if err := s.app.DeleteNovel(input.ID); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"novels": result.Items, "total": result.Total})
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *apiServer) handleCreateNovel(w http.ResponseWriter, r *http.Request) {
@@ -1078,4 +1117,151 @@ func (s *apiServer) handleModelSettings(w http.ResponseWriter, r *http.Request) 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// handlePricing 处理价格设置的 GET 请求。
+func (s *apiServer) handlePricing(w http.ResponseWriter, r *http.Request) {
+	if s.app.settings == nil {
+		writeError(w, fmt.Errorf("settings not loaded"))
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, map[string]any{
+		"price_input":  s.app.settings.PriceInput,
+		"price_output": s.app.settings.PriceOutput,
+		"cache_price":  s.app.settings.CachePrice,
+	})
+}
+
+// handlePhaseGateEnabled 处理门禁开关的 GET/POST 请求。
+func (s *apiServer) handlePhaseGateEnabled(w http.ResponseWriter, r *http.Request) {
+	if s.app.settings == nil {
+		writeError(w, fmt.Errorf("settings not loaded"))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		enabled := s.app.settings.PhaseGateEnabled == nil || *s.app.settings.PhaseGateEnabled
+		writeJSON(w, map[string]any{"enabled": enabled})
+
+	case http.MethodPost:
+		var req struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, fmt.Errorf("invalid request body: %w", err))
+			return
+		}
+		if err := s.app.SetPhaseGateEnabled(req.Enabled); err != nil {
+			writeError(w, err)
+			return
+		}
+		// 广播状态变更
+		s.app.BroadcastChatEvent("phase_gate_enabled_changed", map[string]any{
+			"enabled": req.Enabled,
+		})
+		if s.app.ctx != nil {
+			wails.EventsEmit(s.app.ctx, "settings:phase_gate_enabled_changed", map[string]any{
+				"enabled": req.Enabled,
+			})
+		}
+		writeJSON(w, map[string]any{"ok": true, "enabled": req.Enabled})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// handleApprovalMode 处理审批模式的 GET/POST 请求。
+func (s *apiServer) handleApprovalMode(w http.ResponseWriter, r *http.Request) {
+	if s.app.approvals == nil {
+		writeError(w, fmt.Errorf("approval service not available"))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		mode := s.app.approvals.GetMode()
+		writeJSON(w, map[string]any{"mode": mode})
+
+	case http.MethodPost:
+		var req struct {
+			Mode string `json:"mode"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, fmt.Errorf("invalid request body: %w", err))
+			return
+		}
+		if req.Mode != "auto" && req.Mode != "manual" {
+			writeError(w, fmt.Errorf("mode must be 'auto' or 'manual'"))
+			return
+		}
+		s.app.approvals.SetMode(req.Mode)
+		s.app.settings.ApprovalMode = req.Mode
+		if err := config.SaveSettings(s.app.db, s.app.settings); err != nil {
+			writeError(w, err)
+			return
+		}
+		// 广播状态变更
+		s.app.BroadcastChatEvent("approval_mode_changed", map[string]any{
+			"mode": req.Mode,
+		})
+		if s.app.ctx != nil {
+			wails.EventsEmit(s.app.ctx, "settings:approval_mode_changed", map[string]any{
+				"mode": req.Mode,
+			})
+		}
+		writeJSON(w, map[string]any{"ok": true, "mode": req.Mode})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// handleReasoningEffort 处理思考深度的 POST 请求。
+func (s *apiServer) handleReasoningEffort(w http.ResponseWriter, r *http.Request) {
+	if s.app.settings == nil {
+		writeError(w, fmt.Errorf("settings not loaded"))
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ReasoningEffort string `json:"reasoning_effort"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("invalid request body: %w", err))
+		return
+	}
+	// 验证值
+	validEfforts := map[string]bool{"": true, "low": true, "medium": true, "high": true, "max": true}
+	if !validEfforts[req.ReasoningEffort] {
+		writeError(w, fmt.Errorf("reasoning_effort must be one of: low, medium, high, max, or empty"))
+		return
+	}
+	s.app.settings.ReasoningEffort = req.ReasoningEffort
+	if err := config.SaveSettings(s.app.db, s.app.settings); err != nil {
+		writeError(w, err)
+		return
+	}
+	// 广播状态变更
+	s.app.BroadcastChatEvent("reasoning_effort_changed", map[string]any{
+		"reasoning_effort": req.ReasoningEffort,
+	})
+	if s.app.ctx != nil {
+		wails.EventsEmit(s.app.ctx, "settings:reasoning_effort_changed", map[string]any{
+			"reasoning_effort": req.ReasoningEffort,
+		})
+	}
+	writeJSON(w, map[string]any{"ok": true, "reasoning_effort": req.ReasoningEffort})
 }

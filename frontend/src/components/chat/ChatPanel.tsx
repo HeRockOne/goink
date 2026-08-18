@@ -349,6 +349,18 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     return () => { cleanup() }
   }, [app, models])
 
+  // 监听思考深度变更事件（移动端切换思考深度时桌面端实时更新）
+  useEffect(() => {
+    const cleanup = EventsOn('settings:reasoning_effort_changed', (data: { reasoning_effort?: string }) => {
+      if (data.reasoning_effort !== undefined) {
+        setReasoningEffort(data.reasoning_effort)
+        const model = models.find(m => m.Key === selectedKey)
+        setThinkingEnabled(data.reasoning_effort !== '' && (model?.SupportsThinking ?? false))
+      }
+    })
+    return () => { cleanup() }
+  }, [models, selectedKey])
+
   // 当前模型变化时上报纯 modelID（底部计费面板按模型切换统计）
   useEffect(() => {
     const [, modelID] = splitModelKey(selectedKey)
@@ -975,6 +987,16 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     setApprovalMode(next)
     app.SetApprovalMode(next).catch(() => {})
   }, [approvalMode, app])
+
+  // 监听审批模式变更事件（移动端切换时桌面端实时更新）
+  useEffect(() => {
+    const cleanup = EventsOn('settings:approval_mode_changed', (data: { mode?: string }) => {
+      if (data.mode === 'auto' || data.mode === 'manual') {
+        setApprovalMode(data.mode)
+      }
+    })
+    return () => { cleanup() }
+  }, [])
 
   const handleSelectEffort = useCallback((effort: string) => {
     setReasoningEffort(effort)

@@ -5,7 +5,13 @@ const state = {
   page: 'novels', novelId: 0, novelTitle: '', sessionId: null,
   models: [], selectedModel: '', isLoading: false, sessions: [],
   reader: { novelId: 0, chapterId: 0, idx: 0, chapters: [] },
-  chaptersCache: {}, selfStreaming: false
+  chaptersCache: {}, selfStreaming: false,
+  // 移动端同步桌面端状态
+  currentPhase: '', phaseGateEnabled: true, approvalMode: 'manual', reasoningEffort: '',
+  // 价格设置
+  priceInput: 0, priceOutput: 0, cachePrice: 0,
+  // Token用量
+  sessionUsage: {}, sessionCost: 0, dailyCost: 0
 };
 
 // ── 离线缓存（idb-keyval + 内存 Map）──
@@ -222,6 +228,18 @@ const LANGS = {
     planted_ch: '埋设章节', revealed_ch: '揭示章节', related_truth: '关联真相',
     arc_type: '弧线类型', status_label: '状态', nodes: '节点',
     location_type: '地点类型', tags: '标签', description: '描述',
+    // 门禁状态栏
+    phase_idle: '空闲', phase_init: '初始化', phase_prepare: '准备', phase_outline: '大纲',
+    phase_write: '写作', phase_review: '审稿', phase_maintain: '维护', phase_done: '完成',
+    phase_gate: '门禁', thinking_label: '思考', approval_label: '审批',
+    // 设置页
+    phase_gate_group: '门禁', enable_phase_gate: '启用门禁', phase_gate_on: '已开启', phase_gate_off: '已关闭',
+    approval_group: '审批', approval_mode: '审批模式', approval_auto: '自动', approval_manual: '手动',
+    thinking_group: '思考', reasoning_effort: '推理深度',
+    effort_off: '关闭', effort_low: '低', effort_medium: '中', effort_high: '高', effort_max: '最高',
+    // toast消息
+    phase_gate_enabled: '门禁已开启', phase_gate_disabled: '门禁已关闭',
+    approval_mode_set: '审批模式', thinking_effort_set: '思考深度', setting_failed: '设置失败',
   },
   en: {
     bookshelf: 'Bookshelf', chat: 'Chat', settings: 'Settings', detail: 'Novel Detail',
@@ -253,6 +271,18 @@ const LANGS = {
     planted_ch: 'Planted', revealed_ch: 'Revealed', related_truth: 'Related Truth',
     arc_type: 'Arc Type', status_label: 'Status', nodes: 'Nodes',
     location_type: 'Location Type', tags: 'Tags', description: 'Description',
+    // Phase status bar
+    phase_idle: 'Idle', phase_init: 'Init', phase_prepare: 'Prepare', phase_outline: 'Outline',
+    phase_write: 'Write', phase_review: 'Review', phase_maintain: 'Maintain', phase_done: 'Done',
+    phase_gate: 'Gate', thinking_label: 'Thinking', approval_label: 'Approval',
+    // Settings page
+    phase_gate_group: 'Phase Gate', enable_phase_gate: 'Enable Gate', phase_gate_on: 'On', phase_gate_off: 'Off',
+    approval_group: 'Approval', approval_mode: 'Approval Mode', approval_auto: 'Auto', approval_manual: 'Manual',
+    thinking_group: 'Thinking', reasoning_effort: 'Reasoning Effort',
+    effort_off: 'Off', effort_low: 'Low', effort_medium: 'Medium', effort_high: 'High', effort_max: 'Max',
+    // Toast messages
+    phase_gate_enabled: 'Gate enabled', phase_gate_disabled: 'Gate disabled',
+    approval_mode_set: 'Approval mode', thinking_effort_set: 'Thinking effort', setting_failed: 'Setting failed',
   }
 };
 function getLang() { return localStorage.getItem('goink_lang') || 'zh'; }
@@ -267,6 +297,7 @@ function toggleLang() {
 
 // ── Utils ──
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtTokens(n) { n = n || 0; if (n >= 1000000) return (n / 1000000).toFixed(1) + ' m'; if (n >= 1000) return (n / 1000).toFixed(1) + ' k'; return n.toString(); }
 function toast(msg, dur = 2000) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, dur); }
 function openSheet(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeSheet(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
@@ -283,6 +314,195 @@ function fallbackCopy(t) {
   document.body.appendChild(ta); ta.select();
   try { document.execCommand('copy'); toast('已复制'); } catch (_) { toast('复制失败'); }
   document.body.removeChild(ta);
+}
+
+// ── 状态栏更新 ──
+// ── 快捷操作栏更新 ──
+function updateQuickBar() {
+  // 门禁开关状态
+  const gateBtn = document.getElementById('quickGate');
+  const gateLabel = document.getElementById('quickGateLabel');
+  if (gateBtn && gateLabel) {
+    gateBtn.className = `quick-btn ${state.phaseGateEnabled ? 'active' : ''}`;
+    gateLabel.textContent = state.phaseGateEnabled ? t('phase_gate_on') : t('phase_gate_off');
+  }
+  // 思考深度
+  const thinkingBtn = document.getElementById('quickThinking');
+  const thinkingLabel = document.getElementById('quickThinkingLabel');
+  if (thinkingBtn && thinkingLabel) {
+    const effortNames = { '': t('effort_off'), 'low': t('effort_low'), 'medium': t('effort_medium'), 'high': t('effort_high'), 'max': t('effort_max') };
+    thinkingBtn.className = `quick-btn ${state.reasoningEffort ? 'active' : ''}`;
+    thinkingLabel.textContent = effortNames[state.reasoningEffort] || t('effort_off');
+  }
+  // 审批模式
+  const approvalBtn = document.getElementById('quickApproval');
+  const approvalLabel = document.getElementById('quickApprovalLabel');
+  if (approvalBtn && approvalLabel) {
+    approvalBtn.className = `quick-btn ${state.approvalMode === 'auto' ? 'active' : ''}`;
+    approvalLabel.textContent = state.approvalMode === 'auto' ? t('approval_auto') : t('approval_manual');
+  }
+  // 模型名称
+  const modelLabel = document.getElementById('quickModelLabel');
+  if (modelLabel) {
+    const found = state.models.find(m => m.key === state.selectedModel);
+    modelLabel.textContent = found ? (found.name || 'Model') : t('model');
+  }
+  // Token用量 - 按模型计算成本
+  const moneyLabel = document.getElementById('quickMoneyLabel');
+  if (moneyLabel) {
+    const usage = state.sessionUsage || {};
+    state.sessionCost = calcSessionCost(usage);
+    moneyLabel.textContent = state.sessionCost > 0 ? `¥${state.sessionCost.toFixed(4)}` : '¥0.00';
+    const tokensLabel = document.getElementById('quickTokensLabel');
+    if (tokensLabel) {
+      const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
+      tokensLabel.textContent = total > 0 ? fmtTokens(total) : '';
+    }
+  }
+}
+
+// ── Token用量显示 ──
+function showTokenUsage() {
+  document.getElementById('tokenModal').classList.remove('hidden');
+  updateTokenModal();
+}
+
+function hideTokenUsage() {
+  document.getElementById('tokenModal').classList.add('hidden');
+}
+
+function calcModelCost(missTokens, hitTokens, compTokens) {
+  const missCost = (missTokens / 1000000) * (state.priceInput || 1);
+  const hitCost = (hitTokens / 1000000) * (state.cachePrice || 0.02);
+  const compCost = (compTokens / 1000000) * (state.priceOutput || 2);
+  return missCost + hitCost + compCost;
+}
+
+function calcSessionCost(usage) {
+  if (!usage) return 0;
+  const pm = usage.per_model || {};
+  let total = 0;
+  for (const [, data] of Object.entries(pm)) {
+    total += calcModelCost(data.miss || 0, data.hit || 0, data.comp || 0);
+  }
+  return total;
+}
+
+function updateTokenModal() {
+  const usage = state.sessionUsage || {};
+  const prompt = usage.prompt_tokens || 0;
+  const completion = usage.completion_tokens || 0;
+  const cache = usage.prompt_cache_hit_tokens || 0;
+  const total = (usage.total_tokens || 0) || (prompt + completion);
+  
+  document.getElementById('tokenInput').textContent = fmtTokens(prompt);
+  document.getElementById('tokenOutput').textContent = fmtTokens(completion);
+  document.getElementById('tokenCache').textContent = fmtTokens(cache);
+  document.getElementById('tokenTotal').textContent = fmtTokens(total);
+  
+  // 当前会话按模型成本
+  const perModel = usage.per_model || {};
+  const perModelDiv = document.getElementById('perModelCost');
+  perModelDiv.innerHTML = '';
+  let totalCost = 0;
+  
+  for (const [model, data] of Object.entries(perModel)) {
+    const modelCost = calcModelCost(data.miss || 0, data.hit || 0, data.comp || 0);
+    totalCost += modelCost;
+    const row = document.createElement('div');
+    row.className = 'token-row';
+    row.innerHTML = `<span>${esc(model)}</span><span style="color:var(--ice)">¥${modelCost.toFixed(4)}</span>`;
+    perModelDiv.appendChild(row);
+  }
+  
+  const totalRow = document.createElement('div');
+  totalRow.className = 'token-row token-total';
+  totalRow.innerHTML = `<span>小计</span><span style="color:var(--ice)">¥${totalCost.toFixed(4)}</span>`;
+  perModelDiv.appendChild(totalRow);
+  
+  state.sessionCost = totalCost;
+  
+  // 今日累计 - 列出今天每个会话的费用
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyDiv = document.getElementById('perModelDaily');
+  dailyDiv.innerHTML = '';
+  let dailyCost = 0;
+  let dailyCount = 0;
+  (state.sessions || []).forEach(s => {
+    if (s.created_at && s.created_at.slice(0, 10) === today && s.usage) {
+      try {
+        const u = JSON.parse(s.usage);
+        const sc = calcSessionCost(u);
+        dailyCost += sc;
+        dailyCount++;
+        const row = document.createElement('div');
+        row.className = 'token-row';
+        const label = s.title || s.session_id.slice(-6);
+        row.innerHTML = `<span style="font-size:11px">${esc(label)}</span><span style="color:var(--ice);font-size:11px">¥${sc.toFixed(4)}</span>`;
+        dailyDiv.appendChild(row);
+      } catch (_) {}
+    }
+  });
+  const dailyTotalRow = document.createElement('div');
+  dailyTotalRow.className = 'token-row token-total';
+  dailyTotalRow.innerHTML = `<span>今日 ${dailyCount} 个会话</span><span style="color:var(--ice)">¥${dailyCost.toFixed(4)}</span>`;
+  dailyDiv.appendChild(dailyTotalRow);
+}
+
+// ── 小说删除 ──
+let deleteNovelId = null;
+let deleteNovelTitle = '';
+
+function showDeleteNovel(id, title) {
+  deleteNovelId = id;
+  deleteNovelTitle = title;
+  document.getElementById('deleteNovelTitle').value = '';
+  document.getElementById('deleteNovelBtn').disabled = true;
+  document.getElementById('deleteNovelModal').classList.remove('hidden');
+  // 监听输入
+  document.getElementById('deleteNovelTitle').oninput = function() {
+    document.getElementById('deleteNovelBtn').disabled = (this.value !== title);
+  };
+}
+
+function hideDeleteNovel() {
+  document.getElementById('deleteNovelModal').classList.add('hidden');
+  deleteNovelId = null;
+  deleteNovelTitle = '';
+}
+
+async function confirmDeleteNovel() {
+  if (!deleteNovelId) return;
+  try {
+    await api('/api/novels', {
+      method: 'DELETE',
+      body: { id: deleteNovelId, title: deleteNovelTitle }
+    });
+    toast('小说已删除');
+    hideDeleteNovel();
+    loadNovels();
+  } catch (_) {
+    toast('删除失败');
+  }
+}
+
+// 加载设置状态
+async function loadSettingsStatus() {
+  try {
+    const [approvalRes, modelRes, phaseRes, pricingRes] = await Promise.all([
+      api('/api/settings/approval-mode').catch(() => ({ mode: 'manual' })),
+      api('/api/settings/model').catch(() => ({})),
+      api('/api/settings/phase-gate-enabled').catch(() => ({ enabled: true })),
+      api('/api/settings/pricing').catch(() => ({ price_input: 1, price_output: 2, cache_price: 0.02 }))
+    ]);
+    state.approvalMode = approvalRes.mode || 'manual';
+    state.reasoningEffort = modelRes.reasoning_effort || '';
+    state.phaseGateEnabled = phaseRes.enabled !== false;
+    state.priceInput = pricingRes.price_input || 1;
+    state.priceOutput = pricingRes.price_output || 2;
+    state.cachePrice = pricingRes.cache_price || 0.02;
+    updateQuickBar();
+  } catch (_) {}
 }
 
 // ── Template Helpers ──
@@ -366,7 +586,7 @@ function extractItems(r) {
 }
 
 // ── 页面切换 ──
-function switchPage(page) {
+async function switchPage(page) {
   state.page = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page)?.classList.add('active');
@@ -381,7 +601,7 @@ function switchPage(page) {
     loadModels(); loadSessions();
   } else { actions.innerHTML = ''; if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none'; }
   if (page === 'novels') loadNovels();
-  if (page === 'chat') { loadModels(); loadSessions(); syncWithDesktopState(); }
+  if (page === 'chat') { loadModels(); loadSessions(); syncWithDesktopState(); await loadSettingsStatus(); updateQuickBar(); }
   if (page === 'settings') loadSettings();
   if (page === 'stats') loadStatsPage();
   if (page === 'novel-detail') loadNovelDetail();
@@ -604,6 +824,22 @@ function handleChatEvent(ev) {
       wsContent = '';
       state.isLoading = false;
       setChatBusy(false);
+      // 更新Token用量
+      if (ev.usage) {
+        state.sessionUsage = ev.usage;
+        // 使用真实价格计算成本
+        const inputTokens = (ev.usage.prompt_tokens || 0) / 1000000;
+        const outputTokens = (ev.usage.completion_tokens || 0) / 1000000;
+        const cacheTokens = (ev.usage.prompt_cache_hit_tokens || 0) / 1000000;
+        const priceInput = state.priceInput || 0;
+        const priceOutput = state.priceOutput || 0;
+        const cachePrice = state.cachePrice || 0;
+        const inputCost = inputTokens * priceInput;
+        const outputCost = outputTokens * priceOutput;
+        const cacheSaving = cacheTokens * (priceInput - cachePrice);
+        state.sessionCost = Math.max(0, inputCost + outputCost - cacheSaving);
+        updateQuickBar();
+      }
       // 刷新会话列表
       loadSessions();
       break;
@@ -633,7 +869,49 @@ function handleChatEvent(ev) {
     case 'phase_gate':
       // 阶段门禁变化
       if (ev.phase_gate && ev.phase_gate.phase) {
+        state.currentPhase = ev.phase_gate.phase;
+        updatePhaseStatus();
         toast(`阶段: ${ev.phase_gate.phase}`);
+      }
+      break;
+
+    case 'phase_gate_enabled_changed':
+      // 门禁开关变化（桌面端切换）
+      if (ev.enabled !== undefined) {
+        state.phaseGateEnabled = ev.enabled;
+        updateQuickBar();
+      }
+      break;
+
+    case 'approval_mode_changed':
+      // 审批模式变化（桌面端切换）
+      if (ev.mode === 'auto' || ev.mode === 'manual') {
+        state.approvalMode = ev.mode;
+        updateQuickBar();
+      }
+      break;
+
+    case 'reasoning_effort_changed':
+      // 思考深度变化（桌面端切换）
+      if (ev.reasoning_effort !== undefined) {
+        state.reasoningEffort = ev.reasoning_effort;
+        updateQuickBar();
+      }
+      break;
+
+    case 'model_changed':
+      // 模型变化（桌面端切换）
+      if (ev.model_key) {
+        state.selectedModel = ev.model_key;
+        updateQuickBar();
+      }
+      break;
+
+    case 'retry':
+      // 429重试通知
+      if (ev.retry_count !== undefined) {
+        const retryMsg = `⏳ 正在重试 (${ev.retry_count}/${ev.retry_max}) 等待${ev.retry_wait}秒...`;
+        toast(retryMsg, ev.retry_wait * 1000);
       }
       break;
   }
@@ -698,8 +976,10 @@ let novelTab = 'chapters';
 const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }, { id: 'lore', label: () => '📜 ' + t('lore') }, { id: 'items', label: () => '⚔️ ' + t('items') }, { id: 'scenes', label: () => '🎬 ' + t('scenes') }];
 
 async function loadNovelDetail() {
-  // 标题已在顶部导航栏显示，不再重复
-  document.getElementById('novelDetailHeader').innerHTML = '';
+  // 标题栏添加删除按钮
+  document.getElementById('novelDetailHeader').innerHTML = `
+    <button class="btn-delete-novel" onclick="showDeleteNovel(${state.novelId}, '${state.novelTitle.replace(/'/g, "\\'")}')">🗑️</button>
+  `;
   document.getElementById('novelDetailTabs').innerHTML = TABS.map(tab => `<button class="tab-item ${tab.id === novelTab ? 'active' : ''}" onclick="switchTab('${tab.id}')">${tab.label()}</button>`).join('');
   switchTab(novelTab);
 }
@@ -1418,7 +1698,16 @@ async function sendMessage(text) {
               if (currentStreamEl && ev.tool_name) { content += `\n\n🔧 ${ev.tool_name}...`; scheduleStreamingRender(currentStreamEl, content, thinking); }
               break;
             case 'phase_gate':
-              if (ev.phase_gate && ev.phase_gate.phase) toast(`阶段: ${ev.phase_gate.phase}`);
+              if (ev.phase_gate && ev.phase_gate.phase) {
+                state.currentPhase = ev.phase_gate.phase;
+                updatePhaseStatus();
+                toast(`阶段: ${ev.phase_gate.phase}`);
+              }
+              break;
+            case 'retry':
+              if (ev.retry_count !== undefined) {
+                toast(`⏳ 正在重试 (${ev.retry_count}/${ev.retry_max}) 等待${ev.retry_wait}秒...`, ev.retry_wait * 1000);
+              }
               break;
             case 'done':
               cancelPendingStream();
@@ -1454,7 +1743,23 @@ async function sendMessage(text) {
 function stopChat() { if (abortCtrl) abortCtrl.abort(); if (state.isLoading) { state.isLoading = false; setChatBusy(false); if (state.sessionId) api('/api/chat/cancel', { method: 'POST', body: { session_id: state.sessionId } }).catch(()=>{}); } }
 
 // ═══════════ 会话 ═══════════
-async function loadSessions() { if (!state.novelId) return; try { const r = await api(`/api/sessions?novel_id=${state.novelId}&page=1&size=20`); state.sessions = r.items || []; } catch (_) {} }
+async function loadSessions() { 
+  if (!state.novelId) return; 
+  try { 
+    const r = await api(`/api/sessions?novel_id=${state.novelId}&page=1&size=20`); 
+    state.sessions = r.items || []; 
+    // 更新当前session的usage数据
+    if (state.sessionId) {
+      const currentSession = state.sessions.find(s => s.session_id === state.sessionId);
+      if (currentSession && currentSession.usage) {
+        try {
+          state.sessionUsage = JSON.parse(currentSession.usage);
+          updateQuickBar();
+        } catch (_) {}
+      }
+    }
+  } catch (_) {} 
+}
 function showSessions() {
   const list = document.getElementById('sessionList'); list.innerHTML = '';
   if (state.sessions.length) {
@@ -1472,7 +1777,23 @@ function showSessions() {
   }
   openSheet('sessionSheet');
 }
-async function loadSession(sid) { state.sessionId = sid; document.getElementById('chatMessages').innerHTML = ''; try { const r = await api(`/api/sessions/${sid}/messages`); (r.messages||[]).forEach(m => { if ((m.role==='user'||m.role==='assistant') && (m.content||m.thinking_content)) addMessage(m.role, m.content||'', m.thinking_content||''); }); } catch (_) {} toast('已加载会话'); }
+async function loadSession(sid) { 
+  state.sessionId = sid; 
+  document.getElementById('chatMessages').innerHTML = ''; 
+  try { 
+    const r = await api(`/api/sessions/${sid}/messages`); 
+    (r.messages||[]).forEach(m => { 
+      if ((m.role==='user'||m.role==='assistant') && (m.content||m.thinking_content)) 
+        addMessage(m.role, m.content||'', m.thinking_content||''); 
+    }); 
+  } catch (_) {} 
+  const currentSession = state.sessions.find(s => s.session_id === sid);
+  if (currentSession && currentSession.usage) {
+    try { state.sessionUsage = JSON.parse(currentSession.usage); } catch (_) {}
+  }
+  updateQuickBar();
+  toast('已加载会话'); 
+}
 function newChat() { state.sessionId = null; const c = document.getElementById('chatMessages'); c.innerHTML = ''; c.appendChild(emptyState('开始新的对话')); qs(c, '.em-hint') && (qs(c, '.em-hint').textContent = '输入消息开始创作'); }
 
 // ═══════════ 模型 ═══════════
@@ -1544,6 +1865,49 @@ async function loadSettings() {
     el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
     el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
   }
+}
+
+// ── 设置开关函数 ──
+async function togglePhaseGate() {
+  const newState = !state.phaseGateEnabled;
+  try {
+    await api('/api/settings/phase-gate-enabled', {
+      method: 'POST',
+      body: { enabled: newState }
+    });
+    state.phaseGateEnabled = newState;
+    toast(newState ? t('phase_gate_enabled') : t('phase_gate_disabled'));
+    updateQuickBar();
+  } catch (_) { toast(t('setting_failed')); }
+}
+
+async function toggleApprovalMode() {
+  const newMode = state.approvalMode === 'auto' ? 'manual' : 'auto';
+  try {
+    await api('/api/settings/approval-mode', {
+      method: 'POST',
+      body: { mode: newMode }
+    });
+    state.approvalMode = newMode;
+    toast(`${t('approval_mode_set')}: ${newMode === 'auto' ? t('approval_auto') : t('approval_manual')}`);
+    updateQuickBar();
+  } catch (_) { toast(t('setting_failed')); }
+}
+
+async function cycleReasoningEffort() {
+  const efforts = ['', 'low', 'medium', 'high', 'max'];
+  const idx = efforts.indexOf(state.reasoningEffort);
+  const newEffort = efforts[(idx + 1) % efforts.length];
+  try {
+    await api('/api/settings/reasoning-effort', {
+      method: 'POST',
+      body: { reasoning_effort: newEffort }
+    });
+    state.reasoningEffort = newEffort;
+    const names = { '': t('effort_off'), 'low': t('effort_low'), 'medium': t('effort_medium'), 'high': t('effort_high'), 'max': t('effort_max') };
+    toast(`${t('thinking_effort_set')}: ${names[newEffort]}`);
+    updateQuickBar();
+  } catch (_) { toast(t('setting_failed')); }
 }
 
 function saveTokenFromSettings() {
