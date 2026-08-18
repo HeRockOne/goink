@@ -232,7 +232,7 @@ mode: always
 
 ## 硬约束
 
-- 开书（init）必须先写全书总纲到 book-outline.md（核心矛盾/主角成长弧线/结局方向/篇幅规划），未写总纲禁止切换 prepare
+- 开书（init）必须先写全书总纲到数据库（outlines + outline_beats 表，通过 update_outline + create_outline_beat），未写总纲禁止切换 prepare
 - 每章 at least 1 个情绪锚点；情绪浓度高时禁止讲述句
 - 每章至少1次快慢节奏切换；关键场景必须现场描写≥300字
 - 每章至少1个爽点（对照 main-tech-shuangdian-pacing）；章末必有钩子且类型不与前2章重复

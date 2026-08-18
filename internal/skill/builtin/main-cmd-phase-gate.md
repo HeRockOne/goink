@@ -43,7 +43,7 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 
 | 阶段 | require | 说明 |
 |------|---------|------|
-| init | get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences | 开书：7 项查询确认现状（新书另写 book-outline.md 总纲） |
+| init | get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences | 开书：7 项查询确认现状（新书另写数据库总纲 outlines + outline_beats） |
 | prepare | get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences | 9 项必查，全量状态必须加载 |
 | outline | edit | 大纲必须写入 outlines/NNN.md |
 | write | edit, get_chapter_list | 正文必须写入 chapters/NNN.md + 字数校验前置检查 |
@@ -94,7 +94,7 @@ next: outline
 | 查询 | get_characters, get_character_relations, get_locations, get_location_relations, get_timeline, get_story_arcs, get_arc_nodes, get_reader_perspective, get_preferences, get_lore, get_items, get_item_occurrences, get_scenes, get_stats, get_writing_snapshot, get_writing_context, get_chapter_list, get_entity_appearances | 所有阶段（随时查状态） |
 | 搜索 | search_lore, search_items, search_story_memory, check_story_consistency | 所有阶段 |
 | 网络 | web_search, web_fetch | prepare / outline（查资料考据） |
-| 文件写入 | edit | 配合 edit_paths：init 写总纲（book-outline.md, goink.md）、outline 写大纲（outlines/*）、write 写正文（chapters/*）、review 修正文（chapters/*）、maintain 写指纹（goink.md） |
+| 文件写入 | edit | 配合 edit_paths：init 写总纲（outlines/outline_beats 数据库 + goink.md）、outline 写大纲（outlines/*）、write 写正文（chapters/*）、review 修正文（chapters/*）、maintain 写指纹（goink.md） |
 | 创建 | create_character, create_location, create_location_relation, create_story_arc, create_arc_node, create_lore, create_item, create_item_occurrence, create_scene, create_timeline_entry, create_reader_perspective_entry, create_preference | 只在 init（开书）和 maintain（补录） |
 | 更新 | update_character, update_character_relationship, update_location, update_location_relation, update_story_arc, update_arc_node, update_lore, update_item, update_scene, update_timeline_entry, update_chapter_plan, update_reader_perspective_entry, update_preference, update_writing_snapshot, update_chapter_meta | 只在 maintain；batch write 额外放迷你维护 6 个（create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot） |
 | 删除 | delete_lore, delete_item, delete_scene, delete_record | 只在 maintain |

@@ -51,7 +51,7 @@ func (t *GetWritingContextTool) Description() string {
 		"reader: 读者认知计数 {known=已知信息数, suspense=活跃悬念数, misconception=读者误知数}\n" +
 		"writing_snapshot: 写作快照 {last_chapter_num=最新已完成章节号, current_arc_id=当前弧线ID, current_location=当前地点, active_chars=活跃角色ID数组JSON}\n" +
 		"stats: 统计 {total_chapters=总章数}\n" +
-		"outline: 全书总纲摘要 {summary=book-outline.md 前400字, source=文件路径}——本章创作必须服务于总纲的核心矛盾与结局方向\n" +
+		"outline: 全书总纲摘要 {core_conflict=核心矛盾, growth_arc=成长弧线, ending_direction=结局方向, word_count_plan=篇幅规划(万字), beats=[{chapter,description,beat_type,importance}], source=database}——本章创作必须服务于总纲的核心矛盾与结局方向\n" +
 		"volume: 当前卷信息 {name, description, detail_json=卷纲, start_chapter, end_chapter}——本章只展开本卷情节\n" +
 		"progress: 进度锚点 {current_chapter=当前章号, volume_start=本卷起始章, volume_end=本卷结束章, rule=越界约束}——禁止提前展开后续卷情节"
 }

@@ -46,6 +46,7 @@ var mainAgentTools = []string{
 	"update_chapter_meta",
 	"get_entity_appearances",
 	"check_story_consistency", // review 阶段一致性核对（门禁 review 白名单与 kernel skill 均要求，主会话直接可调）
+	"get_outline", "update_outline", "create_outline_beat", "update_outline_beat", "delete_outline_beat", // 总纲数据库操作（init 阶段核心工具）
 }
 
 var reviewAgentTools = []string{
@@ -59,6 +60,7 @@ var reviewAgentTools = []string{
 	"get_stats",
 	"search_story_memory", "read",
 	"get_entity_appearances", "check_story_consistency",
+	"get_outline", // 审稿需读取总纲做一致性核对
 }
 
 var memoryAgentTools = []string{
