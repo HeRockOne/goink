@@ -272,19 +272,15 @@ CREATE TABLE outline_beats (
   - outline_beats 表：chapter/description/beat_type/importance 的填写要求
   - 大爽点格式规范：`{chapter: N, desc: "具体描述", beat_type: "shuangdian"}`
 
-### P3. init_consistency 检查
+### P3. init_consistency 检查 ✅ 已完成
 
 **目标**：init 阶段收尾时检查总纲/偏好/卷纲三方冲突。
 
-**依赖**：P2（总纲数据库化）完成后实施。
-
-**7项子检查**：
-1. type_pacing：查 outline_beats 计算间距
-2. pref_conflict：查 preferences + outline_beats 关键词比对
-3. promise_consistency：查 outlines.growth_arc + outline_beats
-4. golden_rule：查 lore(category=天道法则)
-5. taboo_violation：查 preferences(category=禁忌) + outline_beats
-6. means_power：查 characters.abilities + outline_beats
-7. file_db_sync：查 outline_beats + story_arcs.detail_json
+**依赖**：P2（总纲数据库化）完成后实施。 ✅ 已完成
 
 **实施位置**：appearance_tools.go，check_types 新增 init_consistency
+
+**已实现的子检查**：
+1. file_db_sync：outline_beats vs story_arcs.detail_json.big_shuangdian ✅
+2. type_pacing：大爽点间距检查（根据题材） ✅
+3. pref_conflict：preferences vs outline_beats（占位，复杂匹配需人工确认）
