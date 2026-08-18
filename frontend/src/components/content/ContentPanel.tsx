@@ -11,6 +11,7 @@ import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import TabBar from './TabBar'
 import ContentEditor from './ContentEditor'
 import OutlineViewer from './OutlineViewer'
+import OutlineEditor from './OutlineEditor'
 import SkillPreview from './SkillPreview'
 import SkillEditForm from '@/components/skill/SkillEditForm'
 import Markdown from '@/components/Markdown'
@@ -525,6 +526,18 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
               }}
             />
           )}
+        </div>
+      </main>
+    )
+  }
+
+  // File tab — book-outline.md uses structured editor
+  if (activeTab.path === 'book-outline.md') {
+    return (
+      <main className="content-panel flex-1 flex flex-col min-w-0 min-h-0 border-r overflow-hidden" style={{ background: 'var(--editor-surface)' }}>
+        <TabBar tabs={tabs} activeTabId={activeTabId} onSelect={setActiveTabId} onClose={closeTab} />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <OutlineEditor novelId={novelId} />
         </div>
       </main>
     )

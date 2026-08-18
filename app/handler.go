@@ -29,6 +29,7 @@ import (
 	"novel/internal/migrate"
 	"novel/internal/netutil"
 	"novel/internal/novel"
+	"novel/internal/outline"
 	"novel/internal/rag"
 	"novel/internal/reader"
 	"novel/internal/rollback"
@@ -82,6 +83,7 @@ type App struct {
 	storyarc    *storyarc.Store
 	location    *location.Store
 	reader      *reader.Store
+	outline     *outline.Store
 	turnCommit  *rollback.Store
 	writing     *writing.Store
 	webdav      *webdavpkg.Server
@@ -338,6 +340,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	a.stats = stats.NewStore(db, a.logger)
 	a.turnCommit = rollback.NewStore(db, a.logger)
 	a.writing = writing.NewStore(db, a.logger)
+	a.outline = outline.NewStore(db)
 	s, err := skill.NewStore(a.logger, config.UserSkillsDir())
 	if err != nil {
 		a.logger.Error("初始化 skill store 失败", "err", err)
