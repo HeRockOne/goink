@@ -597,9 +597,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							// 必须在调用前记录 from，否则真切换判断恒假 → 阶段技能永不注入
 							from := pg.CurrentPhase()
 							ok, warning := pg.SetPhase(targetPhase)
-							// 记录调用（仅成功时；失败时 require 未满足不算有效调用）
-							if ok {
-								pg.OnToolCall("set_phase", true)
+						// 记录调用（仅成功时；失败时 require 未满足不算有效调用）
+						if ok {
+							pg.OnToolCall("set_phase", true, "")
 							}
 							if ok {
 								// 成功：自动注入新阶段必读技能。
@@ -634,9 +634,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 必读技能并重试一次——全自动模式零卡顿，不再让 LLM 手动调
 								// auto_skill_injection（旧行为：LLM 手动读技能 → 多一轮试错）。
 								if strings.Contains(warning, "auto_skill_injection") {
-									a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
-									if ok2, _ := pg.SetPhase(targetPhase); ok2 {
-										pg.OnToolCall("set_phase", true)
+								a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
+								if ok2, _ := pg.SetPhase(targetPhase); ok2 {
+									pg.OnToolCall("set_phase", true, "")
 										if from != targetPhase {
 											a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 										}
@@ -781,7 +781,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 					// 门禁：记录调用
 					if pg != nil && pg.Active() {
-						pg.OnToolCall(name, result.Success)
+						// 提取结果内容用于结果门控
+						resultContent := ""
+						if result.Data != nil {
+							if content, ok := result.Data["content"].(string); ok {
+								resultContent = content
+							}
+						}
+						pg.OnToolCall(name, result.Success, resultContent)
 						// 工具执行成功：重置该工具的拦截计数（连续拦截才算降噪）
 						if result.Success {
 							delete(blockCount, pg.CurrentPhase()+":"+name)

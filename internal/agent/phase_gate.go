@@ -22,6 +22,7 @@ type PhaseGate struct {
 	currentPhase    string
 	calledTools     map[string]int // tool_name → 调用次数（含失败）
 	successfulTools map[string]int // tool_name → 成功次数（require 只看这个）
+	lastToolResults map[string]string // tool_name → 最近一次调用结果内容（结果门控用）
 	mode            string         // "single" | "batch"
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
@@ -77,6 +78,7 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 		visited:         []string{firstPhase},
 		calledTools:     make(map[string]int),
 		successfulTools: make(map[string]int),
+		lastToolResults: make(map[string]string),
 		readsByPhase:    make(map[string]map[string]bool),
 		mode:            mode,
 		active:          true,
@@ -149,8 +151,8 @@ func (g *PhaseGate) CurrentPhase() string {
 
 // OnToolCall 记录工具调用。
 // success=true 表示工具执行成功，require 只统计成功次数。
-// 不再自动推进阶段——用户必须手动调 set_phase 推进。
-func (g *PhaseGate) OnToolCall(toolName string, success bool) {
+// resultContent 是工具返回结果的内容（用于结果门控检查）。
+func (g *PhaseGate) OnToolCall(toolName string, success bool, resultContent string) {
 	if g == nil || !g.active {
 		return
 	}
@@ -158,6 +160,10 @@ func (g *PhaseGate) OnToolCall(toolName string, success bool) {
 	g.calledTools[toolName]++
 	if success {
 		g.successfulTools[toolName]++
+		// 存储最近一次调用结果（结果门控用）
+		if resultContent != "" {
+			g.lastToolResults[toolName] = resultContent
+		}
 	}
 }
 
@@ -230,6 +236,24 @@ func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 		}
 	}
 	return true
+}
+
+// checkResultGateMet 检查结果门控：require 中的工具如果返回了 [ERROR]，禁止推进。
+func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
+	resultGatedTools := map[string]bool{
+		"check_story_consistency": true,
+	}
+	for _, req := range pc.Require {
+		if !resultGatedTools[req] {
+			continue
+		}
+		if result, ok := g.lastToolResults[req]; ok {
+			if strings.Contains(result, "[ERROR]") {
+				return false, fmt.Sprintf("%s 存在硬错误，禁止切换阶段", req)
+			}
+		}
+	}
+	return true, ""
 }
 
 // missingInjections 返回当前阶段尚未加载的必读技能列表（auto_skill_injection）。
@@ -391,6 +415,13 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 		}
 	}
 
+	// 结果门控：require 中的工具如果返回了 [ERROR]，禁止推进
+	if current != nil {
+		if ok, reason := g.checkResultGateMet(current); !ok {
+			return false, reason
+		}
+	}
+
 	// 检查当前阶段的 auto_skill_injection（必读技能）是否满足（不满足则阻塞）
 	if current != nil && len(current.AutoSkillInjection) > 0 {
 		if missingSkills := g.missingInjections(current); len(missingSkills) > 0 {
@@ -437,6 +468,7 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	// 与 readsByPhase（技能按阶段独立生效）保持一致。
 	g.calledTools = make(map[string]int)
 	g.successfulTools = make(map[string]int)
+	g.lastToolResults = make(map[string]string)
 
 	g.currentPhase = targetPhase
 	// 判定一轮完整流程完成：目标阶段是"按 next 链推进回来的、且本轮已访问过"的阶段。

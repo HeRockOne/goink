@@ -62,7 +62,7 @@ next: write
 	}
 
 	// 满足 require 后 → 允许
-	gate.OnToolCall("get_chapter_list", true)
+	gate.OnToolCall("get_chapter_list", true, "")
 	ok, _ = gate.SetPhase("outline")
 	if !ok {
 		t.Error("should allow transition after require met")
@@ -102,8 +102,8 @@ loop: true
 `, "batch")
 
 	// 模拟上一章只做了 2 件：edit + create_scene
-	gate.OnToolCall("edit", true)
-	gate.OnToolCall("create_scene", true)
+	gate.OnToolCall("edit", true, "")
+	gate.OnToolCall("create_scene", true, "")
 	ok, warning := gate.SetPhase("write")
 	if ok {
 		t.Fatal("chapter boundary should be rejected when miniMaintain incomplete")
@@ -114,7 +114,7 @@ loop: true
 
 	// 补齐剩余 4 件后章边界通过
 	for _, tool := range []string{"update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
-		gate.OnToolCall(tool, true)
+		gate.OnToolCall(tool, true, "")
 	}
 	ok, _ = gate.SetPhase("write")
 	if !ok {
@@ -137,7 +137,7 @@ loop: true
 
 	// 上一章完成全部六件套
 	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
-		gate.OnToolCall(tool, true)
+		gate.OnToolCall(tool, true, "")
 	}
 	gate.SetWordCountOK(true)
 	// 章边界通过
@@ -175,7 +175,7 @@ loop: true
 
 	// 模拟完成全部 require 工具
 	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
-		gate.OnToolCall(tool, true)
+		gate.OnToolCall(tool, true, "")
 	}
 	gate.SetWordCountOK(true)
 
@@ -217,7 +217,7 @@ next: review
 
 	// 模拟完成全部 require 工具
 	for _, tool := range []string{"edit", "get_chapter_list", "read", "check_story_consistency"} {
-		gate.OnToolCall(tool, true)
+		gate.OnToolCall(tool, true, "")
 	}
 	gate.SetWordCountOK(true)
 
@@ -319,7 +319,7 @@ edit_paths: chapters/*
 
 	// write: 只能编辑 chapters
 	gate.SetPhase("outline")
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	gate.SetPhase("write")
 	allowed, _ = gate.CheckEditPath("chapters/001.md")
 	if !allowed {
@@ -337,7 +337,7 @@ func TestPhaseGateNilSafe(t *testing.T) {
 	if !allowed {
 		t.Error("nil gate should allow all tools")
 	}
-	nilGate.OnToolCall("read", true)
+	nilGate.OnToolCall("read", true, "")
 }
 
 func fullFlowGate(t *testing.T) *PhaseGate {
@@ -390,7 +390,7 @@ func walkFullCycle(t *testing.T, gate *PhaseGate) {
 		{"prepare", "edit"}, // maintain.next = prepare，回到起点开始第二轮
 	}
 	for _, tr := range transitions {
-		gate.OnToolCall(tr[1], true)
+		gate.OnToolCall(tr[1], true, "")
 		// write 转出需字数校验通过
 		if tr[0] == "review" {
 			gate.SetWordCountOK(true)
@@ -406,7 +406,7 @@ func walkFullCycle(t *testing.T, gate *PhaseGate) {
 // 第二轮不能再任意跳转阶段。
 func TestPhaseGateNoArbitraryJumpAfterFullCycle(t *testing.T) {
 	gate := fullFlowGate(t)
-	gate.OnToolCall("get_characters", true)
+	gate.OnToolCall("get_characters", true, "")
 	walkFullCycle(t, gate)
 	// 回到 prepare（第二轮开始），visited 已重置为 [prepare]
 
@@ -426,13 +426,13 @@ func TestPhaseGateNoArbitraryJumpAfterFullCycle(t *testing.T) {
 // 修复后：合法推进仍可用（第二轮正常进行）
 func TestPhaseGateSecondCycleForwardStillWorks(t *testing.T) {
 	gate := fullFlowGate(t)
-	gate.OnToolCall("get_characters", true)
+	gate.OnToolCall("get_characters", true, "")
 	walkFullCycle(t, gate)
 
 	// 第二轮：prepare → outline 正常推进（走 next）。
 	// 阶段切换后工具计数已重置，本阶段 require（get_characters）须在本阶段内满足。
-	gate.OnToolCall("get_characters", true)
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("get_characters", true, "")
+	gate.OnToolCall("edit", true, "")
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
 		t.Error("second cycle forward transition prepare->outline should succeed")
@@ -445,13 +445,13 @@ func TestPhaseGateSecondCycleForwardStillWorks(t *testing.T) {
 // 单轮内回退修正仍允许：write 发现大纲问题回 outline
 func TestPhaseGateInCycleFallbackStillWorks(t *testing.T) {
 	gate := fullFlowGate(t)
-	gate.OnToolCall("get_characters", true)
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("get_characters", true, "")
+	gate.OnToolCall("edit", true, "")
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
 		t.Fatal("prepare->outline should succeed")
 	}
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, _ = gate.SetPhase("write")
 	if !ok {
 		t.Fatal("outline->write should succeed")
@@ -459,7 +459,7 @@ func TestPhaseGateInCycleFallbackStillWorks(t *testing.T) {
 
 	// write 回退到已访问的 outline：合法（单轮内回退修正）。
 	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	gate.SetWordCountOK(true) // write 转出需字数达标
 	ok, _ = gate.SetPhase("outline")
 	if !ok {
@@ -470,13 +470,13 @@ func TestPhaseGateInCycleFallbackStillWorks(t *testing.T) {
 // 进入 write 阶段重置字数校验：上一章的字数结果不能带到本章（回归测试）
 func TestPhaseGateEnterWriteResetsWordCount(t *testing.T) {
 	gate := fullFlowGate(t)
-	gate.OnToolCall("get_characters", true)
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("get_characters", true, "")
+	gate.OnToolCall("edit", true, "")
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
 		t.Fatal("prepare->outline should succeed")
 	}
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, _ = gate.SetPhase("write")
 	if !ok {
 		t.Fatal("outline->write should succeed")
@@ -488,7 +488,7 @@ func TestPhaseGateEnterWriteResetsWordCount(t *testing.T) {
 	}
 
 	// 本阶段正文写入（阶段切换后 require edit 从零计）
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 
 	// 未重新检查字数时，write 转出必须被阻塞
 	ok, msg := gate.SetPhase("review")
@@ -514,13 +514,13 @@ func TestPhaseGateEnterWriteResetsWordCount(t *testing.T) {
 // 单轮内回退到更早的已访问阶段仍允许（write 回 prepare 重新准备）
 func TestPhaseGateInCycleFallbackToStartAllowed(t *testing.T) {
 	gate := fullFlowGate(t)
-	gate.OnToolCall("get_characters", true)
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("get_characters", true, "")
+	gate.OnToolCall("edit", true, "")
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
 		t.Fatal("prepare->outline should succeed")
 	}
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, _ = gate.SetPhase("write")
 	if !ok {
 		t.Fatal("outline->write should succeed")
@@ -528,7 +528,7 @@ func TestPhaseGateInCycleFallbackToStartAllowed(t *testing.T) {
 
 	// write 回退到已访问的 prepare：单轮内仍允许（prepare 在本轮 visited 中）。
 	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	gate.SetWordCountOK(true) // write 转出需字数达标
 	ok, _ = gate.SetPhase("prepare")
 	if !ok {
@@ -592,8 +592,8 @@ next: prepare
 	// 走一轮：init→prepare→outline→write→review→maintain→done→prepare
 	transitions := []string{"prepare", "outline", "write", "review", "maintain", "done", "prepare"}
 	for _, target := range transitions {
-		gate.OnToolCall("read", true)
-		gate.OnToolCall("edit", true)
+		gate.OnToolCall("read", true, "")
+		gate.OnToolCall("edit", true, "")
 		if target == "review" {
 			gate.SetWordCountOK(true)
 		}
@@ -639,12 +639,12 @@ next: review
 -->
 `, "single")
 
-	gate.OnToolCall("read", true)
+	gate.OnToolCall("read", true, "")
 	ok, _ := gate.SetPhase("outline")
 	if !ok {
 		t.Fatal("prepare->outline failed")
 	}
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, _ = gate.SetPhase("write")
 	if !ok {
 		t.Fatal("outline->write failed")
@@ -652,7 +652,7 @@ next: review
 
 	// write 回退到 outline：合法，且 visited 不应被重置（仍含 prepare）。
 	// 回退前本阶段 require（edit）须已满足——阶段切换后计数从零计。
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	gate.SetWordCountOK(true)
 	ok, _ = gate.SetPhase("outline")
 	if !ok {
@@ -683,23 +683,23 @@ next: prepare
 `, "single")
 
 	// 先满足 prepare require 进入 maintain
-	gate.OnToolCall("get_characters", true)
+	gate.OnToolCall("get_characters", true, "")
 	ok, _ := gate.SetPhase("maintain")
 	if !ok {
 		t.Fatal("prepare->maintain should succeed")
 	}
 
 	// 没查完 → 切出被阻塞
-	gate.OnToolCall("edit", true)
-	gate.OnToolCall("update_chapter_plan", true)
-	gate.OnToolCall("update_chapter_meta", true)
-	gate.OnToolCall("update_writing_snapshot", true)
-	gate.OnToolCall("search_lore", true)
-	gate.OnToolCall("search_items", true)
-	gate.OnToolCall("get_characters", true)
-	gate.OnToolCall("get_timeline", true)
-	gate.OnToolCall("get_story_arcs", true)
-	gate.OnToolCall("get_reader_perspective", true)
+	gate.OnToolCall("edit", true, "")
+	gate.OnToolCall("update_chapter_plan", true, "")
+	gate.OnToolCall("update_chapter_meta", true, "")
+	gate.OnToolCall("update_writing_snapshot", true, "")
+	gate.OnToolCall("search_lore", true, "")
+	gate.OnToolCall("search_items", true, "")
+	gate.OnToolCall("get_characters", true, "")
+	gate.OnToolCall("get_timeline", true, "")
+	gate.OnToolCall("get_story_arcs", true, "")
+	gate.OnToolCall("get_reader_perspective", true, "")
 	// 缺 get_scenes / get_item_occurrences / get_character_relations
 	ok, warning := gate.SetPhase("prepare")
 	if ok {
@@ -710,9 +710,9 @@ next: prepare
 	}
 
 	// 查完 3 个新增查询 → 允许切出
-	gate.OnToolCall("get_scenes", true)
-	gate.OnToolCall("get_item_occurrences", true)
-	gate.OnToolCall("get_character_relations", true)
+	gate.OnToolCall("get_scenes", true, "")
+	gate.OnToolCall("get_item_occurrences", true, "")
+	gate.OnToolCall("get_character_relations", true, "")
 	ok, warning = gate.SetPhase("prepare")
 	if !ok {
 		t.Errorf("should allow transition after all 13 requires met, got warning: %s", warning)
@@ -747,7 +747,7 @@ tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
 	}
 
 	// 模拟 write 阶段：edit 已成功（正文写入）
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, warning := gate.SetPhase("maintain")
 	if !ok {
 		t.Fatalf("prepare->maintain should succeed: %s", warning)
@@ -767,14 +767,14 @@ tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
 	for _, tool := range []string{"update_chapter_plan", "update_chapter_meta", "update_writing_snapshot",
 		"search_lore", "search_items", "get_characters", "get_timeline", "get_story_arcs",
 		"get_reader_perspective", "get_scenes", "get_item_occurrences", "get_character_relations"} {
-		gate.OnToolCall(tool, true)
+		gate.OnToolCall(tool, true, "")
 	}
 	if ready, _ := gate.CheckTransitionReady(); ready {
 		t.Fatal("maintain should NOT be transition-ready without edit (goink.md fingerprint)")
 	}
 
 	// 补做 edit（goink.md 指纹）后才允许推进 done
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ready, next := gate.CheckTransitionReady()
 	if !ready || next != "done" {
 		t.Fatalf("maintain should be transition-ready to done after all 13 requires met in-phase, got ready=%v next=%q", ready, next)
@@ -820,7 +820,7 @@ next: prepare
 	}
 
 	// outline 阶段：未读技能时切换被拦
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, warning := gate.SetPhase("write")
 	if ok {
 		t.Error("should BLOCK: outline auto_skill_injection not met")
@@ -837,7 +837,7 @@ next: prepare
 	}
 
 	// write 阶段：即使前面读过其他技能，本阶段必读未读仍被拦
-	gate.OnToolCall("edit", true)
+	gate.OnToolCall("edit", true, "")
 	ok, warning = gate.SetPhase("done")
 	if ok {
 		t.Error("should BLOCK: write auto_skill_injection not met")
@@ -850,7 +850,7 @@ next: prepare
 		t.Error("should BLOCK: anti-ai-writing still missing")
 	}
 	gate.OnSkillInjected("main-tech-anti-ai-writing")
-	gate.OnToolCall("get_chapter_list", true)
+	gate.OnToolCall("get_chapter_list", true, "")
 	gate.SetWordCountOK(true)
 	ok, _ = gate.SetPhase("done")
 	if !ok {
@@ -1007,11 +1007,123 @@ next: write
 phase: write
 tools: read, auto_skill_injection, edit
 edit_paths: chapters/*
-require: edit
+	require: edit
 auto_skill_injection: main-tech-show-dont-tell
 next: prepare
 -->`
 	if issues := ValidateGateConfig(good, skills); len(issues) != 0 {
 		t.Errorf("expected no issues for good config, got %+v", issues)
 	}
+}
+
+// ── 结果门控测试 ──────────────────────────────────────────
+
+func TestResultGate_ErrorBlocksTransition(t *testing.T) {
+	// 模拟：check_story_consistency 返回 [ERROR]，禁止推进
+	config := `
+<!-- phase-gate-config
+mode: single
+phase: review
+tools: check_story_consistency
+require: check_story_consistency
+next: maintain
+-->
+<!-- phase-gate-config
+mode: single
+phase: maintain
+tools: edit
+require: edit
+next: done
+-->`
+	gate := ParsePhaseGateConfig(config, "single")
+	// 初始阶段是 review（配置中的第一个阶段）
+	if gate.CurrentPhase() != "review" {
+		t.Fatalf("expected initial phase 'review', got '%s'", gate.CurrentPhase())
+	}
+
+	// 调用 check_story_consistency，返回包含 [ERROR] 的结果
+	gate.OnToolCall("check_story_consistency", true, "[ERROR] 死者复出：张三 状态为 dead")
+
+	// 尝试推进到 maintain，应该被拒绝
+	ok, reason := gate.SetPhase("maintain")
+	if ok {
+		t.Error("should block transition when check_story_consistency returns [ERROR]")
+	}
+	if reason == "" {
+		t.Error("expected non-empty reason")
+	}
+	t.Logf("✓ 结果门控正确阻断： %s", reason)
+}
+
+func TestResultGate_WarningAllowsTransition(t *testing.T) {
+	// 模拟：check_story_consistency 返回 [WARNING]，允许推进
+	config := `
+<!-- phase-gate-config
+mode: single
+phase: review
+tools: check_story_consistency
+require: check_story_consistency
+next: maintain
+-->
+<!-- phase-gate-config
+mode: single
+phase: maintain
+tools: edit
+require: edit
+next: done
+-->`
+	gate := ParsePhaseGateConfig(config, "single")
+
+	// 调用 check_story_consistency，返回包含 [WARNING] 的结果
+	gate.OnToolCall("check_story_consistency", true, "[WARNING] 角色出场断档：李四 近30章未出场")
+
+	// 尝试推进到 maintain，应该允许
+	ok, _ := gate.SetPhase("maintain")
+	if !ok {
+		t.Error("should allow transition when check_story_consistency returns only [WARNING]")
+	}
+	t.Logf("✓ [WARNING] 不阻断推进")
+}
+
+func TestResultGate_NoErrorAllowsTransition(t *testing.T) {
+	// 模拟：check_story_consistency 返回通过，允许推进
+	config := `
+<!-- phase-gate-config
+mode: single
+phase: review
+tools: check_story_consistency
+require: check_story_consistency
+next: maintain
+-->
+<!-- phase-gate-config
+mode: single
+phase: maintain
+tools: edit
+require: edit
+next: done
+-->`
+	gate := ParsePhaseGateConfig(config, "single")
+
+	// 调用 check_story_consistency，返回通过
+	gate.OnToolCall("check_story_consistency", true, "✅ 一致性检查通过")
+
+	// 尝试推进到 maintain，应该允许
+	ok, _ := gate.SetPhase("maintain")
+	if !ok {
+		t.Error("should allow transition when check_story_consistency passes")
+	}
+	t.Logf("✓ 检查通过不阻断推进")
+}
+
+func containsStr(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSub(s, substr))
+}
+
+func containsSub(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
