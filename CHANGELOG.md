@@ -8,21 +8,24 @@
 
 ### 新增
 
-- **移动端 Token 弹窗重构**：总成本按模型分类显示（miss×input_price + hit×cache_price + comp×output_price），今日累计列出当天每个会话费用
-- **快捷栏成本显示统一**：使用 per_model 数据计算，与弹窗一致
-- **fmtTokens 格式化函数**：token 数量 >= 100万显示 `x.x m`，>= 1000显示 `x.x k`
-- **桌面端设置分组优化**：基础/移动端连接/AI/显示/Git/WebDAV/维护，分组标题+分隔线
-- **HTTPS 开关说明改进**：开启=HTTPS+认证，关闭=HTTP直连；新增状态文字
-- **delete_record 支持 item_occurrence**：物品出现记录删除
-- **models.dev 模型发现集成**：自动从 models.dev 全球模型数据库补充参数（ContextWindow/MaxOutputTokens/SupportsThinking），支持离线缓存兜底
-- **会话级模型持久化**：打开历史会话时恢复该会话使用的模型
-- **网络接口智能选择**：优先返回 WLAN 192.168.x.x 地址，排除 VPN TUN 适配器
+- **移动端 i18n 全量补全**：80+ 中英双语 key，覆盖 token 弹窗、删除/新建小说、扫描二维码、设置页等
+- **移动端 token 弹窗重构**：累积值显示（cache_hit/cache_miss/acc_completion），标题改为"当前会话分类统计"/"今日统计"，可滚动+分割线
+- **移动端成本显示移到书名栏**：书名左+成本右同行，点击弹出详情
+- **移动端思考模式动态化**：读取模型 reasoning_levels，不再硬编码
+- **后端 reasoning_levels**：mobile 模型列表 API 返回 reasoning_levels 字段
+- **门禁结果门控**：check_story_consistency 返回 [ERROR] 时禁止 set_phase 推进
+- **check_story_consistency 新增 pacing_gap**：连续多章无高密度场景检测，支持题材（xuanhuan/suspense/romance/urban）
+- **check_story_consistency 新增 promise_fulfillment**：卷纲承诺大爽点到期未兑现检测
+- **check_story_consistency 新增 init_consistency**：开书一致性校验（file_db_sync/type_pacing/pref_conflict）
+- **总纲数据库化**：outlines + outline_beats 表，替代 book-outline.md
+- **总纲 MCP 工具**：get_outline/update_outline/create_outline_beat/update_outline_beat/delete_outline_beat
+- **key_events 标签格式规范**：[冲突][对话][伏笔][转折][日常][探索][情感][战斗][成长]
 
 ### 修复
 
-- **output token 显示修正**：使用累计 acc_completion_tokens 而非 last-turn completion_tokens
-- **models.dev 模型 ID 匹配**：支持中转商组织前缀（如 deepseek-ai/DeepSeek-V3）
-- **切换会话状态重置**：stop/session switch/delete/new chat 时重置 loading/retry/streaming 状态
+- **移动端 token 数据口径**：统一使用累积值（prompt_cache_hit_tokens/prompt_cache_miss_tokens/acc_completion_tokens），与桌面端一致
+- **build.ps1 修复**：SelectString 过滤问题 + 构建产物验证
+- **返回格式标准化**：emoji → [ERROR]/[WARNING]
 
 ### 新增
 
