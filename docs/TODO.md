@@ -227,6 +227,8 @@ write 提醒在 5 轮历史出现 5 次（每轮一次，紧跟请求尾部）�
 
 **目标**：将 book-outline.md 迁移到数据库表，支持 init_consistency 检查。
 
+**前置依赖**：无
+
 **数据库设计**：
 ```sql
 -- 总纲表
@@ -256,10 +258,16 @@ CREATE TABLE outline_beats (
 **实施步骤**：
 1. 新建 outlines + outline_beats 表（migrate.go）
 2. 新建 MCP 工具 update_outline / get_outline
-3. 修改 init 阶段：AI 写数据库而不是 book-outline.md
-4. 修改 get_writing_context：返回 outline 数据
-5. 前端：outline 编辑界面（Wails 绑定）
-6. 旧小说迁移脚本（从 book-outline.md 解析导入）
+3. 修改 get_writing_context：返回 outline 数据
+4. 前端：outline 编辑界面（Wails 绑定）
+5. 旧小说迁移脚本（从 book-outline.md 解析导入）
+
+**需要同步修改的 skill**：
+- `main-core-init-phase.md`：
+  - 第0步：从"写 book-outline.md"改为"写 outlines + outline_beats 表"
+  - 一致性校验：去掉第8条（文件vs数据库同步），因为不再有文件
+  - 允许使用的工具：新增 `update_outline` / `get_outline`
+- `main-tech-book-outline.md`：从 Markdown 模板改为数据库字段说明
 
 ### P3. init_consistency 检查
 
