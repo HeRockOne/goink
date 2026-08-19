@@ -107,21 +107,30 @@ function showTokenPrompt() {
   if (overlay) overlay.remove();
   overlay = tpl('tpl-token-prompt').firstElementChild;
   document.body.appendChild(overlay);
-  document.getElementById('tokenInput').focus();
-  document.getElementById('tokenSave').onclick = () => {
-    const val = document.getElementById('tokenInput').value.trim();
+  // 用 overlay 局部查询，避免与 tokenModal 里同名 id（如 tokenMissCount 旧名）冲突
+  const tokenInput = overlay.querySelector('#tokenInput');
+  const tokenSave = overlay.querySelector('#tokenSave');
+  const tokenCancel = overlay.querySelector('#tokenCancel');
+  const tokenScan = overlay.querySelector('#tokenScan');
+  tokenInput.focus();
+  tokenSave.onclick = () => {
+    const val = tokenInput.value.trim();
     if (val) {
       setToken(val);
       overlay.remove();
+      // 保存后验证连接 + 重连 WS（initApp 阶段 connectWS 时无 token，需补建）
+      api('/api/health').then(r => {
+        if (r && r.status === 'ok') { connectWS(); toast('✅ 已连接服务器'); }
+        else toast('⚠️ 令牌已保存，但连接验证失败');
+      }).catch(() => toast('⚠️ 令牌已保存，但无法连接服务器'));
       switchPage(state.page);
-      toast('令牌已保存');
     }
   };
-  document.getElementById('tokenCancel').onclick = () => { overlay.remove(); };
-  document.getElementById('tokenInput').onkeydown = (e) => {
-    if (e.key === 'Enter') document.getElementById('tokenSave').click();
+  tokenCancel.onclick = () => { overlay.remove(); };
+  tokenInput.onkeydown = (e) => {
+    if (e.key === 'Enter') tokenSave.click();
   };
-  document.getElementById('tokenScan').onclick = () => { startQRScan(); };
+  tokenScan.onclick = () => { startQRScan(); };
 }
 
 // QR 码扫描
@@ -477,14 +486,21 @@ function fallbackCopy(t) {
 }
 
 // ── 状态栏更新 ──
+// 门禁阶段状态变化时刷新快捷栏（WS/SSE phase_gate 事件调用）
+function updatePhaseStatus() { updateQuickBar(); }
+
 // ── 快捷操作栏更新 ──
 function updateQuickBar() {
-  // 门禁开关状态
+  // 门禁开关状态：启用且有当前阶段时显示阶段名，否则显示开关状态
   const gateBtn = document.getElementById('quickGate');
   const gateLabel = document.getElementById('quickGateLabel');
   if (gateBtn && gateLabel) {
     gateBtn.className = `quick-btn ${state.phaseGateEnabled ? 'active' : ''}`;
-    gateLabel.textContent = state.phaseGateEnabled ? t('phase_gate_on') : t('phase_gate_off');
+    if (state.phaseGateEnabled && state.currentPhase) {
+      gateLabel.textContent = t('phase_' + state.currentPhase) || state.currentPhase;
+    } else {
+      gateLabel.textContent = state.phaseGateEnabled ? t('phase_gate_on') : t('phase_gate_off');
+    }
   }
   // 思考深度 - 动态读取当前模型的 reasoning_levels
   const thinkingBtn = document.getElementById('quickThinking');
@@ -582,7 +598,7 @@ function updateTokenModal() {
   const cacheMiss = usage.prompt_cache_miss_tokens || 0;
   const output = usage.acc_completion_tokens || usage.completion_tokens || 0;
   
-  document.getElementById('tokenInput').textContent = fmtTokens(cacheMiss);
+  document.getElementById('tokenMissCount').textContent = fmtTokens(cacheMiss);
   document.getElementById('tokenOutput').textContent = fmtTokens(output);
   document.getElementById('tokenCache').textContent = fmtTokens(cacheHit);
   document.getElementById('tokenTotal').textContent = fmtTokens(cacheHit + cacheMiss + output);
