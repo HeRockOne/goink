@@ -26,7 +26,7 @@
 Goink 的核心是一套**五阶段门禁管线**，规范 AI 从准备到维护的完整创作流程：
 
 ```
-prepare → outline → write → review → maintain → 回到 prepare
+prepare → outline → write → review → maintain → done
 ```
 
 - **prepare**：`get_writing_context` 一次获取全量上下文（角色/弧线/伏笔/读者认知/场景/物品/统计）

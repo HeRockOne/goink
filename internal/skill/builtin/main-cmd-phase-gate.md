@@ -21,13 +21,13 @@ Goink 的创作流程强制执行系统。AI 必须按 prepare → outline → w
 - 跨 turn 持久化：当前阶段和已调用工具记录存在 sessions 表，断点续作自动恢复
 - 两种模式：单章（single）和批量（batch，支持 outline⇄write 多章循环）
 - 回退修正：单轮内可回退到本轮已访问过的阶段（如 write 发现大纲问题回 outline 修改）
-- 循环重置：回到 prepare 后访问记录重置，第二轮不能利用上一轮历史任意跳转
+- done 终点：走完一轮（maintain→done）后系统停下，新一轮由用户重新发起，不能利用上一轮历史任意跳转
 
 ## 阶段流程
 
 ```
-单章：prepare → outline → write → review → maintain → prepare
-批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → prepare
+单章：init → prepare → outline → write → review → maintain → done
+批量：init → prepare → outline（一次出 N 章大纲）→ write（循环 N 章，每章动笔前 read 本章大纲，每章写后迷你维护）→ review → maintain → done
 ```
 
 > 批量模式 `[outline ⇄ write × N 章]` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
@@ -85,7 +85,7 @@ next: outline
 
 ## 配置设计指南（怎么配一套门禁）
 
-### 工具分阶段分配（60 个工具按角色分组）
+### 工具分阶段分配（69 个工具按角色分组）
 
 | 工具角色 | 工具名 | 放哪些阶段 |
 |---------|--------|-----------|

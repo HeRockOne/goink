@@ -21,7 +21,7 @@
 - 主动推进：require 满足后**必须主动调 set_phase 切换阶段**，系统不自动推进
 - 跨 turn 持久化：工具调用记录保存在 session 中
 - 两种模式：单章（single）和批量（batch）
-- 单轮内可回退修正，走完一轮完整流程（回到 prepare）后重置访问记录，防止第二轮任意跳转
+- 单轮内可回退修正，走完一轮完整流程到 done 后停止，新一轮由用户重新发起，不能利用上一轮的访问历史任意跳转
 
 ## 设计哲学
 
@@ -33,7 +33,7 @@
 
 **回退修正**：单轮创作内，LLM 可回退到本轮已访问过的阶段（如 write 阶段发现大纲问题，回 outline 修改）。
 
-**循环重置**：完成一轮完整流程（single 或 batch 的 maintain→prepare）后，访问记录重置——第二轮创作不能利用上一轮的访问历史任意跳转。
+**循环重置**：done 是流程终点——maintain 完成 set_phase("done") 后系统停下，不再自动推进；新一轮创作由用户重新发起（新会话从首个阶段开始），不利用上一轮的访问历史任意跳转。
 
 **字数校验（write 阶段转出）**：`set_phase("review")` 前强制检查：
 - 必须调用过 `get_chapter_list`（其返回的 `word_count_ok` 写入门禁状态），未检查则阻塞
@@ -52,17 +52,17 @@
 outline → 写大纲（require: edit）→ set_phase("write")
 write → 写正文（require: edit + get_chapter_list）→ 字数校验 → set_phase("review")
 review → 审读（require: run_subagent）→ set_phase("maintain")
-maintain → 状态维护（require: 13 项清单）→ set_phase("prepare")
-  ↓ 回到 prepare（访问记录重置，开始新一轮）
+maintain → 状态维护（require: 13 项清单）→ set_phase("done")
+  ↓ done 是终点：创作完成，系统停下。新一轮由用户重新发起
 ```
 
 ### 批量模式（mode: batch）
 
 ```
-init → prepare → outline（一次出 N 章大纲）→ [write → 迷你维护] × N 章 → review → maintain → prepare
+init → prepare → outline（一次出 N 章大纲）→ [write → 迷你维护] × N 章 → review → maintain → done
 ```
 
-与单章差异：outline 一次产出全部 N 章大纲；write 循环 N 章正文，每章写后紧跟迷你维护（只写不查，6 个状态写入工具，状态实时结算）；review / maintain 整批统一一次；整批末尾 maintain 收尾后回 prepare（访问记录重置，开始下一批）。
+与单章差异：outline 一次产出全部 N 章大纲；write 循环 N 章正文，每章写后紧跟迷你维护（只写不查，6 个状态写入工具，状态实时结算）；review / maintain 整批统一一次；整批末尾 maintain 收尾后 set_phase("done") 结束本轮创作。
 
 ## 工具白名单
 
@@ -133,10 +133,10 @@ next: outline
 阶段 = 创作流程的步骤。默认六阶段流程，一般不需要增删：
 
 ```
-init（开书）→ prepare（全量状态）→ outline（大纲）→ write（正文）→ review（审稿）→ maintain（维护）
+init（开书）→ prepare（全量状态）→ outline（大纲）→ write（正文）→ review（审稿）→ maintain（维护）→ done（终点）
 ```
 
-每阶段一个配置块；**第一个阶段是流程起点**（新会话从它开始），最后一个阶段的 next 指回第一个阶段（闭环）。
+每阶段一个配置块；**第一个阶段是流程起点**（新会话从它开始），最后一个阶段 maintain 的 next 指向 done（终点，流程走完停止，不再循环回起点）。
 
 ### 第二步：定每阶段的 tools（放什么工具）
 
@@ -222,7 +222,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | 工具被拦截 | 当前阶段不允许该工具 | 完成当前阶段 require 后，主动调 `set_phase` 切换到目标阶段 |
 | 阶段不推进 | require 未满足，或未调 set_phase | 先调用 require 列表中的工具，再主动 `set_phase` 切换 |
 | 切换被拒 | 目标阶段不在 next 链，也不在本轮 visited | 只能推进到 next 或回退到本轮已访问过的阶段 |
-| 第二轮可任意跳转（旧 bug） | visited 永久累积 | 已修复：回到 prepare 时重置访问记录 |
+| 完成后不停想再创作（旧 bug） | visited 永久累积，可任意跳转 | 已修复：流程到 done 终点即停止，新一轮由用户重新发起；done 阶段仅白名单只读工具 |
 | 批量模式不循环 | write 阶段没有 `loop: true` | 默认配置已带；自定义配置需在 batch 的 write 阶段加 `loop: true` |
 | 门禁未激活 | phase_gate_config 为空 | 出厂首次启动自动 seed 默认配置（single + batch）；已配置过则不会被覆盖 |
 

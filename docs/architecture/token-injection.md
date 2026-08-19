@@ -51,7 +51,7 @@ go run ./tokencount
 | Skill catalog | 525 | 3.1% | 8 auto skill（仅 `skills/` 目录新增，不含内置 38 auto） |
 | **合计** | **16,935** | 100% | + 内置 catalog ~1,152 = 实际总注入 ~18,087 |
 
-> 以上为 2026-08-01 实测快照；工具数已从 57 增至 59（新增 get_entity_appearances、check_story_consistency），实际注入略高于快照值。
+> 以上为 2026-08-01 实测快照；工具数已从 57 增至 59（新增 get_entity_appearances、check_story_consistency），实际注入略高于快照值。2026-08 后续新增 outline/volume 工具（get_outline/update_outline/create_outline_beat/update_outline_beat/delete_outline_beat/get_volumes/create_volume/update_volume/delete_volume/delete_item），现共 69 个工具，注入量相应更高。
 
 ---
 

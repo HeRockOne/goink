@@ -206,6 +206,7 @@ func (a *Agent) buildSubagentSkills(novelID int64) string {
 //   - 全文已在上下文（同 session 未压缩）→ 注入短提醒（技能名+要点，~百 token）：
 //     全文在历史靠前位置，注意力随上下文增长衰减（1M 窗口时技能可能被挤到头部）；
 //     短提醒紧跟本轮请求尾部（注意力最强位置），每轮进入阶段唤起模型遵循技能。
+//
 // 压缩重建历史后技能消息被清掉，后续 set_phase 时历史中无该内容，自动恢复注入全文。
 // pg 由调用方传入（Run 局部门禁实例，并发会话互不污染）。
 // runningTokens 必传非 nil：内部 appendMsg 需要 token 计数——旧实现传 nil 导致
@@ -518,7 +519,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			select {
 			case <-ctx.Done():
 				interrupted = true
-					a.flushInterruptedTools(stream, &opts, &toolOutputs, pg)
+				a.flushInterruptedTools(stream, &opts, &toolOutputs, pg)
 				break streamLoop
 
 			case event, ok := <-stream:
@@ -597,9 +598,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							// 必须在调用前记录 from，否则真切换判断恒假 → 阶段技能永不注入
 							from := pg.CurrentPhase()
 							ok, warning := pg.SetPhase(targetPhase)
-						// 记录调用（仅成功时；失败时 require 未满足不算有效调用）
-						if ok {
-							pg.OnToolCall("set_phase", true, "")
+							// 记录调用（仅成功时；失败时 require 未满足不算有效调用）
+							if ok {
+								pg.OnToolCall("set_phase", true, "")
 							}
 							if ok {
 								// 成功：自动注入新阶段必读技能。
@@ -634,9 +635,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 必读技能并重试一次——全自动模式零卡顿，不再让 LLM 手动调
 								// auto_skill_injection（旧行为：LLM 手动读技能 → 多一轮试错）。
 								if strings.Contains(warning, "auto_skill_injection") {
-								a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
-								if ok2, _ := pg.SetPhase(targetPhase); ok2 {
-									pg.OnToolCall("set_phase", true, "")
+									a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
+									if ok2, _ := pg.SetPhase(targetPhase); ok2 {
+										pg.OnToolCall("set_phase", true, "")
 										if from != targetPhase {
 											a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 										}
@@ -793,8 +794,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if result.Success {
 							delete(blockCount, pg.CurrentPhase()+":"+name)
 						}
-// auto_skill_injection 成功：上报本次读取的技能名（auto_skill_injection 检查用）
-					if name == "auto_skill_injection" && result.Success && result.Data != nil {
+						// auto_skill_injection 成功：上报本次读取的技能名（auto_skill_injection 检查用）
+						if name == "auto_skill_injection" && result.Success && result.Data != nil {
 							if skills, ok := result.Data["skills"].([]string); ok {
 								for _, s := range skills {
 									pg.OnSkillInjected(s)

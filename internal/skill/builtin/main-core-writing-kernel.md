@@ -15,8 +15,10 @@ mode: always
 
 ## 流程
 
-单章：prepare → outline → write → review → maintain → prepare
-批量：prepare → outline（一次出 N 章大纲）→ write（显式循环 N 章：每章动笔前 read 本章大纲，每章结束 set_phase("write") 声明章边界，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → prepare
+单章：init → prepare → outline → write → review → maintain → done
+批量：init → prepare → outline（一次出 N 章大纲）→ write（显式循环 N 章：每章动笔前 read 本章大纲，每章结束 set_phase("write") 声明章边界，每章写后迷你维护，每 3 章轻量自检）→ review（批末审稿覆盖全批）→ maintain → done
+
+> **done 是流程终点**：maintain 完成后 set_phase("done")，本轮创作结束，系统停下不再自动推进，等待用户发起新一轮（新会话重新从 init/prepare 开始）。不要自行循环回 prepare 开启无限创作。
 
 > 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
 > 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
@@ -181,7 +183,7 @@ mode: always
 | 12 | **回收/校准伏笔** | 查询 B 发现有要回收/校准的时 | update_timeline_entry：回收（status=resolved + resolved_chapter_id）；校准（title/content/target_chapter 与当前剧情不符时修正——禁止过时伏笔静默存在，僵尸数据会误导后续章节） |
 | 13 | **更新读者认知（含去重）** | 查询 D 发现有悬念变化时 | create_reader_perspective_entry / update_reader_perspective_entry（create 前先核对已有条目，同一事实不同角度优先 update 不新建，杜绝冗余条目） |
 | 14 | **记录章节指纹** | 每章必做 | edit(goink.md, change_type=append)（追加本章指纹，格式见 anti-repetition skill：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行。必须用 append 模式，禁止 full_replace；goink.md 不做其他用途，状态/悬念/设定一律写 DB） |
-| 15 | **阶段切换** | 全部完成后 | set_phase("prepare") |
+| 15 | **阶段切换** | 全部完成后 | set_phase("done")——本轮创作结束，系统停下等待用户发起新一轮 |
 
 ## 关键实体判定标准（补录门槛，防止设定库污染）
 

@@ -39,7 +39,7 @@ goink-master/
 │   ├── location/           # 地点 + 空间关系 Store
 │   ├── logger/             # 日志
 │   ├── lore/               # 世界观设定 Store
-│   ├── mcp_tools/          # 所有 MCP 工具定义（60 个）
+│   ├── mcp_tools/          # 所有 MCP 工具定义（69 个）
 │   ├── migrate/            # 数据库自动迁移（25 张表）
 │   ├── novel/              # 小说索引 + 创作偏好 Store
 │   ├── pattern/            # 写作模式（POV/节奏等）
@@ -130,7 +130,7 @@ reader_perspectives.novel_id → novels.id
 writing_snapshots.novel_id → novels.id (primaryKey)
 ```
 
-## 4. MCP 工具清单（60 个）
+## 4. MCP 工具清单（69 个）
 
 ### 按模块分组
 
@@ -275,7 +275,7 @@ volume_entities:   {characters[], items[], lore[], foreshadow[]}  // ID+name 列
 prepare(get_writing_context) → outline(edit outlines/)
 → write(edit chapters/) → review(run_subagent)
 → maintain(update_*/create_* + update_chapter_meta + update_writing_snapshot + search_lore + search_items + set_phase)
-→ 回到 prepare → 读到 maintain 回写的最新数据
+→ done（本轮结束，用户重发消息再开新一轮）
 ```
 
 ### 门禁配置
