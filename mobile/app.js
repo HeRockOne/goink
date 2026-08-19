@@ -1061,12 +1061,8 @@ function handleChatEvent(ev) {
       break;
 
     case 'tool_call':
-      // 工具调用提示
-      if (wsStreamEl && ev.tool_name) {
-        const toolHint = `\n\n🔧 ${ev.tool_name}...`;
-        wsContent += toolHint;
-        scheduleStreamingRender(wsStreamEl, wsContent, wsThinking);
-      }
+      // 工具调用渲染为独立卡片，不混入正文
+      if (wsStreamEl && ev.tool_name) appendToolBadge(wsStreamEl, ev);
       break;
 
     case 'phase_gate':
@@ -1821,6 +1817,39 @@ function addMessage(role, content, thinking, isStreaming) {
   return div;
 }
 
+// 工具调用独立卡片（不混入正文）：在 msg-body 内 bubble 下方、thinking 上方
+function appendToolBadge(el, ev) {
+  if (!el || !ev.tool_name) return;
+  let container = el.querySelector('.tool-calls');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'tool-calls';
+    const body = el.querySelector('.msg-body');
+    const thinking = body.querySelector('.thinking-toggle');
+    if (thinking) body.insertBefore(container, thinking);
+    else body.appendChild(container);
+  }
+  const tid = ev.tool_id || ev.tool_name;
+  let badge = container.querySelector(`[data-tid="${CSS.escape(tid)}"]`);
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'tool-badge-item tool-run';
+    badge.dataset.tid = tid;
+    const icon = document.createElement('span'); icon.className = 'tool-badge-icon'; icon.textContent = '🔧';
+    const name = document.createElement('span'); name.className = 'tool-badge-name';
+    name.textContent = ev.display_text || ev.tool_name;
+    const status = document.createElement('span'); status.className = 'tool-badge-status'; status.textContent = '…';
+    badge.appendChild(icon); badge.appendChild(name); badge.appendChild(status);
+    container.appendChild(badge);
+  }
+  const status = badge.querySelector('.tool-badge-status');
+  if (ev.phase === 'completed' || ev.success === true) { badge.className = 'tool-badge-item tool-done'; status.textContent = '✓'; }
+  else if (ev.phase === 'failed' || ev.success === false) { badge.className = 'tool-badge-item tool-fail'; status.textContent = '✗'; }
+  else { badge.className = 'tool-badge-item tool-run'; status.textContent = '…'; }
+  const scroll = el.closest('.chat-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+
 // 流式渲染节流：60ms 合并多次增量事件，避免每 token 全量 marked 重渲染卡顿
 let pendingStream = null, streamTimer = null;
 function cancelPendingStream() {
@@ -1898,7 +1927,7 @@ async function sendMessage(text) {
             case 'thinking': thinking += ev.data||''; scheduleStreamingRender(currentStreamEl, content||'思考中...', thinking); break;
             case 'content': content += ev.data||''; scheduleStreamingRender(currentStreamEl, content, thinking); break;
             case 'tool_call':
-              if (currentStreamEl && ev.tool_name) { content += `\n\n🔧 ${ev.tool_name}...`; scheduleStreamingRender(currentStreamEl, content, thinking); }
+              if (currentStreamEl && ev.tool_name) appendToolBadge(currentStreamEl, ev);
               break;
             case 'phase_gate':
               if (ev.phase_gate && ev.phase_gate.phase) {

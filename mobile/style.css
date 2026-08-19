@@ -467,6 +467,22 @@ body::before, body::after, #appMain::before { display: none; }
   border: 1px solid var(--border-strong);
 }
 .tool-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--oak); animation: pulse 1.5s infinite; }
+
+/* 工具调用卡片（独立于正文气泡） */
+.tool-calls { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
+.tool-badge-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text2);
+  background: var(--surface2); border-radius: var(--radius-sm);
+  padding: 4px 8px; border: 1px solid var(--border);
+}
+.tool-badge-icon { opacity: 0.7; flex-shrink: 0; }
+.tool-badge-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-badge-status { font-weight: 600; min-width: 14px; text-align: center; flex-shrink: 0; }
+.tool-badge-item.tool-run .tool-badge-status { color: var(--oak); }
+.tool-badge-item.tool-run .tool-badge-icon { animation: pulse 1.5s infinite; }
+.tool-badge-item.tool-done .tool-badge-status { color: var(--ice); }
+.tool-badge-item.tool-fail .tool-badge-status { color: #c44a4a; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 .loading-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
