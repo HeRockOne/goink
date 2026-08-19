@@ -28,4 +28,5 @@ func RegisterAllTools(r *Registry) {
 	RegisterChapterMetaTool(r)
 	RegisterAutoSkillInjectionTool(r)
 	RegisterOutlineTools(r)
+	RegisterVolumeTools(r)
 }

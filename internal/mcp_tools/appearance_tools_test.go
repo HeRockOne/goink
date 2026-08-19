@@ -410,13 +410,13 @@ func TestInitConsistency_FileDBSync(t *testing.T) {
 	}
 
 	content := result.Data["content"].(string)
-	t.Logf("=== init_consistency file_db_sync 测试 ===")
+	t.Logf("=== init_consistency volume_beat_sync 测试 ===")
 	t.Logf("outline_beats: 第5章, 第10章")
 	t.Logf("detail_json: 第5章, 第10章, 第15章")
 	t.Logf("结果：%s", content)
 
-	if !contains(content, "[ERROR] file_db_sync") {
-		t.Error("应该触发 file_db_sync 错误")
+	if !contains(content, "[ERROR] volume_beat_sync") {
+		t.Error("应该触发 volume_beat_sync 错误")
 	}
 	if !contains(content, "第15章") {
 		t.Error("应该提到第15章")

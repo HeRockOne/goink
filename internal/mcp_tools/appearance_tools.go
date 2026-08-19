@@ -19,6 +19,7 @@ import (
 	"novel/internal/scene"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/volume"
 )
 
 // ── get_entity_appearances ─────────────────────────────
@@ -636,16 +637,25 @@ func getActionTags(genre string) []string {
 func findPromiseUnfulfilled(ctx context.Context, db *gorm.DB, novelID int64, currentChapter, tolerance int) []string {
 	var results []string
 
-	// 查询当前活跃的 volume 弧线
-	var vol storyarc.StoryArc
-	err := db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND status = 'active' AND start_chapter <= ? AND end_chapter >= ?",
-		novelID, currentChapter, currentChapter).First(&vol).Error
-	if err != nil {
-		return nil // 没有活跃 volume，跳过
+	// 查询当前活跃的卷（从 volumes 表）
+	volStore := volume.NewStore(db)
+	vols, err := volStore.ListByNovel(ctx, novelID)
+	if err != nil || len(vols) == 0 {
+		return nil
+	}
+	var currentVol *volume.Volume
+	for i := range vols {
+		if vols[i].StartChapter <= currentChapter && vols[i].EndChapter >= currentChapter {
+			currentVol = &vols[i]
+			break
+		}
+	}
+	if currentVol == nil {
+		return nil
 	}
 
 	// 解析 detail_json
-	if vol.DetailJSON == "" {
+	if currentVol.DetailJSON == "" {
 		return nil
 	}
 	var detail struct {
@@ -654,7 +664,7 @@ func findPromiseUnfulfilled(ctx context.Context, db *gorm.DB, novelID int64, cur
 			Desc    string `json:"desc"`
 		} `json:"big_shuangdian"`
 	}
-	if err := json.Unmarshal([]byte(vol.DetailJSON), &detail); err != nil {
+	if err := json.Unmarshal([]byte(currentVol.DetailJSON), &detail); err != nil {
 		return nil
 	}
 
@@ -667,10 +677,12 @@ func findPromiseUnfulfilled(ctx context.Context, db *gorm.DB, novelID int64, cur
 			continue
 		}
 
-		// 检查是否有对应的 completed arc_node
+		// 检查是否有对应的 completed arc_node（查 story_arcs 中同名卷的 arc_id）
+		var arc storyarc.StoryArc
 		var node storyarc.ArcNode
+		db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND name = ?", novelID, currentVol.Name).First(&arc)
 		err := db.WithContext(ctx).Where("story_arc_id = ? AND status = 'completed' AND actual_chapter >= ? AND actual_chapter <= ?",
-			vol.ID, p.Chapter, currentChapter).First(&node).Error
+			arc.ID, p.Chapter, currentChapter).First(&node).Error
 		if err == nil {
 			continue // 已兑现
 		}
@@ -708,26 +720,31 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 		return nil // 没有大爽点，跳过检查
 	}
 
-	// 获取卷弧线的 detail_json.big_shuangdian
-	var vol storyarc.StoryArc
-	err := db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).First(&vol).Error
-	if err == nil && vol.DetailJSON != "" {
-		var detail struct {
-			BigShuangdian []struct {
-				Chapter int    `json:"chapter"`
-				Desc    string `json:"desc"`
-			} `json:"big_shuangdian"`
-		}
-		if err := json.Unmarshal([]byte(vol.DetailJSON), &detail); err == nil {
-			// file_db_sync: outline_beats vs detail_json.big_shuangdian
-			if len(detail.BigShuangdian) > 0 {
-				dbChapters := make(map[int]bool)
-				for _, b := range beats {
-					dbChapters[b.Chapter] = true
-				}
-				for _, db := range detail.BigShuangdian {
-					if !dbChapters[db.Chapter] {
-						results = append(results, fmt.Sprintf("[ERROR] file_db_sync：卷纲第%d章「%s」在 outline_beats 中不存在", db.Chapter, db.Desc))
+	// 获取卷的 detail_json.big_shuangdian（从 volumes 表）
+	volStore := volume.NewStore(db)
+	vols, err := volStore.ListByNovel(ctx, novelID)
+	if err == nil && len(vols) > 0 {
+		for _, v := range vols {
+			if v.DetailJSON == "" {
+				continue
+			}
+			var detail struct {
+				BigShuangdian []struct {
+					Chapter int    `json:"chapter"`
+					Desc    string `json:"desc"`
+				} `json:"big_shuangdian"`
+			}
+			if err := json.Unmarshal([]byte(v.DetailJSON), &detail); err == nil {
+				// volume_beat_sync: outline_beats vs detail_json.big_shuangdian
+				if len(detail.BigShuangdian) > 0 {
+					dbChapters := make(map[int]bool)
+					for _, b := range beats {
+						dbChapters[b.Chapter] = true
+					}
+					for _, db := range detail.BigShuangdian {
+						if !dbChapters[db.Chapter] {
+							results = append(results, fmt.Sprintf("[ERROR] volume_beat_sync：卷纲第%d章「%s」在 outline_beats 中不存在", db.Chapter, db.Desc))
+						}
 					}
 				}
 			}
@@ -800,18 +817,42 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 
 	// means_power: 主角力量等级 vs 手段类型（需要人工确认，标记为 WARNING）
 	if len(beats) > 0 {
-		// 检查主角是否存在
+		// 检查主角是否存在（优先读 personality.role，次选 description 关键词）
 		var chars []character.Character
 		db.WithContext(ctx).Where("novel_id = ? AND status = 'alive'", novelID).Find(&chars)
 		protagonistFound := false
 		for _, c := range chars {
+			// 优先：personality JSON 中 role="主角"
+			if c.Personality != "" {
+				var p map[string]any
+				if err := json.Unmarshal([]byte(c.Personality), &p); err == nil {
+					if role, ok := p["role"].(string); ok && (strings.Contains(role, "主角") || strings.Contains(role, "protagonist")) {
+						protagonistFound = true
+						break
+					}
+				}
+			}
+			// 次选：description 关键词
 			if strings.Contains(c.Description, "主角") || strings.Contains(c.Description, "protagonist") {
 				protagonistFound = true
 				break
 			}
 		}
 		if !protagonistFound && len(chars) > 0 {
-			results = append(results, "[INFO] means_power：未找到明确的主角标记（description 含'主角'），请确认主角设定")
+			results = append(results, "[INFO] means_power：未找到明确的主角标记（personality.role 或 description 含'主角'），请确认主角设定")
+		}
+	}
+
+	// suspected_dead：角色 description 含死亡措辞但 status 非 dead（疑似死亡未标记）
+	deathKeywords := []string{"焚毁", "灰烬", "毙命", "尸体", "死亡", "死去", "阵亡", "陨落", "消亡", "身死", "魂飞魄散", "形神俱灭"}
+	var aliveChars []character.Character
+	db.WithContext(ctx).Where("novel_id = ? AND status != 'dead'", novelID).Find(&aliveChars)
+	for _, c := range aliveChars {
+		for _, kw := range deathKeywords {
+			if strings.Contains(c.Description, kw) {
+				results = append(results, fmt.Sprintf("[WARNING] suspected_dead：角色「%s」description 含死亡措辞「%s」但 status=%s，建议确认是否标记为 dead", c.Name, kw, c.Status))
+				break
+			}
 		}
 	}
 

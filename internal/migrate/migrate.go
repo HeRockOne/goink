@@ -22,6 +22,7 @@ import (
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/volume"
 	"novel/internal/style"
 	"novel/internal/writing"
 )
@@ -66,6 +67,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&itemoccurrence.ItemOccurrence{},
 		&outline.Outline{},
 		&outline.OutlineBeat{},
+		&volume.Volume{},
 	}
 
 	for _, m := range models {
@@ -74,6 +76,47 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		}
 	}
 
+	// 数据迁移：从 story_arcs WHERE arc_type='volume' 迁移到 volumes 表
+	migrateVolumeData(db, log)
+
 	log.Info("数据库迁移完成", "tables", len(models))
 	return nil
+}
+
+// migrateVolumeData 将 story_arcs 中 arc_type='volume' 的数据迁移到 volumes 表。
+// 幂等：如果 volumes 表已有数据则跳过。
+func migrateVolumeData(db *gorm.DB, log *slog.Logger) {
+	// 检查 volumes 表是否已有数据
+	var count int64
+	db.Model(&volume.Volume{}).Count(&count)
+	if count > 0 {
+		return // 已迁移，跳过
+	}
+
+	// 检查 story_arcs 中是否有 volume 类型数据
+	var arcs []storyarc.StoryArc
+	if err := db.Where("arc_type = 'volume'").Find(&arcs).Error; err != nil {
+		log.Warn("迁移卷数据：查询 story_arcs 失败", "err", err)
+		return
+	}
+	if len(arcs) == 0 {
+		return
+	}
+
+	// 迁移数据
+	for i, arc := range arcs {
+		v := volume.Volume{
+			NovelID:      arc.NovelID,
+			Name:         arc.Name,
+			Description:  arc.Description,
+			StartChapter: arc.StartChapter,
+			EndChapter:   arc.EndChapter,
+			DetailJSON:   arc.DetailJSON,
+			SortOrder:    i + 1,
+		}
+		if err := db.Create(&v).Error; err != nil {
+			log.Warn("迁移卷数据：创建 volume 失败", "name", arc.Name, "err", err)
+		}
+	}
+	log.Info("迁移卷数据完成", "count", len(arcs))
 }

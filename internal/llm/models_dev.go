@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,7 +172,7 @@ func (c *ModelsDevClient) loadFromDisk() bool {
 }
 
 func (c *ModelsDevClient) fetchFromNetwork() {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := newHTTPClient(30 * time.Second)
 	resp, err := client.Get(modelsDevURL)
 	if err != nil {
 		fmt.Printf("[models.dev] 获取模型数据失败: %v\n", err)

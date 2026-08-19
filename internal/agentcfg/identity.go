@@ -26,7 +26,7 @@ var mainAgentTools = []string{
 	"get_reader_perspective", "create_reader_perspective_entry", "update_reader_perspective_entry",
 	"get_preferences", "create_preference", "update_preference",
 	"get_lore", "create_lore", "update_lore", "delete_lore", "search_lore",
-	"get_items", "create_item", "update_item", "delete_item", "search_items",
+	"get_items", "create_item", "update_item", "search_items",
 	"get_item_occurrences", "create_item_occurrence",
 	"get_scenes", "create_scene", "update_scene", "delete_scene",
 	"get_stats",
@@ -47,6 +47,7 @@ var mainAgentTools = []string{
 	"get_entity_appearances",
 	"check_story_consistency", // review 阶段一致性核对（门禁 review 白名单与 kernel skill 均要求，主会话直接可调）
 	"get_outline", "update_outline", "create_outline_beat", "update_outline_beat", "delete_outline_beat", // 总纲数据库操作（init 阶段核心工具）
+	"get_volumes", "create_volume", "update_volume", "delete_volume", // 卷纲数据库操作
 }
 
 var reviewAgentTools = []string{
@@ -137,8 +138,8 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - **角色行为红线（OOC 禁止）**——角色的一切言行、能力、状态必须不超出数据库中其 personality/abilities/status 所定义的边界（工具数据是唯一真相）。禁止让已死亡（status=dead）角色出场、说话或行动；角色能力不得越级使用（任何突破/觉醒/退化必须先在剧情中交代并通过 update_character 记录）；称呼、外貌、年龄修为不得前后矛盾。违反即视为创作事故，必须修正。
 - **学会拒绝模糊需求**——用户随口一提的想法不等于命令，区分讨论和创作。不确定的假设先确认再行动。
 - **auto 审批模式全自动**——审批模式为 auto 时，创作流程全程自主推进，**不要停下来征求用户确认或让用户做选择**（章节标题、创作方向、细节取舍一律自主拍板，包括各技能中"让用户选标题/选方向"的交互指令——auto 模式下由你直接决定）。只有真正缺失且无法推断的信息（用户从未给过的核心设定）才提问。此条优先级高于其他"先确认/提供选项"类指令。
-- **长篇必须建卷**——创建卷（arc_type=volume）时必须填 start_chapter 和 end_chapter（章节范围）。卷是章节的物理分卷，prepare 阶段 get_writing_context 会返回本卷涉及的实体（角色/物品/设定/伏笔），据此保持本卷内设定一致。
-- **每卷结束时写卷摘要**——用 update_story_arc 将摘要写入 detail_json.volume_summary，格式：{"volume_summary":"50-120字概括"}。跨卷一致性依赖此摘要，第 20 卷的 AI 通过 get_writing_context 看到当前卷 detail_json，前卷摘要按需用 get_story_arcs 查看。
+- **长篇必须建卷**——用 create_volume 创建卷时必须填 start_chapter 和 end_chapter（章节范围）。卷是章节的物理分卷（独立于叙事弧线），prepare 阶段 get_writing_context 会返回本卷涉及的实体（角色/物品/设定/伏笔），据此保持本卷内设定一致。
+- **每卷结束时写卷摘要**——用 update_volume 将摘要写入 detail_json.volume_summary，格式：{"volume_summary":"50-120字概括"}。跨卷一致性依赖此摘要，第 20 卷的 AI 通过 get_writing_context 看到当前卷 detail_json，前卷摘要按需用 get_volumes 查看。
 
 【创作流程】
 

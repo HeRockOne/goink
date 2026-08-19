@@ -21,6 +21,7 @@ import (
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/volume"
 	"novel/internal/writing"
 )
 
@@ -100,24 +101,30 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 
 	// ── 2. 本章场景 → 角色 → 地点 → 弧线节点 ──
 	sceneStore := scene.NewStore(db, log)
-	// 先查当前卷，用于筛选规划场景
+	// 先查当前卷（从 volumes 表），用于筛选规划场景
 	var plannedArcID int64
-	var vol storyarc.StoryArc
-	if err := db.WithContext(ctx).
-		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", nid).
-		Order("importance DESC").
-		First(&vol).Error; err == nil {
-		plannedArcID = vol.ID
-		result["volume"] = map[string]any{
-			"name":          vol.Name,
-			"description":   vol.Description,
-			"detail_json":   vol.DetailJSON,
-			"start_chapter": vol.StartChapter,
-			"end_chapter":   vol.EndChapter,
-		}
-		// 卷级聚合：查卷范围内实体（ID 列表，省 token）
-		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
-			result["volume_entities"] = buildVolumeEntitiesData(ctx, db, nid, vol)
+	volStore := volume.NewStore(db)
+	if vols, err := volStore.ListByNovel(ctx, nid); err == nil {
+		for _, v := range vols {
+			if v.StartChapter > 0 && v.EndChapter >= v.StartChapter && curCh.ChapterNumber >= v.StartChapter && curCh.ChapterNumber <= v.EndChapter {
+				result["volume"] = map[string]any{
+					"name":          v.Name,
+					"description":   v.Description,
+					"detail_json":   v.DetailJSON,
+					"start_chapter": v.StartChapter,
+					"end_chapter":   v.EndChapter,
+				}
+				// 查对应 story arc（兼容旧数据：场景仍通过 arc_id 关联）
+				var arc storyarc.StoryArc
+				if err := db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND name = ?", nid, v.Name).First(&arc).Error; err == nil {
+					plannedArcID = arc.ID
+				}
+				// 卷级聚合：查卷范围内实体
+				if v.StartChapter > 0 && v.EndChapter >= v.StartChapter {
+					result["volume_entities"] = buildVolumeEntitiesData(ctx, db, nid, v)
+				}
+				break
+			}
 		}
 	}
 	var scenes []scene.Scene
@@ -372,9 +379,12 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		"volume_end":      0,
 		"rule":            "只展开当前卷（volume_start~volume_end）范围内的情节；后续卷设定不得提前使用；所有章节事件必须服务于 outline 的核心矛盾与结局方向。",
 	}
-	if vol.StartChapter > 0 {
-		progress["volume_start"] = vol.StartChapter
-		progress["volume_end"] = vol.EndChapter
+	// 从已查询的卷数据中获取章节范围
+	if volData, ok := result["volume"].(map[string]any); ok {
+		if start, ok := volData["start_chapter"].(int); ok && start > 0 {
+			progress["volume_start"] = start
+			progress["volume_end"] = volData["end_chapter"]
+		}
 	}
 	result["progress"] = progress
 
@@ -426,7 +436,7 @@ func RegisterWritingContextTool(r *Registry) {
 
 // buildVolumeEntitiesData 查询时聚合当前卷范围内涉及的所有实体（ID 列表，省 token）。
 // 从已有实体表派生，不建缓存表，避免同步负担。
-func buildVolumeEntitiesData(ctx context.Context, db *gorm.DB, nid int64, vol storyarc.StoryArc) map[string]any {
+func buildVolumeEntitiesData(ctx context.Context, db *gorm.DB, nid int64, vol volume.Volume) map[string]any {
 	ve := map[string]any{
 		"characters": []any{},
 		"items":      []any{},
@@ -491,10 +501,10 @@ func buildVolumeEntitiesData(ctx context.Context, db *gorm.DB, nid int64, vol st
 		}
 	}
 
-	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 关联卷，或 arc_id 为空（全局根基设定，始终可见）
+	// 设定：reveal_chapter_id 在卷范围内，或 arc_id 为空（全局根基设定，始终可见）
 	var lores []lore.LoreEntry
 	if err := db.WithContext(ctx).
-		Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id = ? OR arc_id IS NULL)", nid, chIDs, vol.ID).
+		Where("novel_id = ? AND (reveal_chapter_id IN ? OR arc_id IS NULL)", nid, chIDs).
 		Find(&lores).Error; err == nil {
 		list := make([]any, 0, len(lores))
 		for _, l := range lores {

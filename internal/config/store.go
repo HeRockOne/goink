@@ -42,6 +42,7 @@ type AppSettings struct {
 	CachePrice       float64 `gorm:"column:cache_price;default:0.02" json:"cache_price"`                      // 缓存命中价格（元/百万 token）
 	ExaAPIKey        string  `gorm:"column:exa_api_key;default:''" json:"exa_api_key"`                       // Exa 网络搜索 API key（空则用免费 tier）
 	DisplayFont      string  `gorm:"column:display_font;default:''" json:"display_font"`                    // 显示字体，空则用默认楷体
+	PreferredIP      string  `gorm:"column:preferred_ip;default:''" json:"preferred_ip"`                     // 移动端首选网卡 IP（空则自动选 LAN）
 }
 
 func (AppSettings) TableName() string { return "app_config" }

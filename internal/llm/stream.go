@@ -38,9 +38,7 @@ func providerDisablesCacheKey(providerName string) bool {
 func NewClient(providers map[string]Provider, log *slog.Logger) *Client {
 	return &Client{
 		providers: providers,
-		http: &http.Client{
-			Timeout: 0, // 流式请求不设超时，由 ctx 控制
-		},
+		http: newHTTPClient(0), // 流式请求不设超时，由 ctx 控制
 		logger: log,
 	}
 }

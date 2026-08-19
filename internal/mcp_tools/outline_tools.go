@@ -55,6 +55,7 @@ func (t *GetOutlineTool) Execute(ctx context.Context, args any, tc ToolContext) 
 			"core_conflict":    o.CoreConflict,
 			"growth_arc":       o.GrowthArc,
 			"ending_direction": o.EndingDirection,
+			"theme":            o.Theme,
 			"word_count_plan":  o.WordCountPlan,
 			"beats":            beatList,
 		},
@@ -64,9 +65,10 @@ func (t *GetOutlineTool) Execute(ctx context.Context, args any, tc ToolContext) 
 // ── update_outline ─────────────────────────────────────────
 
 type UpdateOutlineArgs struct {
-	CoreConflict    string `json:"core_conflict" jsonschema:"description=核心矛盾一句话"`
-	GrowthArc       string `json:"growth_arc" jsonschema:"description=成长弧线（起点→试探→突破→成型→终局）"`
-	EndingDirection string `json:"ending_direction" jsonschema:"description=结局方向"`
+	CoreConflict    string `json:"core_conflict" jsonschema:"description=核心矛盾。每行一个要素，格式：> 要素名：内容。例：> 主角：林逸\\n> 反派：陈默\\n> 根本冲突：被至交背叛夺走一切\\n> 赌注：六界存亡"`
+	GrowthArc       string `json:"growth_arc" jsonschema:"description=成长弧线。每行一个阶段，格式：> 第起始-结束章 阶段名：阶段描述。例：> 第1-8章 废柴期：被欺压的普通弟子，无特殊能力"`
+	EndingDirection string `json:"ending_direction" jsonschema:"description=结局方向。每行一个要素，格式：> 要素名：内容。例：> 类型：逆袭碾压\\n> 基调：从最低谷到碾压巅峰\\n> 收束：清算所有仇敌"`
+	Theme           string `json:"theme" jsonschema:"description=主题立意。这本书想表达什么。例：> 核心主题：逆天改命\\n> 深层追问：人的价值由谁定义"`
 	WordCountPlan   int    `json:"word_count_plan" jsonschema:"description=篇幅规划（万字）"`
 }
 
@@ -103,6 +105,9 @@ func (t *UpdateOutlineTool) Execute(ctx context.Context, args any, tc ToolContex
 	}
 	if a.EndingDirection != "" {
 		o.EndingDirection = a.EndingDirection
+	}
+	if a.Theme != "" {
+		o.Theme = a.Theme
 	}
 	if a.WordCountPlan > 0 {
 		o.WordCountPlan = a.WordCountPlan

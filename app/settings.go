@@ -26,6 +26,7 @@ type SaveSettingsInput struct {
 	CachePrice           *float64 `json:"cache_price,omitempty"`
 	ExaAPIKey            string   `json:"exa_api_key,omitempty"`
 	DisplayFont          *string  `json:"display_font,omitempty"`
+	PreferredIP          string   `json:"preferred_ip,omitempty"`
 }
 
 // ── 设置 ──────────────────────────────────────────────────
@@ -42,7 +43,10 @@ func (a *App) GetSettings() (*config.AppSettings, error) {
 
 // GetServerInfo 返回服务器连接信息（IP + 端口）。
 func (a *App) GetServerInfo() map[string]any {
-	ip := getLocalIP()
+	ip := a.settings.PreferredIP
+	if ip == "" {
+		ip = getLocalIP()
+	}
 	port := 0
 	if a.ctx != nil {
 		port = 9323
@@ -76,6 +80,9 @@ func (a *App) SaveSettings(input SaveSettingsInput) error {
 	}
 	if input.DisplayFont != nil {
 		a.settings.DisplayFont = *input.DisplayFont
+	}
+	if input.PreferredIP != "" {
+		a.settings.PreferredIP = input.PreferredIP
 	}
 	return config.SaveSettings(a.db, a.settings)
 }

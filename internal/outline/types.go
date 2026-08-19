@@ -9,6 +9,7 @@ type Outline struct {
 	CoreConflict    string    `gorm:"column:core_conflict;type:text" json:"core_conflict"`
 	GrowthArc       string    `gorm:"column:growth_arc;type:text" json:"growth_arc"`
 	EndingDirection string    `gorm:"column:ending_direction;type:text" json:"ending_direction"`
+	Theme           string    `gorm:"column:theme;type:text" json:"theme"`
 	WordCountPlan   int       `gorm:"column:word_count_plan;default:0" json:"word_count_plan"`
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`

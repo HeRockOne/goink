@@ -57,6 +57,15 @@ func (s *Store) List(ctx context.Context, opts ListNovelsOptions) (*storage.Page
 	return storage.NewPageResult(novels, total, pp.Page, pp.Size), nil
 }
 
+// GetByID 返回指定小说（不存在则返回 error）。
+func (s *Store) GetByID(ctx context.Context, id int64) (*Novel, error) {
+	var n Novel
+	if err := s.DB.WithContext(ctx).First(&n, id).Error; err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
 // ── PreferenceItem ────────────────────────────────────
 
 // ListPreferences 返回该小说的专属偏好 + 全部全局偏好。

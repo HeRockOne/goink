@@ -97,6 +97,10 @@ export default function GeneralConfigTab() {
           applyFont(savedFont)
         }
       }
+      // 加载首选网卡 IP
+      if (s?.preferred_ip) {
+        setApiConnect(prev => prev ? { ...prev, ip: s.preferred_ip as string } : prev)
+      }
     }).catch(() => {})
 
     // 读取系统已安装字体
@@ -299,7 +303,12 @@ export default function GeneralConfigTab() {
             {netInterfaces.length > 1 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground w-12 shrink-0">网卡</span>
-                <select value={apiConnect?.ip || ''} onChange={e => { const ip = e.target.value; if (apiConnect) setApiConnect({ ...apiConnect, ip }) }} className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none">
+                <select value={apiConnect?.ip || ''} onChange={e => {
+                  const ip = e.target.value
+                  if (apiConnect) setApiConnect({ ...apiConnect, ip })
+                  // 持久化首选网卡
+                  app.SaveSettings({ preferred_ip: ip }).catch(() => {})
+                }} className="flex-1 h-8 rounded-md border bg-background px-2 text-xs focus:outline-none">
                   {netInterfaces.map(iface => (<option key={iface.ip} value={iface.ip}>{iface.name} - {iface.ip}{iface.is_lan ? ' (LAN)' : ''}{iface.is_vpn ? ' (VPN)' : ''}</option>))}
                 </select>
               </div>

@@ -98,7 +98,7 @@ func searchExa(ctx context.Context, query, apiKey string) (*WebSearchResult, err
 	if apiKey != "" {
 		req.Header.Set("x-api-key", apiKey)
 	}
-	client := &http.Client{Timeout: searchTimeout}
+	client := newHTTPClient(searchTimeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("网络连接失败: %w", err)

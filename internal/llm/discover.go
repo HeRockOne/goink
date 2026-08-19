@@ -26,7 +26,7 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求失败: %w", err)

@@ -66,7 +66,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 		req.Header.Set(k, v)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败: %w", err)

@@ -44,6 +44,15 @@ func (a *App) GetNovels() ([]novel.Novel, error) {
 	return result.Items, nil
 }
 
+// GetNovel 返回指定小说信息（不存在则返回 nil）。
+func (a *App) GetNovel(novelID int64) (*novel.Novel, error) {
+	n, err := a.novel.GetByID(a.ctx, novelID)
+	if err != nil {
+		return nil, nil
+	}
+	return n, nil
+}
+
 // CreateNovelInput 是创建小说的入参。
 type CreateNovelInput struct {
 	Title       string `json:"title"`

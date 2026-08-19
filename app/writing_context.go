@@ -18,6 +18,7 @@ import (
 	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
+	"novel/internal/volume"
 	"novel/internal/writing"
 )
 
@@ -209,23 +210,22 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		})
 	}
 
-	// 卷纲查询：查找当前活跃的卷（放在角色查询之前，用于按卷过滤角色）
-	var volume *WritingVolume
+	// 卷纲查询：查找当前活跃的卷（从 volumes 表）
+	var writingVol *WritingVolume
 	var volumeEntities *WritingVolumeEntities
-	var vol storyarc.StoryArc
-	if err := a.db.WithContext(ctx).
-		Where("novel_id = ? AND arc_type = 'volume' AND status = 'active'", novelID).
-		Order("importance DESC").
-		First(&vol).Error; err == nil {
-		volume = &WritingVolume{
-			Name:        vol.Name,
-			Description: vol.Description,
-			ArcType:     vol.ArcType,
-			DetailJSON:  vol.DetailJSON,
-		}
-		// 卷级聚合：查卷范围内（start_chapter ~ end_chapter）涉及的所有实体
-		if vol.StartChapter > 0 && vol.EndChapter >= vol.StartChapter {
-			volumeEntities = a.buildVolumeEntities(ctx, novelID, vol)
+	volStore := volume.NewStore(a.db)
+	if vols, err := volStore.ListByNovel(ctx, novelID); err == nil {
+		// 找当前章节所在的卷
+		for _, v := range vols {
+			if v.StartChapter > 0 && v.EndChapter >= v.StartChapter {
+				writingVol = &WritingVolume{
+					Name:        v.Name,
+					Description: v.Description,
+					DetailJSON:  v.DetailJSON,
+				}
+				volumeEntities = a.buildVolumeEntities(ctx, novelID, v)
+				break
+			}
 		}
 	}
 
@@ -362,10 +362,18 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 	var sceneBriefs []WritingSceneBrief
 	if ch.ID > 0 {
 		var scenes []scene.Scene
-		if vol.ID > 0 {
+		// 查对应 story arc ID（兼容旧数据：场景仍通过 arc_id 关联）
+		var arcID int64
+		if writingVol != nil {
+			var arc storyarc.StoryArc
+			if a.db.WithContext(ctx).Where("novel_id = ? AND arc_type = 'volume' AND name = ?", novelID, writingVol.Name).First(&arc).Error == nil {
+				arcID = arc.ID
+			}
+		}
+		if arcID > 0 {
 			a.db.WithContext(ctx).Raw(
 				"SELECT * FROM scenes WHERE novel_id = ? AND (chapter_id = ? OR (chapter_id IS NULL AND arc_id = ?)) ORDER BY scene_number ASC",
-				novelID, ch.ID, vol.ID,
+				novelID, ch.ID, arcID,
 			).Scan(&scenes)
 		} else {
 			a.db.WithContext(ctx).Where("novel_id = ? AND chapter_id = ?", novelID, ch.ID).Order("scene_number ASC").Find(&scenes)
@@ -507,7 +515,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 		},
 		WritingSnapshot: snapBrief,
 		Scenes:          sceneBriefs,
-		Volume:          volume,
+		Volume:          writingVol,
 		VolumeEntities:  volumeEntities,
 		ItemOccurrences: itemOccBriefs,
 		Preview:         preview,
@@ -516,7 +524,7 @@ func (a *App) GetWritingContext(novelID int64, chapterNum int) (*WritingContext,
 
 // buildVolumeEntities 查询时聚合当前卷（start~end 章）涉及的所有实体。
 // 从已有表派生，不建缓存表，避免同步负担。
-func (a *App) buildVolumeEntities(ctx context.Context, novelID int64, vol storyarc.StoryArc) *WritingVolumeEntities {
+func (a *App) buildVolumeEntities(ctx context.Context, novelID int64, vol volume.Volume) *WritingVolumeEntities {
 	db := a.db.WithContext(ctx)
 	ve := &WritingVolumeEntities{
 		Characters: []WritingVolumeEntity{},

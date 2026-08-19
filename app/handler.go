@@ -152,8 +152,13 @@ func (a *App) GetAPIConnectInfo() APIConnectInfo {
 	if port == 0 {
 		port = 9323
 	}
+	// 优先使用用户选择的首选网卡 IP
+	ip := a.settings.PreferredIP
+	if ip == "" {
+		ip = getLocalIP()
+	}
 	return APIConnectInfo{
-		IP:     getLocalIP(),
+		IP:     ip,
 		Port:   port,
 		UseTLS: a.apiUseHTTPS,
 	}
