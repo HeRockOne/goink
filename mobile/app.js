@@ -1808,16 +1808,17 @@ function addMessage(role, content, thinking, isStreaming) {
   qs(div, '.cm-bubble').innerHTML = marked.parse(content || '');
   if (thinking) {
     const body = qs(div, '.msg-body');
-    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▲`;
-    const tc = document.createElement('div'); tc.className = 'thinking-content'; tc.textContent = thinking;
-    body.appendChild(tog); body.appendChild(tc);
+    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▼`;
+    const tc = document.createElement('div'); tc.className = 'thinking-content hidden'; tc.textContent = thinking;
+    const bubble = qs(div, '.cm-bubble');
+    body.insertBefore(tog, bubble); body.insertBefore(tc, bubble);
   }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   return div;
 }
 
-// 工具调用独立卡片（不混入正文）：在 msg-body 内 bubble 下方、thinking 上方
+// 工具调用独立卡片（不混入正文）：在 msg-body 内 bubble 上方
 function appendToolBadge(el, ev) {
   if (!el || !ev.tool_name) return;
   let container = el.querySelector('.tool-calls');
@@ -1825,9 +1826,8 @@ function appendToolBadge(el, ev) {
     container = document.createElement('div');
     container.className = 'tool-calls';
     const body = el.querySelector('.msg-body');
-    const thinking = body.querySelector('.thinking-toggle');
-    if (thinking) body.insertBefore(container, thinking);
-    else body.appendChild(container);
+    const bubble = body.querySelector('.msg-bubble');
+    body.insertBefore(container, bubble);
   }
   const tid = ev.tool_id || ev.tool_name;
   let badge = container.querySelector(`[data-tid="${CSS.escape(tid)}"]`);
@@ -1876,16 +1876,24 @@ function updateStreaming(el, content, thinking, final) {
     let t = el.querySelector('.thinking-toggle'), c = el.querySelector('.thinking-content');
     if (!t) {
       t = document.createElement('div'); t.className = 'thinking-toggle'; t.onclick = function(){ toggleThinking(this); };
-      c = document.createElement('div'); c.className = 'thinking-content';
+      c = document.createElement('div'); c.className = 'thinking-content hidden';
       const body = el.querySelector('.msg-body');
-      body.insertBefore(t, body.children[1]); body.insertBefore(c, body.children[2]);
+      body.insertBefore(t, b); body.insertBefore(c, b);
     }
-    c.textContent = thinking; t.textContent = `💭 思考 (${thinking.length}字) ▲`;
+    c.textContent = thinking;
+    if (!t.dataset.userToggled) t.textContent = `💭 思考 (${thinking.length}字) ▼`;
   }
   el.closest('.chat-scroll').scrollTop = el.closest('.chat-scroll').scrollHeight;
 }
 
-function toggleThinking(el) { const c = el.nextElementSibling; if (c) { c.classList.toggle('hidden'); el.textContent = el.textContent.includes('▼') ? el.textContent.replace('▼', '▲') : el.textContent.replace('▲', '▼'); } }
+function toggleThinking(el) {
+  const c = el.nextElementSibling;
+  if (c) {
+    c.classList.toggle('hidden');
+    el.dataset.userToggled = '1';
+    el.textContent = el.textContent.includes('▼') ? el.textContent.replace('▼', '▲') : el.textContent.replace('▲', '▼');
+  }
+}
 
 // 发送/停止按钮状态：busy=true 显示停止按钮，false 恢复发送按钮
 function setChatBusy(busy) {
