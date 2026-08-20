@@ -10,6 +10,8 @@ interface Props {
   usage?: UsageInfo | null
   selectedModel?: string
   onCompress?: () => void
+  phaseMode: string
+  onPhaseModeChange: (mode: string) => void
 }
 
 // v2 左下角门禁阶段序列
@@ -69,11 +71,22 @@ function computeStats(text: string): DetailedStats {
   }
 }
 
-export default function StatusBar({ content, isDirty, gateStatus, usage, selectedModel, onCompress }: Props) {
+export default function StatusBar({ content, isDirty, gateStatus, usage, selectedModel, onCompress, phaseMode, onPhaseModeChange }: Props) {
   const { t } = useTranslation()
   const stats = useMemo(() => computeStats(content), [content])
   const [showDetail, setShowDetail] = useState(false)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 门禁模式循环：single → batch6 → batch9 → batch12 → single
+  const MODE_CYCLE = ['single', 'batch6', 'batch9', 'batch12']
+  const MODE_LABELS: Record<string, string> = {
+    single: '单章', batch6: '批量6', batch9: '批量9', batch12: '批量12',
+  }
+  function cycleMode() {
+    const idx = MODE_CYCLE.indexOf(phaseMode)
+    const next = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]
+    onPhaseModeChange(next)
+  }
 
   function handleMouseEnter() {
     hoverTimer.current = setTimeout(() => setShowDetail(true), 150)
@@ -100,13 +113,15 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, selecte
         <span>{t('shell.lineCount')} {stats.lineCount}</span>
       </div>
 
-      {/* 中区：门禁阶段条（flex 中段，窄窗口自动截断不重叠） */}
+      {/* 中区：门禁模式切换 + 阶段条 */}
       <div className="flex-1 flex items-center justify-center min-w-0 px-3 gap-2">
-        {gateStatus?.mode && (
-          <span className={`gate-mode-badge shrink-0 ${gateStatus.mode === 'batch' ? 'batch' : 'single'}`}>
-            {gateStatus.mode === 'batch' ? '批量' : '单章'}
-          </span>
-        )}
+        <button
+          onClick={cycleMode}
+          className={`gate-mode-badge shrink-0 cursor-pointer transition-colors hover:opacity-80 ${phaseMode === 'single' ? 'single' : 'batch'}`}
+          title="点击切换门禁模式"
+        >
+          {MODE_LABELS[phaseMode] || '单章'}
+        </button>
         {gateStatus?.phase && (
           <span className="gate-steps whitespace-nowrap overflow-hidden">
             {GATE_STEPS.map((p, i) => (

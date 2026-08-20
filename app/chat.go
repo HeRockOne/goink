@@ -526,6 +526,19 @@ func (a *App) CancelChat(sessionID string) {
 	a.agent.Cancel(sessionID)
 }
 
+// SetPhaseMode 设置门禁模式（single/batch），持久化到 session 表，跨 turn 生效。
+func (a *App) SetPhaseMode(sessionID, mode string) error {
+	if mode != "single" && mode != "batch" && mode != "batch6" && mode != "batch9" && mode != "batch12" {
+		return fmt.Errorf("不支持的门禁模式: %s", mode)
+	}
+	gateMode := mode
+	if gateMode != "single" {
+		gateMode = "batch"
+	}
+	a.session.SavePhaseGateMode(sessionID, gateMode)
+	return nil
+}
+
 // DeleteSession 删除指定会话及其所有消息。
 func (a *App) DeleteSession(sessionID string) error {
 	return a.session.DeleteSession(a.ctx, sessionID)

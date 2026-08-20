@@ -93,6 +93,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [activeChapterNum, setActiveChapterNum] = useState(0)
   // 门禁状态（左下角阶段条）
   const [gateStatus, setGateStatus] = useState<import('@/components/chat/types').PhaseStatus | null>(null)
+  // 门禁模式（单章/批量），常驻 localStorage
+  const [phaseMode, setPhaseMode] = useState(() => localStorage.getItem('phase_mode') || 'single')
   // token 用量（状态栏条状统计）
   const [tokenUsage, setTokenUsage] = useState<import('@/components/chat/ContextRing').UsageInfo | null>(null)
   // 当前选中模型（纯 modelID），底部计费面板按模型切换统计
@@ -155,6 +157,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       }
     })
     return () => { cleanup() }
+  }, [])
+
+  // 门禁模式切换：持久化到 localStorage，有活跃会话时同步后端
+  const handlePhaseModeChange = useCallback(async (mode: string) => {
+    setPhaseMode(mode)
+    localStorage.setItem('phase_mode', mode)
   }, [])
 
   // ── 启动时加载字体设置（localStorage 持久化） ────────────
@@ -621,12 +629,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
         <div className={`${activePanel === 'profile' || activePanel === 'cachesim' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' || activePanel === 'cachesim' ? undefined : chatPanelWidth }}>
           <ErrorBoundary>
-            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} onModelChange={setStatusBarModel} />
+            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} onModelChange={setStatusBarModel} phaseMode={phaseMode} />
           </ErrorBoundary>
         </div>
       </div>
 
-      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} selectedModel={statusBarModel} onCompress={() => chatPanelRef.current?.compress()} />
+      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} selectedModel={statusBarModel} onCompress={() => chatPanelRef.current?.compress()} phaseMode={phaseMode} onPhaseModeChange={handlePhaseModeChange} />
 
       <SettingsDialog
         open={showSettings}

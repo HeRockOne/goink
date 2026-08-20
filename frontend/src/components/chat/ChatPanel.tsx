@@ -33,6 +33,7 @@ interface Props {
   onPhaseGate?: (s: import('./types').PhaseStatus) => void
   onUsage?: (u: UsageInfo | null) => void
   onModelChange?: (modelID: string) => void
+  phaseMode?: string
 }
 const EVENT_REORDER_TIMEOUT = 120
 
@@ -51,7 +52,7 @@ export interface ChatPanelHandle {
   compress: () => void
 }
 
-export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage, onModelChange }: Props, ref) {
+export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage, onModelChange, phaseMode }: Props, ref) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -1108,11 +1109,18 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     })
     startedUnsubRef.current = startedCleanup
 
+    // 门禁模式快捷入口：批量模式且无活跃会话时，自动拼"批量写N章"前缀触发后端 batch 检测
+    let finalMsg = content
+    if (phaseMode && phaseMode !== 'single' && (activeSessionId === null || activeSessionId === undefined)) {
+      const match = phaseMode.match(/^batch(\d+)$/)
+      if (match) finalMsg = `批量写${match[1]}章：${content}`
+    }
+
     try {
       await app.Chat({
         session_id: sessionId,
         novel_id: novelId,
-        message: content,
+        message: finalMsg,
         provider_name: p,
         model_id: m,
         reasoning_effort: reasoningEffort,
