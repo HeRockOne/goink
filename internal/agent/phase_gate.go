@@ -92,6 +92,7 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 var knownCategories = map[string]bool{
 	"get": true, "create": true, "update": true,
 	"delete": true, "search": true, "remove": true,
+	"web": true, "check": true,
 }
 
 // categoryPrefixes 类别名到前缀的映射，用于 CheckToolAllowed 匹配。
@@ -102,6 +103,8 @@ var categoryPrefixes = map[string]string{
 	"delete": "delete_",
 	"search": "search_",
 	"remove": "remove_",
+	"web":    "web_",
+	"check":  "check_",
 }
 
 // toolMatchesCategory 检查工具名是否匹配某类别。
