@@ -20,31 +20,14 @@ mode: always
 
 > **done 是流程终点**：maintain 完成后 set_phase("done")，本轮创作结束，系统停下不再自动推进，等待用户发起新一轮（新会话重新从 init/prepare 开始）。不要自行循环回 prepare 开启无限创作。
 
-> 批量模式的 `outline ⇄ write（循环N章）` 含义：outline 阶段一次性产出全部 N 章大纲（连续 edit outlines/001.md ~ NNN.md），
-> 然后 write 阶段循环写 N 章正文。**循环中每章 write 前必须 read outlines/NNN.md（本章大纲，门禁 require 强制）**，
-> 把本章大纲锚定在上下文末尾再动笔，防止把别的章的大纲内容串进本章正文。write 阶段可回退 outline 修改大纲（loop）。
+> **批量循环**：outline 一次性产出全部 N 章大纲；write 循环写 N 章正文。**每章 write 前必须 read outlines/NNN.md（门禁 require 强制）**，把本章大纲锚定在上下文末尾再动笔，防串章。write 阶段可回退 outline 修改大纲（loop）。批量循环中**每章写完后调 set_phase("write") 声明下一章开始**（同阶段幂等成功，只产生显式阶段记录，防连写敷衍）。
 
-> **批量状态实时性（迷你维护）**：每章 write 完成后立即执行"迷你维护"——只写不查，把本章事实写入 DB
-> （create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot），
-> 不调用 get_*/search_* 查询。这样下一章的 get_writing_context 读到的是最新角色/伏笔/场景状态，
-> 避免"整批末尾才 maintain 导致第 N 章读到第 1 章状态"。整批末尾仍保留完整 maintain（13 项清单 + goink.md 指纹）收尾核对。
+> **批量迷你维护（每章实时结算）**：每章 write 完成后立即执行——只写不查，把本章事实写入 DB：
+> create_scene + update_character + create_timeline_entry + update_timeline_entry + create_item_occurrence + update_writing_snapshot，
+> 不调用 get_*/search_* 查询。这样下一章 get_writing_context 读到最新状态，避免批末才维护导致第 N 章读到第 1 章状态。整批末尾仍保留完整 maintain 收尾核对。
 
-> **批量质量节奏（每 3 章自检 + 批末全批审稿）**：
-> - **每 3 章自检（三章一轮，不积攒，一致性 + 文笔双向）**：write 循环中每写 3 章停笔自检一次——
->   **一致性（重点）**：调 get_characters / get_timeline / get_writing_snapshot 读取角色状态、伏笔台账、
->   写作快照，**并调 check_story_consistency（current_chapter=当前章号）做程序化核对**（四类 SQL：
->   伏笔超期/角色断档/物品冲突/死者复出），对照最近 3 章正文检查设定矛盾（角色状态不符、时间线错乱、
->   伏笔状态矛盾、章节衔接断裂、重复内容）——AI 写作常见翻车是"前文死了的角色后文又出现、战力/地点
->   错乱"（注意力衰减 + 遗忘机制的产物），普通读者抓不住文笔，但设定矛盾一眼穿帮；
->   **文笔（次重点）**：read main-tech-revision-pass 与
->   sub-tech-anti-ai-grade 检查最近 3 章节奏、AI 味。发现问题立即 edit 修复，不攒到批末。
->   自检不调 run_subagent（那是批末的事），不 set_phase。
-> - **批末审稿覆盖全批**：整批写完进入 review 阶段后，run_subagent 审读**本批全部 N 章**
->   （子代理 fork 完整主历史，正文已在上下文中，无需重复 read 注入）；审稿重点同样是
->   **一致性优先**（设定矛盾、章节衔接、伏笔状态），其次节奏与 AI 味；**子代理报告必须
->   列出实际审读的章节清单，主 agent 先核对覆盖范围再修复**——覆盖不全（漏章/只审开头）
->   先补审，然后根据审稿意见**逐章** read 自查 + edit 修复 + get_chapter_list 字数复查，
->   **不要只审第 1 章**。
+> **批量质量节奏**：每 3 章停笔自检一次（三章一轮，不积攒）——**一致性（重点）**：调 get_characters / get_timeline / get_writing_snapshot + check_story_consistency（current_chapter=当前章号）对照最近 3 章正文查设定矛盾（角色状态不符/时间线错乱/伏笔矛盾/衔接断裂/重复内容，尤其死者复出、战力地点错乱）；**文笔（次重点）**：read main-tech-revision-pass 与 sub-tech-anti-ai-grade 查最近 3 章节奏与 AI 味。发现问题立即 edit 修复，不攒到批末；自检不调 run_subagent、不 set_phase。
+> **批末审稿覆盖全批**：进入 review 后 run_subagent 审读**本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中）；审稿重点**一致性优先**（设定矛盾/衔接/伏笔），其次节奏与 AI 味；**子代理报告必须列出实际审读章节清单，主 agent 先核对覆盖范围再修复**——覆盖不全先补审，再逐章 read 自查 + edit 修复 + get_chapter_list 字数复查，**不要只审第 1 章**。
 
 > **批量 write 显式循环（每章一个阶段边界）**：批量循环中**每章写完后调 set_phase("write") 声明下一章开始**
 > ——同阶段切换幂等成功，不重置任何校验状态，只产生显式阶段记录（UI/审计逐章可见、LLM 获得"本章完成
@@ -136,6 +119,7 @@ mode: always
    通过——门禁 require 强制，不核对无法转出 review（写时把关，不等审稿阶段才发现设定硬伤；
    get_writing_context 的 dead_characters 名单写作前就要记住，死者不得复出）
    **注意**：check_types 可选，留空=全部检查；review 阶段建议传 `["pacing_gap"]`，maintain 阶段建议传 `["promise_fulfillment"]`
+6.8. **写后自审**（单章每章、批量每 3 章）：read main-tech-revision-pass 与 sub-tech-anti-ai-grade，对照检查本章节奏、AI 味（批量自检见上），发现问题立即 edit 修复
 7. **set_phase("review")**
 
 > **write→review 边界（重要）**：set_phase("review") 或系统自动推进到 review 后，**立即进入审稿流程，禁止在本阶段调用任何维护/更新工具**（update_chapter_meta、update_writing_snapshot、create_scene、update_timeline_entry 等全部会被门禁拦截——review 白名单只有只读/审稿工具）。迷你维护是**写正文完成后、set_phase("review") 之前**做的事；进入 review 后只做：run_subagent 启动审稿 → 读报告 → 修正文。维护动作留到 maintain 阶段统一做。不要尝试"提前维护"——门禁拦截 + 重试思考每次浪费约 1-2K token，且阶段自动推进后当前阶段已是 review，维护工具必然被拦。
@@ -219,20 +203,9 @@ mode: always
 
 **这个实体未来会影响设定一致性吗？会影响→入库；只是本章背景→不录。**
 
-## 阶段技能表（内置 skill 全量调度）
+## Stage Skills（各阶段技能见下方阶段指令与 catalog）
 
-> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate）由用户 `/` 触发，不在此表。
-
-| 阶段 | 技能 |
-|------|------|
-| **init（开书）** | main-core-init-phase（开书流程）, main-tech-genre-templates（12类型）, main-tech-book-outline（总纲）, main-tech-character-design（角色设计）, main-tech-world-building-system（世界观） |
-| **prepare（准备）** | main-tech-common-sense-logic（一致性）, main-tech-genre-templates, main-tech-book-outline（卷纲）, main-tech-brainstorm-composer（卡情节时构思） |
-| **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-chapter-title-design（章节标题设计）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
-| **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（九条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
-| **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
-| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（22项判定） |
-| **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔）, main-tech-data-hygiene（数据卫生：内容校准） |
-| **完结** | main-tech-book-completion（完本清单） |
+各阶段必读技能由门禁 `auto_skill_injection` 在 set_phase 时自动注入全文；其余 auto 技能按需 `read` 加载（已在对话开头的 skill catalog 中列出 name + description，按需求阅）。manual 技能（collect/memory/next/review/phase-gate）由用户 `/` 触发。
 
 ## 硬约束
 
