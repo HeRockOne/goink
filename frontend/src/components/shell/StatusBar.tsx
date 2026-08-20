@@ -15,10 +15,10 @@ interface Props {
 }
 
 // v2 左下角门禁阶段序列
-const GATE_STEPS = ['init', 'prepare', 'outline', 'write', 'review', 'maintain']
+const GATE_STEPS = ['init', 'prepare', 'outline', 'write', 'review', 'maintain', 'done']
 const GATE_LABELS: Record<string, string> = {
   init: '初始化', prepare: '准备', outline: '大纲',
-  write: '正文', review: '审读', maintain: '维护',
+  write: '正文', review: '审读', maintain: '维护', done: '完成',
 }
 
 interface DetailedStats {
@@ -77,10 +77,10 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, selecte
   const [showDetail, setShowDetail] = useState(false)
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 门禁模式循环：single → batch6 → batch9 → batch12 → single
-  const MODE_CYCLE = ['single', 'batch6', 'batch9', 'batch12']
+  // 门禁模式循环：single → batch3 → batch6 → batch9 → batch12 → single
+  const MODE_CYCLE = ['single', 'batch3', 'batch6', 'batch9', 'batch12']
   const MODE_LABELS: Record<string, string> = {
-    single: '单章', batch6: '批量6', batch9: '批量9', batch12: '批量12',
+    single: '单章', batch3: '批量3', batch6: '批量6', batch9: '批量9', batch12: '批量12',
   }
   function cycleMode() {
     const idx = MODE_CYCLE.indexOf(phaseMode)
@@ -122,18 +122,16 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, selecte
         >
           {MODE_LABELS[phaseMode] || '单章'}
         </button>
-        {gateStatus?.phase && (
-          <span className="gate-steps whitespace-nowrap overflow-hidden">
-            {GATE_STEPS.map((p, i) => (
-              <span key={p} className="flex items-center">
-                {i > 0 && <span className="gate-step-sep">·</span>}
-                <span className={`gate-step ${i < currentIdx ? 'past' : i === currentIdx ? 'current' : ''}`}>
-                  {GATE_LABELS[p] || p}
-                </span>
+        <span className="gate-steps whitespace-nowrap overflow-hidden">
+          {GATE_STEPS.map((p, i) => (
+            <span key={p} className="flex items-center">
+              {i > 0 && <span className="gate-step-sep">·</span>}
+              <span className={`gate-step ${i < currentIdx ? 'past' : i === currentIdx ? 'current' : ''}`}>
+                {GATE_LABELS[p] || p}
               </span>
-            ))}
-          </span>
-        )}
+            </span>
+          ))}
+        </span>
       </div>
 
       {showDetail && (
