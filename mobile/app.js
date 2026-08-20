@@ -887,9 +887,9 @@ function handleSyncState(ev) {
   const createBubble = () => {
     wsThinking = thinking;
     wsContent = content;
-    wsStreamEl = addMessage('assistant', content || '思考中...', '', true);
+    wsStreamEl = addMessage('assistant', '', '', true);
     if (thinking || content) {
-      updateStreaming(wsStreamEl, content || '思考中...', thinking, true);
+      updateStreaming(wsStreamEl, content, thinking, true);
     }
     state.isLoading = true;
     setChatBusy(true);
@@ -973,22 +973,23 @@ function handleChatEvent(ev) {
           console.log('[Chat] 历史消息数量:', (r.messages || []).length);
           (r.messages || []).forEach(m => {
             if ((m.role === 'user' || m.role === 'assistant') && (m.content || m.thinking_content)) {
-              addMessage(m.role, m.content || '', m.thinking_content || '');
+              const el = addMessage(m.role, m.content || '', m.thinking_content || '');
+              if (m.role === 'assistant' && m.tool_calls) renderToolCallsFromHistory(el, m.tool_calls);
             }
           });
           // 历史加载完后创建流式气泡
-          wsStreamEl = addMessage('assistant', '思考中...', '', true);
+          wsStreamEl = addMessage('assistant', '', '', true);
           console.log('[Chat] 流式气泡已创建');
         }).catch((err) => {
           console.log('[Chat] 加载历史失败:', err);
-          wsStreamEl = addMessage('assistant', '思考中...', '', true);
+          wsStreamEl = addMessage('assistant', '', '', true);
         });
       } else {
         // 新会话，清空并创建流式气泡
         console.log('[Chat] 新会话，清空并创建流式气泡');
         const container = document.getElementById('chatMessages');
         container.innerHTML = '';
-        wsStreamEl = addMessage('assistant', '思考中...', '', true);
+        wsStreamEl = addMessage('assistant', '', '', true);
         console.log('[Chat] 流式气泡已创建:', wsStreamEl);
       }
       break;
@@ -999,9 +1000,9 @@ function handleChatEvent(ev) {
       wsThinking += ev.data || '';
       // 如果流式气泡还未创建，立即创建
       if (!wsStreamEl) {
-        wsStreamEl = addMessage('assistant', '思考中...', '', true);
+        wsStreamEl = addMessage('assistant', '', '', true);
       }
-      scheduleStreamingRender(wsStreamEl, wsContent || '思考中...', wsThinking);
+      scheduleStreamingRender(wsStreamEl, '', wsThinking);
       break;
 
     case 'content':
@@ -1850,6 +1851,22 @@ function appendToolBadge(el, ev) {
   if (scroll) scroll.scrollTop = scroll.scrollHeight;
 }
 
+// 从历史消息的 tool_calls 数据渲染工具调用卡片（加载历史时调用）。
+function renderToolCallsFromHistory(el, toolCalls) {
+  if (!el || !toolCalls) return;
+  toolCalls.forEach(tc => {
+    const name = tc.function?.name || tc.name || '';
+    if (!name) return;
+    appendToolBadge(el, {
+      tool_name: name,
+      tool_id: tc.id || name,
+      display_text: name,
+      phase: 'completed',
+      success: true
+    });
+  });
+}
+
 // 流式渲染节流：60ms 合并多次增量事件，避免每 token 全量 marked 重渲染卡顿
 let pendingStream = null, streamTimer = null;
 function cancelPendingStream() {
@@ -1869,8 +1886,15 @@ function scheduleStreamingRender(el, content, thinking) {
 function updateStreaming(el, content, thinking, final) {
   const b = el.querySelector('.msg-bubble');
   if (b) {
-    if (final) { b.classList.remove('streaming-plain'); b.innerHTML = marked.parse(content || ''); }
-    else { b.classList.add('streaming-plain'); b.textContent = content || ''; }
+    if (final) {
+      b.classList.remove('streaming-plain'); b.style.display = '';
+      b.innerHTML = marked.parse(content || '');
+    } else if (content) {
+      b.classList.add('streaming-plain'); b.style.display = '';
+      b.textContent = content;
+    } else {
+      b.style.display = 'none';
+    }
   }
   if (thinking) {
     let t = el.querySelector('.thinking-toggle'), c = el.querySelector('.thinking-content');
@@ -1910,7 +1934,7 @@ async function sendMessage(text) {
   state.isLoading = true; setChatBusy(true);
   state.selfStreaming = true; // 自己发消息期间屏蔽 WS 通道（同一事件流会经 WS 全局广播重复推送）
   addMessage('user', text);
-  currentStreamEl = addMessage('assistant', '思考中...', '', true);
+  currentStreamEl = addMessage('assistant', '', '', true);
   abortCtrl = new AbortController(); let thinking = '', content = '', finished = false;
   try {
     const body = { message: text, novel_id: state.novelId };
@@ -1932,7 +1956,7 @@ async function sendMessage(text) {
           const ev = JSON.parse(js);
           switch (ev.type) {
             case 'started': state.sessionId = ev.session_id; break;
-            case 'thinking': thinking += ev.data||''; scheduleStreamingRender(currentStreamEl, content||'思考中...', thinking); break;
+            case 'thinking': thinking += ev.data||''; scheduleStreamingRender(currentStreamEl, '', thinking); break;
             case 'content': content += ev.data||''; scheduleStreamingRender(currentStreamEl, content, thinking); break;
             case 'tool_call':
               if (currentStreamEl && ev.tool_name) appendToolBadge(currentStreamEl, ev);
@@ -2023,8 +2047,10 @@ async function loadSession(sid) {
   try { 
     const r = await api(`/api/sessions/${sid}/messages`); 
     (r.messages||[]).forEach(m => { 
-      if ((m.role==='user'||m.role==='assistant') && (m.content||m.thinking_content)) 
-        addMessage(m.role, m.content||'', m.thinking_content||''); 
+      if ((m.role==='user'||m.role==='assistant') && (m.content||m.thinking_content)) {
+        const el = addMessage(m.role, m.content||'', m.thinking_content||'');
+        if (m.role === 'assistant' && m.tool_calls) renderToolCallsFromHistory(el, m.tool_calls);
+      }
     }); 
   } catch (_) {} 
   const currentSession = state.sessions.find(s => s.session_id === sid);

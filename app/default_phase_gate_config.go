@@ -35,7 +35,7 @@ edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
 next: write
-note: edit(outlines/NNN.md) 写大纲，格式按总纲+卷纲走，不得超出本卷范围
+note: edit(outlines/NNN.md) 写大纲，不得超出本卷范围
 -->
 <!-- phase-gate-config
 mode: single
@@ -100,7 +100,7 @@ edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
 next: write
-note: edit(outlines/NNN.md) 写大纲，格式按总纲+卷纲走，不得超出本卷范围
+note: edit(outlines/NNN.md) 写大纲，不得超出本卷范围
 -->
 <!-- phase-gate-config
 mode: batch

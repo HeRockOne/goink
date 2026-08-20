@@ -863,12 +863,22 @@ func (s *apiServer) handleSessionMessages(w http.ResponseWriter, r *http.Request
 	result := make([]map[string]any, 0)
 	for _, m := range msgs {
 		if m.Role == "user" || m.Role == "assistant" {
-			result = append(result, map[string]any{
+			msgMap := map[string]any{
 				"role":             m.Role,
 				"content":          m.Content,
 				"thinking_content": m.ThinkingContent,
 				"created_at":       m.CreatedAt,
-			})
+			}
+			// 助手消息附带 tool_calls（用于前端渲染工具调用卡片）
+			if m.Role == "assistant" && m.ExtraMetadata != "" {
+				var meta map[string]any
+				if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err == nil {
+					if tc, ok := meta["tool_calls"]; ok {
+						msgMap["tool_calls"] = tc
+					}
+				}
+			}
+			result = append(result, msgMap)
 		}
 	}
 	writeJSON(w, map[string]any{"messages": result})
