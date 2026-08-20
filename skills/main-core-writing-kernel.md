@@ -142,7 +142,7 @@ mode: always
 | 10 | 推进弧线节点（含规划对齐） | 查询 C 发现变化 | update_arc_node（target_chapter 与卷纲 detail_json 对齐，偏差>3章以 volume 为准） |
 | 11 | 新伏笔/悬念 | 有新**关键**伏笔 | create_timeline_entry（title + category + target_chapter required） |
 | 12 | 回收/校准伏笔 | 查询 B 发现要回收/校准 | update_timeline_entry：回收（resolved + resolved_chapter_id）；校准（过时即修正，禁僵尸数据） |
-| 13 | 更新读者认知（含去重） | 查询 D 发现悬念变化 | create/update_reader_perspective_entry（create 前查重，同一事实优先 update） |
+| 13 | 更新读者认知（含去重） | 查询 D 发现悬念变化 | create_reader_perspective_entry / update_reader_perspective_entry（create 前先核对已有条目，同一事实不同角度优先 update 不新建，杜绝冗余条目） |
 | 14 | 记录章节指纹 | 每章必做 | edit(goink.md, append)——格式见 anti-repetition：### 第N章 标题 + 开篇/场景/情感/对白/钩子/感官 各一行，段落间空行；必须 append，禁止 full_replace |
 | 15 | 阶段切换 | 全部完成后 | **set_phase("done")** |
 
