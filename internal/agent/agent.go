@@ -370,11 +370,20 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		if opts.PhaseCurrent != "" || opts.PhaseCalledJSON != "" {
 			phaseGate.LoadState(opts.PhaseCurrent, opts.PhaseCalledJSON)
 		}
+		// 上一轮停在 done：新创作从 prepare 开始，清空旧记录
+		if phaseGate.CurrentPhase() == "done" {
+			phaseGate.ResetTo("prepare")
+			a.logger.Info("门禁状态重置，从 prepare 开始")
+		}
 		a.logger.Info("阶段门禁已启用", "phase", phaseGate.CurrentPhase(), "mode", phaseGate.mode)
 		// Run 结束时保存门禁状态到 session
 		defer func() {
 			if pg != nil {
 				phase, toolsJSON := pg.SaveState()
+				// done 阶段：清空门禁数据，防止同会话续作时 LLM 自由回退
+				if phase == "done" {
+					toolsJSON = ""
+				}
 				a.session.SavePhaseGateState(opts.SessionID, phase, toolsJSON)
 				// 持久化门禁模式：批量会话跨 turn 必须保持 batch（防退化 single）
 				mode := opts.PhaseMode

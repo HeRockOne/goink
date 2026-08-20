@@ -898,3 +898,25 @@ func (g *PhaseGate) LoadWordCount(okStr string) {
 		g.wordCountOK = &v
 	}
 }
+
+// ResetTo 重置门禁状态到指定阶段（清空所有调用记录、visited、reads）。
+// 用于 done 阶段后新创作从 prepare 开始，防止旧状态残留导致自由回退。
+func (g *PhaseGate) ResetTo(phase string) bool {
+	if g == nil || !g.active {
+		return false
+	}
+	for _, p := range g.phases {
+		if p.Name == phase {
+			g.currentPhase = phase
+			g.visited = []string{phase}
+			g.calledTools = make(map[string]int)
+			g.successfulTools = make(map[string]int)
+			g.lastToolResults = make(map[string]string)
+			g.wordCountOK = nil
+			g.readsByPhase = make(map[string]map[string]bool)
+			g.roundCompleted = false
+			return true
+		}
+	}
+	return false
+}
