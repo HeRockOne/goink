@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -42,6 +43,7 @@ type PhaseConfig struct {
 	FailNext  string   // require 不满足时的回退阶段
 	Loop      bool     // batch 模式下是否循环（write → outline）
 	EditPaths string   // edit 工具的路径范围（如 "outlines/*, goink.md"，"*" = 不限制）
+	Note      string   // 注意/提示文本（用于 checklist 动态生成）
 }
 
 // ParsePhaseGateConfig 从 markdown 内容中解析 <!-- phase-gate-config --> 块。
@@ -119,6 +121,8 @@ func parsePhaseBlock(block string) PhaseConfig {
 			pc.Loop = val == "true"
 		case "edit_paths":
 			pc.EditPaths = val
+		case "note":
+			pc.Note = val
 		}
 	}
 	return pc
@@ -301,6 +305,92 @@ func isMutatingTool(toolName string) bool {
 		strings.HasPrefix(toolName, "update_") ||
 		strings.HasPrefix(toolName, "delete_") ||
 		strings.HasPrefix(toolName, "remove_")
+}
+
+// phaseChecklist 从门禁配置动态生成当前阶段紧凑清单（上下文末尾注入，比 kernel 更易被注意）。
+// 必做/禁止/转出 从 PhaseConfig 自动派生，注意 从 Note 字段读取——改门禁配置时顺手维护。
+func phaseChecklist(pc *PhaseConfig) string {
+	if pc == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("【当前阶段：%s】\n", pc.Name))
+
+	// 必做
+	sb.WriteString("必做：")
+	if len(pc.Require) > 0 {
+		sb.WriteString(strings.Join(pc.Require, " + "))
+	} else {
+		sb.WriteString("（无强制要求）")
+	}
+
+	// 禁止：计算白名单外 mutating 工具
+	allowed := make(map[string]bool, len(pc.Tools))
+	for _, t := range pc.Tools {
+		allowed[t] = true
+	}
+	var forbidden []string
+
+	prefixes := []struct {
+		prefix string
+		label  string
+	}{
+		{"create_", "create_*"},
+		{"update_", "update_*"},
+		{"delete_", "delete_*"},
+		{"remove_", "remove_*"},
+	}
+	for _, p := range prefixes {
+		var allowedOfPrefix []string
+		for t := range allowed {
+			if strings.HasPrefix(t, p.prefix) {
+				allowedOfPrefix = append(allowedOfPrefix, t)
+			}
+		}
+		if len(allowedOfPrefix) == 0 {
+			forbidden = append(forbidden, p.label)
+		} else {
+			sort.Strings(allowedOfPrefix)
+			forbidden = append(forbidden, fmt.Sprintf("%s（仅%s）", p.label, strings.Join(allowedOfPrefix, "/")))
+		}
+	}
+
+	if !allowed["edit"] {
+		forbidden = append(forbidden, "edit")
+	} else if pc.EditPaths != "" && pc.EditPaths != "*" {
+		forbidden = append(forbidden, fmt.Sprintf("edit 仅限 %s", pc.EditPaths))
+	}
+
+	if !allowed["run_subagent"] {
+		forbidden = append(forbidden, "run_subagent")
+	}
+
+	sb.WriteString("\n禁止：")
+	if len(forbidden) > 0 {
+		sb.WriteString(strings.Join(forbidden, "，"))
+	} else {
+		sb.WriteString("（无限制）")
+	}
+
+	// 注意
+	if pc.Note != "" {
+		sb.WriteString(fmt.Sprintf("\n注意：%s", pc.Note))
+	}
+
+	// 转出
+	if pc.Next != "" {
+		sb.WriteString("\n转出：")
+		if len(pc.Require) > 0 {
+			sb.WriteString(strings.Join(pc.Require, " + "))
+			sb.WriteString(" 完成")
+		}
+		sb.WriteString(fmt.Sprintf(" → set_phase(\"%s\")", pc.Next))
+	} else {
+		sb.WriteString("\n转出：终点阶段，本轮创作结束")
+	}
+
+	return sb.String()
 }
 
 // ValidationIssue 门禁配置校验结果单条（设置页"校验配置"按钮用）。

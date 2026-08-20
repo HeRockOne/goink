@@ -20,6 +20,7 @@ next: prepare
 <!-- phase-gate-config
 mode: single
 phase: prepare
+note: 还处于只读阶段，不要尝试写大纲或正文——edit 和所有写入工具都会被拦截
 tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, update_chapter_plan, create_story_arc, search_story_memory, web_search, web_fetch, set_phase
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
@@ -33,10 +34,12 @@ edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
 next: write
+note: 大纲写进 outlines/NNN.md 文件，不是数据库。不要调 get_outline（门禁已移除，信息在 get_writing_context 的 outline 段里）
 -->
 <!-- phase-gate-config
 mode: single
 phase: write
+note: 正文只写当前章节内容，禁止复制前章标题或摘要。维护操作在 maintain 阶段做，write 阶段调维护工具会被拦截
 tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, web_search, web_fetch, set_phase, create_item_occurrence, update_writing_snapshot, check_story_consistency
 edit_paths: chapters/*
 require: edit, get_chapter_list, read, check_story_consistency
@@ -54,6 +57,7 @@ next: maintain
 <!-- phase-gate-config
 mode: single
 phase: maintain
+note: 一轮内完成，不留待办
 tools: read, auto_skill_injection, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_outline, update_outline_beat, create_outline_beat, delete_outline_beat, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, update_chapter_meta, check_story_consistency, set_phase
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency
@@ -81,10 +85,12 @@ tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_ch
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
 next: outline
+note: 还处于只读阶段，不要尝试写大纲或正文——edit 和所有写入工具都会被拦截
 -->
 <!-- phase-gate-config
 mode: batch
 phase: outline
+note: 大纲写进 outlines/NNN.md 文件，不是数据库。不要调 get_outline（门禁已移除，信息在 get_writing_context 的 outline 段里）
 tools: read, auto_skill_injection, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_outline, search_story_memory, web_search, web_fetch, set_phase
 edit_paths: outlines/*, goink.md
 require: edit
@@ -100,6 +106,7 @@ require: edit, get_chapter_list, read, create_scene, update_character, create_ti
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
 next: review
 loop: true
+note: 正文只写当前章节内容，禁止复制前章标题或摘要。维护操作在 maintain 阶段做，write 阶段调维护工具会被拦截
 -->
 <!-- phase-gate-config
 mode: batch
@@ -117,6 +124,7 @@ edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle, main-tech-data-hygiene
 next: done
+note: 一轮内完成，不留待办
 -->
 <!-- phase-gate-config
 mode: batch
