@@ -36,7 +36,8 @@ type PhaseGate struct {
 type PhaseConfig struct {
 	Name      string   // 阶段名称
 	Mode      string   // 所属模式："single" | "batch"（空=两种模式都适用）
-	Tools     []string // 允许使用的工具
+	Tools     []string // 允许使用的显式工具名
+	ToolCategories []string // 工具类别（get/create/update/delete/search/remove），自动展开为对应前缀
 	Require   []string // 必须调用过的工具（完成条件）
 	AutoSkillInjection []string // 必须读取过的技能名（完成条件，如 main-tech-show-dont-tell）
 	Next      string   // 满足条件后可进入的下一阶段
@@ -87,6 +88,31 @@ func ParsePhaseGateConfig(content string, mode string) *PhaseGate {
 	}
 }
 
+// knownCategories 可展开为前缀的类别名，用于 tools: 精简配置。
+var knownCategories = map[string]bool{
+	"get": true, "create": true, "update": true,
+	"delete": true, "search": true, "remove": true,
+}
+
+// categoryPrefixes 类别名到前缀的映射，用于 CheckToolAllowed 匹配。
+var categoryPrefixes = map[string]string{
+	"get":    "get_",
+	"create": "create_",
+	"update": "update_",
+	"delete": "delete_",
+	"search": "search_",
+	"remove": "remove_",
+}
+
+// toolMatchesCategory 检查工具名是否匹配某类别。
+func toolMatchesCategory(toolName, category string) bool {
+	prefix, ok := categoryPrefixes[category]
+	if !ok {
+		return toolName == category
+	}
+	return strings.HasPrefix(toolName, prefix)
+}
+
 // parsePhaseBlock 解析单个阶段配置块的键值对。
 func parsePhaseBlock(block string) PhaseConfig {
 	pc := PhaseConfig{}
@@ -108,7 +134,17 @@ func parsePhaseBlock(block string) PhaseConfig {
 		case "mode":
 			pc.Mode = val
 		case "tools":
-			pc.Tools = parseToolList(val)
+			for _, item := range strings.Split(val, ",") {
+				item = strings.TrimSpace(item)
+				if item == "" {
+					continue
+				}
+				if knownCategories[item] {
+					pc.ToolCategories = append(pc.ToolCategories, item)
+				} else {
+					pc.Tools = append(pc.Tools, item)
+				}
+			}
 		case "require":
 			pc.Require = parseToolList(val)
 		case "auto_skill_injection":
@@ -330,18 +366,31 @@ func phaseChecklist(pc *PhaseConfig) string {
 	for _, t := range pc.Tools {
 		allowed[t] = true
 	}
+	// 类别覆盖的工具也算白名单内
+	hasCategory := func(cat string) bool {
+		for _, c := range pc.ToolCategories {
+			if c == cat {
+				return true
+			}
+		}
+		return false
+	}
 	var forbidden []string
 
 	prefixes := []struct {
 		prefix string
 		label  string
+		cat    string
 	}{
-		{"create_", "create_*"},
-		{"update_", "update_*"},
-		{"delete_", "delete_*"},
-		{"remove_", "remove_*"},
+		{"create_", "create_*", "create"},
+		{"update_", "update_*", "update"},
+		{"delete_", "delete_*", "delete"},
+		{"remove_", "remove_*", "remove"},
 	}
 	for _, p := range prefixes {
+		if hasCategory(p.cat) {
+			continue // 类别覆盖，全部放行
+		}
 		var allowedOfPrefix []string
 		for t := range allowed {
 			if strings.HasPrefix(t, p.prefix) {
@@ -356,13 +405,13 @@ func phaseChecklist(pc *PhaseConfig) string {
 		}
 	}
 
-	if !allowed["edit"] {
+	if !allowed["edit"] && !hasCategory("edit") {
 		forbidden = append(forbidden, "edit")
-	} else if pc.EditPaths != "" && pc.EditPaths != "*" {
+	} else if allowed["edit"] && pc.EditPaths != "" && pc.EditPaths != "*" {
 		forbidden = append(forbidden, fmt.Sprintf("edit 仅限 %s", pc.EditPaths))
 	}
 
-	if !allowed["run_subagent"] {
+	if !allowed["run_subagent"] && !hasCategory("run_subagent") {
 		forbidden = append(forbidden, "run_subagent")
 	}
 
@@ -426,13 +475,22 @@ func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue 
 				issues = append(issues, ValidationIssue{mode, p.Name, "error",
 					fmt.Sprintf("next 指向不存在的阶段 [%s]", p.Next)})
 			}
-			// require 的工具必须在 tools 白名单里，否则 set_phase 永远被拦
+			// require 的工具必须在 tools 白名单或类别覆盖中，否则 set_phase 永远被拦
 			tools := make(map[string]bool, len(p.Tools))
 			for _, t := range p.Tools {
 				tools[t] = true
 			}
 			for _, req := range p.Require {
-				if !tools[req] {
+				inTools := tools[req]
+				if !inTools {
+					for _, cat := range p.ToolCategories {
+						if toolMatchesCategory(req, cat) {
+							inTools = true
+							break
+						}
+					}
+				}
+				if !inTools {
 					issues = append(issues, ValidationIssue{mode, p.Name, "error",
 						fmt.Sprintf("require 引用了 tools 中没有的工具 [%s]，切换阶段将永远被拦截", req)})
 				}
@@ -448,7 +506,16 @@ func ValidateGateConfig(content string, knownSkills []string) []ValidationIssue 
 				}
 			}
 			// 有 edit 工具但没限制路径
-			if tools["edit"] && p.EditPaths == "" {
+			hasEdit := tools["edit"]
+			if !hasEdit {
+				for _, cat := range p.ToolCategories {
+					if cat == "edit" {
+						hasEdit = true
+						break
+					}
+				}
+			}
+			if hasEdit && p.EditPaths == "" {
 				issues = append(issues, ValidationIssue{mode, p.Name, "warning",
 					"tools 含 edit 但缺少 edit_paths（将允许编辑任意文件，建议限制路径）"})
 			}
@@ -672,6 +739,18 @@ func (g *PhaseGate) CheckToolAllowed(toolName string) (bool, string) {
 				if missing := g.missingInjections(current); len(missing) > 0 {
 					warning := fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 auto_skill_injection 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
 					return false, warning
+				}
+			}
+			return true, ""
+		}
+	}
+
+	// 匹配类别前缀（get/create/update/delete/search/remove）
+	for _, cat := range current.ToolCategories {
+		if toolMatchesCategory(toolName, cat) {
+			if isMutatingTool(toolName) {
+				if missing := g.missingInjections(current); len(missing) > 0 {
+					return false, fmt.Sprintf("本阶段必读技能尚未加载: %v。请先用 auto_skill_injection 加载这些技能，再执行创作动作——技能是创作指导，必须先读再动笔。", missing)
 				}
 			}
 			return true, ""

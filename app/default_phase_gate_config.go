@@ -8,10 +8,11 @@ import (
 
 // defaultPhaseGateConfig 是出厂默认阶段门禁配置，与项目根目录 门禁配置示例.md 保持同步。
 // 首次启动时写入 app_config，用户可在设置页修改或清空（清空后恢复默认）。
+// tools: 支持类别名（get/create/update/delete/search/remove）自动展开为对应前缀工具。
 const defaultPhaseGateConfig = `<!-- phase-gate-config
 mode: single
 phase: init
-tools: auto_skill_injection, edit, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase, update_outline, get_outline, create_outline_beat, update_outline_beat, delete_outline_beat
+tools: get, create, edit, auto_skill_injection, set_phase, update_outline, update_outline_beat, delete_outline_beat
 edit_paths: goink.md
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
 auto_skill_injection: main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system
@@ -21,7 +22,7 @@ note: 先写全书总纲（update_outline + create_outline_beat），未写总�
 <!-- phase-gate-config
 mode: single
 phase: prepare
-tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, update_chapter_plan, create_story_arc, search_story_memory, web_search, web_fetch, set_phase
+tools: get, search, read, auto_skill_injection, set_phase, web_search, web_fetch, update_writing_snapshot, update_chapter_plan, create_story_arc
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
 next: outline
@@ -30,7 +31,7 @@ note: 平行发出 9 项必查。只读为主，禁止 edit 和正文/大纲写�
 <!-- phase-gate-config
 mode: single
 phase: outline
-tools: read, auto_skill_injection, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_outline, search_story_memory, web_search, web_fetch, set_phase
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch
 edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
@@ -40,7 +41,7 @@ note: edit(outlines/NNN.md) 写大纲，不得超出本卷范围
 <!-- phase-gate-config
 mode: single
 phase: write
-tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, web_search, web_fetch, set_phase, create_item_occurrence, update_writing_snapshot, check_story_consistency
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch, check_story_consistency, create_item_occurrence, update_writing_snapshot
 edit_paths: chapters/*
 require: edit, get_chapter_list, read, check_story_consistency
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
@@ -50,7 +51,7 @@ note: edit(chapters/NNN.md) 写正文，read 本章大纲锚定后再动笔。�
 <!-- phase-gate-config
 mode: single
 phase: review
-tools: read, auto_skill_injection, edit, run_subagent, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, search_story_memory, check_story_consistency, web_search, web_fetch, set_phase
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch, check_story_consistency, run_subagent
 edit_paths: chapters/*
 require: run_subagent, check_story_consistency
 next: maintain
@@ -59,7 +60,7 @@ note: run_subagent 启动审稿，审完 edit 修正文。禁止维护工具
 <!-- phase-gate-config
 mode: single
 phase: maintain
-tools: read, auto_skill_injection, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_outline, update_outline_beat, create_outline_beat, delete_outline_beat, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, update_chapter_meta, check_story_consistency, set_phase
+tools: get, create, update, delete, search, read, edit, auto_skill_injection, set_phase, check_story_consistency
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle, main-tech-data-hygiene
@@ -69,14 +70,14 @@ note: 一轮内完成全部 14 项维护，不留待办
 <!-- phase-gate-config
 mode: single
 phase: done
-tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
+tools: get, set_phase
 next:
 note: 本轮创作结束，等待用户发起新一轮
 -->
 <!-- phase-gate-config
 mode: batch
 phase: init
-tools: auto_skill_injection, edit, create_location, create_character, create_story_arc, create_arc_node, create_lore, create_item, create_timeline_entry, create_preference, get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences, get_writing_context, set_phase, update_outline, get_outline, create_outline_beat, update_outline_beat, delete_outline_beat
+tools: get, create, edit, auto_skill_injection, set_phase, update_outline, update_outline_beat, delete_outline_beat
 edit_paths: goink.md
 require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
 auto_skill_injection: main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system
@@ -86,7 +87,7 @@ note: 先写全书总纲（update_outline + create_outline_beat），未写总�
 <!-- phase-gate-config
 mode: batch
 phase: prepare
-tools: get_writing_context, get_chapter_list, read, auto_skill_injection, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_entity_appearances, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, update_chapter_plan, create_story_arc, search_story_memory, web_search, web_fetch, set_phase
+tools: get, search, read, auto_skill_injection, set_phase, web_search, web_fetch, update_writing_snapshot, update_chapter_plan, create_story_arc
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences
 auto_skill_injection: main-tech-common-sense-logic
 next: outline
@@ -95,7 +96,7 @@ note: 平行发出 9 项必查。只读为主，禁止 edit 和正文/大纲写�
 <!-- phase-gate-config
 mode: batch
 phase: outline
-tools: read, auto_skill_injection, edit, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, get_writing_context, get_outline, search_story_memory, web_search, web_fetch, set_phase
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch
 edit_paths: outlines/*, goink.md
 require: edit
 auto_skill_injection: main-tech-chapter-hook-enhanced, main-tech-chapter-title-design
@@ -105,7 +106,7 @@ note: edit(outlines/NNN.md) 写大纲，不得超出本卷范围
 <!-- phase-gate-config
 mode: batch
 phase: write
-tools: read, auto_skill_injection, edit, search_story_memory, get_characters, get_character_relations, get_timeline, get_story_arcs, get_reader_perspective, get_preferences, get_chapter_list, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, web_search, web_fetch, set_phase, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, check_story_consistency
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch, check_story_consistency, create_item_occurrence, update_writing_snapshot, create_scene, update_character, create_timeline_entry, update_timeline_entry
 edit_paths: chapters/*
 require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, check_story_consistency
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
@@ -116,7 +117,7 @@ note: edit(chapters/NNN.md) 写正文，read 本章大纲锚定后再动笔。�
 <!-- phase-gate-config
 mode: batch
 phase: review
-tools: read, auto_skill_injection, edit, run_subagent, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_lore, search_lore, get_items, search_items, get_scenes, get_item_occurrences, get_stats, get_writing_context, search_story_memory, check_story_consistency, web_search, web_fetch, set_phase
+tools: get, search, read, edit, auto_skill_injection, set_phase, web_search, web_fetch, check_story_consistency, run_subagent
 edit_paths: chapters/*
 require: run_subagent, check_story_consistency
 next: maintain
@@ -125,7 +126,7 @@ note: run_subagent 启动审稿，审完 edit 修正文。禁止维护工具
 <!-- phase-gate-config
 mode: batch
 phase: maintain
-tools: read, auto_skill_injection, edit, update_character, update_character_relationship, create_lore, update_lore, search_lore, create_item, update_item, search_items, get_item_occurrences, create_item_occurrence, create_scene, update_scene, delete_lore, delete_item, delete_scene, create_timeline_entry, update_timeline_entry, update_chapter_plan, create_arc_node, update_arc_node, create_reader_perspective_entry, update_reader_perspective_entry, create_character, update_location, create_location, create_location_relation, update_location_relation, create_story_arc, update_story_arc, create_preference, update_preference, delete_record, get_outline, update_outline_beat, create_outline_beat, delete_outline_beat, get_chapter_list, get_characters, get_character_relations, get_timeline, get_story_arcs, get_locations, get_reader_perspective, get_preferences, get_lore, get_items, get_scenes, get_item_occurrences, get_stats, get_writing_snapshot, update_writing_snapshot, get_writing_context, update_chapter_meta, check_story_consistency, set_phase
+tools: get, create, update, delete, search, read, edit, auto_skill_injection, set_phase, check_story_consistency
 edit_paths: goink.md, chapters/*, outlines/*
 require: edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency
 auto_skill_injection: main-tech-anti-repetition, main-tech-foreshadow-cycle, main-tech-data-hygiene
@@ -135,7 +136,7 @@ note: 一轮内完成全部 14 项维护，不留待办
 <!-- phase-gate-config
 mode: batch
 phase: done
-tools: get_chapter_list, get_writing_snapshot, get_phase_gate_config, set_phase
+tools: get, set_phase
 next:
 note: 本轮创作结束，等待用户发起新一轮
 -->
