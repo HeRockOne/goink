@@ -154,7 +154,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | 删除 | delete_* | 只在 maintain |
 | 审稿 | run_subagent | 只在 review |
 
-**工具清单以 `internal/mcp_tools/` 各文件注册名为准**（get_characters、create_item_occurrence 等 60 个）。
+**工具清单以 `internal/mcp_tools/` 各文件注册名为准**（get_characters、create_item_occurrence 等 69 个）。
 
 ### 第三步：定每阶段的 require（必须完成的动作）
 

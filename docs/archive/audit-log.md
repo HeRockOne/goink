@@ -302,3 +302,15 @@
 > 2026-08-20 门禁拦截根因分析 + 修复：分析新会话 sess_2_18cd84ce8dd8f114 的 11 次门禁拦截，发现 3 个根因——① rw_tools.go edit 工具在 full_replace 后 inject 维护提醒误导 LLM 在 write 阶段做维护（8 次拦截），改为提示 write→review 转出；② outline 阶段 tools 缺 get_outline（2 次拦截），补上；③ maintain 阶段 tools 缺 update_outline_beat/create_outline_beat/delete_outline_beat/get_outline（1 次拦截），补上。default_phase_gate_config.go single+batch 两处同步。go build 通过。
 
 > 2026-08-20 上下文污染根因修复：移除 write 阶段 get_writing_context 白名单（single+batch）。根因不是模型智力低，而是 get_writing_context 在 write 阶段返回了 recent_chapters 前章数据，模型复制了上下文中的前章标题。prepare 阶段已查过 get_writing_context，数据在上下文历史里，write 阶段不需要重新拉——write 阶段只需写正文，不应看到前章全量数据。移除后从架构层面杜绝污染源。
+
+> 2026-08-20 阶段 checklist 注入（对抗注意力衰减）：kernel 的阶段指令在上下文开头（L2），随对话增长被推到中间位置注意力衰减；每次 set_phase 成功后，在上下文末尾（注意力最强位置）注入当前阶段的紧凑清单（do/don't/exit conditions，47-266 tokens）。init 开书/prepare 9 查询/outline 写大纲/write 写正文/review 审稿/maintain 14 维护/done 终点各阶段均有独立清单。write 阶段明确禁止 update_*/create_*(非miniMaintain)/delete_*/run_subagent/edit(goink.md)，预期 write 阶段 8 次维护工具误调用降至 0-2 次。1 文件 internal/agent/phase_checklist.go（+57 行）。
+
+> 2026-08-20 checklist 动态生成（从 PhaseConfig 派生，单真相源）：phaseChecklist 从 PhaseConfig 动态生成"必做/禁止/转出"，"注意"从 Note 字段读取（放在门禁配置块里）。PhaseConfig 新增 Note 字段 + parsePhaseBlock 解析 note: 行。checklist 不再是硬编码字符串，改门禁配置只改 default_phase_gate_config.go 一处。删除 phase_checklist.go（57 行硬编码），逻辑移到 phase_gate.go phaseChecklist 生成函数（90 行）。全量测试通过。
+
+> 2026-08-20 门禁配置 note 字段统一 + 内容修正：note: 行统一放在 next: 后、--> 前。修正 3 处与门禁配置矛盾的内容——prepare 旧说"所有写入工具都被拦截"但配置放行 update_writing_snapshot/update_chapter_plan/create_story_arc，改为"只读为主，禁止 edit 和正文/大纲写入"；outline 旧说"不要调 get_outline"但 get_outline 在白名单中，改为"edit(outlines/NNN.md) 写大纲"；write 旧说"维护在 maintain 做"但 miniMaintain 在 write 阶段，改为"禁止正文外的维护工具"。新增 init/review/done 三阶段 note。
+
+> 2026-08-21 移动端 fix（thinking 空泡 + 历史 tool_call 卡片）：updateStreaming 当 content 为空且非 final 时隐藏 bubble（display:none），content 非空时恢复显示；全部 thinking 事件处理传空字符串而非 '思考中...' 占位符；服务端 handleSessionMessages 解析 assistant 消息 ExtraMetadata 返回 tool_calls 数据；移动端新增 renderToolCallsFromHistory，loadSession/started 事件加载历史时渲染 tool_call 卡片。3 文件（app/api_server.go + mobile/app.js），go build + 测试通过。
+
+> 2026-08-21 门禁 done 重置（防止同会话自由回退）：PhaseGate 新增 ResetTo 方法——清空全部状态（calledTools/successfulTools/visited/reads/wordCountOK）并设 phase。agent.go defer 保存在 phase=="done" 时清空 visited/tools 数据（保留 currentPhase=done 给 UI）；Run 初始化 LoadState 后检测 currentPhase=="done" 则 ResetTo("prepare")，新创作从 prepare 开始。visited=[prepare]，LLM 只能推进到 outline（prepare.next），不能回退到任何其他阶段。2 文件（phase_gate.go + agent.go），go build + 测试通过。
+
+> 2026-08-21 门禁工具类别系统（精简配置）：新增 knownCategories（get/create/update/delete/search/remove/web/check），parsePhaseBlock 解析 tools: 时自动识别类别存入 ToolCategories，显式工具名存入 Tools。CheckToolAllowed 先匹配显式名再匹配类别前缀。phaseChecklist 禁止生成：类别覆盖的前缀跳过。config 从每行 50+ 工具名缩到 8-14 个 token。向下兼容旧格式。2 文件（phase_gate.go + default_phase_gate_config.go），go build + 测试通过，新 exe 已部署。

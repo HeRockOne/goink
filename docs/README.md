@@ -62,7 +62,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [audit-log.md](archive/audit-log.md) | 审计日志（2026-08-04 ~ 2026-08-19，全部代码变更记录，按时间倒序） |
+| [audit-log.md](archive/audit-log.md) | 审计日志（2026-08-04 ~ 2026-08-21，全部代码变更记录，按时间倒序） |
 | [llm-chain-audit-2026-08-12.md](archive/llm-chain-audit-2026-08-12.md) | LLM 链路全量审计（系统提示词/工具/skill/缓存/门禁/压缩，16 项修复 + 9 项遗留） |
 | [true-machine-verification-2026-08-12.md](archive/true-machine-verification-2026-08-12.md) | 审计修复后真机验证手册（5 场景：init 可达/技能注入/batch 残留/压缩恢复/命中率并发，含 sqlite 自查命令） |
 | billing-panel.md | 计费面板技术设计（已完成功能的实现记录） |
