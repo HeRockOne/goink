@@ -300,3 +300,5 @@
 > 2026-08-20 门禁模式切换 UI（StatusBar 常驻按钮 + 批量前缀自动拼）：StatusBar 模式徽章从只读 span 改为点击 button 循环切换单章/批量6/批量9/批量12，无对话时也常驻显示（读 localStorage）。ChatPanel 新会话批量模式下自动拼接批量前缀触发后端 batch 检测。后端加 SetPhaseMode Wails 绑定。wails generate module 生成 bindings。frontend build + go build + agent 测试通过。
 
 > 2026-08-20 门禁拦截根因分析 + 修复：分析新会话 sess_2_18cd84ce8dd8f114 的 11 次门禁拦截，发现 3 个根因——① rw_tools.go edit 工具在 full_replace 后 inject 维护提醒误导 LLM 在 write 阶段做维护（8 次拦截），改为提示 write→review 转出；② outline 阶段 tools 缺 get_outline（2 次拦截），补上；③ maintain 阶段 tools 缺 update_outline_beat/create_outline_beat/delete_outline_beat/get_outline（1 次拦截），补上。default_phase_gate_config.go single+batch 两处同步。go build 通过。
+
+> 2026-08-20 上下文污染根因修复：移除 write 阶段 get_writing_context 白名单（single+batch）。根因不是模型智力低，而是 get_writing_context 在 write 阶段返回了 recent_chapters 前章数据，模型复制了上下文中的前章标题。prepare 阶段已查过 get_writing_context，数据在上下文历史里，write 阶段不需要重新拉——write 阶段只需写正文，不应看到前章全量数据。移除后从架构层面杜绝污染源。
