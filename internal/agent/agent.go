@@ -234,24 +234,37 @@ func (a *Agent) injectPhaseSkills(pg *PhaseGate, phase string, opts *RunOptions,
 	if content == "" {
 		return
 	}
-	// 去重：opts.Messages 已含相同技能全文 → 注入短提醒唤起注意（门禁状态照常标记）
-	for _, m := range opts.Messages {
-		if role, _ := m["role"].(string); role == "system" {
-			if c, ok := m["content"].(string); ok && c == content {
-				reminder, rerr := mcp_tools.BuildSkillsReminder(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
-				if rerr == nil && reminder != "" {
-					a.appendMsg("system", reminder, "", nil, opts, runningTokens)
-					a.logger.Debug("技能全文已在上下文，注入短提醒唤起注意", "phase", phase, "skills", pc.AutoSkillInjection)
-				} else {
-					a.logger.Debug("技能已在上下文中，跳过重复注入", "phase", phase, "skills", pc.AutoSkillInjection)
-				}
-				for _, name := range pc.AutoSkillInjection {
-					if !strings.Contains(name, "*") {
-						pg.OnSkillInjected(name)
-					}
-				}
-				return
+	// 去重：opts.Messages 已含相同技能全文 → 注入短提醒唤起注意（门禁状态照常标记）。
+	// 匹配范围：system 消息精确定位（系统 set_phase 注入全文）；tool 消息子串匹配
+	// （LLM 手动调 auto_skill_injection 返回的全文在 tool 消息内，被 JSON 包裹，需 Contains）。
+	// 旧实现只对比 system 消息 c==content，manual auto_skill_injection 的 tool 全文不在
+	// 去重范围内 → 手动抢读后系统又注入一份全文，同一技能重复注入（真机 9.2K+5K 实锤）。
+	injectReminder := func() {
+		reminder, rerr := mcp_tools.BuildSkillsReminder(a.skillStore, opts.NovelID, pc.AutoSkillInjection)
+		if rerr == nil && reminder != "" {
+			a.appendMsg("system", reminder, "", nil, opts, runningTokens)
+			a.logger.Debug("技能全文已在上下文，注入短提醒唤起注意", "phase", phase, "skills", pc.AutoSkillInjection)
+		} else {
+			a.logger.Debug("技能已在上下文中，跳过重复注入", "phase", phase, "skills", pc.AutoSkillInjection)
+		}
+		for _, name := range pc.AutoSkillInjection {
+			if !strings.Contains(name, "*") {
+				pg.OnSkillInjected(name)
 			}
+		}
+	}
+	for _, m := range opts.Messages {
+		role, _ := m["role"].(string)
+		if role != "system" && role != "tool" {
+			continue
+		}
+		c, ok := m["content"].(string)
+		if !ok || c == "" {
+			continue
+		}
+		if (role == "system" && c == content) || strings.Contains(c, content) {
+			injectReminder()
+			return
 		}
 	}
 	a.appendMsg("system", content, "", nil, opts, runningTokens)
@@ -614,7 +627,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								a.handleBatchChapterBoundary(pg, from, targetPhase, &opts, runningTokens)
 								if pg.mode == "batch" && targetPhase == "write" {
 									if wc := pg.WordCountCheck(); wc == nil || !*wc {
-										wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"
+										wcMsg := "<system-reminder>\n本章字数未校验或未达标，请先 get_chapter_list 校验达标（不足按缺口×1.2 一次扩到位）再声明下一章。\n</system-reminder>"
 										a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 									}
 								}
@@ -644,7 +657,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 										a.handleBatchChapterBoundary(pg, from, targetPhase, &opts, runningTokens)
 										if pg.mode == "batch" && targetPhase == "write" {
 											if wc := pg.WordCountCheck(); wc == nil || !*wc {
-												wcMsg := "<system-reminder>\n本章尚未通过 get_chapter_list 字数校验（当前章节字数未达标或未校验）。请先调用 get_chapter_list 校验本章字数达标（min_words~max_words）后，再声明下一章边界。若字数不足，必须一次扩到位（按缺口×1.2 设定目标，一次 read 一次 edit 补足），禁止挤牙膏式多次小扩。\n</system-reminder>"
+												wcMsg := "<system-reminder>\n本章字数未校验或未达标，请先 get_chapter_list 校验达标（不足按缺口×1.2 一次扩到位）再声明下一章。\n</system-reminder>"
 												a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 											}
 										}

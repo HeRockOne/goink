@@ -52,7 +52,7 @@ func (t *GetWritingContextTool) Description() string {
 		"reader: 读者认知计数 {known=已知信息数, suspense=活跃悬念数, misconception=读者误知数}\n" +
 		"writing_snapshot: 写作快照 {last_chapter_num=最新已完成章节号, current_arc_id=当前弧线ID, current_location=当前地点, active_chars=活跃角色ID数组JSON}\n" +
 		"stats: 统计 {total_chapters=总章数}\n" +
-		"outline: 全书总纲摘要 {core_conflict=核心矛盾, growth_arc=成长弧线, ending_direction=结局方向, word_count_plan=篇幅规划(万字), beats=[{chapter,description,beat_type,importance}], source=database}——本章创作必须服务于总纲的核心矛盾与结局方向\n" +
+		"outline: 全书总纲摘要 {core_conflict=核心矛盾, growth_arc=成长弧线, ending_direction=结局方向, word_count_plan=篇幅规划(万字), beats=[{chapter,description,beat_type}]（importance 不返回，如需完整大爽点用 get_outline）, source=database}——本章创作必须服务于总纲的核心矛盾与结局方向\n" +
 		"volume: 当前卷信息 {name, description, detail_json=卷纲, start_chapter, end_chapter}——本章只展开本卷情节\n" +
 		"progress: 进度锚点 {current_chapter=当前章号, volume_start=本卷起始章, volume_end=本卷结束章, rule=越界约束}——禁止提前展开后续卷情节"
 }
@@ -82,9 +82,9 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	}
 	result["chapter"] = chapterData
 
-	// ── 1.5 最近 5 章列表（以当前章节为锚点） ──
+	// ── 1.5 最近 3 章列表（以当前章节为锚点；3 章足够衔接受益，旧章节靠 search/read 反查） ──
 	cs := chapter.NewStore(db, log)
-	recentChs, _ := cs.GetRecentBefore(ctx, nid, chapNum, 5)
+	recentChs, _ := cs.GetRecentBefore(ctx, nid, chapNum, 3)
 	recentList := make([]map[string]any, 0)
 	for _, ch := range recentChs {
 		recentList = append(recentList, map[string]any{
@@ -261,10 +261,10 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	}
 	result["global_lore"] = globalLoreList
 
-	// ── 5. 时间线 ──
+	// ── 5. 时间线（近 30 条，够创作窗口；全量靠 get_timeline 反查） ──
 	tlStore := timeline.NewStore(db, log)
 	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
-		PageParams: storage.PageParams{Page: 1, Size: 100},
+		PageParams: storage.PageParams{Page: 1, Size: 30},
 	})
 	if err == nil {
 		pending := make([]map[string]any, 0)
@@ -350,7 +350,7 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		outlineMap["word_count_plan"] = o.WordCountPlan
 		outlineMap["source"] = "database"
 
-		// 读取大爽点
+		// 读取大爽点（importance 不返回——写作只看位置与内容，省 token）
 		beats, _ := oStore.ListBeats(ctx, nid)
 		beatList := make([]map[string]any, 0, len(beats))
 		for _, b := range beats {
@@ -358,7 +358,6 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 				"chapter":     b.Chapter,
 				"description": b.Description,
 				"beat_type":   b.BeatType,
-				"importance":  b.Importance,
 			})
 		}
 		outlineMap["beats"] = beatList

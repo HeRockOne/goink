@@ -138,6 +138,8 @@ mode: always
    **注意**：check_types 可选，留空=全部检查；review 阶段建议传 `["pacing_gap"]`，maintain 阶段建议传 `["promise_fulfillment"]`
 7. **set_phase("review")**
 
+> **write→review 边界（重要）**：set_phase("review") 或系统自动推进到 review 后，**立即进入审稿流程，禁止在本阶段调用任何维护/更新工具**（update_chapter_meta、update_writing_snapshot、create_scene、update_timeline_entry 等全部会被门禁拦截——review 白名单只有只读/审稿工具）。迷你维护是**写正文完成后、set_phase("review") 之前**做的事；进入 review 后只做：run_subagent 启动审稿 → 读报告 → 修正文。维护动作留到 maintain 阶段统一做。不要尝试"提前维护"——门禁拦截 + 重试思考每次浪费约 1-2K token，且阶段自动推进后当前阶段已是 review，维护工具必然被拦。
+
 ### review
 
 1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章。**审稿报告必须列出实际审读的章节清单**（如"已审：第 3-7 章"），主 agent 收到报告先核对覆盖范围，发现覆盖不全（漏章/只审了开头几章）必须再启动子代理补审未覆盖章节，全部覆盖后才进入修复

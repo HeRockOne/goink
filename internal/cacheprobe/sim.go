@@ -990,7 +990,7 @@ func fixedSystemNoCat() []map[string]any {
 // novelState 模拟 NS，与真实 agentcfg.NovelState 字节格式完全一致：
 //   【小说基础信息】书名/类型/简介 ← 真实 DB（novels 表第一本，经 GOINK_DATA_DIR/GOINK_DB_PATH）
 //   当前进度：第 N 章 ← turn 动态（模拟创作推进；真实为 DB chapters 计数）
-//   【章节指纹（最近）】← 真实 goink.md 尾部 1500 字符（platform.DataDir()/novels/{id}/goink.md）
+//   【章节指纹（最近）】← 真实 goink.md 尾部 1000 字符（platform.DataDir()/novels/{id}/goink.md）
 // DB/文件缺失时回退占位，保证相对比较不受影响。
 func novelState(turn int) string {
 	var b strings.Builder
@@ -1020,8 +1020,8 @@ func novelState(turn int) string {
 	if real != "" {
 		b.WriteString("\n【章节指纹（最近）】\n")
 		r := []rune(real)
-		if len(r) > 1500 {
-			b.WriteString(string(r[len(r)-1500:]))
+		if len(r) > 1000 {
+			b.WriteString(string(r[len(r)-1000:]))
 			b.WriteString("\n…（更早指纹已截断，如需完整内容用 read(goink.md)）\n")
 		} else {
 			b.WriteString(real)
@@ -1032,9 +1032,9 @@ func novelState(turn int) string {
 		return b.String()
 	}
 
-	// 回退占位指纹（每章 6 段指纹，约 120 字符/章，模拟 1500 字符上限）
+	// 回退占位指纹（每章 6 段指纹，约 120 字符/章，模拟 1000 字符上限）
 	b.WriteString("\n【章节指纹（最近）】\n")
-	for i := 1; i <= 12; i++ {
+	for i := 1; i <= 8; i++ {
 		fmt.Fprintf(&b, "### 第%d章 %s\n\n开篇：%s\n\n场景：%s\n\n情感：%s\n\n对白：%s\n\n钩子：%s\n\n感官：%s\n\n",
 			i, "秘境初探", "动作开场", "宗门演武", "紧张", "冲突对话", "悬念", "视觉听觉")
 	}
@@ -1100,7 +1100,7 @@ func openRealDB() (*gorm.DB, error) {
 	return realDB, nil
 }
 
-// readRealGoinkFingerprint 读取真实 goink.md 尾部最近 1500 字符（与 agentcfg.NovelState 的 maxGoinkChars 一致）。
+// readRealGoinkFingerprint 读取真实 goink.md 尾部最近 1000 字符（与 agentcfg.NovelState 的 maxGoinkChars 一致）。
 // 查找路径：GOINK_DATA_DIR 或 exe 目录或 ~/Goink 下的 novels/{1..N}/goink.md（取存在的一本）。
 func readRealGoinkFingerprint() string {
 	dir := platform.DataDir()

@@ -38,8 +38,10 @@ func (t *AutoSkillInjectionTool) Description() string {
 【注意】技能是创作指导（世界观分类/伏笔节奏/悬念设计等方法论），压缩后必须补读再动笔——不要因为"读过一次"就跳过补读；门禁会在创作动作前强制检查。`
 }
 
-func (t *AutoSkillInjectionTool) JSONSchema() json.RawMessage { return SchemaOf(AutoSkillInjectionArgs{}) }
-func (t *AutoSkillInjectionTool) NewArgs() any                { return &AutoSkillInjectionArgs{} }
+func (t *AutoSkillInjectionTool) JSONSchema() json.RawMessage {
+	return SchemaOf(AutoSkillInjectionArgs{})
+}
+func (t *AutoSkillInjectionTool) NewArgs() any { return &AutoSkillInjectionArgs{} }
 
 func (t *AutoSkillInjectionTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*AutoSkillInjectionArgs)
@@ -59,8 +61,8 @@ func (t *AutoSkillInjectionTool) Execute(ctx context.Context, args any, tc ToolC
 	// 此时只返回"已在上下文中"提示，OnSkillInjected 标记照常由 agent 层完成。
 	if content != "" && messagesContainContent(tc.Messages, content) {
 		return &ToolResult{Success: true, Data: map[string]any{
-			"skills":  names,
-			"display": fmt.Sprintf("技能已在上下文中（系统已自动注入），无需重复加载: %s", strings.Join(names, ", ")),
+			"skills":             names,
+			"display":            fmt.Sprintf("技能已在上下文中（系统已自动注入），无需重复加载: %s", strings.Join(names, ", ")),
 			"already_in_context": true,
 		}}, nil
 	}
@@ -71,10 +73,23 @@ func (t *AutoSkillInjectionTool) Execute(ctx context.Context, args any, tc ToolC
 	}}, nil
 }
 
-// messagesContainContent 检查消息列表中是否已有完全相同的技能全文（去重用）。
+// messagesContainContent 检查消息列表中是否已有技能全文（去重用）。
+// system 消息是纯文本全文（精确匹配）；tool 消息是 JSON 包裹的全文（子串匹配，
+// 覆盖"LLM 此前手动 auto_skill_injection 已拿过全文"场景，避免重复返回全文）。
 func messagesContainContent(messages []map[string]any, content string) bool {
+	if content == "" {
+		return false
+	}
 	for _, m := range messages {
-		if c, ok := m["content"].(string); ok && c == content {
+		role, _ := m["role"].(string)
+		if role != "system" && role != "tool" {
+			continue
+		}
+		c, ok := m["content"].(string)
+		if !ok || c == "" {
+			continue
+		}
+		if (role == "system" && c == content) || strings.Contains(c, content) {
 			return true
 		}
 	}

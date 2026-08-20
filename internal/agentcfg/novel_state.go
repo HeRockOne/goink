@@ -51,7 +51,7 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 		// 注入最近 maxGoinkChars 字符（尾部截断，保留最新指纹供防重复，
 		// 固定窗口字节稳定，符合 P1 缓存协议）。完整内容由 AI 用 read 按需读取。
 		b = append(b, "\n【章节指纹（最近）】\n"...)
-		const maxGoinkChars = 1500
+		const maxGoinkChars = 1000
 		r := []rune(state)
 		if len(r) > maxGoinkChars {
 			b = append(b, string(r[len(r)-maxGoinkChars:])...)
