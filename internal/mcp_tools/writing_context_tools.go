@@ -39,7 +39,7 @@ func (t *GetWritingContextTool) Description() string {
 		"使用时机：prepare 阶段开头调用一次即可，不要反复调用。\n" +
 		"返回结构说明：\n" +
 		"chapter: 当前章节 {num=章节号, title=标题, word_count=字数}\n" +
-		"recent_chapters[]: 最近5章 [{num, title, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数, characters_in=本章出场角色ID数组JSON, arc_ids=本章涉及弧线ID数组JSON}]\n" +
+		"recent_chapters[]: 最近3章 [{num, summary=本章摘要, key_events=关键事件JSON数组, word_cnt=字数, characters_in=本章出场角色ID数组JSON, arc_ids=本章涉及弧线ID数组JSON}]（title 不返回——防模型复制前章标题到正文，前章标题对当前写作无指导意义）\n" +
 		"scenes[]: 本章场景 [{title, summary, word_count, location={name=地点名, type=地点类型}, arc_node={title=节点标题, arc_name=所属弧线名}}]\n" +
 		"characters[]: 出场角色 [{name, status=角色状态(alive/dead/missing/unknown，dead=已死亡不得出场), location={name=所在地点}, items=[{name, role=key_prop/supporting/minor}], item_count=持有物品总数}]\n" +
 		"dead_characters[]: 已死亡角色名单（status=dead 的聚合，写作时严禁让其中任何角色再次出场/说话/被提及为在场）\n" +
@@ -88,7 +88,6 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	for _, ch := range recentChs {
 		recentList = append(recentList, map[string]any{
 			"num":           ch.ChapterNumber,
-			"title":         ch.Title,
 			"summary":       ch.Summary,
 			"key_events":    ch.KeyEvents,
 			"word_cnt":      ch.WordCount,
@@ -97,6 +96,10 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		})
 	}
 	result["recent_chapters"] = recentList
+	// 前置引用说明：防止模型把前章标题/摘要复制到正文（上下文污染——模型看到参考内容后
+	// 误当输出模板，是已知 LLM 通病，非特定模型缺陷）。这条说明放在 data 最前靠近
+	// recent_chapters，比系统提示词里的遥远指令更有效（sandwich defense 模式）。
+	result["recent_chapters_note"] = "以下为前章参考摘要，仅用于了解剧情进展。**禁止复制到正文中**——正文只写当前章节内容，不拷贝前章标题、摘要或事件列表。"
 
 	// ── 2. 本章场景 → 角色 → 地点 → 弧线节点 ──
 	sceneStore := scene.NewStore(db, log)
