@@ -18,7 +18,6 @@ import (
 	"novel/internal/outline"
 	"novel/internal/reader"
 	"novel/internal/scene"
-	"novel/internal/storage"
 	"novel/internal/storyarc"
 	"novel/internal/timeline"
 	"novel/internal/volume"
@@ -46,8 +45,8 @@ func (t *GetWritingContextTool) Description() string {
 		"dead_characters[]: 已死亡角色名单（status=dead 的聚合，写作时严禁让其中任何角色再次出场/说话/被提及为在场）\n" +
 		"active_arcs[]: 活跃弧线 [{name, type_zh=类型中文(主线/支线/角色弧/背景), nodes_done=已完成节点数, nodes_total=总节点数, related_lore=[关联设定ID], related_items=[关联物品ID]}]\n" +
 		"global_lore[]: 全局设定索引（arc_id 为空、跨弧线根基设定，如修炼体系/势力格局/天道法则）[{id, name}]——写作用到这些设定时用 get_lore 取详情\n" +
-		"timeline.pending[]: 待回收伏笔 [{title, category=foreshadowing/user_directive, target_chapter=目标回收章节, importance=重要度1-5}]\n" +
-		"timeline.resolved[]: 已回收伏笔 [{title, resolved_chapter=实际回收章节}]\n" +
+		"timeline.pending[]: 待回收伏笔（target ≤ 当前+10 创作窗口内全部）[{title, category=foreshadowing/user_directive, target_chapter=目标回收章节, importance=重要度1-5}]\n" +
+		"timeline.resolved[]: 已回收伏笔（仅近 5 章内回收的，远处用 get_timeline/check_story_consistency 核对）[{title, resolved_chapter=实际回收章节}]\n" +
 		"timeline.overdue[]: 超期未回收伏笔 [{title, target_chapter=原定回收章节, importance, overdue_by=超期了几章(越大越紧急)}]\n" +
 		"reader: 读者认知计数 {known=已知信息数, suspense=活跃悬念数, misconception=读者误知数}\n" +
 		"writing_snapshot: 写作快照 {last_chapter_num=最新已完成章节号, current_arc_id=当前弧线ID, current_location=当前地点, active_chars=活跃角色ID数组JSON}\n" +
@@ -261,16 +260,18 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	}
 	result["global_lore"] = globalLoreList
 
-	// ── 5. 时间线（近 30 条，够创作窗口；全量靠 get_timeline 反查） ──
+	// ── 5. 时间线（创作窗口：target ≤ 当前+10 的全部 pending + 近 5 章 resolved；远处靠 get_timeline/check 反查） ──
 	tlStore := timeline.NewStore(db, log)
-	tlEntries, err := tlStore.ListByNovel(ctx, nid, timeline.ListByNovelOptions{
-		PageParams: storage.PageParams{Page: 1, Size: 30},
-	})
+	// ListByChapterRange 拿到 target_chapter ≤ 当前+10 的条目（含全部 overdue 的 pending，
+	// 及历史已回收条目），再手动过滤 resolved 只保留近处——避免 ListByNovel 无窗口分页
+	// 把"未来章才回收"的规划条目混进 writing_context（真机：resolved 里 7 条是 34-45 章，
+	// 当前写 17 章完全用不上，曾占 timeline 段 54%）。
+	tlRange, err := tlStore.ListByChapterRange(ctx, nid, 0, chapNum+10)
 	if err == nil {
 		pending := make([]map[string]any, 0)
 		resolved := make([]map[string]any, 0)
 		overdue := make([]map[string]any, 0)
-		for _, e := range tlEntries.Items {
+		for _, e := range tlRange {
 			entry := map[string]any{
 				"id":               e.ID,
 				"title":            e.Title,
@@ -281,6 +282,11 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 				"resolved_chapter": e.ResolvedChapterID,
 			}
 			if e.Status == "resolved" {
+				// resolved 只保留近 5 章内回收的（当前创作需确认近处已回收）；
+				// 远处的已回收条目交 check_story_consistency / get_timeline 核对，不占 context
+				if chapNum > 0 && e.ResolvedChapterID > 0 && e.ResolvedChapterID < int64(chapNum-5) {
+					continue
+				}
 				resolved = append(resolved, entry)
 			} else {
 				pending = append(pending, entry)
