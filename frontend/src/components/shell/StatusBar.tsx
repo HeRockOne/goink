@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PhaseStatus } from '@/components/chat/types'
 import ContextRing, { type UsageInfo } from '@/components/chat/ContextRing'
@@ -82,11 +82,17 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, selecte
   const MODE_LABELS: Record<string, string> = {
     single: '单章', batch3: '批量3', batch6: '批量6', batch9: '批量9', batch12: '批量12',
   }
+  const [modeToast, setModeToast] = useState('')
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function cycleMode() {
     const idx = MODE_CYCLE.indexOf(phaseMode)
     const next = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]
     onPhaseModeChange(next)
+    setModeToast(MODE_LABELS[next] || next)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setModeToast(''), 2000)
   }
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   function handleMouseEnter() {
     hoverTimer.current = setTimeout(() => setShowDetail(true), 150)
@@ -179,6 +185,14 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, selecte
         {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
         <ContextRing usage={usage ?? null} selectedModel={selectedModel} onCompress={onCompress} bar />
       </span>
+
+      {modeToast && (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-medium shadow-lg whitespace-nowrap">
+            门禁模式：{modeToast}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
