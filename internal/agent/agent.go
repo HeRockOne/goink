@@ -296,8 +296,7 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 	a.injectPhaseSkills(pg, next, opts, runningTokens)
 	a.logger.Info("门禁自动推进", "from", current, "to", next)
 	reminder := fmt.Sprintf(
-		"<system-reminder>\n阶段 [%s] 条件已满足，已自动推进到 [%s]\n</system-reminder>",
-		current, next)
+		"<system-reminder>\n%s\n</system-reminder>", phaseChecklist(next))
 	a.appendMsg("user", reminder, "", nil, opts, runningTokens)
 	ps := pg.Status()
 	emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
@@ -637,7 +636,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 后续所有请求的前缀包含这条动态消息，前缀缓存每次失效。
 								// 8/9 批量每章 set_phase("write") 后每条都不同 → 命中率 89-93% 掉到 86%。
 								// 工具结果已返回 phase，LLM 不需要 StatusString 细节。
-								injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段，继续执行该阶段任务。\n</system-reminder>", pg.CurrentPhase())
+								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", phaseChecklist(pg.CurrentPhase()))
 								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
 								ps := pg.Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
@@ -661,7 +660,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 												a.appendMsg("user", wcMsg, "", nil, &opts, runningTokens)
 											}
 										}
-										injectMsg := fmt.Sprintf("<system-reminder>\n已切换到 [%s] 阶段（技能已自动补注入），继续执行该阶段任务。\n</system-reminder>", pg.CurrentPhase())
+										injectMsg := fmt.Sprintf("<system-reminder>\n%s（技能已自动补注入，必读技能已在上下文中）\n</system-reminder>", phaseChecklist(pg.CurrentPhase()))
 										a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
 										ps := pg.Status()
 										emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
