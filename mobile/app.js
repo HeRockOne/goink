@@ -244,7 +244,7 @@ applyTheme(getTheme());
 // ── 国际化 i18n ──
 const LANGS = {
   zh: {
-    bookshelf: '书架', chat: '对话', settings: '设置', detail: '小说详情',
+    bookshelf: '书架', chat: '对话', stats_label: '统计', settings: '设置', detail: '小说详情',
     novels_empty: '书架空空如也', loading: '加载中', load_fail: '加载失败',
     chapters: '章节', characters: '角色', timeline: '时间线', arcs: '弧线',
     reader: '读者', preferences: '偏好', locations: '地点',
@@ -365,7 +365,7 @@ const LANGS = {
     no_model: '未选择', switch_to: '切换到',
   },
   en: {
-    bookshelf: 'Bookshelf', chat: 'Chat', settings: 'Settings', detail: 'Novel Detail',
+    bookshelf: 'Bookshelf', chat: 'Chat', stats_label: 'Stats', settings: 'Settings', detail: 'Novel Detail',
     novels_empty: 'Your bookshelf is empty', loading: 'Loading', load_fail: 'Failed to load',
     chapters: 'Chapters', characters: 'Characters', timeline: 'Timeline', arcs: 'Arcs',
     reader: 'Reader', preferences: 'Preferences', locations: 'Locations',
@@ -786,8 +786,13 @@ function dc({ badge, bg, color, title, sub, meta, onclick }) {
 function nvCard(n) {
   const el = tpl('tpl-novel-card'); const root = el.firstElementChild;
   if (n.id === state.novelId) root.classList.add('novel-active');
-  root.onclick = () => openNovel(n.id, esc(n.title));
-  const icon = qs(root, '.nv-icon'); icon.style.background = n.color || '#666'; icon.textContent = (n.title || '?')[0];
+  root.onclick = (e) => { if (!e.target.closest('.novel-delete-btn')) openNovel(n.id, esc(n.title)); };
+  const icon = qs(root, '.nv-icon');
+  const c = n.color || '#666';
+  icon.style.background = c;
+  icon.style.background = `linear-gradient(158deg, color-mix(in srgb, ${c} 62%, white) 0%, ${c} 46%, color-mix(in srgb, ${c} 72%, black) 100%)`;
+  icon.textContent = (n.title || '?')[0];
+  icon.dataset.title = n.title || '';
   qs(root, '.nv-title').textContent = n.title;
   let m = '';
   if (n.genre) m += `<span class="novel-tag novel-tag-ghost">${esc(n.genre)}</span>`;
@@ -802,6 +807,12 @@ function nvCard(n) {
   if (wd) wdEl.innerHTML = `<strong>${wd}</strong>`; else wdEl.remove();
   const dtEl = qs(root, '.nv-stat-dt');
   if (n.lastUpdated) dtEl.textContent = '🕐' + n.lastUpdated; else dtEl.remove();
+  // 删除按钮
+  const delBtn = document.createElement('button');
+  delBtn.className = 'novel-delete-btn';
+  delBtn.innerHTML = TRASH_SVG;
+  delBtn.onclick = (e) => { e.stopPropagation(); showDeleteNovel(n.id, n.title); };
+  root.appendChild(delBtn);
   return root;
 }
 
@@ -825,19 +836,40 @@ function extractItems(r) {
 }
 
 // ── 页面切换 ──
+// 返回按钮 SVG
+const BACK_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15,18 9,12 15,6"/></svg>';
+// 对话入口 SVG
+const CHAT_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+// 删除 SVG
+const TRASH_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>';
+
+function goBack() {
+  if (state.page === 'novel-detail' || state.page === 'chat') switchPage('novels');
+  else if (state.page === 'settings' || state.page === 'stats') switchPage('novels');
+}
+
 async function switchPage(page) {
   state.page = page;
+  document.body.dataset.page = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page)?.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   const titles = { novels: t('bookshelf'), chat: t('chat'), stats: t('stats_label', '统计'), settings: t('settings'), 'novel-detail': state.novelTitle || t('detail') };
   document.getElementById('pageTitle').textContent = titles[page] || 'Goink';
   const actions = document.getElementById('headerActions');
-  if (page === 'chat') {
-    actions.innerHTML = '<button onclick="newChat()" title="' + t('new_chat') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button onclick="showSessions()" title="' + t('history') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></button>';
+
+  if (page === 'novel-detail') {
+    // 顶栏：返回 + 书名 | 对话入口
+    actions.innerHTML = `<button onclick="goBack()" title="${t('back')}">${BACK_SVG}</button><button onclick="openChat()" title="${t('chat')}">${CHAT_SVG}</button>`;
+  } else if (page === 'chat') {
+    // 顶栏：返回 + 书名 | 新对话 + 历史
+    actions.innerHTML = `<button onclick="goBack()" title="${t('back')}">${BACK_SVG}</button><button onclick="newChat()" title="${t('new_chat')}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button onclick="showSessions()" title="${t('history')}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></button>`;
     updateChatBanner();
     loadModels(); loadSessions();
-  } else { actions.innerHTML = ''; if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none'; }
+  } else {
+    actions.innerHTML = '';
+    if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none';
+  }
   if (page === 'novels') loadNovels();
   if (page === 'chat') { loadModels(); loadSessions(); syncWithDesktopState(); await loadSettingsStatus(); updateQuickBar(); }
   if (page === 'settings') loadSettings();
@@ -1180,7 +1212,7 @@ async function loadNovels() {
     if (API.connOk && !r._offline) syncToOffline(novelsFingerprint(novels));
     // 离线提示
     if (r._offline) toast('📡 离线模式，显示缓存数据');
-    const colors = ['#7b4f9e','#c44a4a','#3d8b5e','#b8922e','#c44a4a','#7b4f9e','#3d8b5e','#d4a843'];
+    const colors = ['#6366f1','#e05656','#2f9e6e','#d9932b','#8b5cf6','#0ea5e9','#ec4899','#14b8a6'];
     const enriched = await Promise.all(novels.map(async (n, i) => {
       const [chRes, charRes] = await Promise.all([api(`/api/novels/${n.id}/chapters?page=1&size=9999`), api(`/api/characters?novel_id=${n.id}`)]);
       const chs = chRes.chapters || [];
@@ -1193,6 +1225,7 @@ async function loadNovels() {
 }
 
 function openNovel(id, title) { state.novelId = id; state.novelTitle = title; delete state.chaptersCache[id]; switchPage('novel-detail'); }
+function openChat() { switchPage('chat'); }
 
 // ═══════════ 新建作品 ═══════════
 function showCreateNovel() {
@@ -1217,13 +1250,10 @@ async function doCreateNovel() {
 
 // ═══════════ 小说详情 ═══════════
 let novelTab = 'chapters';
-const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }, { id: 'lore', label: () => '📜 ' + t('lore') }, { id: 'items', label: () => '⚔️ ' + t('items') }, { id: 'scenes', label: () => '🎬 ' + t('scenes') }];
+const TABS = [{ id: 'chapters', label: () => t('chapters') }, { id: 'characters', label: () => t('characters') }, { id: 'timeline', label: () => t('timeline') }, { id: 'arcs', label: () => t('arcs') }, { id: 'reader', label: () => t('reader') }, { id: 'preferences', label: () => t('preferences') }, { id: 'locations', label: () => t('locations') }, { id: 'lore', label: () => t('lore') }, { id: 'items', label: () => t('items') }, { id: 'scenes', label: () => t('scenes') }];
 
 async function loadNovelDetail() {
-  // 标题栏添加删除按钮（不用内联 onclick 拼接标题：书名含引号/反斜杠会突破属性注入事件）
-  const header = document.getElementById('novelDetailHeader');
-  header.innerHTML = `<button class="btn-delete-novel" title="删除小说">🗑️</button>`;
-  header.querySelector('.btn-delete-novel').addEventListener('click', () => showDeleteNovel(state.novelId, state.novelTitle));
+  document.getElementById('novelDetailHeader').innerHTML = '';
   document.getElementById('novelDetailTabs').innerHTML = TABS.map(tab => `<button class="tab-item ${tab.id === novelTab ? 'active' : ''}" onclick="switchTab('${tab.id}')">${tab.label()}</button>`).join('');
   switchTab(novelTab);
 }

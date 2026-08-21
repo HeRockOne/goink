@@ -8,8 +8,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#eef3f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0a0e17" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f4fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0d16" media="(prefers-color-scheme: dark)">
 <title>Goink — 太虚剑宗</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
@@ -179,22 +179,22 @@
 
   <!-- ═══════════════════ Templates ═══════════════════ -->
 
-  <!-- 小说卡片 -->
+  <!-- 小说卡片（Apple Books 封面网格） -->
   <template id="tpl-novel-card">
     <div class="novel-card">
-      <div class="novel-card-top">
-        <div class="novel-icon nv-icon">?</div>
-        <div class="novel-info">
-          <div class="novel-title nv-title"></div>
-          <div class="novel-meta-row nv-meta"></div>
-          <div class="novel-desc nv-desc"></div>
-        </div>
+      <div class="novel-cover-box">
+        <div class="novel-icon nv-icon" data-title="">?</div>
       </div>
-      <div class="novel-stats nv-stats">
-        <span class="novel-stat-item nv-stat-ch"><strong>0</strong></span>
-        <span class="novel-stat-item nv-stat-char"><strong>0</strong></span>
-        <span class="novel-stat-item nv-stat-wd"></span>
-        <span class="novel-stat-item nv-stat-dt"></span>
+      <div class="novel-info">
+        <div class="novel-title nv-title"></div>
+        <div class="novel-meta-row nv-meta"></div>
+        <div class="novel-stats nv-stats">
+          <span class="novel-stat-item nv-stat-ch"><strong>0</strong></span>
+          <span class="novel-stat-item nv-stat-char"><strong>0</strong></span>
+          <span class="novel-stat-item nv-stat-wd"></span>
+          <span class="novel-stat-item nv-stat-dt"></span>
+        </div>
+        <div class="novel-desc nv-desc"></div>
       </div>
     </div>
   </template>
