@@ -19,7 +19,7 @@ mode: auto
 ## init 阶段允许使用的工具（与门禁白名单一致）
 
 - 总纲：`update_outline`、`create_outline_beat`、`update_outline_beat`、`delete_outline_beat`、`get_outline`
-- 编辑：`edit`（仅限 book-outline.md，向后兼容）
+- 编辑：`edit`（init 阶段不使用；门禁 edit_paths 已改为 goink.md，总纲不再写文件）
 - 创建：`create_story_arc`、`create_arc_node`、`create_location`、`create_character`、`create_lore`、`create_item`、`create_timeline_entry`、`create_preference`
 - 查询验证：`get_characters`、`get_locations`、`get_story_arcs`、`get_lore`、`get_items`、`get_timeline`、`get_preferences`（**这 7 项就是门禁 require，阶段结束前必须全部调用过**）
 - 系统：`auto_skill_injection`、`set_phase`
