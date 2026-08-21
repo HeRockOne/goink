@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, FileText, Pencil, Plus, Download } from 'lucide-react'
+import { ChevronRight, FileText, Pencil, Plus, Download, Trash2 } from 'lucide-react'
 import { toastError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useApp } from '@/hooks/useApp'
@@ -139,6 +139,28 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
     setEditingId(null)
   }
 
+  async function handleDeleteChapter(ch: chapter.Chapter) {
+    const msg = `确认删除第 ${ch.chapter_number} 章「${ch.title}」？\n\n正文文件和章节记录将被永久删除，此操作不可恢复。`
+    if (!window.confirm(msg)) return
+    try {
+      await app.DeleteChapter(novelId, ch.chapter_number)
+      loadChapters()
+    } catch (err) {
+      toastError(t('common.saveFailed') + ': ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
+  async function handleDeleteOutline(o: OutlineItem) {
+    const msg = `确认删除第 ${o.chapter_number} 章大纲？\n\n大纲文件将被永久删除，此操作不可恢复。`
+    if (!window.confirm(msg)) return
+    try {
+      await app.DeleteOutlineFile(novelId, o.chapter_number)
+      loadOutlines()
+    } catch (err) {
+      toastError(t('common.saveFailed') + ': ' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
+
   return (
     <>
       <div className="flex items-center justify-between px-3 py-2.5 border-b">
@@ -220,20 +242,28 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
             <p className="text-xs text-muted-foreground/70 px-3 py-2">{t('sidebar.noOutlines')}</p>
           ) : (
             outlines.map(o => (
-              <button
-                key={o.chapter_number}
-                onClick={() => onSelectOutline(o.file_path, o.title ? `第${o.chapter_number}章 · ${o.title}` : `第${o.chapter_number}章 大纲`)}
-                className={`w-full flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors relative
-                  ${target?.path === o.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
-              >
-                {target?.path === o.file_path && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
-                )}
-                <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
-                  {t('sidebar.chapterN', { n: o.chapter_number })}
-                </span>
-                <span className="flex-1 text-sm truncate">{o.title || t('sidebar.outlineFallback')}</span>
-              </button>
+              <div key={o.chapter_number} className="group flex items-center w-full">
+                <button
+                  onClick={() => onSelectOutline(o.file_path, o.title ? `第${o.chapter_number}章 · ${o.title}` : `第${o.chapter_number}章 大纲`)}
+                  className={`flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 relative
+                    ${target?.path === o.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
+                >
+                  {target?.path === o.file_path && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
+                  )}
+                  <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
+                    {t('sidebar.chapterN', { n: o.chapter_number })}
+                  </span>
+                  <span className="flex-1 text-sm truncate">{o.title || t('sidebar.outlineFallback')}</span>
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); handleDeleteOutline(o) }}
+                  className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all shrink-0 mr-1"
+                  title="删除大纲"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -316,12 +346,21 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                           )}
                         </button>
                         {editingId !== ch.id && (
-                          <button
-                            onClick={e => { e.stopPropagation(); startEdit(ch) }}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground hover:text-foreground transition-all z-10"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleDeleteChapter(ch) }}
+                              className="absolute right-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all z-10"
+                              title="删除章节"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); startEdit(ch) }}
+                              className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground hover:text-foreground transition-all z-10"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </>
                         )}
                       </div>
                     ))}

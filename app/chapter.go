@@ -39,6 +39,22 @@ func (a *App) UpdateChapterTitle(novelID int64, chapterNumber int, title string)
 	return a.chapter.UpdateTitle(a.ctx, novelID, chapterNumber, title)
 }
 
+// DeleteChapter 删除指定章节，同时删除正文文件和数据库记录。
+func (a *App) DeleteChapter(novelID int64, chapterNumber int) error {
+	if err := git.DeleteFile(novelID, git.ChapterPath(chapterNumber)); err != nil {
+		return fmt.Errorf("删除章节文件失败: %w", err)
+	}
+	if err := a.chapter.Delete(a.ctx, novelID, chapterNumber); err != nil {
+		return fmt.Errorf("删除章节记录失败: %w", err)
+	}
+	return nil
+}
+
+// DeleteOutlineFile 删除指定章节的大纲文件。
+func (a *App) DeleteOutlineFile(novelID int64, chapterNumber int) error {
+	return git.DeleteFile(novelID, git.OutlinePath(chapterNumber))
+}
+
 // CreateChapter 创建新章节，章节号自动递增。同时创建空正文文件。
 func (a *App) CreateChapter(input CreateChapterInput) (*chapter.Chapter, error) {
 	latest, err := a.chapter.GetLatestNumber(a.ctx, input.NovelID)

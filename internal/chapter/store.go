@@ -159,3 +159,10 @@ func (s *Store) UpdateTitle(ctx context.Context, novelID int64, chapterNumber in
 		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
 		Update("title", title).Error
 }
+
+// Delete 删除某小说中指定章节号的记录。
+func (s *Store) Delete(ctx context.Context, novelID int64, chapterNumber int) error {
+	return s.DB.WithContext(ctx).
+		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
+		Delete(&Chapter{}).Error
+}

@@ -74,6 +74,20 @@ func WriteFile(novelID int64, path, content string) error {
 	return nil
 }
 
+func DeleteFile(novelID int64, path string) error {
+	fullPath, err := ResolvePath(path, novelID)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(fullPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("git: delete %s: %w", path, err)
+	}
+	return nil
+}
+
 var ErrPathEscape = errors.New("git: path escapes novel directory")
 
 // outlineTitleRe 匹配首行的 "第N章" 前缀（标题在章号之后，如 "# 第1章 名声" → "名声"）。
