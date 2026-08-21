@@ -101,6 +101,25 @@ HTTP 状态码: `401`
 }
 ```
 
+### GET /api/sync/state
+
+查询桌面端当前是否正在流式输出（移动端中途打开对话页时拉取现场）。
+
+**响应（空闲）:**
+```json
+{ "active": false }
+```
+
+**响应（流式中）:**
+```json
+{
+  "active": true,
+  "session_id": "sess_1_xxx",
+  "thinking": "已累积的思考内容...",
+  "content": "已累积的正文内容..."
+}
+```
+
 ---
 
 ## 2. 小说
@@ -125,6 +144,40 @@ HTTP 状态码: `401`
   "total": 1
 }
 ```
+
+### POST /api/novels
+
+创建新小说。
+
+**请求体:**
+```json
+{
+  "title": "小说标题",
+  "genre": "玄幻",
+  "description": "简介（可选）"
+}
+```
+
+**响应:**
+```json
+{ "novel": { "id": 2, "title": "小说标题", "...": "..." } }
+```
+
+### DELETE /api/novels
+
+删除小说（需标题匹配确认，防误删）。
+
+**请求体:**
+```json
+{ "id": 1, "title": "小说标题" }
+```
+
+**响应:**
+```json
+{ "ok": true }
+```
+
+错误时返回 `{ "error": "标题不匹配" }` 等。
 
 ---
 
@@ -1176,7 +1229,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 27. 审批模式
+## 28. 审批模式
 
 ### GET /api/settings/approval-mode
 
@@ -1208,7 +1261,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 28. 思考深度
+## 29. 思考深度
 
 ### POST /api/settings/reasoning-effort
 
@@ -1234,7 +1287,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 29. 重试事件
+## 30. 重试事件
 
 当 LLM 请求遇到 429/402 错误时，系统会自动重试，并通过 SSE 和 WebSocket 推送重试状态。
 
@@ -1256,15 +1309,16 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 30. WebSocket
+## 31. WebSocket
 
 ### WebSocket /api/ws
 
 实时双向通信端点，用于桌面端和移动端之间的状态同步。
 
-**连接地址:** `ws://{IP}:{PORT}/api/ws?token=<token>`
+**连接地址:** `ws://{IP}:{PORT}/api/ws?token=<token>&room=<room>`
 
 > WebSocket 需要通过 query 参数传递 token，无法使用 HTTP Header。
+> `room` 参数可选：传会话 ID 订阅该会话的对话事件流，不传或传 `global` 接收全局广播。
 
 **接收事件类型:**
 | event.type | 说明 | 数据 |
@@ -1274,7 +1328,7 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 
 ---
 
-## 27. 静态文件
+## 32. 静态文件
 
 ### GET /
 

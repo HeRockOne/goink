@@ -65,6 +65,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   }
 
   const [turns, setTurns] = useState<Turn[]>([])
+  // turns 镜像：供事件回调在 updater 外读取当前值（updater 内禁止副作用）
+  const turnsRef = useRef<Turn[]>([])
+  turnsRef.current = turns
   const [sessionId, setSessionId] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const startXRef = useRef(0)
@@ -101,6 +104,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const startedUnsubRef = useRef<(() => void) | null>(null)
   const agentUnsubRef = useRef<(() => void) | null>(null)
   const eventQueuesRef = useRef<Map<number, EventQueue>>(new Map())
+  // 发送代际号：并发发送/切换会话时，旧发送的 finally 不得注销新发送的监听器、
+  // 不得把积压事件 flush 进当前会话（旧实现共享 ref 被覆盖后误删，见审计 F1/F2）
+  const sendGenRef = useRef(0)
   const onApprovalFileEditRef = useRef(onApprovalFileEdit)
   useEffect(() => { onApprovalFileEditRef.current = onApprovalFileEdit }, [onApprovalFileEdit])
   // 加载模型列表并恢复持久化设置
@@ -148,6 +154,16 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   // 加载会话列表（不自动选中）
   useEffect(() => {
     if (!novelId) return
+    // 切小说：拆除上一小说会话的动态监听与队列（同 handleSelectSession 的理由）
+    startedUnsubRef.current?.()
+    startedUnsubRef.current = null
+    agentUnsubRef.current?.()
+    agentUnsubRef.current = null
+    eventQueuesRef.current.forEach(queue => {
+      if (queue.flushTimer) clearTimeout(queue.flushTimer)
+    })
+    eventQueuesRef.current.clear()
+    sendGenRef.current++
     setActiveSessionId(null)
     setTurns([])
     setSessionId('')
@@ -181,6 +197,17 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     const cleanup2 = EventsOn('chat:api_done', refreshOnDone)
     return () => { cleanup1(); cleanup2() }
   }, [app, novelId, activeSessionId])
+
+  // 新会话自动生成标题后刷新头部标题（app/chat.go generateTitle 完成时发出，
+  // 旧实现无监听导致标题一直为空，需手动重选会话才刷新）
+  useEffect(() => {
+    const cleanup = EventsOn('chat:title_updated', (data: { session_id?: string; title?: string }) => {
+      if (data.session_id && data.title && data.session_id === activeSessionId) {
+        setSessionTitle(data.title)
+      }
+    })
+    return () => { cleanup() }
+  }, [activeSessionId])
 
   // 监听移动端对话实时流事件，实现双端同步
   useEffect(() => {
@@ -450,6 +477,19 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   }, [])
 
   const handleSelectSession = useCallback((sid: string) => {
+    // 切换会话：注销上一会话的动态监听并清空事件队列。
+    // agent 事件通道按 session 隔离（agent:{sessionID}:{turnID}），不注销时旧会话
+    // 迟到事件会按撞号的 turnId 写进新会话的 turn；代际号 +1 让在途发送的
+    // finally 跳过 flush（旧队列数据属于已离开的会话）
+    startedUnsubRef.current?.()
+    startedUnsubRef.current = null
+    agentUnsubRef.current?.()
+    agentUnsubRef.current = null
+    eventQueuesRef.current.forEach(queue => {
+      if (queue.flushTimer) clearTimeout(queue.flushTimer)
+    })
+    eventQueuesRef.current.clear()
+    sendGenRef.current++
     loadOnSessionRef.current = true // 显式选会话 → 消息加载 effect 执行重建
     setActiveSessionId(sid)
     setVisibleTurnCount(30)
@@ -503,6 +543,16 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   }, [app, novelId, handleSelectSession])
 
   const handleNewChat = useCallback(() => {
+    // 新建对话：同 handleSelectSession，拆除上一会话监听与队列
+    startedUnsubRef.current?.()
+    startedUnsubRef.current = null
+    agentUnsubRef.current?.()
+    agentUnsubRef.current = null
+    eventQueuesRef.current.forEach(queue => {
+      if (queue.flushTimer) clearTimeout(queue.flushTimer)
+    })
+    eventQueuesRef.current.clear()
+    sendGenRef.current++
     setActiveSessionId(null)
     setTurns([])
     setSessionId('')
@@ -516,6 +566,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true)
   }, [])
+
+  // 稳定引用：RetryNotification 的 effect deps 含 onDone，内联箭头会在每次渲染时
+  // 重置倒计时定时器（流式期间父组件高频重渲染）
+  const clearRetryInfo = useCallback(() => setRetryInfo(null), [])
 
   const handleCloseHistory = useCallback(() => {
     setShowHistoryPanel(false)
@@ -1087,7 +1141,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
     setTurns(prev => [...prev, newTurn])
 
-    // 监听 chat:started，拿到 turnId 后订阅 agent 事件流
+    // 监听 chat:started，拿到 turnId 后订阅 agent 事件流。
+    // myGen 代际守卫：并发发送时旧发送的 finally 不许注销新发送的监听器（F1）
+    const myGen = ++sendGenRef.current
+    let myBackendTurnId: number | null = null
     startedUnsubRef.current?.()
     const startedCleanup = EventsOn('chat:started', (data: ChatStartedEvent) => {
       if (data.session_id) {
@@ -1097,6 +1154,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }
 
       // 更新 turn 的 turnId 为后端分配的真实值
+      myBackendTurnId = data.turn_id
       setTurns(prev => prev.map(t =>
         t.id === turnId ? { ...t, turnId: data.turn_id } : t
       ))
@@ -1133,18 +1191,32 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         return { ...t, status: 'failed' as const, errorMessage: errMsg }
       }))
     } finally {
-      eventQueuesRef.current.forEach((queue, queuedTurnId) => {
-        if (queue.flushTimer) clearTimeout(queue.flushTimer)
-        const orderedEvents = [...queue.pending.entries()].sort(([a], [b]) => a - b)
-        queue.pending.clear()
-        for (const [seq, queuedEvent] of orderedEvents) {
-          if (seq >= queue.nextSeq) {
-            queue.nextSeq = seq + 1
-            applyAgentEvent(queuedTurnId, queuedEvent)
+      // 代际守卫：flush 积压事件与注销监听器只由最新一次发送执行。
+      // 被新发送取代（中途插话/取消）的旧发送只丢弃自己的队列，
+      // 不动共享 ref——旧实现此处会误删新发送的监听器导致新 turn 收不到事件
+      const isLatest = sendGenRef.current === myGen
+      if (isLatest) {
+        eventQueuesRef.current.forEach((queue, queuedTurnId) => {
+          if (queue.flushTimer) clearTimeout(queue.flushTimer)
+          const orderedEvents = [...queue.pending.entries()].sort(([a], [b]) => a - b)
+          queue.pending.clear()
+          for (const [seq, queuedEvent] of orderedEvents) {
+            if (seq >= queue.nextSeq) {
+              queue.nextSeq = seq + 1
+              applyAgentEvent(queuedTurnId, queuedEvent)
+            }
           }
-        }
-      })
-      eventQueuesRef.current.clear()
+        })
+        eventQueuesRef.current.clear()
+        startedUnsubRef.current?.()
+        startedUnsubRef.current = null
+        agentUnsubRef.current?.()
+        agentUnsubRef.current = null
+      } else if (myBackendTurnId !== null) {
+        const staleQueue = eventQueuesRef.current.get(myBackendTurnId)
+        if (staleQueue?.flushTimer) clearTimeout(staleQueue.flushTimer)
+        eventQueuesRef.current.delete(myBackendTurnId)
+      }
       setTurns(prev => prev.map(t =>
         t.id === turnId && t.status === 'streaming'
           ? { ...t, status: 'done' as const, segments: t.segments.map(seg =>
@@ -1156,20 +1228,15 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       if (activeCountRef.current === 0) {
         setIsLoading(false)
       }
-      startedUnsubRef.current?.()
-      startedUnsubRef.current = null
-      agentUnsubRef.current?.()
-      agentUnsubRef.current = null
     }
   }, [sessionId, novelId, selectedKey, reasoningEffort, app, handleAgentEvent, applyAgentEvent, activeSessionId])
 
   const handleRetry = useCallback((turnId: string) => {
-    setTurns(prev => {
-      const turn = prev.find(t => t.id === turnId)
-      if (!turn || !turn.userMessage) return prev
-      handleSend(turn.userMessage)
-      return prev.filter(t => t.id !== turnId)
-    })
+    // 从镜像 ref 读取（StrictMode 下 updater 双调用，updater 内调 handleSend 会重复发送）
+    const turn = turnsRef.current.find(t => t.id === turnId)
+    if (!turn || !turn.userMessage) return
+    setTurns(prev => prev.filter(t => t.id !== turnId))
+    handleSend(turn.userMessage)
   }, [handleSend])
 
   const hasNovel = novelId > 0
@@ -1236,10 +1303,15 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           activeSessionId={activeSessionId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
-          onDeleted={() => {
+          onDeleted={(deletedIds) => {
             setIsLoading(false)
             setRetryInfo(null)
             setApiStreaming(false)
+            // 删的是当前活跃会话：清空状态（handleNewChat 会拆除监听与队列），
+            // 否则 sessionId 残留脏值，下次发送带已删会话 ID
+            if (activeSessionId && deletedIds.includes(activeSessionId)) {
+              handleNewChat()
+            }
           }}
         />
       </div>
@@ -1248,7 +1320,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           retryCount={retryInfo.count}
           retryMax={retryInfo.max}
           retryWait={retryInfo.wait}
-          onDone={() => setRetryInfo(null)}
+          onDone={clearRetryInfo}
         />
       )}
 
@@ -1323,7 +1395,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                 {turns.slice(-visibleTurnCount).map(turn => (
                   <div key={turn.id} className="space-y-2">
                     {turn.userMessage && (
-                      <MessageBubble role="user" content={turn.userMessage} timestamp={turn.id} />
+                      <MessageBubble role="user" content={turn.userMessage} />
                     )}
 
                     {/* 工具卡片合并计数：连续同名同状态的普通工具段合并（并行调用去噪） */}
@@ -1331,6 +1403,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                       toolCounts.clear()
                       toolMergeIds.clear()
                       toolDetails.clear()
+                      // lastHeadId 追踪当前连续串的可见头部段：A,A,A 序列的第 3 个段
+                      // 的 prev 是已隐藏的 A2，计数必须累加到头部 A0（旧实现写到
+                      // 隐藏段 id 上导致 ≥3 连段少报）
+                      let lastHeadId: string | null = null
                       for (let i = 0; i < turn.segments.length; i++) {
                         const s = turn.segments[i]
                         if (s.type !== 'tool' || s.toolName === 'run_subagent' || s.toolName === 'web_search' || s.toolName === 'web_fetch') continue
@@ -1338,13 +1414,14 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                         const mergeable = prev !== null && prev.type === 'tool'
                           && prev.toolName === s.toolName && prev.toolStatus === s.toolStatus
                           && prev.toolName !== 'run_subagent' && prev.toolName !== 'web_search' && prev.toolName !== 'web_fetch'
-                        if (mergeable) {
+                        if (mergeable && lastHeadId) {
                           toolMergeIds.add(s.id)
-                          toolCounts.set(prev.id, (toolCounts.get(prev.id) ?? 1) + 1)
-                          const list = toolDetails.get(prev.id) ?? []
+                          toolCounts.set(lastHeadId, (toolCounts.get(lastHeadId) ?? 1) + 1)
+                          const list = toolDetails.get(lastHeadId) ?? []
                           list.push({ displayText: s.displayText, status: s.toolStatus, activityKind: s.activityKind, error: s.error })
-                          toolDetails.set(prev.id, list)
+                          toolDetails.set(lastHeadId, list)
                         } else {
+                          lastHeadId = s.id
                           toolCounts.set(s.id, 1)
                         }
                       }

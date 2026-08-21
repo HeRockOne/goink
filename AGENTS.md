@@ -17,7 +17,7 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 ### Skill 结构约定
 
 - **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（当前 44 个：37 auto + 5 manual + 2 always——main-core-ai-communication-standard 已内置兜底，与 kernel 同待遇；数量以目录为准，勿在文档写死）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
-- **2 个常驻调度 skill**（main-core-writing-kernel、main-core-ai-communication-standard）在 `skills/`（项目根目录，版本控制），**需要时可改**（调度流程调整）；同步到 `~/.goink/skills/` 后生效
+- **`skills/`（项目根目录，版本控制）= 用户级 skill 真源**：当前 6 个文件（main-core-writing-kernel、main-core-ai-communication-standard、main-core-init-phase、main-tech-chapter-title-design、main-tech-data-hygiene、sub-tech-review-standards），数量以目录为准。这些是**需要时可改**的调度/审稿技能（同名覆盖内置），同步到 `~/.goink/skills/` 后生效；改动后如属通用改进应回灌 `internal/skill/builtin/` 保持基线一致（2026-08-21 审计已核对：kernel/review-standards/init-phase 三者为领先 builtin 的演进版，其余与 builtin 逐字节相同）
 - **新增 skill**：放 `internal/skill/builtin/<name>.md`，并在 main-core-writing-kernel 的阶段技能表登记（需重新编译，或放用户级即时生效）
 - 同名优先级：小说级 > 用户级 > 内置（放用户级可覆盖内置默认行为）
 
@@ -25,7 +25,7 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 
 ## 一、新 AI 接手必读
 
-**仓库布局**：`app/` = Wails 绑定层（Chat/设置/面板入口，chat.go 组装 LLM 链路）；`internal/` = 核心库（agent=循环+门禁+压缩、agentcfg=系统提示词/白名单、mcp_tools=工具、cacheprobe=成本模拟、session=消息存储、skill=技能库、llm=客户端）；`frontend/` = React 前端；`cmd/cacheprobe/` = 模拟 CLI；`skills/` = 常驻调度 skill（版本控制）。
+**仓库布局**：`app/` = Wails 绑定层（Chat/设置/面板入口，chat.go 组装 LLM 链路）；`internal/` = 核心库（agent=循环+门禁+压缩、agentcfg=系统提示词/白名单、mcp_tools=工具、cacheprobe=成本模拟、session=消息存储、skill=技能库、llm=客户端）；`frontend/` = React 前端；`cmd/cacheprobe/` = 模拟 CLI；`skills/` = 用户级 skill 真源（版本控制，同名覆盖内置）。
 
 阅读顺序：
 1. `docs/README.md` — 文档索引（architecture/design/adr/archive 分层，archive 含历次审计）

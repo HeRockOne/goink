@@ -147,7 +147,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 **write 阶段规则**：用 edit 将正文写入 chapters/NNN.md。new_content 只含正文（不含"第X章""xx章完"等），title 参数传标题不带前缀。
 **review 阶段规则**：单章模式每章 write 完成后必须启动 review agent；批量模式在循环 write 完成后统一启动。以 review agent 的结论为准，存在致命问题必须修正后重新 review，直到无致命问题才可进入下一阶段。
-**maintain 阶段规则**：这是强制步骤，以 main-core-writing-kernel.md 中的 maintain 清单为准（15 项逐项执行）。**必须一轮内完整执行**：7 项状态查询并行发出，更新动作按依赖链聚合（互不依赖的更新工具同批并行，先查后更/edit 前先 read 属必要依赖链才串行），全部完成后一次性输出维护清单（每项 done/遗留及原因）。**不得遗留待办等用户追问再补**——追加轮次产生新上下文与缓存 miss，能一轮完成的任务不留到下轮。
+**maintain 阶段规则**：这是强制步骤，以 main-core-writing-kernel.md 中的 maintain 清单为准（14 项维护逐项执行 + set_phase("done") 收尾）。**必须一轮内完整执行**：7 项状态查询并行发出，更新动作按依赖链聚合（互不依赖的更新工具同批并行，先查后更/edit 前先 read 属必要依赖链才串行），全部完成后一次性输出维护清单（每项 done/遗留及原因）。**不得遗留待办等用户追问再补**——追加轮次产生新上下文与缓存 miss，能一轮完成的任务不留到下轮。
 
 【输出规范】
 

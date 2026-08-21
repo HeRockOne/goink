@@ -94,7 +94,7 @@ func TestBatchChapterBoundaryRequiresMiniMaintain(t *testing.T) {
 <!-- phase-gate-config
 mode: batch
 phase: write
-tools: read, edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+tools: read, edit, check, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
 require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 next: review
 loop: true
@@ -112,8 +112,8 @@ loop: true
 		t.Errorf("warning should mention miniMaintain, got: %s", warning)
 	}
 
-	// 补齐剩余 4 件后章边界通过
-	for _, tool := range []string{"update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+	// 补齐剩余 4 件 + 章级一致性核对后章边界通过
+	for _, tool := range []string{"update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot", "check_story_consistency"} {
 		gate.OnToolCall(tool, true, "")
 	}
 	ok, _ = gate.SetPhase("write")
@@ -122,8 +122,39 @@ loop: true
 	}
 }
 
-// 章边界通过后 ResetPhaseCounts：require 计数清零，下章必须重新结算。
-func TestBatchChapterBoundaryResetCounts(t *testing.T) {
+// 章边界缺一致性核对：白名单含 check 时必须先核对再声明下一章（写时把关）。
+func TestBatchChapterBoundaryRequiresConsistencyCheck(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, check, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+require: edit, get_chapter_list, read, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, check_story_consistency
+next: review
+loop: true
+-->
+`, "batch")
+
+	// 六件套完成但未调 check_story_consistency → 章边界拦截
+	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+		gate.OnToolCall(tool, true, "")
+	}
+	ok, warning := gate.SetPhase("write")
+	if ok {
+		t.Fatal("chapter boundary should be rejected without per-chapter consistency check")
+	}
+	if !strings.Contains(warning, "check_story_consistency") {
+		t.Errorf("warning should mention consistency check, got: %s", warning)
+	}
+	// 核对后放行
+	gate.OnToolCall("check_story_consistency", true, "✅ 一致性检查通过")
+	if ok, _ := gate.SetPhase("write"); !ok {
+		t.Fatal("chapter boundary should pass after consistency check")
+	}
+}
+
+// 用户自定义配置未放行 check_story_consistency 时，章边界不得被焊死。
+func TestBatchChapterBoundarySkipsCheckWhenToolUnavailable(t *testing.T) {
 	gate := ParsePhaseGateConfig(`
 <!-- phase-gate-config
 mode: batch
@@ -135,8 +166,29 @@ loop: true
 -->
 `, "batch")
 
-	// 上一章完成全部六件套
 	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+		gate.OnToolCall(tool, true, "")
+	}
+	if ok, _ := gate.SetPhase("write"); !ok {
+		t.Fatal("chapter boundary should pass when check tool not in whitelist")
+	}
+}
+
+// 章边界通过后 ResetPhaseCounts：require 计数清零，下章必须重新结算。
+func TestBatchChapterBoundaryResetCounts(t *testing.T) {
+	gate := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+mode: batch
+phase: write
+tools: read, edit, check, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
+next: review
+loop: true
+-->
+`, "batch")
+
+	// 上一章完成全部六件套 + 章级一致性核对
+	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot", "check_story_consistency"} {
 		gate.OnToolCall(tool, true, "")
 	}
 	gate.SetWordCountOK(true)
@@ -166,15 +218,15 @@ func TestBatchLoopPhaseNoAutoAdvance(t *testing.T) {
 <!-- phase-gate-config
 mode: batch
 phase: write
-tools: read, edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
+tools: read, edit, check, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot, set_phase
 require: edit, create_scene, update_character, create_timeline_entry, update_timeline_entry, create_item_occurrence, update_writing_snapshot
 next: review
 loop: true
 -->
 `, "batch")
 
-	// 模拟完成全部 require 工具
-	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot"} {
+	// 模拟完成全部 require 工具 + 章级一致性核对
+	for _, tool := range []string{"edit", "create_scene", "update_character", "create_timeline_entry", "update_timeline_entry", "create_item_occurrence", "update_writing_snapshot", "check_story_consistency"} {
 		gate.OnToolCall(tool, true, "")
 	}
 	gate.SetWordCountOK(true)

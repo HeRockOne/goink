@@ -115,6 +115,22 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
   const [showRoles, setShowRoles] = useState(true)
   const [prices, setPrices] = useState<PriceConfig>(DEFAULT_PRICES)
   const thresholdLoaded = useRef(false)
+  // 设置保存防抖：价格输入/阈值滑条每次 onChange 只更新本地 state，
+  // 合并补丁 600ms 后一次性落库（旧实现每键击全量 SaveSettings 写一次 DB）
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingPatchRef = useRef<Partial<{ price_input: number; price_output: number; cache_price: number; compression_threshold: number }>>({})
+  const saveSettingsDebounced = useCallback((patch: Partial<{ price_input: number; price_output: number; cache_price: number; compression_threshold: number }>) => {
+    Object.assign(pendingPatchRef.current, patch)
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      const merged = pendingPatchRef.current
+      pendingPatchRef.current = {}
+      saveTimerRef.current = null
+      if (Object.keys(merged).length > 0) {
+        SaveSettings(merged).catch(() => {})
+      }
+    }, 600)
+  }, [])
 
   useEffect(() => {
     if (thresholdLoaded.current) return
@@ -322,7 +338,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                     onChange={e => {
                       const v = parseFloat(e.target.value) || 0
                       setPrices({ ...prices, priceInput: v })
-                      SaveSettings({ price_input: v }).catch(() => {})
+                      saveSettingsDebounced({ price_input: v })
                     }}
                     placeholder="0"
                     className="w-full h-6 text-center text-xs border rounded bg-background px-1"
@@ -337,7 +353,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                     onChange={e => {
                       const v = parseFloat(e.target.value) || 0
                       setPrices({ ...prices, priceOutput: v })
-                      SaveSettings({ price_output: v }).catch(() => {})
+                      saveSettingsDebounced({ price_output: v })
                     }}
                     placeholder="0"
                     className="w-full h-6 text-center text-xs border rounded bg-background px-1"
@@ -352,7 +368,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
                     onChange={e => {
                       const v = parseFloat(e.target.value) || 0
                       setPrices({ ...prices, cachePrice: v })
-                      SaveSettings({ cache_price: v }).catch(() => {})
+                      saveSettingsDebounced({ cache_price: v })
                     }}
                     placeholder="0"
                     className="w-full h-6 text-center text-xs border rounded bg-background px-1"
@@ -389,7 +405,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
               onChange={e => {
                 const v = Number(e.target.value)
                 setThreshold(v)
-                SaveSettings({ compression_threshold: v / 100 }).catch(() => {})
+                saveSettingsDebounced({ compression_threshold: v / 100 })
               }}
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
               style={{

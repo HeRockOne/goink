@@ -1,4 +1,5 @@
 {
+  "selectAll": "全选",
   "common": {
     "loading": "加载中...",
     "save": "保存",
@@ -417,6 +418,7 @@
   },
   "location": {
     "location": "地点",
+    "fitView": "适配视图",
     "confirmDeleteWithChildren": "确定要删除该地点吗？子地点将变为根节点，关联的空间关系也会被删除。",
     "noLocations": "暂无地点",
     "delete": "删除",

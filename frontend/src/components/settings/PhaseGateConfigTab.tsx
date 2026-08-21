@@ -24,6 +24,12 @@ export default function PhaseGateConfigTab() {
   }, [])
 
   async function handleSave() {
+    // 后端 SaveSettings 忽略空串（omitempty 语义）：清空保存会假成功且实际未生效。
+    // 清空场景请用"恢复出厂默认"；此处拦截并提示
+    if (!config.trim()) {
+      setMsg('配置不能为空：如需回到默认配置请点击"恢复出厂默认"')
+      return
+    }
     setSaving(true)
     setMsg('')
     try {

@@ -550,6 +550,14 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 			if missing := g.missingMiniMaintain(); len(missing) > 0 {
 				return false, fmt.Sprintf("上一章迷你维护未完成，缺少: %v。请先完成本章状态结算（create_scene/update_character/create_timeline_entry/update_timeline_entry/create_item_occurrence/update_writing_snapshot）再声明下一章", missing)
 			}
+			// 写时把关：每章写完必须程序化一致性核对（kernel write 6.5）。
+			// 只在转 review 时查会让中间章的设定硬伤（伏笔超期/死者复出/物品冲突）
+			// 潜伏到批末才暴露，返工成本随批量线性放大。
+			// 仅当当前阶段白名单实际放行该工具时才强制——用户自定义配置未包含时
+			// 不得把章边界焊死（拦了也调不了）
+			if g.toolAvailable("check_story_consistency") && g.successfulTools["check_story_consistency"] == 0 {
+				return false, "上一章未执行 check_story_consistency 一致性核对。请先调用 check_story_consistency（current_chapter=本章章号）核对硬错误，发现 [ERROR] 定位修复后重跑通过，再声明下一章"
+			}
 		}
 		return true, ""
 	}
@@ -800,6 +808,26 @@ func (g *PhaseGate) ShouldAutoAdvance() (bool, string) {
 		}
 	}
 	return g.CheckTransitionReady()
+}
+
+// toolAvailable 判断工具在当前阶段白名单（显式列表或类别前缀）中是否可用。
+// 阶段不存在视为不限制（返回 true）。
+func (g *PhaseGate) toolAvailable(toolName string) bool {
+	cur := g.findPhase(g.currentPhase)
+	if cur == nil {
+		return true
+	}
+	for _, t := range cur.Tools {
+		if t == toolName {
+			return true
+		}
+	}
+	for _, cat := range cur.ToolCategories {
+		if toolMatchesCategory(toolName, cat) {
+			return true
+		}
+	}
+	return false
 }
 
 // findPhase 按名称查找阶段配置。

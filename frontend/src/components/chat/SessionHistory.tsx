@@ -11,7 +11,7 @@ interface Props {
   activeSessionId?: string | null
   onClose: () => void
   onSelectSession: (sessionId: string) => void
-  onDeleted?: () => void
+  onDeleted?: (deletedIds: string[]) => void
 }
 
 export default function SessionHistory({ open, novelId, activeSessionId, onClose, onSelectSession, onDeleted }: Props) {
@@ -158,8 +158,8 @@ export default function SessionHistory({ open, novelId, activeSessionId, onClose
     setIsDeleting(false)
     setSelectedIds(new Set())
     loadPageRef.current?.(1)
-    // 通知父组件（可选，如父级需要同步其他数据源）
-    onDeleted?.()
+    // 回传被删会话 ID：父级据此判断当前活跃会话是否被删，避免残留脏 session_id
+    onDeleted?.(ids)
   }, [selectedIds, app, t, onDeleted])
 
   // 导出单个会话为 Markdown

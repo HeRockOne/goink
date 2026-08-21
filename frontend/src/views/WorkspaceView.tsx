@@ -323,6 +323,9 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
     return node
   }
 
+  // 每次渲染只计算一次（旧写法在 JSX 条件判断 + 渲染各调一次，创建两份元素树只用一份）
+  const specialPanel = renderSpecialPanel(activePanel)
+
   function handleActivitySelect(id: string) {    const currentPanel = sidebarPanel ?? activePanel
     if (id === currentPanel && !sidebarClosed) {
       setSidebarClosed(true)
@@ -620,8 +623,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
                 <ExtractWorkspaceView novelId={activeNovelId} focusSampleId={styleSampleFocusId} onFocusSampleHandled={() => setStyleSampleFocusId(null)} />
               </ErrorBoundary>
             </div>
-            {renderSpecialPanel(activePanel) && (
-              <ErrorBoundary>{renderSpecialPanel(activePanel)}</ErrorBoundary>
+            {specialPanel && (
+              <ErrorBoundary>{specialPanel}</ErrorBoundary>
             )}
           </div>
         )}

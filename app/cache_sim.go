@@ -84,7 +84,9 @@ func (a *App) StartCacheSimulation(mode string, gateRounds int, shortQARounds in
 
 // StartCacheSimScenarios 批量场景对比：一次跑多个可自定义场景，完成后推送事件 cachesim:batch-done。
 // 场景类型按参数推断：批量章数>0 且无单章轮数 → batch；单章轮数>0 且批量章数=0 → single；都有 → mixed。
-func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
+// reqID 由前端生成并原样随事件带回：预设跑批与自定义跑批共用同一事件通道，
+// 前端按 reqID 过滤，防止并发请求的结果互相覆盖（审计 F4）。
+func (a *App) StartCacheSimScenarios(reqID string, scenarios []SimScenarioReq) error {
 	go func() {
 		simMu.Lock()
 		defer simMu.Unlock()
@@ -115,7 +117,7 @@ func (a *App) StartCacheSimScenarios(scenarios []SimScenarioReq) error {
 			}
 			results = append(results, *r)
 		}
-		wails.EventsEmit(a.ctx, "cachesim:batch-done", results)
+		wails.EventsEmit(a.ctx, "cachesim:batch-done", map[string]any{"req_id": reqID, "results": results})
 	}()
 	return nil
 }

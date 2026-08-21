@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Folder, RefreshCw, Languages, Shield, Wifi, WifiOff, Archive, RotateCcw, Loader2, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
+import { toast } from 'sonner'
 import { SaveGitConfig, SetChapterWordLimit, GetSystemFonts, GetLocalInterfaces } from '@/lib/wailsjs/go/app/App'
 import { useApp, type novel } from '@/hooks/useApp'
 
@@ -344,7 +345,7 @@ export default function GeneralConfigTab() {
           <p className="text-[11px] text-muted-foreground">用于 AI 联网搜索（web_search）。留空使用 Exa 免费额度（有速率限制），填写后可解除限制。到 <span className="text-primary">dashboard.exa.ai/api-keys</span> 获取。</p>
           <div className="flex items-center gap-2">
             <input type="password" value={exaApiKey} onChange={e => { setExaApiKey(e.target.value); setExaKeySaved(false) }} placeholder="exa-xxx（可选）" className="flex-1 h-8 rounded-md border bg-background px-3 text-xs font-mono focus:outline-none" />
-            <button onClick={async () => { try { await app.SaveSettings({ exa_api_key: exaApiKey.trim() }); setExaKeySaved(true); setTimeout(() => setExaKeySaved(false), 2000) } catch {} }} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">{exaKeySaved ? '已保存' : '保存'}</button>
+            <button onClick={async () => { const val = exaApiKey.trim(); if (!val) { toast.error('Key 不能为空：留空即使用免费额度，无需保存'); return } try { await app.SaveSettings({ exa_api_key: val }); setExaKeySaved(true); setTimeout(() => setExaKeySaved(false), 2000) } catch {} }} className="inline-flex items-center h-8 px-3 rounded-md text-xs border hover:bg-muted transition-colors">{exaKeySaved ? '已保存' : '保存'}</button>
           </div>
         </div>
       </section>

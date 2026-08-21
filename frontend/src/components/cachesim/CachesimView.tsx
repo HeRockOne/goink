@@ -124,14 +124,20 @@ export default function CachesimView() {
   // 推理深度（reasoning effort）：low=保守口径 / high=思考密集（对标 mimo high 会话）
   const [simEffort, setSimEffort] = useState<'low' | 'high'>('low')
   const mountedRef = useRef(true)
+  // 请求标识：预设跑批与自定义跑批共用 cachesim:batch-done 通道，
+  // 后端原样带回 req_id，前端只接受最新一次请求的结果（防互相覆盖）
+  const reqSeqRef = useRef(0)
+  const activeReqRef = useRef<{ id: string; kind: 'presets' | 'custom' } | null>(null)
 
   // 跑三档预设（进面板自动 + 校准系数变化后手动重跑）
   const runPresets = useCallback(async () => {
+    const myReq = { id: `run-${++reqSeqRef.current}`, kind: 'presets' as const }
+    activeReqRef.current = myReq
     setPresetRunning(true)
     setError('')
     setPresetResults([])
     try {
-      await StartCacheSimScenarios(PRESETS.map(p => ({ ...p.scenario, effort: simEffort, hist_chapters: p.scenario.hist_chapters ?? 0, context_window: windowK * 1000 })))
+      await StartCacheSimScenarios(myReq.id, PRESETS.map(p => ({ ...p.scenario, effort: simEffort, hist_chapters: p.scenario.hist_chapters ?? 0, context_window: windowK * 1000 })))
     } catch (e) {
       setError(String(e))
       setPresetRunning(false)
@@ -141,17 +147,24 @@ export default function CachesimView() {
   // 进面板自动跑三档预设
   useEffect(() => {
     mountedRef.current = true
-    const c1 = EventsOn('cachesim:batch-done', (data: CacheSimResult[]) => {
+    const c1 = EventsOn('cachesim:batch-done', (data: { req_id: string; results: CacheSimResult[] }) => {
       if (!mountedRef.current) return
+      const active = activeReqRef.current
+      if (!active || data.req_id !== active.id) return // 过期请求的结果丢弃
       setPresetRunning(false)
       setRunning(false)
-      const ok = data.filter(d => d.cost >= 0)
+      const ok = data.results.filter(d => d.cost >= 0)
       if (ok.length === 0) {
         setError('模拟失败')
         return
       }
-      setPresetResults(ok)
-      setResults(ok)
+      if (active.kind === 'presets') {
+        setPresetResults(ok)
+        setResults(ok)
+      } else {
+        // 自定义跑批只更新高级详情表格，不覆盖第一屏预设结果
+        setResults(ok)
+      }
     })
     runPresets()
     return () => { mountedRef.current = false; c1() }
@@ -191,12 +204,14 @@ export default function CachesimView() {
   }
 
   const runAll = useCallback(async () => {
+    const myReq = { id: `run-${++reqSeqRef.current}`, kind: 'custom' as const }
+    activeReqRef.current = myReq
     setRunning(true)
     setError('')
     setResults([])
     const req = scenarios.map(sc => ({ ...sc, effort: simEffort, hist_chapters: sc.hist_chapters ?? 0, context_window: windowK * 1000 }))
     try {
-      await StartCacheSimScenarios(req)
+      await StartCacheSimScenarios(myReq.id, req)
     } catch (e) {
       setError(String(e))
       setRunning(false)

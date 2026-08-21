@@ -1,6 +1,28 @@
 // ── Goink Mobile Web Client ──
 // base 优先取扫码保存的地址（goink_api_base），否则跟随当前页面 origin
 const API = { base: localStorage.getItem('goink_api_base') || location.origin, ws: null, connOk: false };
+
+// ── Markdown 安全渲染 ──
+// marked v15 已移除 sanitize 选项：AI 回复与章节正文经 marked.parse 后直接 innerHTML，
+// 原始 HTML 会透传执行（web_fetch 抓取的外部网页内容经 LLM 进入正文，构成注入链）。
+// 覆写渲染器：原始 HTML 一律转义为纯文本；链接仅放行 http(s) 并强制 noopener。
+const _escapeHtml = s => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+marked.use({
+  renderer: {
+    html(token) { return _escapeHtml(token.text ?? token.raw ?? ''); },
+    link(token) {
+      const href = token.href || '';
+      const text = _escapeHtml(token.text || href);
+      if (/^https?:\/\//i.test(href)) {
+        return `<a href="${_escapeHtml(href)}" target="_blank" rel="noopener noreferrer nofollow">${text}</a>`;
+      }
+      return text;
+    }
+  }
+});
+
 const state = {
   page: 'novels', novelId: 0, novelTitle: '', sessionId: null,
   models: [], selectedModel: '', isLoading: false, sessions: [],
@@ -37,8 +59,10 @@ async function offlineFallback(path) {
   return { error: 'offline', _offline: true };
 }
 
-async function syncToOffline() {
+async function syncToOffline(fp) {
   if (!API.connOk) return;
+  // 指纹未变化（书架无增改）时跳过全量重拉，避免每次进书架清库后 N+1 重拉全部章节
+  if (fp && fp === _lastSyncFp) return;
   try {
     await idbKeyval.clear().catch(() => {});
     memCache.clear();
@@ -61,11 +85,19 @@ async function syncToOffline() {
         ]);
       }
     }
+    _lastSyncFp = fp || '';
   } catch (_) {}
 }
+let _lastSyncFp = '';
+function novelsFingerprint(novels) { return (novels || []).map(n => `${n.id}:${n.updated_at || ''}`).join('|'); }
 
 // ── HTTP ──
-let _useCache = false; // 连续失败后跳过网络直接读缓存
+// 缓存模式：连续 2 次请求失败才启用，且只维持 30s（TTL 到期后放行一次真实请求探测恢复），
+// 避免单次抖动/弱网超时就把书架永久钉在陈旧缓存上
+let _useCache = false;
+let _failCount = 0;
+let _useCacheAt = 0;
+const USE_CACHE_TTL = 30000;
 
 function getToken() { return localStorage.getItem('goink_api_token') || ''; }
 function setToken(t) { localStorage.setItem('goink_api_token', t); }
@@ -76,13 +108,14 @@ async function api(path, opts = {}) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const isGet = !opts.method || opts.method === 'GET';
   // 离线或缓存模式：跳过网络直接读缓存
-  if (!navigator.onLine || (_useCache && isGet)) {
+  const cacheActive = _useCache && Date.now() - _useCacheAt < USE_CACHE_TTL;
+  if (!navigator.onLine || (cacheActive && isGet)) {
     API.connOk = false;
     return offlineFallback(path);
   }
-  // 网络请求带 1.5s 超时
+  // 网络请求带 2.5s 超时（桌面端流式负载下 500ms 会误判离线）
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 500);
+  const timer = setTimeout(() => ctrl.abort(), 2500);
   const signal = opts.signal || ctrl.signal;
   try {
     const res = await fetch(API.base + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined, signal });
@@ -91,12 +124,15 @@ async function api(path, opts = {}) {
       if (!document.getElementById('tokenOverlay')) showTokenPrompt();
       return { error: 'unauthorized' };
     }
-    API.connOk = true; _useCache = false; // 成功 → 取消缓存模式
+    API.connOk = true; _useCache = false; _failCount = 0; // 成功 → 取消缓存模式
     const data = await res.json();
     if (isGet) cacheResponse(path, data).catch(() => {});
     return data;
   } catch (_) {
-    API.connOk = false; _useCache = true; // 失败 → 后续直接读缓存
+    clearTimeout(timer);
+    API.connOk = false;
+    _failCount++;
+    if (_failCount >= 2) { _useCache = true; _useCacheAt = Date.now(); } // 连续失败 → 短暂进入缓存模式
     return offlineFallback(path);
   }
 }
@@ -465,21 +501,21 @@ function toggleLang() {
 }
 
 // ── Utils ──
-function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function fmtTokens(n) { n = n || 0; if (n >= 1000000) return (n / 1000000).toFixed(1) + ' m'; if (n >= 1000) return (n / 1000).toFixed(1) + ' k'; return n.toString(); }
 function toast(msg, dur = 2000) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.classList.add('hidden'), 300); }, dur); }
 function openSheet(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeSheet(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
 
-// 复制文本
-function copyText(t) {
+// 复制文本（形参名不能用 t，会遮蔽 i18n 函数导致 toast(t('copied')) 抛 TypeError）
+function copyText(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(t).then(() => toast(t('copied'))).catch(() => fallbackCopy(t));
-  } else { fallbackCopy(t); }
+    navigator.clipboard.writeText(text).then(() => toast(t('copied'))).catch(() => fallbackCopy(text));
+  } else { fallbackCopy(text); }
 }
-function fallbackCopy(t) {
+function fallbackCopy(text) {
   const ta = document.createElement('textarea');
-  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
   try { document.execCommand('copy'); toast(t('copied')); } catch (_) { toast(t('copy_fail')); }
   document.body.removeChild(ta);
@@ -814,6 +850,7 @@ async function switchPage(page) {
 let wsStreamEl = null; // 桌面端对话流式消息的 DOM 元素
 let wsThinking = '';   // 桌面端对话思考内容
 let wsContent = '';    // 桌面端对话正文内容
+let wsRebuildTimer = null; // 重试预算耗尽后的整体重建定时器（防重复调度）
 
 async function connectWS() {
   try {
@@ -855,6 +892,13 @@ async function connectWS() {
       onDisconnect(err) {
         console.log('[WS] 断开连接:', err);
         API.connOk = false;
+        // wspulse 重试预算耗尽（RetriesExhaustedError）后内部不再重拨，
+        // 外层 5s 重试只覆盖首次 dial 失败——不重建则实时同步静默死亡直到刷新页面
+        if (err && (err.name === 'RetriesExhaustedError' || /max reconnect retries/i.test(String(err && err.message)))) {
+          if (!wsRebuildTimer) {
+            wsRebuildTimer = setTimeout(() => { wsRebuildTimer = null; connectWS(); }, 10000);
+          }
+        }
       },
       onTransportRestore() {
         console.log('[WS] 连接恢复');
@@ -1132,8 +1176,8 @@ async function loadNovels() {
     const novels = r.novels || [];
     const el = document.getElementById('novelList');
     if (!novels.length) { el.innerHTML = `<div class="empty-state"><p>${t('novels_empty')}</p></div>`; return; }
-    // 在线时后台同步到 IndexedDB
-    if (API.connOk && !r._offline) syncToOffline();
+    // 在线时后台同步到 IndexedDB（书架指纹未变则跳过）
+    if (API.connOk && !r._offline) syncToOffline(novelsFingerprint(novels));
     // 离线提示
     if (r._offline) toast('📡 离线模式，显示缓存数据');
     const colors = ['#7b4f9e','#c44a4a','#3d8b5e','#b8922e','#c44a4a','#7b4f9e','#3d8b5e','#d4a843'];
@@ -1148,7 +1192,7 @@ async function loadNovels() {
   } catch (_) { document.getElementById('novelList').innerHTML = `<div class="empty-state"><p>${t('load_fail')}</p></div>`; }
 }
 
-function openNovel(id, title) { state.novelId = id; state.novelTitle = title; switchPage('novel-detail'); }
+function openNovel(id, title) { state.novelId = id; state.novelTitle = title; delete state.chaptersCache[id]; switchPage('novel-detail'); }
 
 // ═══════════ 新建作品 ═══════════
 function showCreateNovel() {
@@ -1176,10 +1220,10 @@ let novelTab = 'chapters';
 const TABS = [{ id: 'chapters', label: () => '📖 ' + t('chapters') }, { id: 'characters', label: () => '👤 ' + t('characters') }, { id: 'timeline', label: () => '⏱ ' + t('timeline') }, { id: 'arcs', label: () => '🔮 ' + t('arcs') }, { id: 'reader', label: () => '👁 ' + t('reader') }, { id: 'preferences', label: () => '⚙ ' + t('preferences') }, { id: 'locations', label: () => '📍 ' + t('locations') }, { id: 'lore', label: () => '📜 ' + t('lore') }, { id: 'items', label: () => '⚔️ ' + t('items') }, { id: 'scenes', label: () => '🎬 ' + t('scenes') }];
 
 async function loadNovelDetail() {
-  // 标题栏添加删除按钮
-  document.getElementById('novelDetailHeader').innerHTML = `
-    <button class="btn-delete-novel" onclick="showDeleteNovel(${state.novelId}, '${state.novelTitle.replace(/'/g, "\\'")}')">🗑️</button>
-  `;
+  // 标题栏添加删除按钮（不用内联 onclick 拼接标题：书名含引号/反斜杠会突破属性注入事件）
+  const header = document.getElementById('novelDetailHeader');
+  header.innerHTML = `<button class="btn-delete-novel" title="删除小说">🗑️</button>`;
+  header.querySelector('.btn-delete-novel').addEventListener('click', () => showDeleteNovel(state.novelId, state.novelTitle));
   document.getElementById('novelDetailTabs').innerHTML = TABS.map(tab => `<button class="tab-item ${tab.id === novelTab ? 'active' : ''}" onclick="switchTab('${tab.id}')">${tab.label()}</button>`).join('');
   switchTab(novelTab);
 }
@@ -1939,11 +1983,18 @@ async function sendMessage(text) {
   try {
     const body = { message: text, novel_id: state.novelId };
     if (state.sessionId) body.session_id = state.sessionId;
-    if (state.selectedModel) { const p = state.selectedModel.split('/', 2); if (p.length === 2) { body.provider_name = p[0]; body.model_id = p[1]; } }
+    // 服务端 /api/chat 解析的字段是 model/provider（api_server.go handleChat），
+    // 发 provider_name/model_id 会被 json 解码静默丢弃，按消息指定模型从未生效
+    if (state.selectedModel) { const p = state.selectedModel.split('/', 2); if (p.length === 2) { body.provider = p[0]; body.model = p[1]; } }
     const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
     const res = await fetch(API.base + '/api/chat', { method: 'POST', headers, body: JSON.stringify(body), signal: abortCtrl.signal });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
     const reader = res.body.getReader(), decoder = new TextDecoder(); let buf = '';
     while (true) {
       const { done, value } = await reader.read(); if (done) break;

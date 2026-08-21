@@ -413,25 +413,23 @@ func findVanishedCharacters(ctx context.Context, db *gorm.DB, novelID int64, cur
 		}
 	}
 
-	// 角色最后一次出场章节
-	lastSeen := map[int64]int{} // charID → chapter_number
-	var allScenes []scene.Scene
-	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&allScenes)
-	// 建立 chapter_id → chapter_number
-	allChIDs := map[int64]int{}
-	var chs []chapter.Chapter
-	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chs)
-	for _, c := range chs {
-		allChIDs[c.ID] = c.ChapterNumber
+	// 角色最后一次出场章节：单条 JOIN 查询只取三列（旧实现全量加载 scenes+chapters
+	// 两个完整结构体切片，长篇几千章时每次调用内存与耗时线性膨胀）
+	type sceneChRow struct {
+		CharacterIDs string
+		ChapterNum   int
 	}
-	for _, sc := range allScenes {
-		if sc.ChapterID == nil {
-			continue
-		}
-		chNum := allChIDs[*sc.ChapterID]
-		for _, id := range parseJSONInt64Array(sc.CharacterIDs) {
-			if chNum > lastSeen[id] {
-				lastSeen[id] = chNum
+	var rows []sceneChRow
+	db.WithContext(ctx).Raw(
+		"SELECT s.character_ids AS character_ids, c.chapter_number AS chapter_num"+
+			" FROM scenes s JOIN chapters c ON c.id = s.chapter_id"+
+			" WHERE s.novel_id = ? AND s.chapter_id IS NOT NULL", novelID).Scan(&rows)
+
+	lastSeen := map[int64]int{} // charID → chapter_number
+	for _, r := range rows {
+		for _, id := range parseJSONInt64Array(r.CharacterIDs) {
+			if r.ChapterNum > lastSeen[id] {
+				lastSeen[id] = r.ChapterNum
 			}
 		}
 	}
@@ -516,6 +514,8 @@ type deadAppeared struct {
 // findDeadAppeared 查找已死亡角色在死亡章节之后仍被写入章节出场列表（characters_in）的情况。
 // characters_in 是 maintain 阶段每章回写的 JSON 数组（如 [127,128,129]），
 // status=dead 且 status_changed_chapter_id 明确的角色出现在更晚章节的 characters_in 中即为死者复出。
+// 单次遍历后续章节判定（旧实现按死亡角色逐个反查全部后续章节，O(死者数×章数)）；
+// 每个角色只报最早一次复出章节，避免同一角色刷屏多条。
 func findDeadAppeared(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int) []deadAppeared {
 	var deadChars []character.Character
 	db.WithContext(ctx).Where("novel_id = ? AND status = 'dead' AND status_changed_chapter_id IS NOT NULL", novelID).Find(&deadChars)
@@ -525,13 +525,16 @@ func findDeadAppeared(ctx context.Context, db *gorm.DB, novelID int64, currentCh
 
 	// 章节 ID → 章节号 映射（用于 characters_in 反查章号）
 	var chs []chapter.Chapter
-	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&chs)
+	db.WithContext(ctx).Where("novel_id = ?", novelID).Select("id", "chapter_number").Find(&chs)
 	chNumByID := map[int64]int{}
 	for _, c := range chs {
 		chNumByID[c.ID] = c.ChapterNumber
 	}
 
-	var out []deadAppeared
+	// 死亡角色：角色ID → 死亡章号 + 姓名
+	deathChByID := map[int64]int{}
+	nameByID := map[int64]string{}
+	minDeathCh := currentChapter
 	for _, ch := range deadChars {
 		if ch.StatusChangedChapterID == nil {
 			continue
@@ -540,16 +543,31 @@ func findDeadAppeared(ctx context.Context, db *gorm.DB, novelID int64, currentCh
 		if deathChNum == 0 {
 			continue
 		}
-		// 死亡章之后的章节，characters_in 中含该角色 ID → 死者复出
-		var later []chapter.Chapter
-		db.WithContext(ctx).Where("novel_id = ? AND chapter_number > ?", novelID, deathChNum).
-			Select("id", "chapter_number", "characters_in").Find(&later)
-		for _, lc := range later {
-			for _, id := range parseJSONInt64Array(lc.CharactersIn) {
-				if id == ch.ID {
-					out = append(out, deadAppeared{Name: ch.Name, DeathChapter: deathChNum, AppearedChapter: lc.ChapterNumber})
-					break
-				}
+		deathChByID[ch.ID] = deathChNum
+		nameByID[ch.ID] = ch.Name
+		if deathChNum < minDeathCh {
+			minDeathCh = deathChNum
+		}
+	}
+	if len(deathChByID) == 0 {
+		return nil
+	}
+
+	// 单次遍历死亡章之后的章节，characters_in 命中即记录
+	var out []deadAppeared
+	seen := map[int64]bool{}
+	var later []chapter.Chapter
+	db.WithContext(ctx).Where("novel_id = ? AND chapter_number > ? AND chapter_number <= ?",
+		novelID, minDeathCh-1, currentChapter).
+		Select("id", "chapter_number", "characters_in").Order("chapter_number").Find(&later)
+	for _, lc := range later {
+		for _, id := range parseJSONInt64Array(lc.CharactersIn) {
+			if seen[id] {
+				continue
+			}
+			if deathCh, ok := deathChByID[id]; ok && lc.ChapterNumber > deathCh {
+				seen[id] = true
+				out = append(out, deadAppeared{Name: nameByID[id], DeathChapter: deathCh, AppearedChapter: lc.ChapterNumber})
 			}
 		}
 	}
@@ -751,22 +769,8 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 		}
 	}
 
-	// pref_conflict: preferences 节奏类 vs outline_beats 章节号
-	var prefs []novel.PreferenceItem
-	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&prefs)
-	for _, p := range prefs {
-		if p.Category != "节奏" && p.Category != "节奏偏好" {
-			continue
-		}
-		// 提取偏好中的章节数字
-		for _, b := range beats {
-			chapterStr := fmt.Sprintf("第%d章", b.Chapter)
-			if strings.Contains(p.Content, chapterStr) {
-				// 偏好提到某个章节号，检查是否与大爽点位置一致
-				// 这里只做简单匹配，复杂冲突需要人工确认
-			}
-		}
-	}
+	// pref_conflict 检查已移除：原实现内层循环体为空（只 Contains 匹配无任何动作），
+	// 节奏类偏好与 outline_beats 的复杂冲突需人工确认，程序化误报价值低
 
 	// type_pacing: 大爽点间距检查（根据题材）
 	if genre != "" {
@@ -803,6 +807,8 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 	}
 
 	// taboo_violation: 禁忌 vs 大爽点描述
+	var prefs []novel.PreferenceItem
+	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&prefs)
 	for _, p := range prefs {
 		if p.Category != "禁忌" && p.Category != "禁忌事项" {
 			continue
