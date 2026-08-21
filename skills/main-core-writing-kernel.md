@@ -72,6 +72,14 @@ mode: always
 
 > **并行工具调用**：同一阶段内无依赖的工具调用**并行发出**（一次请求多个工具调用，模型原生支持并行 tool_calls）——如 prepare 9 项必查、maintain 查询批、迷你维护 6 项、每 3 章自检查询，一次并行发出而不是一次一个；有依赖才串行（后一个需要前一个的结果）。并行减少轮边界与重复 thinking，且不损失任何数据。
 
+### init（开书，仅新书）
+
+门禁自动注入必读技能：main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system。按 main-core-init-phase 工作流执行：
+
+信息采集（分波次提问）→ 写总纲（update_outline + create_outline_beat）→ 创建卷弧线 → 弧线/地点/角色/节点 → 世界观/物品 → 偏好/伏笔 → 一致性校验 → 用户确认 → 结构验证（7 项查询并行）→ **set_phase("prepare")**
+
+硬性门槛：未写全书总纲禁止切换 prepare；用户未明确确认禁止 set_phase（AI 自我判断不算确认）。
+
 ### prepare
 
 **必读技能在动笔前已由系统就绪**（门禁 auto_skill_injection 阶段会在 set_phase 时自动注入）。然后执行：
@@ -136,7 +144,10 @@ mode: always
    通过——门禁 require 强制，不核对无法转出 review（写时把关，不等审稿阶段才发现设定硬伤；
    get_writing_context 的 dead_characters 名单写作前就要记住，死者不得复出）
    **注意**：check_types 可选，留空=全部检查；review 阶段建议传 `["pacing_gap"]`，maintain 阶段建议传 `["promise_fulfillment"]`
-7. **set_phase("review")**
+7. **写后自审**（单章每章执行；批量随每 3 章自检执行）：read main-tech-revision-pass 与 sub-tech-anti-ai-grade，检查本章节奏与 AI 味，发现问题立即 edit 修复
+8. **set_phase("review")**
+
+> **write→review 边界**：进入 review 后立即审稿，**禁止调用任何维护/更新工具**（白名单只读/审稿，会被门禁拦截）。迷你维护是写正文完成后、set_phase("review") 之前做的；进入 review 只做：run_subagent 启动审稿 → 读报告 → 修正文。维护留到 maintain 统一做。
 
 ### review
 

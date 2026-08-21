@@ -17,7 +17,7 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 ### Skill 结构约定
 
 - **内置 skill（`internal/skill/builtin/`）**：瑞士军刀全量版（当前 44 个：37 auto + 5 manual + 2 always——main-core-ai-communication-standard 已内置兜底，与 kernel 同待遇；数量以目录为准，勿在文档写死）。可按需优化（补正反例/自查表/统一口径），但**创作规则零删减**——任何改动不得删掉原有的写作规则、判定标准或检查项，只能增加或改写表达
-- **`skills/`（项目根目录，版本控制）= 用户级 skill 真源**：当前 6 个文件（main-core-writing-kernel、main-core-ai-communication-standard、main-core-init-phase、main-tech-chapter-title-design、main-tech-data-hygiene、sub-tech-review-standards），数量以目录为准。这些是**需要时可改**的调度/审稿技能（同名覆盖内置），同步到 `~/.goink/skills/` 后生效；改动后如属通用改进应回灌 `internal/skill/builtin/` 保持基线一致（2026-08-21 审计已核对：kernel/review-standards/init-phase 三者为领先 builtin 的演进版，其余与 builtin 逐字节相同）
+- **`skills/`（项目根目录，版本控制）= 用户级 skill 真源**：当前 6 个文件（main-core-writing-kernel、main-core-ai-communication-standard、main-core-init-phase、main-tech-chapter-title-design、main-tech-data-hygiene、sub-tech-review-standards），数量以目录为准。这些是**需要时可改**的调度/审稿技能（同名覆盖内置），同步到 `~/.goink/skills/` 后生效；改动后如属通用改进应回灌 `internal/skill/builtin/` 保持基线一致（2026-08-21 已双向同步：6 文件与 builtin 逐字节一致，其中 kernel/review-standards/init-phase 为演进版回灌——kernel 回灌时补回单章写后自审、write→review 边界、init 用户确认门槛三条规则）
 - **新增 skill**：放 `internal/skill/builtin/<name>.md`，并在 main-core-writing-kernel 的阶段技能表登记（需重新编译，或放用户级即时生效）
 - 同名优先级：小说级 > 用户级 > 内置（放用户级可覆盖内置默认行为）
 
