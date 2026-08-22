@@ -43,13 +43,11 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 	}
 	isMain := agentType == "main"
 
-	// 分角色 detail：
-	// - system 用固定前缀的精确值（首轮写入 session.extra_metadata.fixed_prefix_tokens），
-	//   不含动态 system 消息（phase reminder 等，量小归入格式开销）
-	// - user/assistant/tool 用 runningTokens 本地计数（tiktoken 估算，量级准确）
-	// - 差值（工具定义已计入固定前缀；剩余为消息格式开销 + 动态 system）单独展示为 overhead
+	// 合并一次 session 读取（避免两次 db 查询）
+	sess, _ := a.session.GetSession(ctx, opts.SessionID)
+
 	fixedPrefix := 0
-	if sess, err := a.session.GetSession(ctx, opts.SessionID); err == nil && sess.ExtraMetadata != "" {
+	if sess != nil && sess.ExtraMetadata != "" {
 		var meta map[string]any
 		if json.Unmarshal([]byte(sess.ExtraMetadata), &meta) == nil {
 			if v, _ := meta["fixed_prefix_tokens"].(float64); v > 0 {
@@ -80,7 +78,7 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 	accHit, accMiss := float64(0), float64(0)
 	accCompletion := float64(0)
 	perModel := make(map[string]map[string]float64) // modelID → {hit, miss, comp}
-	if sess, err := a.session.GetSession(ctx, opts.SessionID); err == nil && sess.Usage != "" {
+	if sess != nil && sess.Usage != "" {
 		var old map[string]any
 		if json.Unmarshal([]byte(sess.Usage), &old) == nil {
 			if v, _ := old["prompt_cache_hit_tokens"].(float64); v > 0 {

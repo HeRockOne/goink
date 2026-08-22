@@ -13,6 +13,10 @@ version: 1
 
 用户说"帮我改改这章""这章写完了但感觉不对""润色文字""怎么修改小说"时自动加载。
 
+## 与 sub-tech-review-standards 的区别
+
+本 skill 是**作者自修工具**（主动润色流程），review-standards 是**审稿子代理的判定标准**（被动检查清单）。区别：revision-pass 关注"怎么改"，review-standards 关注"哪里有问题"。使用场景：自己改稿时用 revision-pass，交给子代理审稿时用 review-standards。
+
 ## 核心原则
 
 初稿是你说给自己听的故事，修改稿是你说给读者听的故事。参考 **Stephen King "On Writing"**：二稿 = 一稿 − 10%（减废话不加减字）。**永远从大到小改：结构 > 场景 > 句子**——微观润色留到最后，否则会花时间润色一段最终可能被删除的文字。

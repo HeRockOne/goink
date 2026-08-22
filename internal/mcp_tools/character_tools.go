@@ -57,6 +57,13 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 		return nil, fmt.Errorf("list characters: %w", err)
 	}
 
+	// 批量预计算物品数量，避免 N+1
+	charIDs := make([]int64, len(result.Items))
+	for i, ch := range result.Items {
+		charIDs[i] = ch.ID
+	}
+	itemCounts := batchCountItemsForChars(itemStore, ctx, tc.NovelID, charIDs)
+
 	items := make([]map[string]any, len(result.Items))
 	for i, ch := range result.Items {
 		if a.Brief {
@@ -64,7 +71,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 				"id":          ch.ID,
 				"name":        ch.Name,
 				"location_id": ch.LocationID,
-				"item_count":  countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+				"item_count":  itemCounts[ch.ID],
 			}
 		} else {
 			items[i] = map[string]any{
@@ -74,7 +81,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 				"personality": parseJSONField(ch.Personality),
 				"abilities":   parseJSONField(ch.Abilities),
 				"location_id": ch.LocationID,
-				"item_count":  countItemsForChar(itemStore, ctx, tc.NovelID, ch.ID),
+				"item_count":  itemCounts[ch.ID],
 			}
 		}
 	}
@@ -525,6 +532,27 @@ func countItemsForChar(store *item.Store, ctx context.Context, novelID, charID i
 	var count int64
 	store.DB.WithContext(ctx).Model(&item.Item{}).Where("novel_id = ? AND owner_id = ?", novelID, charID).Count(&count)
 	return int(count)
+}
+
+// batchCountItemsForChars 批量统计多个角色的物品数量，避免 N+1 查询。
+func batchCountItemsForChars(store *item.Store, ctx context.Context, novelID int64, charIDs []int64) map[int64]int {
+	result := make(map[int64]int, len(charIDs))
+	if len(charIDs) == 0 {
+		return result
+	}
+	var counts []struct {
+		OwnerID int64
+		Cnt     int64
+	}
+	store.DB.WithContext(ctx).Model(&item.Item{}).
+		Select("owner_id, COUNT(*) as cnt").
+		Where("novel_id = ? AND owner_id IN ?", novelID, charIDs).
+		Group("owner_id").
+		Scan(&counts)
+	for _, c := range counts {
+		result[c.OwnerID] = int(c.Cnt)
+	}
+	return result
 }
 
 func RegisterCharacterTools(r *Registry) {

@@ -100,7 +100,7 @@ func chapterByIDMap(ctx context.Context, db *gorm.DB, novelID int64, ids []int64
 
 func characterAppearances(ctx context.Context, db *gorm.DB, novelID, charID int64, limit int) []map[string]any {
 	var scenes []scene.Scene
-	db.WithContext(ctx).Where("novel_id = ?", novelID).Find(&scenes)
+	db.WithContext(ctx).Where("novel_id = ?", novelID).Order("id DESC").Limit(200).Find(&scenes)
 	chIDs := map[int64]bool{}
 	contexts := map[int64]string{}
 	for _, sc := range scenes {
@@ -460,32 +460,59 @@ func findVanishedCharacters(ctx context.Context, db *gorm.DB, novelID int64, cur
 }
 
 func findItemConflicts(ctx context.Context, db *gorm.DB, novelID int64) []item.Item {
-	var conflicted []item.Item
 	var destroyed []item.Item
 	db.WithContext(ctx).Where("novel_id = ? AND status IN ?", novelID, []string{"destroyed", "lost"}).Find(&destroyed)
+	if len(destroyed) == 0 {
+		return nil
+	}
+
+	// 收集所有状态变化章号
+	chapterIDs := make([]int64, 0, len(destroyed))
 	for _, it := range destroyed {
-		if it.StatusChangedChapterID == nil {
-			continue
+		if it.StatusChangedChapterID != nil {
+			chapterIDs = append(chapterIDs, *it.StatusChangedChapterID)
 		}
-		var ch chapter.Chapter
-		if err := db.WithContext(ctx).First(&ch, *it.StatusChangedChapterID).Error; err != nil {
-			continue
-		}
-		// 状态变化章之后的章节
-		var laterChapters []chapter.Chapter
-		db.WithContext(ctx).Where("novel_id = ? AND chapter_number > ?", novelID, ch.ChapterNumber).Find(&laterChapters)
-		if len(laterChapters) == 0 {
-			continue
-		}
-		chIDs := make([]int64, 0, len(laterChapters))
-		for _, lc := range laterChapters {
-			chIDs = append(chIDs, lc.ID)
-		}
-		var cnt int64
-		db.WithContext(ctx).Model(&itemoccurrence.ItemOccurrence{}).
-			Where("novel_id = ? AND item_id = ? AND chapter_id IN ?", novelID, it.ID, chIDs).
-			Count(&cnt)
-		if cnt > 0 {
+	}
+	if len(chapterIDs) == 0 {
+		return nil
+	}
+
+	// 批量查状态变化章的 chapter_number
+	var chs []chapter.Chapter
+	db.WithContext(ctx).Where("id IN ?", chapterIDs).Find(&chs)
+	chNumMap := make(map[int64]int, len(chs))
+	for _, ch := range chs {
+		chNumMap[ch.ID] = ch.ChapterNumber
+	}
+
+	// 批量查后续章节 ID
+	var laterChapters []chapter.Chapter
+	db.WithContext(ctx).Where("novel_id = ? AND chapter_number > (SELECT MAX(chapter_number) FROM chapters WHERE id IN ?)", novelID, chapterIDs).Find(&laterChapters)
+	if len(laterChapters) == 0 {
+		return nil
+	}
+	laterIDs := make([]int64, 0, len(laterChapters))
+	for _, lc := range laterChapters {
+		laterIDs = append(laterIDs, lc.ID)
+	}
+
+	// 批量查 occurrence（哪些 destroyed items 在后续章节出现过）
+	type occResult struct {
+		ItemID int64
+	}
+	var occItems []occResult
+	db.WithContext(ctx).Model(&itemoccurrence.ItemOccurrence{}).
+		Select("DISTINCT item_id").
+		Where("novel_id = ? AND item_id IN (SELECT id FROM items WHERE novel_id = ? AND status IN ('destroyed','lost')) AND chapter_id IN ?", novelID, novelID, laterIDs).
+		Scan(&occItems)
+	occSet := make(map[int64]bool, len(occItems))
+	for _, o := range occItems {
+		occSet[o.ItemID] = true
+	}
+
+	var conflicted []item.Item
+	for _, it := range destroyed {
+		if occSet[it.ID] {
 			conflicted = append(conflicted, it)
 		}
 	}
@@ -759,9 +786,9 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 					for _, b := range beats {
 						dbChapters[b.Chapter] = true
 					}
-					for _, db := range detail.BigShuangdian {
-						if !dbChapters[db.Chapter] {
-							results = append(results, fmt.Sprintf("[ERROR] volume_beat_sync：卷纲第%d章「%s」在 outline_beats 中不存在", db.Chapter, db.Desc))
+					for _, bd := range detail.BigShuangdian {
+						if !dbChapters[bd.Chapter] {
+							results = append(results, fmt.Sprintf("[ERROR] volume_beat_sync：卷纲第%d章「%s」在 outline_beats 中不存在", bd.Chapter, bd.Desc))
 						}
 					}
 				}

@@ -195,10 +195,30 @@ func (t *DeleteVolumeTool) NewArgs() any      { return &DeleteVolumeArgs{} }
 func (t *DeleteVolumeTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*DeleteVolumeArgs)
 	store := volume.NewStore(tc.DB)
+
+	// 查询卷信息（用于审批和级联）
+	v, err := store.GetByID(ctx, a.ID)
+	if err != nil {
+		return nil, fmt.Errorf("volume not found: %d", a.ID)
+	}
+
+	// 审批
+	meta := map[string]any{"id": v.ID, "name": v.Name, "start_chapter": v.StartChapter, "end_chapter": v.EndChapter, "type": "volume"}
+	injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{
+		"table": "volume", "id": a.ID, "deleted": meta,
+	})
+	if err != nil || result != nil {
+		return result, err
+	}
+
+	// 提醒：卷删除后，原卷范围内章节仍保留（chapter 表无 volume_id 字段，章节通过 chapter_number 隐式关联卷）。
+	// 章节不会被删除，但卷纲引用的 start_chapter/end_chapter 范围内章节将成为孤儿。
+	slog.Info("volume deleted", "volume_id", v.ID, "range", fmt.Sprintf("%d-%d", v.StartChapter, v.EndChapter))
+
 	if err := store.Delete(ctx, a.ID); err != nil {
 		return nil, fmt.Errorf("delete volume: %w", err)
 	}
-	return &ToolResult{Success: true, Data: map[string]any{"ok": true}}, nil
+	return &ToolResult{Success: true, Data: map[string]any{"ok": true}, Inject: injects}, nil
 }
 
 // ── 注册 ──────────────────────────────────────────────────

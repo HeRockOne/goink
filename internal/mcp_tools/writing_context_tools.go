@@ -139,34 +139,76 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		scenes, _ = sceneStore.ListByChapter(ctx, nid, curCh.ID)
 	}
 	sceneList := make([]map[string]any, 0)
-	for _, s := range scenes {
-		// 地点
-		locInfo := map[string]any{"id": 0, "name": ""}
-		if s.LocationID != nil {
-			var loc location.Location
-			if err := db.WithContext(ctx).First(&loc, *s.LocationID).Error; err == nil {
-				locInfo = map[string]any{"id": loc.ID, "name": loc.Name, "type": loc.LocationType}
+	// 批量预查询场景地点
+	{
+		locIDs := make([]int64, 0)
+		for _, s := range scenes {
+			if s.LocationID != nil {
+				locIDs = append(locIDs, *s.LocationID)
 			}
 		}
-		// 弧线节点
-		nodeInfo := map[string]any(nil)
-		if s.ArcNodeID != nil {
-			var node storyarc.ArcNode
-			if err := db.WithContext(ctx).First(&node, *s.ArcNodeID).Error; err == nil {
-				var arcName string
-				db.WithContext(ctx).Model(&storyarc.StoryArc{}).Select("name").Where("id = ?", node.StoryArcID).Scan(&arcName)
-				nodeInfo = map[string]any{"id": node.ID, "title": node.Title, "arc_id": node.StoryArcID, "arc_name": arcName}
+		locMap := make(map[int64]location.Location)
+		if len(locIDs) > 0 {
+			var locs []location.Location
+			db.WithContext(ctx).Where("id IN ?", locIDs).Find(&locs)
+			for _, l := range locs {
+				locMap[l.ID] = l
 			}
 		}
-		sceneList = append(sceneList, map[string]any{
-			"id":         s.ID,
-			"title":      s.Title,
-			"summary":    s.Summary,
-			"word_count": s.WordCount,
-			"location":   locInfo,
-			"arc_node":   nodeInfo,
-			"scene_num":  s.SceneNumber,
-		})
+		// 批量预查询弧线节点+弧线名
+		nodeIDs := make([]int64, 0)
+		for _, s := range scenes {
+			if s.ArcNodeID != nil {
+				nodeIDs = append(nodeIDs, *s.ArcNodeID)
+			}
+		}
+		type nodeInfoT struct {
+			storyarc.ArcNode
+			ArcName string
+		}
+		nodeMap := make(map[int64]nodeInfoT)
+		if len(nodeIDs) > 0 {
+			var nodes []storyarc.ArcNode
+			db.WithContext(ctx).Where("id IN ?", nodeIDs).Find(&nodes)
+			arcIDs := make([]int64, 0)
+			for _, n := range nodes {
+				arcIDs = append(arcIDs, n.StoryArcID)
+			}
+			arcNameMap := make(map[int64]string)
+			if len(arcIDs) > 0 {
+				var arcs []storyarc.StoryArc
+				db.WithContext(ctx).Where("id IN ?", arcIDs).Select("id,name").Find(&arcs)
+				for _, a := range arcs {
+					arcNameMap[a.ID] = a.Name
+				}
+			}
+			for _, n := range nodes {
+				nodeMap[n.ID] = nodeInfoT{ArcNode: n, ArcName: arcNameMap[n.StoryArcID]}
+			}
+		}
+		for _, s := range scenes {
+			locInfo := map[string]any{"id": 0, "name": ""}
+			if s.LocationID != nil {
+				if l, ok := locMap[*s.LocationID]; ok {
+					locInfo = map[string]any{"id": l.ID, "name": l.Name, "type": l.LocationType}
+				}
+			}
+			var ni map[string]any
+			if s.ArcNodeID != nil {
+				if n, ok := nodeMap[*s.ArcNodeID]; ok {
+					ni = map[string]any{"id": n.ID, "title": n.Title, "arc_id": n.StoryArcID, "arc_name": n.ArcName}
+				}
+			}
+			sceneList = append(sceneList, map[string]any{
+				"id":         s.ID,
+				"title":      s.Title,
+				"summary":    s.Summary,
+				"word_count": s.WordCount,
+				"location":   locInfo,
+				"arc_node":   ni,
+				"scene_num":  s.SceneNumber,
+			})
+		}
 	}
 	result["scenes"] = sceneList
 
@@ -197,28 +239,47 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 		var chars []character.Character
 		db.WithContext(ctx).Where("id IN ? AND novel_id = ?", charIDs, nid).Find(&chars)
 		itemStore := item.NewStore(db, log)
+		itemCounts := batchCountItemsForChars(itemStore, ctx, nid, charIDs)
+		// 批量查角色地点
+		charLocIDs := make([]int64, 0)
+		for _, ch := range chars {
+			if ch.LocationID != nil {
+				charLocIDs = append(charLocIDs, *ch.LocationID)
+			}
+		}
+		charLocMap := make(map[int64]location.Location)
+		if len(charLocIDs) > 0 {
+			var charLocs []location.Location
+			db.WithContext(ctx).Where("id IN ?", charLocIDs).Find(&charLocs)
+			for _, l := range charLocs {
+				charLocMap[l.ID] = l
+			}
+		}
+		// 批量查角色物品（仅 key_prop 和 supporting）
+		charItemsMap := make(map[int64][]map[string]any)
+		{
+			var allItems []item.Item
+			db.WithContext(ctx).Where("novel_id = ? AND owner_id IN ? AND narrative_role IN ('key_prop','supporting')", nid, charIDs).Find(&allItems)
+			for _, it := range allItems {
+				if it.OwnerID != nil {
+					charItemsMap[*it.OwnerID] = append(charItemsMap[*it.OwnerID], map[string]any{"id": it.ID, "name": it.Name, "role": it.NarrativeRole})
+				}
+			}
+		}
 		for _, ch := range chars {
 			locInfo := map[string]any{"id": 0, "name": ""}
 			if ch.LocationID != nil {
-				var loc location.Location
-				if err := db.WithContext(ctx).First(&loc, *ch.LocationID).Error; err == nil {
-					locInfo = map[string]any{"id": loc.ID, "name": loc.Name}
+				if l, ok := charLocMap[*ch.LocationID]; ok {
+					locInfo = map[string]any{"id": l.ID, "name": l.Name}
 				}
-			}
-			// 该角色持有的物品（仅 key_prop 和 supporting）
-			items := make([]map[string]any, 0)
-			var itemList []item.Item
-			db.WithContext(ctx).Where("novel_id = ? AND owner_id = ? AND narrative_role IN ('key_prop','supporting')", nid, ch.ID).Find(&itemList)
-			for _, it := range itemList {
-				items = append(items, map[string]any{"id": it.ID, "name": it.Name, "role": it.NarrativeRole})
 			}
 			charList = append(charList, map[string]any{
 				"id":         ch.ID,
 				"name":       ch.Name,
-				"status":     ch.Status, // alive/dead/missing/unknown：dead=已死亡（不得让其出场/说话/行动）
+				"status":     ch.Status,
 				"location":   locInfo,
-				"items":      items,
-				"item_count": countItemsForChar(itemStore, ctx, nid, ch.ID),
+				"items":      charItemsMap[ch.ID],
+				"item_count": itemCounts[ch.ID],
 			})
 		}
 	}
@@ -227,28 +288,65 @@ func (t *GetWritingContextTool) Execute(ctx context.Context, args any, tc ToolCo
 	// ── 4. 活跃弧线 → 节点进度 + 关联设定/物品 ──
 	var arcs []storyarc.StoryArc
 	db.WithContext(ctx).Where("novel_id = ? AND status = 'active'", nid).Find(&arcs)
+	// 批量查弧线节点计数
+	type arcCount struct {
+		StoryArcID int64
+		Total      int64
+		Done       int64
+	}
+	arcCounts := make(map[int64]arcCount)
+	if len(arcs) > 0 {
+		arcIDs := make([]int64, len(arcs))
+		for i, a := range arcs {
+			arcIDs[i] = a.ID
+		}
+		var counts []arcCount
+		db.WithContext(ctx).Model(&storyarc.ArcNode{}).
+			Select("story_arc_id, COUNT(*) as total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as done").
+			Where("story_arc_id IN ?", arcIDs).
+			Group("story_arc_id").
+			Scan(&counts)
+		for _, c := range counts {
+			arcCounts[c.StoryArcID] = c
+		}
+	}
+	// 批量查弧线关联设定和物品
+	arcLoreMap := make(map[int64][]int64)
+	arcItemMap := make(map[int64][]int64)
+	if len(arcs) > 0 {
+		arcIDs := make([]int64, len(arcs))
+		for i, a := range arcs {
+			arcIDs[i] = a.ID
+		}
+		var loreEntries []struct {
+			ArcID int64
+			ID    int64
+		}
+		db.WithContext(ctx).Model(&lore.LoreEntry{}).Select("arc_id, id").Where("novel_id = ? AND arc_id IN ?", nid, arcIDs).Scan(&loreEntries)
+		for _, l := range loreEntries {
+			arcLoreMap[l.ArcID] = append(arcLoreMap[l.ArcID], l.ID)
+		}
+		var itemEntries []struct {
+			ArcID int64
+			ID    int64
+		}
+		db.WithContext(ctx).Model(&item.Item{}).Select("arc_id, id").Where("novel_id = ? AND arc_id IN ?", nid, arcIDs).Scan(&itemEntries)
+		for _, it := range itemEntries {
+			arcItemMap[it.ArcID] = append(arcItemMap[it.ArcID], it.ID)
+		}
+	}
 	arcList := make([]map[string]any, 0)
 	for _, ar := range arcs {
-		// 节点进度
-		var totalNodes, doneNodes int64
-		db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ?", ar.ID).Count(&totalNodes)
-		db.WithContext(ctx).Model(&storyarc.ArcNode{}).Where("story_arc_id = ? AND status = 'completed'", ar.ID).Count(&doneNodes)
-		// 关联设定（初始化为空数组，不返回 null）
-		loreIDs := make([]int64, 0)
-		db.WithContext(ctx).Model(&lore.LoreEntry{}).Select("id").Where("novel_id = ? AND arc_id = ?", nid, ar.ID).Scan(&loreIDs)
-		// 关联物品
-		itemIDs := make([]int64, 0)
-		db.WithContext(ctx).Model(&item.Item{}).Select("id").Where("novel_id = ? AND arc_id = ?", nid, ar.ID).Scan(&itemIDs)
-
+		ac := arcCounts[ar.ID]
 		arcList = append(arcList, map[string]any{
 			"id":            ar.ID,
 			"name":          ar.Name,
 			"type_zh":       arcTypeZh(ar.ArcType),
 			"status":        ar.Status,
-			"nodes_total":   totalNodes,
-			"nodes_done":    doneNodes,
-			"related_lore":  loreIDs,
-			"related_items": itemIDs,
+			"nodes_total":   ac.Total,
+			"nodes_done":    ac.Done,
+			"related_lore":  arcLoreMap[ar.ID],
+			"related_items": arcItemMap[ar.ID],
 		})
 	}
 	result["active_arcs"] = arcList

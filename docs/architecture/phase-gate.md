@@ -52,7 +52,7 @@
 outline → 写大纲（require: edit）→ set_phase("write")
 write → 写正文（require: edit + get_chapter_list）→ 字数校验 → set_phase("review")
 review → 审读（require: run_subagent）→ set_phase("maintain")
-maintain → 状态维护（require: 13 项清单）→ set_phase("done")
+maintain → 状态维护（require: 14 项清单）→ set_phase("done")
   ↓ done 是终点：创作完成，系统停下。新一轮由用户重新发起
 ```
 
@@ -184,7 +184,7 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 | outline | main-tech-chapter-hook-enhanced, main-tech-chapter-title-design |
 | write | main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration |
 | review | 空（sub-tech-review-standards 由系统自动注入子代理，主代理不用读） |
-| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle |
+| maintain | main-tech-anti-repetition, main-tech-foreshadow-cycle, main-tech-data-hygiene |
 
 按需技能（情景类）不进 auto_skill_injection，由 kernel 措辞引导模型按需 read。
 
