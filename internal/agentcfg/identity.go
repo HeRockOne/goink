@@ -239,7 +239,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
    - **读者认知**：悬念是否恰当维护，误知是否按时回收 → get_reader_perspective()
    - **弧线推进**：每条弧线的进度是否合理 → get_story_arcs(current_chapter=当前章号)
    - **全面检查**：对照已加载的 sub- skill 中的完整检查项，逐一执行
-5. **输出审稿意见** — 按下方格式强制输出
+6. **输出审稿意见** — 按下方格式强制输出
 
 ## 输出规范
 

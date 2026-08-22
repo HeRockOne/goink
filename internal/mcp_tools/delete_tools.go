@@ -82,14 +82,56 @@ func (t *DeleteRecordTool) Execute(ctx context.Context, args any, tc ToolContext
 	case "preference":
 		return t.deletePreference(ctx, a, tc)
 	case "scene":
-		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&scene.Scene{})
-		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+		var sc scene.Scene
+		if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).First(&sc).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return &ToolResult{Success: false, Error: fmt.Sprintf("场景 %d 不存在或不属于当前小说", a.ID)}, nil
+			}
+			return nil, fmt.Errorf("query scene: %w", err)
+		}
+		meta := map[string]any{"id": sc.ID, "title": sc.Title, "chapter_id": sc.ChapterID, "type": "scene"}
+		injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{"table": a.Table, "id": a.ID, "deleted": meta})
+		if err != nil || result != nil {
+			return result, err
+		}
+		if err := tc.DB.WithContext(ctx).Delete(&sc).Error; err != nil {
+			return nil, fmt.Errorf("delete scene: %w", err)
+		}
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
 	case "lore":
-		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&lore.LoreEntry{})
-		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+		var l lore.LoreEntry
+		if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).First(&l).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return &ToolResult{Success: false, Error: fmt.Sprintf("世界观 %d 不存在或不属于当前小说", a.ID)}, nil
+			}
+			return nil, fmt.Errorf("query lore: %w", err)
+		}
+		meta := map[string]any{"id": l.ID, "category": l.Category, "title": l.Title, "type": "lore"}
+		injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{"table": a.Table, "id": a.ID, "deleted": meta})
+		if err != nil || result != nil {
+			return result, err
+		}
+		if err := tc.DB.WithContext(ctx).Delete(&l).Error; err != nil {
+			return nil, fmt.Errorf("delete lore: %w", err)
+		}
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
 	case "item":
-		tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).Delete(&item.Item{})
-		return &ToolResult{Success: true, Data: map[string]any{"deleted": true}}, nil
+		var it item.Item
+		if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).First(&it).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return &ToolResult{Success: false, Error: fmt.Sprintf("物品 %d 不存在或不属于当前小说", a.ID)}, nil
+			}
+			return nil, fmt.Errorf("query item: %w", err)
+		}
+		meta := map[string]any{"id": it.ID, "name": it.Name, "type": "item"}
+		injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{"table": a.Table, "id": a.ID, "deleted": meta})
+		if err != nil || result != nil {
+			return result, err
+		}
+		if err := tc.DB.WithContext(ctx).Delete(&it).Error; err != nil {
+			return nil, fmt.Errorf("delete item: %w", err)
+		}
+		return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
 	case "item_occurrence":
 		return t.deleteItemOccurrence(ctx, a, tc)
 	default:
@@ -437,9 +479,9 @@ func (t *DeleteRecordTool) deleteReaderPerspectiveEntry(ctx context.Context, a *
 
 func (t *DeleteRecordTool) deletePreference(ctx context.Context, a *DeleteRecordArgs, tc ToolContext) (*ToolResult, error) {
 	var rec novel.PreferenceItem
-	if err := tc.DB.WithContext(ctx).Where("id = ? AND ((novel_id = ? AND is_global = false) OR is_global = true)", a.ID, tc.NovelID).First(&rec).Error; err != nil {
+	if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ? AND is_global = false", a.ID, tc.NovelID).First(&rec).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return &ToolResult{Success: false, Error: fmt.Sprintf("偏好项 %d 不存在", a.ID)}, nil
+			return &ToolResult{Success: false, Error: fmt.Sprintf("偏好项 %d 不存在或为全局偏好（全局偏好不可通过此工具删除）", a.ID)}, nil
 		}
 		return nil, fmt.Errorf("query preference: %w", err)
 	}

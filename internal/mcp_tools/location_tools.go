@@ -367,6 +367,22 @@ func (t *UpdateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 
 	json.Unmarshal(tc.RawArgs, &loc)
 
+	if a.Name != "" {
+		loc.Name = a.Name
+	}
+	if a.LocationType != "" {
+		loc.LocationType = a.LocationType
+	}
+	if a.Description != "" {
+		loc.Description = a.Description
+	}
+	if a.DetailJSON != "" {
+		loc.DetailJSON = a.DetailJSON
+	}
+	if a.ParentLocationID != nil {
+		loc.ParentLocationID = a.ParentLocationID
+	}
+
 	// tags 规范化：LLM 可能传对象数组或裸数组，统一规整为字符串数组；从 RawArgs 取原始值
 	if rawTags, ok := raw["tags"]; ok {
 		tags, err := NormalizeStringArrayValue(rawTags)
@@ -558,6 +574,13 @@ func (t *UpdateLocationRelationTool) Execute(ctx context.Context, args any, tc T
 	}
 
 	json.Unmarshal(tc.RawArgs, &rel)
+
+	if a.RelationType != "" {
+		rel.RelationType = a.RelationType
+	}
+	if a.Description != "" {
+		rel.Description = a.Description
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&rel).Error; err != nil {
 		return nil, fmt.Errorf("save relation: %w", err)

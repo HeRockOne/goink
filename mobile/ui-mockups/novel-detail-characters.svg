@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fb"/>
+      <stop offset="100%" stop-color="#f0f2f5"/>
+    </linearGradient>
+    <linearGradient id="novel1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="char1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#f87171"/>
+    </linearGradient>
+    <linearGradient id="char2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="char3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <filter id="cardShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="8" flood-color="#000" flood-opacity="0.06"/>
+    </filter>
+    <filter id="iconShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="screen"><rect x="0" y="0" width="390" height="844" rx="0"/></clipPath>
+  </defs>
+  
+  <g clip-path="url(#screen)">
+    <rect width="390" height="844" fill="url(#bg)"/>
+    
+    <!-- Status bar -->
+    <rect width="390" height="50" fill="#f8f9fb"/>
+    <text x="32" y="32" font-size="14" font-weight="600" fill="#1e293b">9:41</text>
+    <rect x="308" y="22" width="18" height="10" rx="2" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="310" y="24" width="12" height="6" rx="1" fill="#1e293b"/>
+    
+    <!-- Back button -->
+    <text x="24" y="34" font-size="20" fill="#2563eb">←</text>
+    
+    <!-- Novel header -->
+    <g transform="translate(20, 60)">
+      <g transform="translate(0, 0)" filter="url(#iconShadow)">
+        <rect width="56" height="68" rx="10" fill="url(#novel1)"/>
+        <text x="28" y="44" font-size="26" font-weight="700" fill="white" text-anchor="middle">龙</text>
+      </g>
+      <g transform="translate(72, 0)">
+        <text x="0" y="18" font-size="21" font-weight="800" fill="#0f172a" letter-spacing="-0.3">龙族之黄昏</text>
+        <g transform="translate(200, 0)">
+          <circle cx="16" cy="8" r="16" fill="#f1f5f9"/>
+          <text x="16" y="13" font-size="14" fill="#94a3b8" text-anchor="middle">🗑</text>
+        </g>
+      </g>
+    </g>
+    
+    <!-- Stats row -->
+    <g transform="translate(20, 148)">
+      <rect width="350" height="52" rx="12" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="117" y1="12" x2="117" y2="40" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="233" y1="12" x2="233" y2="40" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="58" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">128</text>
+      <text x="58" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">章数</text>
+      <text x="175" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">24</text>
+      <text x="175" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">角色</text>
+      <text x="292" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">42.6万</text>
+      <text x="292" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">字数</text>
+    </g>
+    
+    <!-- Tab bar -->
+    <g transform="translate(20, 220)">
+      <rect x="0" y="0" width="52" height="34" rx="8" fill="transparent"/>
+      <text x="26" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">目录</text>
+      
+      <rect x="58" y="0" width="52" height="34" rx="8" fill="rgba(37,99,235,0.08)"/>
+      <text x="84" y="22" font-size="13" font-weight="600" fill="#2563eb" text-anchor="middle">角色</text>
+      
+      <rect x="116" y="0" width="52" height="34" rx="8" fill="transparent"/>
+      <text x="142" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">设定</text>
+      
+      <rect x="174" y="0" width="52" height="34" rx="8" fill="transparent"/>
+      <text x="200" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">时间线</text>
+    </g>
+    
+    <rect x="20" y="258" width="350" height="1" fill="#e2e8f0"/>
+    <rect x="78" y="258" width="52" height="2" rx="1" fill="#2563eb"/>
+    
+    <!-- Character cards -->
+    <!-- Character 1 - Main -->
+    <g transform="translate(20, 274)" filter="url(#cardShadow)">
+      <rect width="350" height="100" rx="14" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <circle cx="28" cy="28" r="28" fill="url(#char1)"/>
+        <text x="28" y="34" font-size="18" font-weight="700" fill="white" text-anchor="middle">苏</text>
+      </g>
+      <g transform="translate(80, 16)">
+        <text x="0" y="14" font-size="16" font-weight="700" fill="#0f172a">苏暮寒</text>
+        <rect x="68" y="0" width="36" height="18" rx="6" fill="rgba(239,68,68,0.1)"/>
+        <text x="86" y="13" font-size="10" font-weight="600" fill="#ef4444" text-anchor="middle">主角</text>
+        <text x="0" y="36" font-size="12" fill="#64748b" line-height="1.5">被放逐的龙族少年，黄昏之血的觉醒者。沉默寡言，内心燃烧着复仇的火焰。</text>
+      </g>
+      <!-- Relations -->
+      <g transform="translate(80, 64)">
+        <rect width="56" height="20" rx="6" fill="#f1f5f9"/>
+        <text x="28" y="14" font-size="10" fill="#64748b" text-anchor="middle">→ 林霜月</text>
+        <rect x="62" y="0" width="56" height="20" rx="6" fill="#f1f5f9"/>
+        <text x="90" y="14" font-size="10" fill="#64748b" text-anchor="middle">→ 龙渊</text>
+        <rect x="124" y="0" width="56" height="20" rx="6" fill="#f1f5f9"/>
+        <text x="152" y="14" font-size="10" fill="#64748b" text-anchor="middle">→ 萧远</text>
+      </g>
+      <text x="330" y="50" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Character 2 -->
+    <g transform="translate(20, 382)">
+      <rect width="350" height="80" rx="14" fill="white"/>
+      <g transform="translate(16, 16)">
+        <circle cx="24" cy="24" r="24" fill="url(#char2)"/>
+        <text x="24" y="30" font-size="16" font-weight="700" fill="white" text-anchor="middle">林</text>
+      </g>
+      <g transform="translate(72, 16)">
+        <text x="0" y="14" font-size="15" font-weight="600" fill="#334155">林霜月</text>
+        <rect x="56" y="0" width="36" height="18" rx="6" fill="rgba(139,92,246,0.1)"/>
+        <text x="74" y="13" font-size="10" font-weight="600" fill="#8b5cf6" text-anchor="middle">女主</text>
+        <text x="0" y="36" font-size="12" fill="#64748b">冰系灵师，表面冷漠实则心系苍生</text>
+      </g>
+      <g transform="translate(72, 56)">
+        <rect width="56" height="18" rx="6" fill="#f1f5f9"/>
+        <text x="28" y="13" font-size="10" fill="#64748b" text-anchor="middle">← 苏暮寒</text>
+      </g>
+      <text x="330" y="40" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Character 3 -->
+    <g transform="translate(20, 470)">
+      <rect width="350" height="80" rx="14" fill="white"/>
+      <g transform="translate(16, 16)">
+        <circle cx="24" cy="24" r="24" fill="url(#char3)"/>
+        <text x="24" y="30" font-size="16" font-weight="700" fill="white" text-anchor="middle">龙</text>
+      </g>
+      <g transform="translate(72, 16)">
+        <text x="0" y="14" font-size="15" font-weight="600" fill="#334155">龙渊长老</text>
+        <rect x="72" y="0" width="36" height="18" rx="6" fill="rgba(245,158,11,0.1)"/>
+        <text x="90" y="13" font-size="10" font-weight="600" fill="#d97706" text-anchor="middle">反派</text>
+        <text x="0" y="36" font-size="12" fill="#64748b">龙族长老会首领，表面维护秩序实则野心勃勃</text>
+      </g>
+      <g transform="translate(72, 56)">
+        <rect width="56" height="18" rx="6" fill="#f1f5f9"/>
+        <text x="28" y="13" font-size="10" fill="#64748b" text-anchor="middle">→ 苏暮寒</text>
+        <rect x="62" y="0" width="56" height="18" rx="6" fill="#f1f5f9"/>
+        <text x="90" y="13" font-size="10" fill="#64748b" text-anchor="middle">敌对</text>
+      </g>
+      <text x="330" y="40" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Character 4 -->
+    <g transform="translate(20, 558)">
+      <rect width="350" height="80" rx="14" fill="white"/>
+      <g transform="translate(16, 16)">
+        <circle cx="24" cy="24" r="24" fill="#10b981"/>
+        <text x="24" y="30" font-size="16" font-weight="700" fill="white" text-anchor="middle">萧</text>
+      </g>
+      <g transform="translate(72, 16)">
+        <text x="0" y="14" font-size="15" font-weight="600" fill="#334155">萧远</text>
+        <rect x="36" y="0" width="50" height="18" rx="6" fill="rgba(16,185,129,0.1)"/>
+        <text x="61" y="13" font-size="10" font-weight="600" fill="#059669" text-anchor="middle">盟友</text>
+        <text x="0" y="36" font-size="12" fill="#64748b">游侠，苏暮寒唯一的朋友，消息灵通</text>
+      </g>
+      <g transform="translate(72, 56)">
+        <rect width="56" height="18" rx="6" fill="#f1f5f9"/>
+        <text x="28" y="13" font-size="10" fill="#64748b" text-anchor="middle">→ 苏暮寒</text>
+      </g>
+      <text x="330" y="40" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Bottom nav -->
+    <rect x="0" y="780" width="390" height="64" fill="white" stroke="#e2e8f0" stroke-width="0.5"/>
+    <g opacity="0.4">
+      <text x="65" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">📚</text>
+      <text x="65" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">书架</text>
+    </g>
+    <g opacity="1">
+      <circle cx="185" cy="794" r="2" fill="#2563eb"/>
+      <text x="185" y="828" font-size="20" fill="#2563eb" text-anchor="middle">💬</text>
+      <text x="185" y="816" font-size="11" font-weight="600" fill="#2563eb" text-anchor="middle">对话</text>
+    </g>
+    <g opacity="0.4">
+      <text x="265" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">📊</text>
+      <text x="265" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">统计</text>
+    </g>
+    <g opacity="0.4">
+      <text x="325" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">⚙️</text>
+      <text x="325" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">设置</text>
+    </g>
+    <rect x="130" y="836" width="130" height="5" rx="2.5" fill="#1e293b" opacity="0.2"/>
+  </g>
+</svg>

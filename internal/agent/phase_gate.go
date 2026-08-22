@@ -937,7 +937,11 @@ func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 		Visited: g.visited,
 		Reads:   g.readsByPhase,
 	}
-	b, _ := json.Marshal(data)
+	b, err := json.Marshal(data)
+	if err != nil {
+		// 序列化失败时返回空状态，避免静默丢失门禁数据
+		return g.currentPhase, "{}"
+	}
 	return g.currentPhase, string(b)
 }
 

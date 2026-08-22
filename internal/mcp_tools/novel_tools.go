@@ -302,6 +302,16 @@ func (t *UpdatePreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 		return nil, fmt.Errorf("unmarshal preference: %w", err)
 	}
 
+	// 逐字段覆盖，避免零值覆盖已有数据
+	if a.Category != "" {
+		item.Category = a.Category
+	}
+	if a.Content != "" {
+		item.Content = a.Content
+	}
+	// is_global 由 JSON 解码后直接使用（bool 类型无法区分「未传」和「传false」，
+	// 但 schema 仅在需要修改时才传此字段，信任 Unmarshal 结果即可）
+
 	if err := tc.DB.WithContext(ctx).Save(&item).Error; err != nil {
 		return nil, fmt.Errorf("save preference: %w", err)
 	}

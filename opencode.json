@@ -313,20 +313,38 @@
         "baseURL": "https://api.yjs.im/v1"
       },
       "models": {
+        "minimax-m2.7-highspeed": {
+          "name": "minimax-m2.7-highspeed"
+        },
+        "sensenova-6.8-flash-lite": {
+          "name": "sensenova-6.8-flash-lite"
+        },
+        "grok-4.5": {
+          "name": "grok-4.5"
+        },
         "deepseek-v4-flash": {
           "name": "deepseek-v4-flash"
         },
-        "mimo-v2.5": {
-          "name": "mimo-v2.5"
+        "gpt-5.6-luna": {
+          "name": "gpt-5.6-luna"
+        },
+        "deepseek-v4-pro": {
+          "name": "deepseek-v4-pro"
+        },
+        "glm-5.2": {
+          "name": "glm-5.2"
+        },
+        "deepseek-v4-flash-0731": {
+          "name": "deepseek-v4-flash-0731"
         },
         "minimax-m3": {
           "name": "minimax-m3"
         },
-        "minimax-m2.7-highspeed": {
-          "name": "minimax-m2.7-highspeed"
+        "mimo-v2.5": {
+          "name": "mimo-v2.5"
         },
-        "deepseek-v4-pro": {
-          "name": "deepseek-v4-pro"
+        "ox-alpha": {
+          "name": "ox-alpha"
         }
       }
     },

@@ -10,16 +10,21 @@ import (
 
 // 只读工具集合，死循环检测用。
 var readOnlyTools = map[string]bool{
-	"search_story_memory":     true,
-	"get_timeline":            true,
-	"get_chapter_list":        true,
-	"get_characters":          true,
-	"get_locations":           true,
-	"get_story_arcs":          true,
-	"get_reader_perspective":  true,
-	"get_preferences":         true,
-	"get_character_relations": true,
-	"read":                    true,
+	"search_story_memory":      true,
+	"get_timeline":             true,
+	"get_chapter_list":         true,
+	"get_characters":           true,
+	"get_locations":            true,
+	"get_story_arcs":           true,
+	"get_reader_perspective":   true,
+	"get_preferences":          true,
+	"get_character_relations":  true,
+	"get_scenes":               true,
+	"get_item_occurrences":     true,
+	"get_writing_snapshot":     true,
+	"get_lore":                 true,
+	"get_items":                true,
+	"read":                     true,
 }
 
 type toolOutput struct {
@@ -91,8 +96,8 @@ func toolPattern(outputs []toolOutput) string {
 	parts := make([]string, len(outputs))
 	for i, o := range outputs {
 		parts[i] = o.name + ":" + string(o.rawArgs)
-		if len(parts[i]) > 100 {
-			parts[i] = parts[i][:100]
+		if len(parts[i]) > 256 {
+			parts[i] = parts[i][:256]
 		}
 	}
 	sort.Strings(parts)

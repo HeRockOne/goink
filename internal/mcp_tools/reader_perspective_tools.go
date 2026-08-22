@@ -306,6 +306,22 @@ func (t *UpdateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 
 	json.Unmarshal(tc.RawArgs, &entry)
 
+	if a.Content != "" {
+		entry.Content = a.Content
+	}
+	if a.RevealedChapter > 0 {
+		entry.RevealedChapter = a.RevealedChapter
+	}
+	if a.PlantedChapter > 0 {
+		entry.PlantedChapter = a.PlantedChapter
+	}
+	if a.RelatedTruth != "" {
+		entry.RelatedTruth = a.RelatedTruth
+	}
+	if a.Type != "" {
+		entry.Type = a.Type
+	}
+
 	if err := tc.DB.WithContext(ctx).Save(&entry).Error; err != nil {
 		return nil, fmt.Errorf("save perspective entry: %w", err)
 	}

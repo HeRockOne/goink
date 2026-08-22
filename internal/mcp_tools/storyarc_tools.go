@@ -287,6 +287,34 @@ func (t *UpdateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 
 	json.Unmarshal(tc.RawArgs, &arc)
 
+	if a.Name != "" {
+		arc.Name = a.Name
+	}
+	if a.Description != "" {
+		arc.Description = a.Description
+	}
+	if a.ArcType != "" {
+		arc.ArcType = a.ArcType
+	}
+	if a.Importance > 0 {
+		arc.Importance = a.Importance
+	}
+	if a.Status != "" {
+		arc.Status = a.Status
+	}
+	if a.ReactivateAt != "" {
+		arc.ReactivateAt = a.ReactivateAt
+	}
+	if a.DetailJSON != "" {
+		arc.DetailJSON = a.DetailJSON
+	}
+	if a.StartChapter > 0 {
+		arc.StartChapter = a.StartChapter
+	}
+	if a.EndChapter > 0 {
+		arc.EndChapter = a.EndChapter
+	}
+
 	if err := tc.DB.WithContext(ctx).Save(&arc).Error; err != nil {
 		return nil, fmt.Errorf("save arc: %w", err)
 	}
@@ -427,6 +455,22 @@ func (t *UpdateArcNodeTool) Execute(ctx context.Context, args any, tc ToolContex
 	}
 
 	json.Unmarshal(tc.RawArgs, &node)
+
+	if a.Title != "" {
+		node.Title = a.Title
+	}
+	if a.Description != "" {
+		node.Description = a.Description
+	}
+	if a.TargetChapter > 0 {
+		node.TargetChapter = a.TargetChapter
+	}
+	if a.ActualChapter > 0 {
+		node.ActualChapter = a.ActualChapter
+	}
+	if a.Status != "" {
+		node.Status = a.Status
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&node).Error; err != nil {
 		return nil, fmt.Errorf("save node: %w", err)

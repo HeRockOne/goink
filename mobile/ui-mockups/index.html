@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goink Mobile UI Mockups</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; background: #f8f9fb; padding: 24px; }
+  h1 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: #94a3b8; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px; }
+  .card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; }
+  .card-header h3 { font-size: 15px; font-weight: 700; color: #0f172a; }
+  .card-header p { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  .card-body { padding: 20px; display: flex; justify-content: center; }
+  .card-body img { max-width: 100%; height: auto; border-radius: 8px; }
+  .card-body object { max-width: 100%; height: auto; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .badge-red { background: rgba(239,68,68,0.1); color: #ef4444; }
+  .badge-green { background: rgba(16,185,129,0.1); color: #059669; }
+  .badge-blue { background: rgba(37,99,235,0.1); color: #2563eb; }
+  .wide { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+  <h1>Goink Mobile UI Mockups</h1>
+  <p class="subtitle">移动端界面布局设计 — 点击查看各页面 SVG 源文件</p>
+  
+  <div class="grid">
+    <!-- Before/After comparison -->
+    <div class="card wide">
+      <div class="card-header">
+        <h3>Before → After 对比 <span class="badge badge-red">当前</span> → <span class="badge badge-green">目标</span></h3>
+        <p>书架页改进前后对比</p>
+      </div>
+      <div class="card-body">
+        <object data="before-after.svg" type="image/svg+xml" width="100%"></object>
+      </div>
+    </div>
+    
+    <!-- Bookshelf -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📚 书架页</h3>
+        <p>bookshelf.svg — 小说列表 + 卡片系统</p>
+      </div>
+      <div class="card-body">
+        <object data="bookshelf.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Chat -->
+    <div class="card">
+      <div class="card-header">
+        <h3>💬 对话页</h3>
+        <p>chat.svg — AI 创作对话界面</p>
+      </div>
+      <div class="card-body">
+        <object data="chat.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Novel Detail - Chapters -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📖 小说详情 — 章节目录</h3>
+        <p>novel-detail-chapters.svg — Header + Tab + 章节列表</p>
+      </div>
+      <div class="card-body">
+        <object data="novel-detail-chapters.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Novel Detail - Characters -->
+    <div class="card">
+      <div class="card-header">
+        <h3>👥 小说详情 — 角色列表</h3>
+        <p>novel-detail-characters.svg — 角色卡片 + 关系标签</p>
+      </div>
+      <div class="card-body">
+        <object data="novel-detail-characters.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📊 统计页</h3>
+        <p>stats.svg — 总览 + 创作趋势 + 各作品明细</p>
+      </div>
+      <div class="card-body">
+        <object data="stats.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Settings -->
+    <div class="card">
+      <div class="card-header">
+        <h3>⚙️ 设置页</h3>
+        <p>settings.svg — 连接/语言/数据/关于</p>
+      </div>
+      <div class="card-body">
+        <object data="settings.svg" type="image/svg+xml" width="260"></object>
+      </div>
+    </div>
+    
+    <!-- Layout Hierarchy -->
+    <div class="card wide">
+      <div class="card-header">
+        <h3>🏗 组件层级树</h3>
+        <p>layout-hierarchy.svg — App Shell → Pages → Components → Leaves</p>
+      </div>
+      <div class="card-body">
+        <object data="layout-hierarchy.svg" type="image/svg+xml" width="100%"></object>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

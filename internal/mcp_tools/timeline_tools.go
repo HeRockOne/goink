@@ -252,6 +252,28 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 
 	json.Unmarshal(tc.RawArgs, &entry)
 
+	if a.Title != "" {
+		entry.Title = a.Title
+	}
+	if a.Content != "" {
+		entry.Content = a.Content
+	}
+	if a.DetailJSON != "" {
+		entry.DetailJSON = a.DetailJSON
+	}
+	if a.TargetChapter > 0 {
+		entry.TargetChapter = a.TargetChapter
+	}
+	if a.Importance > 0 {
+		entry.Importance = a.Importance
+	}
+	if a.Status != "" {
+		entry.Status = a.Status
+	}
+	if a.ResolvedChapterID > 0 {
+		entry.ResolvedChapterID = a.ResolvedChapterID
+	}
+
 	if err := tc.DB.WithContext(ctx).Save(&entry).Error; err != nil {
 		return nil, fmt.Errorf("save timeline entry: %w", err)
 	}

@@ -292,63 +292,18 @@
       }
     },
     "shangtang": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "shangtang",
+      "options": {
+        "baseURL": "https://token.sensenova.cn/v1"
+      },
       "models": {
         "sensenova-6.7-flash-lite": {
-          "variants": {
-            "medium": {
-              "reasoningEffort": "medium"
-            },
-            "max": {
-              "reasoningEffort": "max"
-            },
-            "none": {
-              "reasoningEffort": "none"
-            },
-            "low": {
-              "reasoningEffort": "low"
-            },
-            "high": {
-              "reasoningEffort": "high"
-            }
-          },
-          "interleaved": {
-            "field": "reasoning_content"
-          },
-          "options": {
-            "reasoningEffort": "high"
-          }
+          "name": "sensenova-6.7-flash-lite"
         },
         "deepseek-v4-flash": {
-          "variants": {
-            "medium": {
-              "reasoningEffort": "medium"
-            },
-            "max": {
-              "reasoningEffort": "max"
-            },
-            "none": {
-              "reasoningEffort": "none"
-            },
-            "low": {
-              "reasoningEffort": "low"
-            },
-            "high": {
-              "reasoningEffort": "high"
-            }
-          },
-          "interleaved": {
-            "field": "reasoning_content"
-          },
-          "options": {
-            "reasoningEffort": "high"
-          }
+          "name": "deepseek-v4-flash"
         }
-      },
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://token.sensenova.cn/v1",
-        "apiKey": "{env:SHANGTANG_API_KEY}",
-        "setCacheKey": true
       }
     },
     "yjm": {

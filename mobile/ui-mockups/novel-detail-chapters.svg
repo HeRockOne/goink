@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f9fb"/>
+      <stop offset="100%" stop-color="#f0f2f5"/>
+    </linearGradient>
+    <linearGradient id="novel1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="cardShadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="8" flood-color="#000" flood-opacity="0.06"/>
+    </filter>
+    <filter id="iconShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    <clipPath id="screen"><rect x="0" y="0" width="390" height="844" rx="0"/></clipPath>
+  </defs>
+  
+  <g clip-path="url(#screen)">
+    <rect width="390" height="844" fill="url(#bg)"/>
+    
+    <!-- Status bar -->
+    <rect width="390" height="50" fill="#f8f9fb"/>
+    <text x="32" y="32" font-size="14" font-weight="600" fill="#1e293b">9:41</text>
+    <rect x="308" y="22" width="18" height="10" rx="2" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+    <rect x="310" y="24" width="12" height="6" rx="1" fill="#1e293b"/>
+    
+    <!-- Back button -->
+    <text x="24" y="34" font-size="20" fill="#2563eb">←</text>
+    
+    <!-- Novel header -->
+    <g transform="translate(20, 60)">
+      <g transform="translate(0, 0)" filter="url(#iconShadow)">
+        <rect width="56" height="68" rx="10" fill="url(#novel1)"/>
+        <text x="28" y="44" font-size="26" font-weight="700" fill="white" text-anchor="middle">龙</text>
+      </g>
+      <g transform="translate(72, 0)">
+        <text x="0" y="18" font-size="21" font-weight="800" fill="#0f172a" letter-spacing="-0.3">龙族之黄昏</text>
+        <!-- Delete button -->
+        <g transform="translate(200, 0)">
+          <circle cx="16" cy="8" r="16" fill="#f1f5f9"/>
+          <text x="16" y="13" font-size="14" fill="#94a3b8" text-anchor="middle">🗑</text>
+        </g>
+      </g>
+    </g>
+    
+    <!-- Stats summary row -->
+    <g transform="translate(20, 148)">
+      <rect width="350" height="52" rx="12" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="117" y1="12" x2="117" y2="40" stroke="#e2e8f0" stroke-width="1"/>
+      <line x1="233" y1="12" x2="233" y2="40" stroke="#e2e8f0" stroke-width="1"/>
+      <text x="58" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">128</text>
+      <text x="58" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">章数</text>
+      <text x="175" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">24</text>
+      <text x="175" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">角色</text>
+      <text x="292" y="22" font-size="18" font-weight="800" fill="#2563eb" text-anchor="middle">42.6万</text>
+      <text x="292" y="38" font-size="11" fill="#94a3b8" text-anchor="middle">字数</text>
+    </g>
+    
+    <!-- Tab bar -->
+    <g transform="translate(20, 220)">
+      <rect x="0" y="0" width="80" height="34" rx="8" fill="rgba(37,99,235,0.08)"/>
+      <text x="40" y="22" font-size="13" font-weight="600" fill="#2563eb" text-anchor="middle">章节目录</text>
+      
+      <rect x="86" y="0" width="80" height="34" rx="8" fill="transparent"/>
+      <text x="126" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">角色</text>
+      
+      <rect x="172" y="0" width="80" height="34" rx="8" fill="transparent"/>
+      <text x="212" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">设定</text>
+      
+      <rect x="258" y="0" width="80" height="34" rx="8" fill="transparent"/>
+      <text x="298" y="22" font-size="13" fill="#94a3b8" text-anchor="middle">时间线</text>
+    </g>
+    
+    <!-- Tab indicator line -->
+    <rect x="20" y="258" width="350" height="1" fill="#e2e8f0"/>
+    <rect x="20" y="258" width="80" height="2" rx="1" fill="#2563eb"/>
+    
+    <!-- Chapter list -->
+    <!-- Chapter 128 - Latest (frost blue) -->
+    <g transform="translate(20, 274)" filter="url(#cardShadow)">
+      <rect width="350" height="64" rx="12" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+      <rect width="350" height="64" rx="12" fill="rgba(37,99,235,0.03)"/>
+      <g transform="translate(14, 12)">
+        <rect width="36" height="40" rx="8" fill="rgba(37,99,235,0.1)"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#2563eb" text-anchor="middle">128</text>
+      </g>
+      <g transform="translate(62, 12)">
+        <text x="0" y="14" font-size="14" font-weight="600" fill="#0f172a">黄昏降临</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-15  3,200字</text>
+      </g>
+      <text x="330" y="32" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Chapter 127 -->
+    <g transform="translate(20, 346)">
+      <rect width="350" height="56" rx="12" fill="white"/>
+      <g transform="translate(14, 8)">
+        <rect width="36" height="40" rx="8" fill="#f1f5f9"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#475569" text-anchor="middle">127</text>
+      </g>
+      <g transform="translate(62, 8)">
+        <text x="0" y="14" font-size="14" font-weight="500" fill="#334155">龙族的秘密</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-14  2,800字</text>
+      </g>
+      <text x="330" y="28" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Chapter 126 -->
+    <g transform="translate(20, 410)">
+      <rect width="350" height="56" rx="12" fill="white"/>
+      <g transform="translate(14, 8)">
+        <rect width="36" height="40" rx="8" fill="#f1f5f9"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#475569" text-anchor="middle">126</text>
+      </g>
+      <g transform="translate(62, 8)">
+        <text x="0" y="14" font-size="14" font-weight="500" fill="#334155">风起云涌</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-13  3,100字</text>
+      </g>
+      <text x="330" y="28" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Chapter 125 -->
+    <g transform="translate(20, 474)">
+      <rect width="350" height="56" rx="12" fill="white"/>
+      <g transform="translate(14, 8)">
+        <rect width="36" height="40" rx="8" fill="#f1f5f9"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#475569" text-anchor="middle">125</text>
+      </g>
+      <g transform="translate(62, 8)">
+        <text x="0" y="14" font-size="14" font-weight="500" fill="#334155">旧日的回响</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-12  2,900字</text>
+      </g>
+      <text x="330" y="28" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Chapter 124 -->
+    <g transform="translate(20, 538)">
+      <rect width="350" height="56" rx="12" fill="white"/>
+      <g transform="translate(14, 8)">
+        <rect width="36" height="40" rx="8" fill="#f1f5f9"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#475569" text-anchor="middle">124</text>
+      </g>
+      <g transform="translate(62, 8)">
+        <text x="0" y="14" font-size="14" font-weight="500" fill="#334155">命运的交汇</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-11  3,050字</text>
+      </g>
+      <text x="330" y="28" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Chapter 123 -->
+    <g transform="translate(20, 602)">
+      <rect width="350" height="56" rx="12" fill="white"/>
+      <g transform="translate(14, 8)">
+        <rect width="36" height="40" rx="8" fill="#f1f5f9"/>
+        <text x="18" y="26" font-size="13" font-weight="700" fill="#475569" text-anchor="middle">123</text>
+      </g>
+      <g transform="translate(62, 8)">
+        <text x="0" y="14" font-size="14" font-weight="500" fill="#334155">破碎的誓言</text>
+        <text x="0" y="34" font-size="11" fill="#94a3b8">2025-01-10  2,700字</text>
+      </g>
+      <text x="330" y="28" font-size="16" fill="#cbd5e1" text-anchor="middle">›</text>
+    </g>
+    
+    <!-- Bottom nav -->
+    <rect x="0" y="780" width="390" height="64" fill="white" stroke="#e2e8f0" stroke-width="0.5"/>
+    <g opacity="0.4">
+      <text x="65" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">📚</text>
+      <text x="65" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">书架</text>
+    </g>
+    <g opacity="1">
+      <circle cx="185" cy="794" r="2" fill="#2563eb"/>
+      <text x="185" y="828" font-size="20" fill="#2563eb" text-anchor="middle">💬</text>
+      <text x="185" y="816" font-size="11" font-weight="600" fill="#2563eb" text-anchor="middle">对话</text>
+    </g>
+    <g opacity="0.4">
+      <text x="265" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">📊</text>
+      <text x="265" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">统计</text>
+    </g>
+    <g opacity="0.4">
+      <text x="325" y="828" font-size="20" fill="#94a3b8" text-anchor="middle">⚙️</text>
+      <text x="325" y="816" font-size="11" fill="#94a3b8" text-anchor="middle">设置</text>
+    </g>
+    <rect x="130" y="836" width="130" height="5" rx="2.5" fill="#1e293b" opacity="0.2"/>
+  </g>
+</svg>
