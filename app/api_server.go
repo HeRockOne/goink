@@ -97,8 +97,10 @@ func newAPIServer(port int, useHTTPS bool, app *App, logger *slog.Logger, fronte
 	s.mux.HandleFunc("/api/settings/model", s.handleModelSettings) // 模型切换
 	s.mux.HandleFunc("/api/settings/pricing", s.handlePricing)   // 价格设置
 	s.mux.HandleFunc("/api/settings/phase-gate-enabled", s.handlePhaseGateEnabled) // 门禁开关
+	s.mux.HandleFunc("/api/settings/allow-ai-gate-config-update", s.handleAllowAIGateConfigUpdate) // AI 修改门禁配置开关
 	s.mux.HandleFunc("/api/settings/approval-mode", s.handleApprovalMode)           // 审批模式
 	s.mux.HandleFunc("/api/settings/reasoning-effort", s.handleReasoningEffort)     // 思考深度
+	s.mux.HandleFunc("/api/settings/thinking-enabled", s.handleThinkingEnabled)     // 思考模式开关
 	s.mux.HandleFunc("/api/ws", s.handleWebSocket)                                   // 双端同步 WebSocket
 	// 前端静态文件
 	if s.frontend != nil {
@@ -1082,6 +1084,7 @@ func (s *apiServer) handleModelSettings(w http.ResponseWriter, r *http.Request) 
 				"provider":         m.ProviderName,
 				"thinking":         m.SupportsThinking,
 				"reasoning_levels": m.ReasoningLevels,
+				"context_window":   m.ContextWindow,
 			})
 			}
 		}
@@ -1189,6 +1192,37 @@ func (s *apiServer) handlePhaseGateEnabled(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// handleAllowAIGateConfigUpdate 处理 AI 修改门禁配置开关的 GET/POST 请求。
+func (s *apiServer) handleAllowAIGateConfigUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.app.settings == nil {
+		writeError(w, fmt.Errorf("settings not loaded"))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		allowed := s.app.settings.AllowAIGateConfigUpdate != nil && *s.app.settings.AllowAIGateConfigUpdate
+		writeJSON(w, map[string]any{"allowed": allowed})
+
+	case http.MethodPost:
+		var req struct {
+			Allowed bool `json:"allowed"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, fmt.Errorf("invalid request body: %w", err))
+			return
+		}
+		if err := s.app.SetAllowAIGateConfigUpdate(req.Allowed); err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "allowed": req.Allowed})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 // handleApprovalMode 处理审批模式的 GET/POST 请求。
 func (s *apiServer) handleApprovalMode(w http.ResponseWriter, r *http.Request) {
 	if s.app.approvals == nil {
@@ -1275,4 +1309,31 @@ func (s *apiServer) handleReasoningEffort(w http.ResponseWriter, r *http.Request
 		})
 	}
 	writeJSON(w, map[string]any{"ok": true, "reasoning_effort": req.ReasoningEffort})
+}
+
+// handleThinkingEnabled 处理思考模式开关的 POST 请求。
+func (s *apiServer) handleThinkingEnabled(w http.ResponseWriter, r *http.Request) {
+	if s.app.settings == nil {
+		writeError(w, fmt.Errorf("settings not loaded"))
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("invalid request body: %w", err))
+		return
+	}
+	s.app.settings.ThinkingEnabled = &req.Enabled
+	if err := config.SaveSettings(s.app.db, s.app.settings); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "enabled": req.Enabled})
 }

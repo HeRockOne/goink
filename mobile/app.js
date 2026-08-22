@@ -35,6 +35,7 @@ const state = {
   // Token用量
   sessionUsage: {}, sessionCost: 0, dailyCost: 0
 };
+let costPollTimer = null;  // 成本轮询定时器
 
 // ── 离线缓存（idb-keyval + 内存 Map）──
 // idb-keyval: 持久化层，基于 IndexedDB，大容量
@@ -586,19 +587,37 @@ function updateChatBanner() {
   }
   updateChatBannerCost();
 }
+function fmtContextWindow(n) {
+  if (!n || n <= 0) return '';
+  if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
 function updateChatBannerCost() {
-  const costEl = document.getElementById('chatBannerCost');
+  const costEl = document.getElementById('headerTokenCost');
   if (!costEl) return;
   const usage = state.sessionUsage || {};
   state.sessionCost = calcSessionCost(usage);
-  const cacheHit = usage.prompt_cache_hit_tokens || 0;
-  const cacheMiss = usage.prompt_cache_miss_tokens || 0;
-  const output = usage.acc_completion_tokens || usage.completion_tokens || 0;
-  const totalTokens = cacheHit + cacheMiss + output;
+  // 金额
   const costText = state.sessionCost > 0 ? `¥${state.sessionCost.toFixed(4)}` : '';
-  const tokenText = totalTokens > 0 ? fmtTokens(totalTokens) : '';
-  costEl.innerHTML = costText ? `<span class="cost-value">${costText}</span>${tokenText ? `<small class="cost-tokens">${tokenText}</small>` : ''}` : '';
-  costEl.style.display = costText ? '' : 'none';
+  // 上下文窗口（优先 usage，fallback 当前模型）
+  let ctxWin = usage.context_window || 0;
+  if (!ctxWin) {
+    const m = state.models.find(m => m.key === state.selectedModel);
+    if (m) ctxWin = m.context_window || 0;
+  }
+  const ctxText = fmtContextWindow(ctxWin);
+  // 缓存命中率
+  const hitRatio = usage.cache_hit_ratio;
+  const hitText = (typeof hitRatio === 'number' && hitRatio > 0)
+    ? hitRatio.toFixed(hitRatio >= 99 ? 4 : 2) + '%'
+    : '';
+  const parts = [];
+  if (costText) parts.push(`<span class="cost-value">${costText}</span>`);
+  if (ctxText) parts.push(`<small class="cost-ctx">${ctxText}</small>`);
+  if (hitText) parts.push(`<small class="cost-hit">${hitText}</small>`);
+  costEl.innerHTML = parts.join('<span class="cost-sep">|</span>');
+  costEl.classList.toggle('no-data', parts.length === 0);
 }
 
 // ── Token用量显示 ──
@@ -865,13 +884,25 @@ async function switchPage(page) {
     // 顶栏：返回 + 书名 | 新对话 + 历史
     actions.innerHTML = `<button onclick="goBack()" title="${t('back')}">${BACK_SVG}</button><button onclick="newChat()" title="${t('new_chat')}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button onclick="showSessions()" title="${t('history')}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></button>`;
     updateChatBanner();
-    loadModels(); loadSessions();
   } else {
     actions.innerHTML = '';
     if (document.getElementById('chatBanner')) document.getElementById('chatBanner').style.display = 'none';
   }
   if (page === 'novels') loadNovels();
-  if (page === 'chat') { loadModels(); loadSessions(); syncWithDesktopState(); await loadSettingsStatus(); updateQuickBar(); }
+  if (page === 'chat') {
+    loadModels(); syncWithDesktopState(); await loadSettingsStatus();
+    await loadSessions();  // 等会话数据加载完再刷新成本
+    updateQuickBar();
+    updateChatBannerCost();
+    // 启动成本轮询（每8秒刷新一次会话用量）
+    if (costPollTimer) clearInterval(costPollTimer);
+    costPollTimer = setInterval(() => {
+      if (state.page !== 'chat') { clearInterval(costPollTimer); costPollTimer = null; return; }
+      loadSessions();
+    }, 8000);
+  } else if (costPollTimer) {
+    clearInterval(costPollTimer); costPollTimer = null;
+  }
   if (page === 'settings') loadSettings();
   if (page === 'stats') loadStatsPage();
   if (page === 'novel-detail') loadNovelDetail();
@@ -2093,15 +2124,15 @@ async function loadSessions() {
   try { 
     const r = await api(`/api/sessions?novel_id=${state.novelId}&page=1&size=20`); 
     state.sessions = r.items || []; 
-    // 更新当前session的usage数据
-    if (state.sessionId) {
-      const currentSession = state.sessions.find(s => s.session_id === state.sessionId);
-      if (currentSession && currentSession.usage) {
-        try {
-          state.sessionUsage = JSON.parse(currentSession.usage);
-          updateQuickBar();
-        } catch (_) {}
-      }
+    // 更新当前session的usage数据（没选中session时默认用最近一个）
+    const target = state.sessionId
+      ? state.sessions.find(s => s.session_id === state.sessionId)
+      : state.sessions[0];
+    if (target && target.usage) {
+      try {
+        state.sessionUsage = JSON.parse(target.usage);
+        updateChatBannerCost();
+      } catch (_) {}
     }
   } catch (_) {} 
 }

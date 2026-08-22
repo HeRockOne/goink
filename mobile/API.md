@@ -1065,12 +1065,24 @@ data: {"type":"done","text":"好的，我来帮你写。"}
       "session_id": "abc123",
       "title": "会话标题",
       "current_phase": "写作",
+      "usage": "{\"prompt_cache_hit_tokens\":1234,\"prompt_cache_miss_tokens\":5678,\"acc_completion_tokens\":9012,\"per_model\":{\"deepseek/deepseek-chat\":{\"miss\":5678,\"hit\":1234,\"comp\":9012}},\"context_window\":128000,\"cache_hit_ratio\":89.5,\"usage_ratio\":12.3}",
       "created_at": "2026-07-01T00:00:00Z"
     }
   ],
   "total": 10
 }
 ```
+
+**usage 字段结构（JSON 字符串，需 parse）:**
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| prompt_cache_hit_tokens | int | 累计缓存命中 token 数 |
+| prompt_cache_miss_tokens | int | 累计缓存未命中 token 数 |
+| acc_completion_tokens | int | 累计输出 token 数 |
+| per_model | object | 按模型分组的 token 统计（miss/hit/comp） |
+| context_window | int | 当前模型上下文窗口大小 |
+| cache_hit_ratio | float | 缓存命中率（百分比，如 89.5） |
+| usage_ratio | float | 上下文占用率（百分比） |
 
 ### GET /api/sessions/{session_id}/messages
 
@@ -1119,13 +1131,17 @@ data: {"type":"done","text":"好的，我来帮你写。"}
       "key": "openai/gpt-4",
       "name": "GPT-4",
       "provider": "openai",
-      "thinking": false
+      "thinking": false,
+      "reasoning_levels": ["low", "medium", "high"],
+      "context_window": 128000
     },
     {
       "key": "anthropic/claude-3-opus",
       "name": "Claude 3 Opus",
       "provider": "anthropic",
-      "thinking": true
+      "thinking": true,
+      "reasoning_levels": ["low", "medium", "high"],
+      "context_window": 200000
     }
   ]
 }
@@ -1140,6 +1156,8 @@ data: {"type":"done","text":"好的，我来帮你写。"}
 | models[].name | string | 模型显示名称 |
 | models[].provider | string | 提供商名称 |
 | models[].thinking | bool | 是否支持思考模式 |
+| models[].reasoning_levels | string[] | 可用推理力度列表 |
+| models[].context_window | int | 上下文窗口大小（token 数） |
 
 ### POST /api/settings/model
 
