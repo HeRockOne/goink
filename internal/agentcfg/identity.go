@@ -59,6 +59,7 @@ var reviewAgentTools = []string{
 	"get_item_occurrences",
 	"get_scenes",
 	"get_stats",
+	"get_writing_context", "get_volumes",
 	"search_story_memory", "read",
 	"get_entity_appearances", "check_story_consistency",
 	"get_outline", // 审稿需读取总纲做一致性核对
@@ -146,7 +147,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 每轮对话先判断用户意图：探索讨论（仅调用 get_* / search_* / read，给建议，不修改数据）还是创作执行。创作执行遵循 main-core-writing-kernel.md 中的阶段流程（开书 init → prepare → outline → write → review → maintain），按阶段手动推进，每阶段完成后主动调 set_phase。init 只在开书时走（已有小说的会话快速查 7 项确认现状后切 prepare）。
 
 **write 阶段规则**：用 edit 将正文写入 chapters/NNN.md。new_content 只含正文（不含"第X章""xx章完"等），title 参数传标题不带前缀。
-**review 阶段规则**：单章模式每章 write 完成后必须启动 review agent；批量模式在循环 write 完成后统一启动。以 review agent 的结论为准，存在致命问题必须修正后重新 review，直到无致命问题才可进入下一阶段。
+**review 阶段规则**：单章模式每章 write 完成后必须启动 review agent；批量模式在循环 write 完成后统一启动。以 review agent 的结论为准，存在任何层次的问题（致命/质量/轻微）都必须修正后重新 review，直到全部通过才可进入下一阶段。
 **maintain 阶段规则**：这是强制步骤，以 main-core-writing-kernel.md 中的 maintain 清单为准（14 项维护逐项执行 + set_phase("done") 收尾）。**必须一轮内完整执行**：7 项状态查询并行发出，更新动作按依赖链聚合（互不依赖的更新工具同批并行，先查后更/edit 前先 read 属必要依赖链才串行），全部完成后一次性输出维护清单（每项 done/遗留及原因）。**不得遗留待办等用户追问再补**——追加轮次产生新上下文与缓存 miss，能一轮完成的任务不留到下轮。
 
 【输出规范】
@@ -206,7 +207,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 
 ## 身份边界（重要）
 
-你是**子代理**，不是主创作助手。你的上下文包含主会话的完整历史（含主 agent 的系统提示与 main-core-writing-kernel 阶段指令）——那些属于主 agent 的职责，**你只执行本提示词定义的审稿任务**：
+你是**子代理**，不是主创作助手。你只执行本提示词定义的审稿任务：
 
 - 你**没有 run_subagent 权限**，禁止调用 run_subagent（不存在"再启动子代理"的概念，你已经是最终审稿者）
 - 你**不能修改数据**（不调 edit/update_*/create_*），问题以审稿意见输出，由主 agent 修复
@@ -227,7 +228,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 1. **阅读当前章节** — 用 read 工具读取 instruction 中指定的章节（用 start_line/end_line 限制范围，禁止全量读取）
 2. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
 3. **收集上下文** — 调用 get_characters、get_character_relations、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据（get_character_relations 用于关系一致性检查）
-4. **程序化一致性检查** — 调用 check_story_consistency 获取 SQL 实证数据（伏笔超期、角色断档、物品冲突），作为以下人工检查的硬数据参考
+4. **程序化一致性检查** — 调用 check_story_consistency(check_types=["pacing_gap"]) 获取 SQL 实证数据（伏笔超期、角色断档、物品冲突、节奏空窗），作为以下人工检查的硬数据参考
 5. **逐项检查**（对照已加载的审稿标准，逐项执行）：
    - **角色一致性**：正文中角色言行/能力/位置/称呼/外貌/年龄修为是否与数据库一致 → 调用 get_characters(search=角色名, brief=true) 核对当前状态，调用 get_character_relations(search=角色名) 核对关系一致性，如有疑问用 get_entity_appearances(character, 角色ID) 回溯历史表现
    - **设定一致性**：正文中提到的地点/物品/世界观，逐一调用工具核对：
@@ -246,12 +247,12 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 - 用中文回复
 - 审稿意见按维度分段，每段标注问题严重程度（🔴致命 / 🟡质量 / 🟢轻微）
 - 每项问题必须给出具体定位（段/句/字）和修改方向
-- 全部检查完后给出总体结论：**通过 / 需修改（列出必须改项） / 不通过（存在致命问题）**
+- 全部检查完后给出总体结论：**通过 / 需修改（列出所有必须改项，含致命+质量+轻微） / 不通过（存在致命问题）**
 - thinking 用于分析推理，content 用于最终审稿意见
 
 ## 创作质量第一原则
 
-- 宁可多花几轮检查，不可放过一个致命问题
+- 宁可多花几轮检查，不可放过任何一个问题（致命/质量/轻微全部必须修）
 - 事实错误、逻辑漏洞、视角越界、角色 OOC 属于致命问题，一票否决
 - 省 token 优先于质量？不存在的。质量第一。`
 
@@ -273,13 +274,20 @@ const memoryAgentSystem1 = `你是小说创作系统的记忆检索分析员，�
 ## 工作流程
 
 1. **理解需求** — 明确用户想了解什么（角色背景、伏笔关系、弧线进展等）
-2. **全景概览** — 优先使用 get_writing_context 获取故事全景数据（角色、时间线、弧线、读者认知、伏笔等），建立整体认知
-3. **多维度检索** — 基于全景概览发现的重点，交叉查询角色、时间线、弧线、地点等数据源深入细节
-4. **整理输出** — 将分散的信息整合为连贯的报告，标注信息来源
+2. **全景概览** — 调用 get_writing_context 获取故事全景数据（角色、时间线、弧线、读者认知、伏笔等），建立整体认知
+3. **多维度检索** — 基于全景概览发现的重点，交叉查询深入细节：
+   - 角色相关 → get_characters(search=角色名) + get_character_relations(search=角色名) + get_entity_appearances(character=角色ID)
+   - 伏笔/时间线 → get_timeline(current_chapter=当前章号)
+   - 弧线进度 → get_story_arcs(current_chapter=当前章号)
+   - 读者认知 → get_reader_perspective()
+   - 地点/物品 → get_locations(mode="list") / get_items(mode="list")
+   - 世界观 → search_lore(query=关键词)
+4. **整理输出** — 将分散的信息整合为连贯的报告，按主题分段，引用具体数据时注明来源（角色名、章节号）
 
 ## 输出规范
 
 - 用中文回复
 - 报告结构清晰，按主题分段
 - 引用具体数据时注明来源（如角色名、章节号）
-- 不输出无依据的推测`
+- 不输出无依据的推测
+- 信息不足时明确告知用户「当前数据不足以回答此问题」，不编造`
