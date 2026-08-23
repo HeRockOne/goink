@@ -9,6 +9,7 @@ import { AgentEventType, emptySegment, rebuildTurns } from './types'
 import ChatInput from './ChatInput'
 import ChatControls from './ChatControls'
 import MessageBubble from './MessageBubble'
+import MessageNavigator from './MessageNavigator'
 import ThinkingBlock from './ThinkingBlock'
 import ToolCallCard, { type ToolCallDetail } from './ToolCallCard'
 import WebSearchCard from './WebSearchCard'
@@ -1258,6 +1259,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       ? t('chat.configureModelFirst')
       : t('chat.inputPlaceholder')
 
+  // 流式中气泡的实时元信息（历史 turn 用落库值，见 MessageBubble props）
+  const liveModelName = models.find(m => m.Key === selectedKey)?.ModelName || splitModelKey(selectedKey)[1] || ''
+
+  const scrollToTurn = useCallback((turnId: string) => {
+    document.getElementById(`turn-${turnId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
     <aside className="chat-panel shrink-0 h-full flex flex-col bg-sidebar border-l relative overflow-hidden" style={{ width: chatPanelWidth }}>
       <div
@@ -1396,9 +1404,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                   </button>
                 )}
                 {turns.slice(-visibleTurnCount).map(turn => (
-                  <div key={turn.id} className="space-y-2">
+                  <div key={turn.id} id={`turn-${turn.id}`} className="space-y-2 scroll-mt-3">
                     {turn.userMessage && (
-                      <MessageBubble role="user" content={turn.userMessage} />
+                      <MessageBubble role="user" content={turn.userMessage} timestamp={turn.userTimestamp} />
                     )}
 
                     {/* 工具卡片合并计数：连续同名同状态的普通工具段合并（并行调用去噪） */}
@@ -1507,6 +1515,11 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                             <MessageBubble
                               role="assistant"
                               content={seg.content}
+                              timestamp={seg.timestamp}
+                              model={turn.model ?? (turn.status === 'streaming' ? liveModelName : undefined)}
+                              reasoningEffort={turn.reasoningEffort ?? (turn.status === 'streaming' && thinkingEnabled ? (reasoningEffort || '') : undefined)}
+                              durationMs={turn.durationMs}
+                              usage={turn.usage}
                               onRetry={turn.status === 'failed' ? () => handleRetry(turn.id) : undefined}
                             />
                           )}
@@ -1571,12 +1584,18 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         )}
       </div>
 
+      {/* 消息导航条：右侧圆点锚点，点击定位到对应消息轮次 */}
+      {!showRecent && hasTurns && (
+        <MessageNavigator turns={turns.slice(-visibleTurnCount)} onJump={scrollToTurn} />
+      )}
+
       <ChatInput
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading || apiStreaming}
         placeholder={inputPlaceholder}
         slashItems={slashCommands}
         onSend={handleSend}
+        sessionId={activeSessionId || sessionId}
         onListSlash={loadSlash}
         onStop={() => {
           setTurns(prev => prev.map(t =>

@@ -58,6 +58,7 @@ export interface TurnSegment {
   thinkingContent: string
   thinkingDone: boolean
   isStreaming: boolean
+  timestamp?: string // 文本块生成时间（历史消息来自 msg.created_at，流式中无）
   // tool
   toolName: string
   toolId: string
@@ -106,6 +107,11 @@ export interface Turn {
   status: 'streaming' | 'done' | 'failed' | 'interrupted' | 'stopped'
   errorMessage?: string
   compressionOnly?: boolean // 纯压缩 turn（手动压缩），无用户消息
+  userTimestamp?: string    // 用户消息时间
+  model?: string            // 生成本轮回复的模型 ID（取最后一条 assistant 消息）
+  reasoningEffort?: string  // 思考档位（'' = 未开启思考）
+  durationMs?: number       // 本轮耗时（毫秒）
+  usage?: Record<string, unknown> // 本轮最终 token 用量（来自 assistant 消息 extra_metadata.usage）
 }
 
 export function rebuildTurns(messages: session.Message[]): Turn[] {
@@ -167,6 +173,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
         userMessage: msg.content,
         segments: [],
         status: 'done',
+        userTimestamp: msg.created_at,
       }
       turns.push(current)
     } else if (msg.role === 'assistant') {
@@ -227,6 +234,13 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
       // 主 Agent 消息
       if (!current) continue
 
+      // 元信息（模型/思考档位/耗时/用量）：多轮工具调用时逐条覆盖，最后一条（最终回复）生效
+      if (msg.model) current.model = msg.model
+      if (msg.reasoning_effort !== undefined) current.reasoningEffort = msg.reasoning_effort
+      if (msg.duration_ms) current.durationMs = msg.duration_ms
+      const msgUsage = parseMessageUsage(msg.extra_metadata)
+      if (msgUsage) current.usage = msgUsage
+
       const thinkingContent = msg.thinking_content || ''
 
       // 文本内容
@@ -238,6 +252,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
           thinkingContent,
           thinkingDone: true,
           isStreaming: false,
+          timestamp: msg.created_at,
         })
       }
 
@@ -287,5 +302,16 @@ function parseToolDisplays(extraMetadata?: string): ToolDisplay[] {
     return []
   } catch {
     return []
+  }
+}
+
+// parseMessageUsage 提取 assistant 消息 extra_metadata.usage（UpdateMessageUsage 写入的单条用量）
+function parseMessageUsage(extraMetadata?: string): Record<string, unknown> | undefined {
+  if (!extraMetadata) return undefined
+  try {
+    const meta = JSON.parse(extraMetadata)
+    return meta.usage && typeof meta.usage === 'object' ? meta.usage : undefined
+  } catch {
+    return undefined
   }
 }

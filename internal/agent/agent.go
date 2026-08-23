@@ -78,6 +78,7 @@ type RunOptions struct {
 	PhaseMode            string     // 门禁模式："single" | "batch"
 	PhaseGateEnabled     bool       // 门禁总开关，false 时跳过所有门禁检查
 	AllowAIGateConfigUpdate bool    // 允许 AI 修改门禁配置（默认 false，防止 AI 自行放行）
+	StartedAt            time.Time  // Run 开始时间（Run 内部赋值），assistant 消息落库时计算本轮耗时
 }
 
 // New 创建 Agent 实例。
@@ -358,6 +359,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	if opts.Model == nil {
 		return AgentLoopResult{}, errors.New("agent: Model is required in RunOptions")
 	}
+	opts.StartedAt = time.Now()
 
 	ctx = storage.WithTurn(ctx, opts.SessionID, opts.TurnID)
 
@@ -1026,6 +1028,13 @@ func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[strin
 		Version:         opts.ActiveVersion,
 		ToAPI:           opts.AgentType == "main",
 		ToFrontend:      role == "assistant",
+	}
+	if role == "assistant" && opts.Model != nil {
+		msg.Model = opts.Model.ID
+		msg.ReasoningEffort = opts.ReasoningEffort
+		if !opts.StartedAt.IsZero() {
+			msg.DurationMs = time.Since(opts.StartedAt).Milliseconds()
+		}
 	}
 	a.logger.Debug("appendMsg", "role", role, "agentType", opts.AgentType, "subTaskID", opts.SubTaskID, "turnID", opts.TurnID)
 	if err := a.db.Create(msg).Error; err != nil {

@@ -50,6 +50,9 @@ type Message struct {
 	EventType       string    `gorm:"column:event_type"                                             json:"event_type,omitempty"`     // "compression" | "interrupt" | "error" | ""
 	AgentType       string    `gorm:"column:agent_type;not null;default:'main';index"              json:"agent_type"`                // "main" | "review" | "memory"
 	SubTaskID       string    `gorm:"column:sub_task_id;index"                                     json:"sub_task_id,omitempty"`     // run_subagent 的 tool call ID，前端路由子 Agent 消息用
+	Model           string    `gorm:"column:model;not null;default:''"                             json:"model,omitempty"`           // 生成此消息的模型 ID（assistant 消息落库时写入，气泡元信息展示）
+	ReasoningEffort string    `gorm:"column:reasoning_effort;not null;default:''"                  json:"reasoning_effort,omitempty"` // 生成时的思考档位（"" = 未开启思考）
+	DurationMs      int64     `gorm:"column:duration_ms;not null;default:0"                        json:"duration_ms"`               // 本轮耗时（turn 开始到本消息落库的毫秒数，0 = 旧数据无记录）
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime;index"                       json:"created_at"`
 }
 

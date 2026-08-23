@@ -684,6 +684,14 @@ body {
   scrollbar-color: var(--border) transparent;
 }
 
+/* 隐藏滚动条但保留滚动能力（消息导航条用） */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* 防止滚动链式传递的通用工具类 */
 .overscroll-contain {
   overscroll-behavior: contain;

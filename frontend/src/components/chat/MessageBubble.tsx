@@ -2,19 +2,32 @@ import { memo, useState, useCallback, useRef } from 'react'
 import { Copy, Check, RotateCcw, Pencil } from 'lucide-react'
 import Markdown from '@/components/Markdown'
 
+interface UsageInfo {
+  prompt_cache_hit_tokens?: number
+  prompt_cache_miss_tokens?: number
+  acc_completion_tokens?: number
+}
+
 interface Props {
   role: 'user' | 'assistant'
   content: string
   timestamp?: string
+  model?: string
+  reasoningEffort?: string
+  durationMs?: number
+  usage?: Record<string, unknown>
   onRetry?: () => void
   onEdit?: () => void
 }
 
-export default memo(function MessageBubble({ role, content, timestamp, onRetry, onEdit }: Props) {
+export default memo(function MessageBubble({ role, content, timestamp, model, reasoningEffort, durationMs, usage, onRetry, onEdit }: Props) {
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
   const [showActions, setShowActions] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const hasMeta = !isUser && Boolean(model || durationMs || usage)
+  const u = usage as unknown as UsageInfo | undefined
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content).then(() => {
@@ -48,9 +61,22 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
   }`}
         >
           <Markdown content={content} className={isUser ? 'markdown-user' : undefined} />
-          {timestamp && (
-            <div className={`text-[10px] text-muted-foreground/50 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-              {formatTime(timestamp)}
+          {(timestamp || hasMeta) && (
+            <div className={`text-[10px] text-muted-foreground/50 mt-1 flex items-center gap-2 flex-wrap ${isUser ? 'justify-end' : 'justify-start'}`}>
+              {timestamp && <span>{formatTime(timestamp)}</span>}
+              {hasMeta && (
+                <>
+                  {model && <span title={model}>{model}</span>}
+                  {reasoningEffort && <span>思考:{reasoningEffort}</span>}
+                  {!!durationMs && durationMs > 0 && <span>{(durationMs / 1000).toFixed(1)}s</span>}
+                  {u && (u.prompt_cache_hit_tokens || u.prompt_cache_miss_tokens || u.acc_completion_tokens) ? (
+                    <span title="输入 tokens ↑ / 输出 tokens ↓">
+                      ↑{fmtTokens((u.prompt_cache_hit_tokens || 0) + (u.prompt_cache_miss_tokens || 0))}
+                      {' '}↓{fmtTokens(u.acc_completion_tokens || 0)}
+                    </span>
+                  ) : null}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -97,6 +123,13 @@ export default memo(function MessageBubble({ role, content, timestamp, onRetry, 
     </div>
   )
 })
+
+function fmtTokens(n: number): string {
+  if (!n) return '0'
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(n)
+}
 
 function formatTime(ts: string): string {
   try {

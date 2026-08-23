@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-23：对话消息流元信息 + 草稿持久化 + 消息导航条。① messages 表新增 model/reasoning_effort/duration_ms 三列（GORM AutoMigrate 自动迁移），appendMsg 在 assistant 消息落库时写入（RunOptions.StartedAt 于 Run 开头赋值，duration = turn 开始到本条落库耗时）；② MessageBubble 元信息行：模型名/思考档位/耗时/单条 token 用量（usage 来自 UpdateMessageUsage 已写入的 extra_metadata.usage，前端 parseMessageUsage 解析），历史 turn 元数据经 rebuildTurns 聚合到 Turn（多轮工具调用时最后一条 assistant 生效）；流式中显示当前选中模型实时值；③ ChatInput 草稿按 sessionId 持久化 localStorage（goink_draft_{sid}，切换会话各恢复各的，发送即清）；④ 新增 MessageNavigator 右侧圆点导航条（≥4 个用户轮次才渲染，悬停预览摘要、点击 scrollIntoView 定位）。旧消息新列为空自然降级。
+
 > 2026-08-23：审稿记录落库（数据沉淀）。新增 `internal/review`（ReviewRecord 表 + ParseReport 解析器：从报告原文 best-effort 提取总分/判定/致命数/5维分/章节范围，解析失败存原文）；RunSubAgent 返回时确定性落库（agent.go，零依赖 AI 自觉，失败仅告警）；新只读工具 get_review_history（review_history_tools.go，按章节过滤+include_report，主 agent/review 子代理白名单均登记，门禁 get 类别天然覆盖）。用途：压缩后找回审稿细节、修订闭环核对、分数趋势与重复问题检测。
 
 > 2026-08-04：cache-hit-fix-implementation.md 已实施（P1: NS 每轮落库 + 保留 K=3 快照；P2: NS 移出压缩系统区，改末尾落库；store 排序改 id；新增 compress_test/store_test）。未落地部分：P4（命中率报警阈值）、P5（用户运营纪律）。

@@ -8,15 +8,36 @@ interface Props {
   isLoading: boolean
   placeholder: string
   slashItems: app.SlashCommand[]
+  sessionId?: string // 草稿按会话隔离持久化，防止误关软件丢失未发送输入
   onSend: (message: string) => void
   onStop: () => void
   onListSlash: () => void
   controls?: ReactNode
 }
 
-export default function ChatInput({ disabled, isLoading, placeholder, slashItems, onSend, onStop, onListSlash, controls }: Props) {
+const draftKey = (sid?: string) => `goink_draft_${sid || 'default'}`
+
+export default function ChatInput({ disabled, isLoading, placeholder, slashItems, sessionId, onSend, onStop, onListSlash, controls }: Props) {
   const [hasContent, setHasContent] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 切换会话时恢复该会话的草稿
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const saved = sessionId ? localStorage.getItem(draftKey(sessionId)) || '' : ''
+    textarea.value = saved
+    textarea.style.height = 'auto'
+    if (saved) textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px'
+    setHasContent(saved.trim().length > 0)
+  }, [sessionId])
+
+  const saveDraft = useCallback((value: string) => {
+    try {
+      if (value) localStorage.setItem(draftKey(sessionId), value)
+      else localStorage.removeItem(draftKey(sessionId))
+    } catch { /* 存储满/禁用时静默跳过 */ }
+  }, [sessionId])
 
   // slash menu state
   const [slashOpen, setSlashOpen] = useState(false)
@@ -47,7 +68,8 @@ export default function ChatInput({ disabled, isLoading, placeholder, slashItems
     setHasContent(true)
     setActiveCommand(cmd)
     closeSlash()
-  }, [closeSlash])
+    saveDraft(textarea.value)
+  }, [closeSlash, saveDraft])
 
   const updateSlashPos = useCallback(() => {
     const textarea = textareaRef.current
@@ -119,6 +141,7 @@ export default function ChatInput({ disabled, isLoading, placeholder, slashItems
       const value = textarea.value.trim()
       if (value && !disabled) {
         onSend(value)
+        saveDraft('')
         textarea.value = ''
         textarea.style.height = 'auto'
         setHasContent(false)
@@ -126,15 +149,16 @@ export default function ChatInput({ disabled, isLoading, placeholder, slashItems
         closeSlash()
       }
     }
-  }, [slashOpen, filteredItems, slashIndex, disabled, onSend, applySlashSelection, closeSlash])
+  }, [slashOpen, filteredItems, slashIndex, disabled, onSend, applySlashSelection, closeSlash, saveDraft])
 
   const handleInput = useCallback((e: React.FormEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget
     target.style.height = 'auto'
     target.style.height = Math.min(target.scrollHeight, 180) + 'px'
     setHasContent(target.value.trim().length > 0)
+    saveDraft(target.value)
     checkSlash(target.value)
-  }, [checkSlash])
+  }, [checkSlash, saveDraft])
 
   const handleSendClick = useCallback(() => {
     const textarea = textareaRef.current
@@ -142,13 +166,14 @@ export default function ChatInput({ disabled, isLoading, placeholder, slashItems
     const value = textarea.value.trim()
     if (value && !disabled) {
       onSend(value)
+      saveDraft('')
       textarea.value = ''
       textarea.style.height = 'auto'
       setHasContent(false)
       setActiveCommand(null)
       closeSlash()
     }
-  }, [disabled, onSend, closeSlash])
+  }, [disabled, onSend, closeSlash, saveDraft])
 
   const handleStopClick = useCallback(() => {
     onStop()
