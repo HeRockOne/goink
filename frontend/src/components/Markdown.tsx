@@ -235,6 +235,72 @@ function PreBlock({ children }: { children?: ReactNode }) {
   )
 }
 
+// 提取 markdown 表格的表头与行文本，用于宽表降级渲染
+function tableStructure(children: ReactNode): { headers: string[]; rows: string[][] } | null {
+  let headers: string[] = []
+  const rows: string[][] = []
+
+  const walk = (node: ReactNode, inHead: boolean) => {
+    if (Array.isArray(node)) { node.forEach(n => walk(n, inHead)); return }
+    if (!isValidElement(node)) return
+    const type = node.type as unknown
+    if (typeof type !== 'string') return
+    if (type === 'thead' || type === 'tbody') {
+      walk((node.props as { children?: ReactNode }).children, type === 'thead')
+      return
+    }
+    if (type === 'tr') {
+      const cells: string[] = []
+      const walkCell = (cn: ReactNode) => {
+        if (Array.isArray(cn)) { cn.forEach(walkCell); return }
+        if (!isValidElement(cn)) return
+        const ct = cn.type as unknown
+        if (ct === 'th' || ct === 'td') {
+          cells.push(getNodeText((cn.props as { children?: ReactNode }).children).trim())
+        }
+      }
+      walkCell((node.props as { children?: ReactNode }).children)
+      if (inHead && headers.length === 0) headers = cells
+      else rows.push(cells)
+    }
+  }
+
+  walk(children, false)
+  if (!headers.length && !rows.length) return null
+  return { headers, rows }
+}
+
+// 列数 ≤3 正常表格（可横向滚动）；≥4 降级为逐行卡片，避免窄面板挤压
+function AdaptiveTable({ children }: { children?: ReactNode }) {
+  const data = useMemo(() => tableStructure(children), [children])
+  if (!data || data.headers.length < 4) {
+    return (
+      <div className="markdown-table-scroll">
+        <table>{children}</table>
+      </div>
+    )
+  }
+  const cols = data.headers.length > 0
+    ? data.headers
+    : (data.rows[0] ?? []).map((_, i) => String(i + 1))
+  return (
+    <div className="markdown-table-cards not-prose">
+      {data.rows.map((cells, i) => (
+        <div key={i} className="markdown-table-card">
+          {cols.map((h, j) =>
+            cells[j] ? (
+              <div key={j} className="markdown-table-card-row">
+                <span className="markdown-table-card-label">{h}</span>
+                <span className="markdown-table-card-value">{cells[j]}</span>
+              </div>
+            ) : null
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const components: Components = {
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noopener noreferrer">
@@ -257,6 +323,7 @@ const components: Components = {
   summary: ({ children, ...props }) => (
     <summary {...props}>{children}</summary>
   ),
+  table: ({ children }) => <AdaptiveTable>{children}</AdaptiveTable>,
 }
 
 export default function Markdown({ content, className }: MarkdownProps) {

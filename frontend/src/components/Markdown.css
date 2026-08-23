@@ -148,6 +148,59 @@
   transition: background 120ms ease;
 }
 
+/* ── 表格自适应 ───────────────────────────────────────────── */
+.markdown-table-scroll {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.markdown-table-scroll table {
+  min-width: max-content;
+}
+
+.markdown-table-scroll th,
+.markdown-table-scroll td {
+  white-space: nowrap;
+}
+
+.markdown-table-cards {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.55em 0;
+}
+
+.markdown-table-card {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+
+.markdown-table-card-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+  font-size: 0.8125rem;
+}
+
+.markdown-table-card-row + .markdown-table-card-row {
+  border-top: 1px dashed color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.markdown-table-card-label {
+  flex-shrink: 0;
+  max-width: 40%;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+
+.markdown-table-card-value {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
 /* ── 列表 ─────────────────────────────────────────────────── */
 .prose li::marker {
   color: var(--muted-foreground);

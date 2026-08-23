@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { ArrowUp, Square, Zap, Play, Star } from 'lucide-react'
 import type { app } from '@/hooks/useApp'
 import SlashMenu from './SlashMenu'
@@ -11,9 +11,10 @@ interface Props {
   onSend: (message: string) => void
   onStop: () => void
   onListSlash: () => void
+  controls?: ReactNode
 }
 
-export default function ChatInput({ disabled, isLoading, placeholder, slashItems, onSend, onStop, onListSlash }: Props) {
+export default function ChatInput({ disabled, isLoading, placeholder, slashItems, onSend, onStop, onListSlash, controls }: Props) {
   const [hasContent, setHasContent] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -169,39 +170,44 @@ export default function ChatInput({ disabled, isLoading, placeholder, slashItems
           </span>
         </div>
       )}
-      <div className="flex items-end gap-2 bg-muted/30 rounded-2xl border px-2 py-2">
-        <textarea
-          ref={textareaRef}
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          className="flex-1 bg-transparent resize-none text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50 disabled:text-muted-foreground/40 py-2 px-2 min-h-[28px] max-h-[180px]"
-        />
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {hasContent && (
-            <span className="text-[10px] text-muted-foreground/40 tabular-nums px-1">
-              {textareaRef.current?.value.length || 0}
-            </span>
-          )}
-          {isLoading && !hasContent ? (
-            <button
-              onClick={handleStopClick}
-              className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-md transition-all hover:bg-destructive/85 shrink-0"
-            >
-              <Square className="w-4 h-4" fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              disabled={disabled || !hasContent}
-              onClick={handleSendClick}
-              className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all hover:-translate-y-px hover:shadow-lg hover:shadow-primary/30 disabled:bg-muted disabled:text-muted-foreground/40 disabled:shadow-none disabled:hover:translate-y-0 shrink-0"
-            >
-              <ArrowUp className="w-5 h-5" />
-            </button>
-          )}
+      <div className="bg-muted/30 rounded-2xl border px-2 py-2">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            className="flex-1 bg-transparent resize-none text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50 disabled:text-muted-foreground/40 py-2 px-2 min-h-[28px] max-h-[180px]"
+          />
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {hasContent && (
+              <span className="text-[10px] text-muted-foreground/40 tabular-nums px-1">
+                {textareaRef.current?.value.length || 0}
+              </span>
+            )}
+            {isLoading && !hasContent ? (
+              <button
+                onClick={handleStopClick}
+                className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-md transition-all hover:bg-destructive/85 shrink-0"
+              >
+                <Square className="w-4 h-4" fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                disabled={disabled || !hasContent}
+                onClick={handleSendClick}
+                className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all hover:-translate-y-px hover:shadow-lg hover:shadow-primary/30 disabled:bg-muted disabled:text-muted-foreground/40 disabled:shadow-none disabled:hover:translate-y-0 shrink-0"
+              >
+                <ArrowUp className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
+        {controls && (
+          <div className="mt-1 -mx-2 border-t px-2 pt-1">{controls}</div>
+        )}
       </div>
 
       {slashOpen && filteredItems.length > 0 && (

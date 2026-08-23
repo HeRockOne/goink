@@ -19,6 +19,9 @@ interface Props {
 
 const BLOCK_SIZE = 100
 
+// AI 可能把「第N章」写进标题，前端归一化避免与编号重复显示
+const stripChapterPrefix = (title: string) => title.replace(/^第\s*\d+\s*章\s*[·:：-]?\s*/, '')
+
 interface OutlineItem {
   chapter_number: number
   file_path: string
@@ -254,7 +257,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                   <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
                     {t('sidebar.chapterN', { n: o.chapter_number })}
                   </span>
-                  <span className="flex-1 text-sm truncate">{o.title || t('sidebar.outlineFallback')}</span>
+                  <span className="flex-1 text-sm truncate">{stripChapterPrefix(o.title || '') || t('sidebar.outlineFallback')}</span>
                 </button>
                 <button
                   onClick={e => { e.stopPropagation(); handleDeleteOutline(o) }}
@@ -337,7 +340,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                               className="flex-1 h-6 rounded border bg-background px-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
                           ) : (
-                            <span className="flex-1 text-sm truncate cursor-text" title="点击编辑" onClick={e => { e.stopPropagation(); startEdit(ch) }}>{ch.title}</span>
+                            <span className="flex-1 text-sm truncate cursor-text" title="点击编辑" onClick={e => { e.stopPropagation(); startEdit(ch) }}>{stripChapterPrefix(ch.title)}</span>
                           )}
                           {ch.word_count > 0 && editingId !== ch.id && (
                             <span className="text-[10px] text-muted-foreground/60 shrink-0">

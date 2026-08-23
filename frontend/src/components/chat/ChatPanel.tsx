@@ -130,13 +130,14 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
         // 恢复推理程度（验证级别仍合法）
         let effort = settings?.reasoning_effort || ''
-        if (!effort || !model.ReasoningLevels?.includes(effort)) {
+        if (effort && !model.ReasoningLevels?.includes(effort)) {
           effort = model.ReasoningLevels?.[0] || ''
         }
         setReasoningEffort(effort)
 
-        // 恢复思考模式
-        setThinkingEnabled(effort !== '' && (model?.SupportsThinking ?? false))
+        // 恢复思考模式（独立于 reasoning_effort，防止关掉思考后重启被重置）
+        const thinkingOn = settings?.thinking_enabled !== false
+        setThinkingEnabled(thinkingOn && (model?.SupportsThinking ?? false))
       }
 
       // 恢复审批模式
@@ -1055,8 +1056,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
 
   const handleSelectEffort = useCallback((effort: string) => {
     setReasoningEffort(effort)
-    setThinkingEnabled(effort !== '')
+    const enabled = effort !== ''
+    setThinkingEnabled(enabled)
     app.SetReasoningEffort(effort).catch(() => {})
+    app.SetThinkingEnabled(enabled).catch(() => {})
   }, [app])
 
   const handleCompress = useCallback(async () => {
@@ -1587,21 +1590,21 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
           // 移动端对话进行中时，取消移动端的会话；否则取消桌面端当前会话
           app.CancelChat(apiActiveRef.current.sessionId || sessionId)
         }}
-      />
-
-      <div className="border-t mx-4" />
-
-      <ChatControls
-        models={models}
-        selectedKey={selectedKey}
-        onSelectModel={handleSelectModel}
-        onRefreshModels={refreshModels}
-        reasoningEffort={reasoningEffort}
-        onSelectEffort={handleSelectEffort}
-        thinkingEnabled={thinkingEnabled}
-        approvalMode={approvalMode}
-        onToggleApproval={handleToggleApproval}
-        onConfigModel={handleConfigModel}
+        controls={
+          <ChatControls
+            models={models}
+            selectedKey={selectedKey}
+            onSelectModel={handleSelectModel}
+            onRefreshModels={refreshModels}
+            reasoningEffort={reasoningEffort}
+            onSelectEffort={handleSelectEffort}
+            thinkingEnabled={thinkingEnabled}
+            approvalMode={approvalMode}
+            onToggleApproval={handleToggleApproval}
+            onConfigModel={handleConfigModel}
+            embedded
+          />
+        }
       />
 
       {isDragging && (

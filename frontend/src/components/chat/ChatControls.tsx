@@ -14,6 +14,7 @@ interface Props {
   approvalMode: 'manual' | 'auto'
   onToggleApproval: () => void
   onConfigModel: () => void
+  embedded?: boolean
 }
 
 export default function ChatControls({
@@ -27,6 +28,7 @@ export default function ChatControls({
   approvalMode,
   onToggleApproval,
   onConfigModel,
+  embedded,
 }: Props) {
   const { t } = useTranslation()
   const selected = models.find(m => m.Key === selectedKey)
@@ -40,7 +42,7 @@ export default function ChatControls({
   const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s
 
   return (
-    <div className="flex items-center gap-1.5 px-4 py-2 text-xs shrink-0 select-none">
+    <div className={`flex items-center gap-1.5 text-xs select-none ${embedded ? 'min-w-0' : 'px-4 py-2 shrink-0'}`}>
       <PopSelect
         value={selectedKey}
         options={modelOptions}
