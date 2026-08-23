@@ -22,6 +22,7 @@ import (
 	"novel/internal/config"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
+	"novel/internal/review"
 	"novel/internal/search"
 	"novel/internal/session"
 	"novel/internal/skill"
@@ -169,6 +170,15 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		Broadcast:       parentOpts.Broadcast, // 子代理事件也广播到移动端
 	}
 	result, err := a.Run(ctx, subOpts)
+
+	// 审稿记录确定性落库：报告原文全量保存，结构化字段 best-effort 解析。
+	// 落库失败只告警，不影响审稿结果返回。
+	if err == nil && at == agentcfg.ReviewAgent {
+		rec := review.ParseReport(result.FinalText, req.Instruction)
+		rec.NovelID = req.NovelID
+		rec.SessionID = parentOpts.SessionID
+		review.SaveRecord(a.db, rec, slog.Default())
+	}
 
 	return result.FinalText, err
 }

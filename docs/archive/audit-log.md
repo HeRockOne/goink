@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-23：审稿记录落库（数据沉淀）。新增 `internal/review`（ReviewRecord 表 + ParseReport 解析器：从报告原文 best-effort 提取总分/判定/致命数/5维分/章节范围，解析失败存原文）；RunSubAgent 返回时确定性落库（agent.go，零依赖 AI 自觉，失败仅告警）；新只读工具 get_review_history（review_history_tools.go，按章节过滤+include_report，主 agent/review 子代理白名单均登记，门禁 get 类别天然覆盖）。用途：压缩后找回审稿细节、修订闭环核对、分数趋势与重复问题检测。
+
 > 2026-08-04：cache-hit-fix-implementation.md 已实施（P1: NS 每轮落库 + 保留 K=3 快照；P2: NS 移出压缩系统区，改末尾落库；store 排序改 id；新增 compress_test/store_test）。未落地部分：P4（命中率报警阈值）、P5（用户运营纪律）。
 > 2026-08-04：outline-on-demand-fix.md 已实施（book-outline.md 总纲落点 + get_writing_context 注入总纲摘要/进度锚点 + kernel/init-phase/门禁示例更新 + 侧边栏总纲入口）。
 > 2026-08-04：goink.md 定位收敛为「章节指纹账本」（仅 append 模式追加，DB 承载全部状态/悬念/设定/偏好）；edit 工具新增 change_type=append；NovelState 注入 goink.md 尾部最近 1500 字符。

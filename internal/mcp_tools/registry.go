@@ -29,4 +29,5 @@ func RegisterAllTools(r *Registry) {
 	RegisterAutoSkillInjectionTool(r)
 	RegisterOutlineTools(r)
 	RegisterVolumeTools(r)
+	RegisterReviewTools(r)
 }

@@ -24,6 +24,7 @@ var readOnlyTools = map[string]bool{
 	"get_writing_snapshot":     true,
 	"get_lore":                 true,
 	"get_items":                true,
+	"get_review_history":       true,
 	"read":                     true,
 }
 

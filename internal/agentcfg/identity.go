@@ -39,6 +39,7 @@ var mainAgentTools = []string{
 	"web_search",
 	"web_fetch",
 	"run_subagent",
+	"get_review_history",
 	"set_phase",
 	"get_phase_gate_config",
 	"update_phase_gate_config",
@@ -63,6 +64,7 @@ var reviewAgentTools = []string{
 	"search_story_memory", "read",
 	"get_entity_appearances", "check_story_consistency",
 	"get_outline", // 审稿需读取总纲做一致性核对
+	"get_review_history", // 回查历史审稿记录，重复问题检测
 }
 
 var memoryAgentTools = []string{

@@ -16,6 +16,7 @@ import (
 	"novel/internal/novel"
 	"novel/internal/outline"
 	"novel/internal/reader"
+	"novel/internal/review"
 	"novel/internal/rollback"
 	"novel/internal/scene"
 	"novel/internal/session"
@@ -68,6 +69,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&outline.Outline{},
 		&outline.OutlineBeat{},
 		&volume.Volume{},
+		&review.ReviewRecord{},
 	}
 
 	for _, m := range models {

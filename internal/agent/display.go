@@ -46,6 +46,7 @@ var toolDisplayNames = map[string]string{
 	"check_story_consistency":         "设定一致性检查",
 	"update_chapter_meta":             "更新章节元数据",
 	"get_item_occurrences":            "查看物品流转",
+	"get_review_history":              "查询审稿记录",
 	"create_item_occurrence":          "记录物品出现",
 	"get_items":                       "查看物品列表",
 	"create_item":                     "创建新物品",
