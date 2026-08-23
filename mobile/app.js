@@ -355,7 +355,12 @@ const LANGS = {
     model_switched: '模型已切换', sync_done: '已同步到当前会话',
     session_loaded: '已加载会话', model_badge: '思考',
     unknown_error: '未知错误', offline_mode: '离线模式，显示缓存数据',
-    no_arc: '无名弧线', no_location: '无名', scene_node_prefix: '节点',
+    create_novel_short: '新建', reader_known: '已知信息', reader_suspense: '悬念', reader_misconception: '误解',
+    grade: '品级', narrative_role: '叙事角色', holder: '持有者', key_item: '关键道具',
+    role_important: '重要', role_normal: '普通', actual_prefix: '实际:',
+    lore_hidden_note: '否（隐藏设定）', arc_id: '关联弧线',
+    ch_prefix: '第', ch_suffix: '章',
+    back: '返回', wan: '万', zi: '字', no_arc: '无名弧线', no_location: '无名', scene_node_prefix: '节点',
     scene_default: '场景', load_error: '加载失败',
     // 重试
     retrying: '正在重试 ({n}次)',
@@ -500,7 +505,12 @@ const LANGS = {
     model_switched: 'Model switched', sync_done: 'Synced to current session',
     session_loaded: 'Session loaded', model_badge: 'Think',
     unknown_error: 'Unknown error', offline_mode: 'Offline, showing cache',
-    no_arc: 'Unnamed arc', no_location: 'Unnamed', scene_node_prefix: 'Node',
+    create_novel_short: 'New', reader_known: 'Known', reader_suspense: 'Suspense', reader_misconception: 'Misconception',
+    grade: 'Quality', narrative_role: 'Role', holder: 'Holder', key_item: 'Key Item',
+    role_important: 'Important', role_normal: 'Normal', actual_prefix: 'Actual:',
+    lore_hidden_note: 'No (hidden)', arc_id: 'Related Arc',
+    ch_prefix: 'Ch.', ch_suffix: '',
+    back: 'Back', wan: '0k', zi: '', no_arc: 'Unnamed arc', no_location: 'Unnamed', scene_node_prefix: 'Node',
     scene_default: 'Scene', load_error: 'Load failed',
     // Retry
     retrying: 'Retrying ({n})',
@@ -766,7 +776,7 @@ function updateTokenModal() {
   
   const totalRow = document.createElement('div');
   totalRow.className = 'token-row token-total';
-  totalRow.innerHTML = `<span>小计</span><span style="color:var(--ice)">¥${totalCost.toFixed(4)}</span>`;
+  totalRow.innerHTML = `<span>${t('subtotal')}</span><span style="color:var(--ice)">¥${totalCost.toFixed(4)}</span>`;
   perModelDiv.appendChild(totalRow);
   
   state.sessionCost = totalCost;
@@ -794,7 +804,7 @@ function updateTokenModal() {
   });
   const dailyTotalRow = document.createElement('div');
   dailyTotalRow.className = 'token-row token-total';
-  dailyTotalRow.innerHTML = `<span>今日 ${dailyCount} 个会话</span><span style="color:var(--ice)">¥${dailyCost.toFixed(4)}</span>`;
+  dailyTotalRow.innerHTML = `<span>${t('today_sessions', {n: dailyCount})}</span><span style="color:var(--ice)">¥${dailyCost.toFixed(4)}</span>`;
   dailyDiv.appendChild(dailyTotalRow);
 }
 
@@ -910,7 +920,7 @@ function nvCard(n) {
   qs(root, '.nv-meta').innerHTML = m;
   const desc = qs(root, '.nv-desc');
   if (n.description) desc.textContent = n.description; else desc.remove();
-  const wd = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + '万' : n.totalWords ? n.totalWords + '字' : '';
+  const wd = n.totalWords >= 10000 ? (n.totalWords / 10000).toFixed(1) + t('wan') : n.totalWords ? n.totalWords + t('zi') : '';
   qs(root, '.nv-stat-ch').innerHTML = `<strong>${n.chapterCount}</strong>${t('chapters')}`;
   qs(root, '.nv-stat-char').innerHTML = `<strong>${n.charCount}</strong>${t('characters')}`;
   const wdEl = qs(root, '.nv-stat-wd');
@@ -1662,7 +1672,7 @@ async function loadStatsPage() {
 }
 
 function fmt(n) {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+  if (n >= 10000) return (n / 10000).toFixed(1) + t('wan');
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
   return String(n);
 }
@@ -1902,13 +1912,13 @@ function formatCharacter(c) {
 function formatTimeline(t) {
   let h = '';
   if (t.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(t.title)}</div>`;
-  if (t.category) h += ir('分类', esc(t.category));
-  if (t.status) { const sc = t.status === 'resolved' ? 'var(--ice)' : t.status === 'pending' ? 'var(--ice)' : 'var(--text2)'; h += ir('状态', esc(t.status), `color:${sc};font-weight:600`); }
-  if (t.target_chapter) h += ir('目标章节', '第' + t.target_chapter + '章');
-  if (t.source_chapter_id) h += ir('来源章节', '第' + t.source_chapter_id + '章');
-  if (t.resolved_chapter_id) h += ir('解决章节', '第' + t.resolved_chapter_id + '章');
-  if (t.importance) { let s = ''; for (let i = 0; i < t.importance; i++) s += '★'; for (let i = t.importance; i < 5; i++) s += '☆'; h += ir('重要度', s); }
-  if (t.source) h += ir('来源', esc(t.source));
+  if (t.category) h += ir(t('category'), esc(t.category));
+  if (t.status) { const sc = t.status === 'resolved' ? 'var(--ice)' : t.status === 'pending' ? 'var(--ice)' : 'var(--text2)'; h += ir(t('status_label'), esc(t.status), `color:${sc};font-weight:600`); }
+  if (t.target_chapter) h += ir(t('target_prefix'), t('ch_prefix') + t.target_chapter + t('ch_suffix'));
+  if (t.source_chapter_id) h += ir(t('source_prefix'), t('ch_prefix') + t.source_chapter_id + t('ch_suffix'));
+  if (t.resolved_chapter_id) h += ir(t('resolved_prefix'), t('ch_prefix') + t.resolved_chapter_id + t('ch_suffix'));
+  if (t.importance) { let s = ''; for (let i = 0; i < t.importance; i++) s += '★'; for (let i = t.importance; i < 5; i++) s += '☆'; h += ir(t('importance'), s); }
+  if (t.source) h += ir(t('source_label'), esc(t.source));
   if (t.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:var(--text2)">${esc(t.content)}</div>`;
   if (t.detail_json) { try { const d = JSON.parse(t.detail_json); Object.keys(d).forEach(k => { h += ir(esc(k), esc(String(d[k]))); }); } catch (_) {} }
   return h;
@@ -1917,14 +1927,14 @@ function formatTimeline(t) {
 function formatArc(a, nodes) {
   let h = '';
   if (a.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(a.name)}</div>`;
-  if (a.arc_type) h += ir('类型', esc(a.arc_type));
-  if (a.status) h += ir('状态', esc(a.status));
+  if (a.arc_type) h += ir(t('type'), esc(a.arc_type));
+  if (a.status) h += ir(t('status_label'), esc(a.status));
   if (a.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(a.description)}</div>`;
   if (nodes && nodes.length) {
-    h += `<div style="font-size:14px;font-weight:600;margin:12px 0 6px;color:var(--ice)">节点 (${nodes.length})</div>`;
+    h += `<div style="font-size:14px;font-weight:600;margin:12px 0 6px;color:var(--ice)">${t('nodes')} (${nodes.length})</div>`;
     nodes.sort((x, y) => (x.target_chapter||0) - (y.target_chapter||0)).forEach((n, i) => {
       const sc = n.status === 'completed' ? 'var(--ice)' : n.status === 'pending' ? 'var(--ice)' : 'var(--text2)';
-      h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:6px 0"><div style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;border-radius:50%;background:${sc};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</span><strong style="font-size:13px;flex:1;color:var(--text)">${esc(n.title||'')}</strong></div>${n.target_chapter ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">目标: 第${n.target_chapter}章${n.actual_chapter ? ` | 实际: 第${n.actual_chapter}章` : ''}</div>` : ''}${n.description ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.4">${esc(n.description)}</div>` : ''}</div>`;
+      h += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:6px 0"><div style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;border-radius:50%;background:${sc};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</span><strong style="font-size:13px;flex:1;color:var(--text)">${esc(n.title||'')}</strong></div>${n.target_chapter ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">${t('target_prefix')} ${t('ch_prefix')}${n.target_chapter}${t('ch_suffix')}${n.actual_chapter ? ` | ${t('actual_prefix')} ${t('ch_prefix')}${n.actual_chapter}${t('ch_suffix')}` : ''}</div>` : ''}${n.description ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.4">${esc(n.description)}</div>` : ''}</div>`;
     });
   }
   return h;
@@ -1932,11 +1942,11 @@ function formatArc(a, nodes) {
 
 function formatReader(i) {
   let h = '';
-  const tl = { known: '已知信息', suspense: '悬念', misconception: '误解' }[i.type] || i.type || '';
-  if (tl) { const tc = i.type==='suspense'?'var(--ice)':i.type==='misconception'?'var(--ice)':'var(--ice)'; h += ir('类型', esc(tl), `color:${tc};font-weight:600`); }
-  if (i.planted_chapter) h += ir('埋设章节', '第' + i.planted_chapter + '章');
-  if (i.revealed_chapter) h += ir('揭示章节', '第' + i.revealed_chapter + '章');
-  if (i.related_truth) h += ir('关联真相', esc(i.related_truth));
+  const tl = { known: t('reader_known'), suspense: t('reader_suspense'), misconception: t('reader_misconception') }[i.type] || i.type || '';
+  if (tl) { const tc = i.type==='suspense'?'var(--ice)':i.type==='misconception'?'var(--ice)':'var(--ice)'; h += ir(t('type'), esc(tl), `color:${tc};font-weight:600`); }
+  if (i.planted_chapter) h += ir(t('planted_ch'), t('ch_prefix') + i.planted_chapter + t('ch_suffix'));
+  if (i.revealed_chapter) h += ir(t('revealed_ch'), t('ch_prefix') + i.revealed_chapter + t('ch_suffix'));
+  if (i.related_truth) h += ir(t('related_truth'), esc(i.related_truth));
   if (i.content) h += `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:var(--text2)">${esc(i.content)}</div>`;
   return h;
 }
@@ -1952,20 +1962,20 @@ function formatPreference(i) {
 function formatLocation(l) {
   let h = '';
   if (l.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(l.name)}</div>`;
-  if (l.location_type) h += ir('类型', esc(l.location_type));
+  if (l.location_type) h += ir(t('type'), esc(l.location_type));
   if (l.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.description)}</div>`;
   if (l.detail_json) { try { const d = JSON.parse(l.detail_json); Object.keys(d).forEach(k => { h += ir(esc(k), esc(String(d[k]))); }); } catch (_) {} }
-  if (l.tags) h += `<div style="margin-top:8px"><span class="info-label" style="display:inline-block;min-width:60px;font-size:11px;color:var(--ice)">标签</span><div class="data-card-meta" style="display:inline-flex;gap:4px;margin-left:4px">${l.tags.split(',').map(t => `<span class="tag" style="background:var(--frost);color:var(--ice)">${esc(t.trim())}</span>`).join('')}</div></div>`;
+  if (l.tags) h += `<div style="margin-top:8px"><span class="info-label" style="display:inline-block;min-width:60px;font-size:11px;color:var(--ice)">${t('tags')}</span><div class="data-card-meta" style="display:inline-flex;gap:4px;margin-left:4px">${l.tags.split(',').map(tg => `<span class="tag" style="background:var(--frost);color:var(--ice)">${esc(tg.trim())}</span>`).join('')}</div></div>`;
   return h;
 }
 
 function formatLore(l) {
   let h = '';
   if (l.title) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(l.title)}</div>`;
-  if (l.category) h += ir('分类', esc(l.category));
-  if (l.is_public === false) h += ir('公开', '否（隐藏设定）', 'color:#c44a4a');
-  if (l.reveal_chapter_id) h += ir('揭示章节', '第' + l.reveal_chapter_id + '章');
-  if (l.arc_id) h += ir('关联弧线', 'ID: ' + l.arc_id);
+  if (l.category) h += ir(t('category'), esc(l.category));
+  if (l.is_public === false) h += ir(t('scope'), t('lore_hidden_note'), 'color:#c44a4a');
+  if (l.reveal_chapter_id) h += ir(t('revealed_ch'), t('ch_prefix') + l.reveal_chapter_id + t('ch_suffix'));
+  if (l.arc_id) h += ir(t('arc_id'), 'ID: ' + l.arc_id);
   if (l.summary) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(l.summary)}</div>`;
   if (l.content) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap">${esc(l.content)}</div>`;
   return h;
@@ -1974,11 +1984,11 @@ function formatLore(l) {
 function formatItem(i) {
   let h = '';
   if (i.name) h += `<div style="font-size:17px;font-weight:700;margin-bottom:6px;color:var(--ice)">${esc(i.name)}</div>`;
-  if (i.item_type) h += ir('类型', esc(i.item_type));
-  if (i.grade) h += ir('品级', esc(i.grade));
-  if (i.status) h += ir('状态', esc(i.status));
-  if (i.narrative_role) h += ir('叙事角色', {key_prop:'关键道具',supporting:'重要',normal:'普通'}[i.narrative_role] || i.narrative_role);
-  if (i.owner_id) h += ir('持有者', 'ID: ' + i.owner_id);
+  if (i.item_type) h += ir(t('type'), esc(i.item_type));
+  if (i.grade) h += ir(t('grade'), esc(i.grade));
+  if (i.status) h += ir(t('status_label'), esc(i.status));
+  if (i.narrative_role) h += ir(t('narrative_role'), {key_prop:t('key_item'),supporting:t('role_important'),normal:t('role_normal')}[i.narrative_role] || i.narrative_role);
+  if (i.owner_id) h += ir(t('holder'), 'ID: ' + i.owner_id);
   if (i.description) h += `<div style="margin:8px 4px;font-size:13px;line-height:1.6;color:var(--text2)">${esc(i.description)}</div>`;
   if (i.ability) h += `<div style="margin:8px 4px"><span class="info-label" style="color:var(--ice)">能力</span><div style="font-size:13px;line-height:1.6;color:var(--text2);margin-top:4px">${esc(i.ability)}</div></div>`;
   if (i.lore) h += `<div style="margin:8px 4px"><span class="info-label" style="color:var(--ice)">来历</span><div style="font-size:13px;line-height:1.6;color:var(--text2);margin-top:4px">${esc(i.lore)}</div></div>`;
