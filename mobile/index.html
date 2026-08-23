@@ -80,8 +80,8 @@
       <button id="scrollToBottom" class="scroll-bottom-btn hidden" onclick="scrollToBottom()">↓</button>
       <div id="chatInput" class="chat-input">
         <div class="input-row">
-          <span id="contextUsage" class="context-usage" onclick="showTokenUsage()"></span>
-          <textarea id="msgInput" placeholder="输入消息..." rows="1"></textarea>
+          <div id="contextUsage" class="context-usage" onclick="showContextPanel()"></div>
+          <textarea id="msgInput" data-i18n-placeholder="input_msg" placeholder="输入消息..." rows="1"></textarea>
           <button id="sendBtn" class="btn-send" disabled>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
           </button>
@@ -299,7 +299,7 @@
       <div style="background:var(--surface-raised);border-radius:var(--radius-xl);padding:24px;width:85%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);border:1px solid var(--border);border-top:2px solid var(--gold)">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:8px;color:var(--gold);letter-spacing:1px;padding-left:10px;border-left:2px solid var(--gold)">🔐 访问验证</h3>
         <p style="font-size:12px;color:var(--text2);margin-bottom:14px">首次连接需输入令牌，请在桌面端「设置」中查看或扫描二维码。</p>
-        <input id="tokenInput" type="text" placeholder="输入 32 位令牌" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:monospace;margin-bottom:12px;outline:none;box-sizing:border-box;background:var(--bg);color:var(--text)">
+        <input id="tokenInput" type="text" data-i18n-placeholder="token_placeholder" placeholder="输入 32 位令牌" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:monospace;margin-bottom:12px;outline:none;box-sizing:border-box;background:var(--bg);color:var(--text)">
         <div style="display:flex;gap:8px;margin-bottom:10px">
           <button id="tokenSave" style="flex:1;padding:9px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--oak-dark),var(--oak));color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px var(--maple-glow)">连接</button>
           <button id="tokenCancel" style="padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;cursor:pointer">跳过</button>
@@ -412,6 +412,44 @@
         <div class="delete-actions">
           <button class="btn-secondary" onclick="hideDeleteNovel()" data-i18n="cancel">取消</button>
           <button class="btn-danger" id="deleteNovelBtn" disabled onclick="confirmDeleteNovel()" data-i18n="confirm_delete">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="contextModal" class="modal hidden">
+    <div class="modal-content context-modal">
+      <div class="modal-header">
+        <span data-i18n="ctx_panel">上下文面板</span>
+        <button class="modal-close" onclick="hideContextPanel()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="ctx-ring-wrap">
+          <svg class="ctx-ring-lg" viewBox="0 0 120 120">
+            <circle class="ctx-track-lg" cx="60" cy="60" r="52"/>
+            <circle id="ctxRingFill" class="ctx-fill-lg" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ctx-ring-label">
+            <span id="ctxRingPct" class="ctx-pct-lg">0</span>
+            <span class="ctx-pct-unit">%</span>
+          </div>
+        </div>
+        <div class="ctx-stats">
+          <div class="ctx-stat-row">
+            <span class="ctx-stat-label" data-i18n="ctx_used">已用</span>
+            <span id="ctxUsed" class="ctx-stat-val">-</span>
+          </div>
+          <div class="ctx-stat-row">
+            <span class="ctx-stat-label" data-i18n="ctx_window">窗口</span>
+            <span id="ctxWindow" class="ctx-stat-val">-</span>
+          </div>
+          <div class="ctx-stat-row">
+            <span class="ctx-stat-label" data-i18n="ctx_cache_hit">缓存命中</span>
+            <span id="ctxHitRate" class="ctx-stat-val">-</span>
+          </div>
+          <div class="ctx-stat-row">
+            <span class="ctx-stat-label" data-i18n="ctx_cost">成本</span>
+            <span id="ctxCostVal" class="ctx-stat-val">-</span>
+          </div>
         </div>
       </div>
     </div>

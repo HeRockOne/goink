@@ -157,9 +157,9 @@ function showTokenPrompt() {
       overlay.remove();
       // 保存后验证连接 + 重连 WS（initApp 阶段 connectWS 时无 token，需补建）
       api('/api/health').then(r => {
-        if (r && r.status === 'ok') { connectWS(); toast('✅ 已连接服务器'); }
-        else toast('⚠️ 令牌已保存，但连接验证失败');
-      }).catch(() => toast('⚠️ 令牌已保存，但无法连接服务器'));
+        if (r && r.status === 'ok') { connectWS(); toast(t('connected_server')); }
+        else toast(t('token_saved_connect_fail'));
+      }).catch(() => toast(t('token_saved_no_server')));
       switchPage(state.page);
     }
   };
@@ -197,7 +197,7 @@ function startQRScan() {
       scanFrame();
     })
     .catch(() => {
-      toast('无法访问摄像头');
+      toast(t('camera_error'));
       overlay.remove();
     });
 
@@ -219,7 +219,7 @@ function startQRScan() {
         setToken(code.data);
         document.getElementById('tokenOverlay').remove();
         switchPage(state.page);
-        toast('扫码成功，令牌已保存');
+        toast(t('scan_success'));
         return;
       }
     }
@@ -364,6 +364,30 @@ const LANGS = {
     // 设置页
     api_auth: 'API 认证', cache_label: '缓存', auto_sync: '在线自动同步',
     no_model: '未选择', switch_to: '切换到',
+    // 上下文面板
+    ctx_panel: '上下文面板', ctx_used: '已用', ctx_window: '窗口', ctx_cache_hit: '缓存命中', ctx_cost: '成本',
+    // 设置页
+    save: '保存', switch_to_label: '切换到', status_connected: '🟢 已连接', status_offline: '🔴 离线',
+    token_placeholder: '输入 32 位令牌', scan_qr_btn: '📷 扫描二维码',
+    // 统计页
+    no_novel_hint_text: '请先打开一本小说', no_data_text: '暂无数据', load_error_text: '加载失败',
+    total_chapters_label: '总章节', total_words_label: '总字数', avg_words_label: '均章字数',
+    arc_progress_label: '弧线进度', foreshadow_rate_label: '伏笔回收',
+    char_count_label: '角色数', loc_count_label: '地点数', latest_chapter_label: '最新章节',
+    // 对话
+    thinking_toggle_text: '💭 思考 ({n}字) ▼',
+    // 通用 toast
+    connected_server: '✅ 已连接服务器', token_saved_connect_fail: '⚠️ 令牌已保存，但连接验证失败',
+    token_saved_no_server: '⚠️ 令牌已保存，但无法连接服务器',
+    model_switched_toast: '模型已切换', model_switch_fail: '切换失败', token_saved_toast: '令牌已保存',
+    token_saved_verify_fail: '⚠️ 已保存，但连接验证失败（令牌可能不对）',
+    token_saved_no_connect: '⚠️ 已保存，但无法连接服务器（检查地址与端口）',
+    scan_ok_connected: '✅ 扫码成功，已连接服务器', offline_toast: '📡 离线模式，显示缓存数据',
+    no_chapters_toast: '暂无章节', chapter_not_found: '章节未找到',
+    sync_recovering: '📡 网络已恢复，正在同步数据...', sync_complete: '✅ 数据同步完成',
+    // 趋势
+    trend_title: '趋势分析', trend_words: '字数趋势', trend_chapters: '章节趋势',
+    trend_no_data: '暂无趋势数据',
   },
   en: {
     bookshelf: 'Bookshelf', chat: 'Chat', stats_label: 'Stats', settings: 'Settings', detail: 'Novel Detail',
@@ -485,6 +509,30 @@ const LANGS = {
     // Settings
     api_auth: 'API Auth', cache_label: 'Cache', auto_sync: 'Auto Sync',
     no_model: 'None', switch_to: 'Switch to',
+    // Context panel
+    ctx_panel: 'Context', ctx_used: 'Used', ctx_window: 'Window', ctx_cache_hit: 'Cache Hit', ctx_cost: 'Cost',
+    // Settings
+    save: 'Save', switch_to_label: 'Switch to', status_connected: '🟢 Connected', status_offline: '🔴 Offline',
+    token_placeholder: 'Enter 32-char token', scan_qr_btn: '📷 Scan QR Code',
+    // Stats
+    no_novel_hint_text: 'Open a novel first', no_data_text: 'No data yet', load_error_text: 'Failed to load',
+    total_chapters_label: 'Chapters', total_words_label: 'Words', avg_words_label: 'Avg Words',
+    arc_progress_label: 'Arc Progress', foreshadow_rate_label: 'Foreshadow Rate',
+    char_count_label: 'Characters', loc_count_label: 'Locations', latest_chapter_label: 'Latest',
+    // Chat
+    thinking_toggle_text: '💭 Think ({n}) ▼',
+    // Toast
+    connected_server: '✅ Connected', token_saved_connect_fail: '⚠️ Token saved, but verification failed',
+    token_saved_no_server: '⚠️ Token saved, but cannot connect',
+    model_switched_toast: 'Model switched', model_switch_fail: 'Switch failed', token_saved_toast: 'Token saved',
+    token_saved_verify_fail: '⚠️ Saved, but verification failed (wrong token?)',
+    token_saved_no_connect: '⚠️ Saved, but cannot connect (check address & port)',
+    scan_ok_connected: '✅ Scan success, connected', offline_toast: '📡 Offline, showing cache',
+    no_chapters_toast: 'No chapters yet', chapter_not_found: 'Chapter not found',
+    sync_recovering: '📡 Network restored, syncing...', sync_complete: '✅ Sync complete',
+    // Trends
+    trend_title: 'Trends', trend_words: 'Words Trend', trend_chapters: 'Chapters Trend',
+    trend_no_data: 'No trend data yet',
   }
 };
 function getLang() { return localStorage.getItem('goink_lang') || 'zh'; }
@@ -599,10 +647,14 @@ function updateContextUsage() {
   const usage = state.sessionUsage || {};
   const ratio = usage.usage_ratio;
   if (typeof ratio === 'number' && ratio > 0) {
-    el.textContent = ratio >= 100 ? '100%' : ratio.toFixed(1) + '%';
+    const r = 17, c = 2 * Math.PI * r;
+    const pct = Math.min(ratio, 100);
+    const offset = c * (1 - pct / 100);
+    el.innerHTML = `<svg viewBox="0 0 42 42"><circle class="ring-track" cx="21" cy="21" r="${r}"/><circle class="ring-fill" cx="21" cy="21" r="${r}" stroke-dasharray="${c}" stroke-dashoffset="${offset}"/></svg><span class="ring-pct">${pct >= 100 ? '100' : pct.toFixed(1)}</span>`;
     el.classList.add('visible');
   } else {
     el.classList.remove('visible');
+    el.innerHTML = '';
   }
 }
 function updateChatBannerCost() {
@@ -634,6 +686,39 @@ function showTokenUsage() {
 
 function hideTokenUsage() {
   document.getElementById('tokenModal').classList.add('hidden');
+}
+
+function showContextPanel() {
+  document.getElementById('contextModal').classList.remove('hidden');
+  updateContextModal();
+}
+function hideContextPanel() {
+  document.getElementById('contextModal').classList.add('hidden');
+}
+function updateContextModal() {
+  const usage = state.sessionUsage || {};
+  const ratio = usage.usage_ratio || 0;
+  const window = usage.context_window || 0;
+  const used = Math.round(window * ratio / 100);
+  const hitRatio = usage.cache_hit_ratio;
+
+  // 大圆环
+  const r = 52, c = 2 * Math.PI * r;
+  const fill = document.getElementById('ctxRingFill');
+  if (fill) {
+    fill.setAttribute('stroke-dasharray', c);
+    fill.setAttribute('stroke-dashoffset', c * (1 - Math.min(ratio, 100) / 100));
+  }
+  document.getElementById('ctxRingPct').textContent = ratio >= 100 ? '100' : ratio.toFixed(1);
+
+  document.getElementById('ctxUsed').textContent = fmtTokens(used);
+  document.getElementById('ctxWindow').textContent = fmtContextWindow(window);
+  document.getElementById('ctxHitRate').textContent = (typeof hitRatio === 'number' && hitRatio > 0)
+    ? hitRatio.toFixed(hitRatio >= 99 ? 4 : 2) + '%'
+    : '-';
+  document.getElementById('ctxCostVal').textContent = state.sessionCost > 0
+    ? '¥' + state.sessionCost.toFixed(4)
+    : '-';
 }
 
 function calcModelCost(missTokens, hitTokens, compTokens) {
@@ -938,7 +1023,7 @@ async function connectWS() {
           // 非 chat 频道的事件
           if (ev.type === 'model_changed') {
             state.selectedModel = ev.model_key || '';
-            toast('模型已切换');
+            toast(t('model_switched_toast'));
             if (state.page === 'settings') loadSettings();
             return;
           }
@@ -1024,7 +1109,7 @@ function handleSyncState(ev) {
     }).catch(() => {
       createBubble();
     });
-    toast('已同步到当前会话');
+    toast(t('sync_done'));
   } else {
     // 同一会话：桌面端生成中途进入聊天页，直接补流式气泡
     createBubble();
@@ -1248,7 +1333,7 @@ async function loadNovels() {
     // 在线时后台同步到 IndexedDB（书架指纹未变则跳过）
     if (API.connOk && !r._offline) syncToOffline(novelsFingerprint(novels));
     // 离线提示
-    if (r._offline) toast('📡 离线模式，显示缓存数据');
+    if (r._offline) toast(t('offline_toast'));
     const colors = ['#6366f1','#e05656','#2f9e6e','#d9932b','#8b5cf6','#0ea5e9','#ec4899','#14b8a6'];
     const enriched = await Promise.all(novels.map(async (n, i) => {
       const [chRes, charRes] = await Promise.all([api(`/api/novels/${n.id}/chapters?page=1&size=9999`), api(`/api/characters?novel_id=${n.id}`)]);
@@ -1533,7 +1618,7 @@ async function loadTabContent(tab) {
         break;
       }
     }
-  } catch (_) { el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>'; }
+  } catch (_) { el.innerHTML = `<div class="empty-state"><p>${t('load_error_text')}</p></div>`; }
 }
 
 // ═══════════ 统计页面 ═══════════
@@ -1542,22 +1627,22 @@ async function loadStatsPage() {
   el.innerHTML = `<div class="empty-state"><div class="loading-dots">${t('loading')}</div></div>`;
   const nId = state.novelId;
   if (!nId) {
-    el.innerHTML = '<div class="empty-state"><p>请先打开一本小说</p></div>';
+    el.innerHTML = `<div class="empty-state"><p>${t('no_novel_hint_text')}</p></div>`;
     return;
   }
   try {
     const r = await api(`/api/stats?novel_id=${nId}`);
     const s = r.stats;
-    if (!s) { el.innerHTML = '<div class="empty-state"><p>暂无数据</p></div>'; return; }
+    if (!s) { el.innerHTML = `<div class="empty-state"><p>${t('no_data_text')}</p></div>`; return; }
     el.innerHTML = '';
     const cards = [
-      { label: '总章节', value: String(s.total_chapters || 0), badge: '📖' },
-      { label: '总字数', value: fmt(s.total_words || 0), badge: '📝' },
-      { label: '均章字数', value: fmt(s.avg_chapter_words || 0), badge: '📐' },
-      { label: '弧线进度', value: `${s.arc_completed||0}/${s.arc_count||0}`, badge: '🔮' },
-      { label: '伏笔回收', value: `${s.foreshadowing_resolved||0}/${s.foreshadowing_total||0}`, badge: '👁' },
-      { label: '角色数', value: String(s.character_count || 0), badge: '👤' },
-      { label: '地点数', value: String(s.location_count || 0), badge: '📍' },
+      { label: t('total_chapters_label'), value: String(s.total_chapters || 0), badge: '📖' },
+      { label: t('total_words_label'), value: fmt(s.total_words || 0), badge: '📝' },
+      { label: t('avg_words_label'), value: fmt(s.avg_chapter_words || 0), badge: '📐' },
+      { label: t('arc_progress_label'), value: `${s.arc_completed||0}/${s.arc_count||0}`, badge: '🔮' },
+      { label: t('foreshadow_rate_label'), value: `${s.foreshadowing_resolved||0}/${s.foreshadowing_total||0}`, badge: '👁' },
+      { label: t('char_count_label'), value: String(s.character_count || 0), badge: '👤' },
+      { label: t('loc_count_label'), value: String(s.location_count || 0), badge: '📍' },
     ];
     const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px';
     cards.forEach(c => {
@@ -1570,10 +1655,10 @@ async function loadStatsPage() {
     if (s.latest_chapter_num > 0) {
       const footer = document.createElement('div');
       footer.style.cssText = 'margin-top:14px;font-size:12px;color:var(--text2);text-align:center';
-      footer.textContent = `最新章节：第 ${s.latest_chapter_num} 章 ${s.latest_chapter_title || ''}`;
+      footer.textContent = t('latest_chapter_label') + `：第 ${s.latest_chapter_num} 章 ${s.latest_chapter_title || ''}`;
       el.appendChild(footer);
     }
-  } catch (_) { el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>'; }
+  } catch (_) { el.innerHTML = `<div class="empty-state"><p>${t('load_error_text')}</p></div>`; }
 }
 
 function fmt(n) {
@@ -1587,9 +1672,9 @@ let scrollThrottleTimer = null;
 
 async function readChapter(novelId, chapterId) {
   const chapters = await getChapters(novelId);
-  if (!chapters.length) { toast('暂无章节'); return; }
+  if (!chapters.length) { toast(t('no_chapters_toast')); return; }
   const idx = chapters.findIndex(c => c.id === chapterId);
-  if (idx < 0) { toast('章节未找到'); return; }
+  if (idx < 0) { toast(t('chapter_not_found')); return; }
   state.reader = { novelId, chapterId, idx, chapters };
 
   // 获取章节内容
@@ -1598,7 +1683,7 @@ async function readChapter(novelId, chapterId) {
     const r = await api(`/api/chapters/${chapterId}`);
     content = r.content || '';
     if (!state.chaptersCache[novelId]) state.chaptersCache[novelId] = chapters;
-  } catch (_) { toast('加载失败'); return; }
+  } catch (_) { toast(t('load_error_text')); return; }
 
   // 渲染阅读器
   renderReader(content);
@@ -1920,7 +2005,7 @@ function addMessage(role, content, thinking, isStreaming) {
   qs(div, '.cm-bubble').innerHTML = marked.parse(content || '');
   if (thinking) {
     const body = qs(div, '.msg-body');
-    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = `💭 思考 (${thinking.length}字) ▼`;
+    const tog = document.createElement('div'); tog.className = 'thinking-toggle'; tog.onclick = function(){ toggleThinking(this); }; tog.textContent = t('thinking_toggle_text', {n: thinking.length});
     const tc = document.createElement('div'); tc.className = 'thinking-content hidden'; tc.textContent = thinking;
     const bubble = qs(div, '.cm-bubble');
     body.insertBefore(tog, bubble); body.insertBefore(tc, bubble);
@@ -2016,7 +2101,7 @@ function updateStreaming(el, content, thinking, final) {
       body.insertBefore(t, b); body.insertBefore(c, b);
     }
     c.textContent = thinking;
-    if (!t.dataset.userToggled) t.textContent = `💭 思考 (${thinking.length}字) ▼`;
+    if (!t.dataset.userToggled) t.textContent = t('thinking_toggle_text', {n: thinking.length});
   }
   el.closest('.chat-scroll').scrollTop = el.closest('.chat-scroll').scrollHeight;
 }
@@ -2176,7 +2261,7 @@ async function loadSession(sid) {
     try { state.sessionUsage = JSON.parse(currentSession.usage); } catch (_) {}
   }
   updateQuickBar();
-  toast('已加载会话'); 
+  toast(t('session_loaded')); 
 }
 function newChat() { state.sessionId = null; const c = document.getElementById('chatMessages'); c.innerHTML = ''; c.appendChild(emptyState('开始新的对话')); qs(c, '.em-hint') && (qs(c, '.em-hint').textContent = '输入消息开始创作'); }
 
@@ -2191,14 +2276,14 @@ function showModels() {
     const displayName = m.provider ? `${m.provider} / ${m.name}` : (m.name || m.key);
     qs(root, '.mod-name').textContent = displayName;
     if (m.thinking) {
-      const badge = document.createElement('span'); badge.className = 'model-badge'; badge.textContent = '思考';
+      const badge = document.createElement('span'); badge.className = 'model-badge'; badge.textContent = t('model_badge');
       root.appendChild(badge);
     }
     list.appendChild(root);
   });
   openSheet('modelSheet');
 }
-async function selectModel(key) { try { await api('/api/settings/model', { method: 'POST', body: { model_key: key } }); state.selectedModel = key; closeSheet('modelSheet'); toast('已切换'); showModels(); } catch (_) { toast('切换失败'); } }
+async function selectModel(key) { try { await api('/api/settings/model', { method: 'POST', body: { model_key: key } }); state.selectedModel = key; closeSheet('modelSheet'); toast(t('model_switched_toast')); showModels(); } catch (_) { toast(t('model_switch_fail')); } }
 
 // ═══════════ 设置 ═══════════
 function sg(label, rows) {
@@ -2213,7 +2298,7 @@ function sg(label, rows) {
 }
 function authBlock(token) {
   const d = document.createElement('div');
-  d.innerHTML = `<div style="display:flex;gap:8px;margin-top:4px"><input id="tokenField" type="text" placeholder="输入 32 位令牌" value="${esc(token)}" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:monospace;outline:none;background:var(--bg);color:var(--text)"><button onclick="saveTokenFromSettings()" style="padding:7px 14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--ice),var(--ice-light));color:#fff;font-size:12px;font-weight:600;cursor:pointer">保存</button></div><button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:11px;cursor:pointer">📷 扫描二维码</button>`;
+  d.innerHTML = `<div style="display:flex;gap:8px;margin-top:4px"><input id="tokenField" type="text" placeholder="${t('token_placeholder')}" value="${esc(token)}" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:monospace;outline:none;background:var(--bg);color:var(--text)"><button onclick="saveTokenFromSettings()" style="padding:7px 14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--ice),var(--ice-light));color:#fff;font-size:12px;font-weight:600;cursor:pointer">${t('save')}</button></div><button onclick="startQRScanFromSettings()" style="width:100%;margin-top:8px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:11px;cursor:pointer">${t('scan_qr_btn')}</button>`;
   return d;
 }
 
@@ -2225,29 +2310,29 @@ async function loadSettings() {
     const r = await api('/api/settings/model');
     if (r.error === 'unauthorized') {
       const el = document.getElementById('settingsContent'); el.innerHTML = '';
-      el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+      el.appendChild(sg('🔐 ' + t('api_auth'), [authBlock(token)]));
       el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
-      el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
+      el.appendChild(sg('🌐 Language', [settingRow(t('switch_to_label'), lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
       return;
     }
     state.models = r.models||[]; state.selectedModel = r.selected_model_key||'';
     const found = state.models.find(m => m.key === state.selectedModel);
-    const name = found ? (found.provider ? `${found.provider} / ${found.name}` : found.name) : state.selectedModel.split('/').pop() || '未选择';
+    const name = found ? (found.provider ? `${found.provider} / ${found.name}` : found.name) : state.selectedModel.split('/').pop() || t('no_model');
     const el = document.getElementById('settingsContent'); el.innerHTML = '';
     el.appendChild(sg('🤖 ' + t('model'), [settingRow(t('current_model'), esc(name), showModels, 'color:var(--ice)')]));
     el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
-    el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
-    el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+    el.appendChild(sg('🌐 Language', [settingRow(t('switch_to_label'), lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
+    el.appendChild(sg('🔐 ' + t('api_auth'), [authBlock(token)]));
     el.appendChild(sg('🔗 ' + t('server'), [
       settingRow(t('server'), esc(API.base), null, 'color:var(--text);font-size:12px'),
-      settingRow(t('status'), API.connOk?'🟢 已连接':'🔴 离线', null, `color:${API.connOk?'var(--ice)':'var(--ice)'}`),
-      settingRow('缓存', '在线自动同步', null, 'color:var(--text3);font-size:11px')
+      settingRow(t('status'), API.connOk?t('status_connected'):t('status_offline'), null, `color:${API.connOk?'var(--ice)':'var(--ice)'}`),
+      settingRow(t('cache_label'), t('auto_sync'), null, 'color:var(--text3);font-size:11px')
     ]));
   } catch (_) {
     const el = document.getElementById('settingsContent'); el.innerHTML = '';
-    el.appendChild(sg('🔐 API 认证', [authBlock(token)]));
+    el.appendChild(sg('🔐 ' + t('api_auth'), [authBlock(token)]));
     el.appendChild(sg('🎨 ' + t('appearance'), [settingRow(t('dark_mode').replace('Mode','').replace('模式',''), isDark?t('dark_mode'):t('light_mode'), toggleTheme, 'color:var(--ice)')]));
-    el.appendChild(sg('🌐 Language', [settingRow('切换到', lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
+    el.appendChild(sg('🌐 Language', [settingRow(t('switch_to_label'), lang==='zh'?'English →':'中文 →', toggleLang, 'color:var(--ice)')]));
   }
 }
 
@@ -2299,7 +2384,7 @@ function saveTokenFromSettings() {
   const val = document.getElementById('tokenField').value.trim();
   if (val) {
     setToken(val);
-    toast('令牌已保存');
+    toast(t('token_saved_toast'));
     loadSettings();
   }
 }
@@ -2344,7 +2429,7 @@ function startQRScanFromSettings() {
       scanFrame();
     })
     .catch(() => {
-      toast('无法访问摄像头');
+      toast(t('camera_error'));
       overlay.remove();
     });
 
@@ -2368,15 +2453,15 @@ function startQRScanFromSettings() {
           setToken(info.token);
           // 验证连接
           api('/api/health').then(r => {
-            if (r && r.status === 'ok') toast('✅ 扫码成功，已连接服务器');
-            else toast('⚠️ 已保存，但连接验证失败（令牌可能不对）');
-          }).catch(() => toast('⚠️ 已保存，但无法连接服务器（检查地址与端口）'));
+            if (r && r.status === 'ok') toast(t('scan_ok_connected'));
+            else toast(t('token_saved_verify_fail'));
+          }).catch(() => toast(t('token_saved_no_connect')));
         } else {
           // 旧格式：纯令牌
           const tokenField = document.getElementById('tokenField');
           if (tokenField) tokenField.value = code.data;
           setToken(code.data);
-          toast('扫码成功，令牌已保存');
+          toast(t('scan_success'));
         }
         loadSettings();
         return;
@@ -2416,7 +2501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setToken(qToken);
     localStorage.setItem('goink_api_base', location.origin);
     history.replaceState(null, '', location.pathname + location.hash);
-    toast('✅ 扫码成功，已连接服务器');
+    toast(t('scan_ok_connected'));
   }
   document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => switchPage(btn.dataset.page)));
   const input = document.getElementById('msgInput');
@@ -2446,9 +2531,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('online', () => {
     API.connOk = false;
     if (getToken()) {
-      toast('📡 网络已恢复，正在同步数据...');
+      toast(t('sync_recovering'));
       syncToOffline().then(() => {
-        toast('✅ 数据同步完成');
+        toast(t('sync_complete'));
         if (state.page === 'novels') loadNovels();
       }).catch(() => {});
     }
