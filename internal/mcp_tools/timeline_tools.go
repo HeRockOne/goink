@@ -240,6 +240,20 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 		return &ToolResult{Success: false, Error: "回收伏笔（status=resolved）时 resolved_chapter_id 不能为空，请填入实际回收章节号"}, nil
 	}
 
+	// 台账防腐化：resolved_chapter_id 不得指向尚未写出的未来章节。
+	// （事故案例：AI 把 resolved 填成 34-51 而实际只写到 21 章，台账静默失真。）
+	if a.Status == "resolved" && a.ResolvedChapterID > 0 {
+		var maxCh int64
+		tc.DB.WithContext(ctx).Table("chapters").Where("novel_id = ?", tc.NovelID).
+			Select("COALESCE(MAX(chapter_number), 0)").Scan(&maxCh)
+		if int64(a.ResolvedChapterID) > maxCh {
+			return &ToolResult{Success: false, Error: fmt.Sprintf(
+				"拒绝：resolved_chapter_id=%d 超过当前最大章节号 %d——伏笔只能在实际已写的章节中回收。"+
+					"若计划在未来的第 %d 章回收，请保持 status=pending 并把 target_chapter 设为该章号",
+				a.ResolvedChapterID, maxCh, a.ResolvedChapterID)}, nil
+		}
+	}
+
 	var entry timeline.TimelineEntry
 	if err := tc.DB.WithContext(ctx).
 		Where("id = ? AND novel_id = ?", a.EntryID, tc.NovelID).

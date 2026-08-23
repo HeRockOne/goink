@@ -230,7 +230,7 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
 1. **阅读当前章节** — 用 read 工具读取 instruction 中指定的章节（用 start_line/end_line 限制范围，禁止全量读取）
 2. **阅读前一章** — 用 read 工具读取前一章最后50行，检查衔接
 3. **收集上下文** — 调用 get_characters、get_character_relations、get_timeline、get_story_arcs、get_reader_perspective 获取设定数据（get_character_relations 用于关系一致性检查）
-4. **程序化一致性检查** — 调用 check_story_consistency(check_types=["pacing_gap"]) 获取 SQL 实证数据（伏笔超期、角色断档、物品冲突、节奏空窗），作为以下人工检查的硬数据参考
+4. **程序化一致性检查** — 调用 check_story_consistency(check_types=["pacing_gap","beat_window","scope_guard","type_drift","ledger_integrity"]) 获取 SQL 实证数据（节奏空窗、爽点临近、卷范围越界、类型漂移、台账失真），作为以下人工检查的硬数据参考——这些检查项的输出必须逐条纳入审稿报告
 5. **逐项检查**（对照已加载的审稿标准，逐项执行）：
    - **角色一致性**：正文中角色言行/能力/位置/称呼/外貌/年龄修为是否与数据库一致 → 调用 get_characters(search=角色名, brief=true) 核对当前状态，调用 get_character_relations(search=角色名) 核对关系一致性，如有疑问用 get_entity_appearances(character, 角色ID) 回溯历史表现
    - **设定一致性**：正文中提到的地点/物品/世界观，逐一调用工具核对：

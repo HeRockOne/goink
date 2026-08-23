@@ -261,7 +261,7 @@ func foreshadowAppearances(ctx context.Context, db *gorm.DB, novelID, entryID in
 
 type CheckStoryConsistencyArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"required,description=当前章节号" validate:"required,min=1"`
-	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\",\"pacing_gap\",\"promise_fulfillment\",\"init_consistency\"]。留空=全部"`
+	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\",\"pacing_gap\",\"promise_fulfillment\",\"init_consistency\",\"ledger_integrity\",\"beat_window\",\"scope_guard\",\"type_drift\"]。留空=全部"`
 	Lookback       int    `json:"lookback" jsonschema:"description=pacing_gap 回溯窗口章数，默认5"`
 	MinGap         int    `json:"min_gap" jsonschema:"description=pacing_gap 连续无动作场景触发阈值，默认3"`
 	Tolerance      int    `json:"tolerance" jsonschema:"description=promise_fulfillment 承诺章+tolerance后仍未兑现才报警，默认3"`
@@ -272,7 +272,7 @@ type CheckStoryConsistencyTool struct{}
 
 func (t *CheckStoryConsistencyTool) Name() string { return "check_story_consistency" }
 func (t *CheckStoryConsistencyTool) Description() string {
-	return "程序化一致性检查，用 SQL 实证返回七类问题：\n" +
+	return "程序化一致性检查，用 SQL 实证返回十一类问题：\n" +
 		"1. foreshadow_overdue：超过目标章仍未回收的伏笔（硬错误）\n" +
 		"2. character_vanished：近30章未出场但有历史戏份的角色（出场断档，疑似被遗忘）\n" +
 		"3. item_conflict：已销毁/丢失的物品在之后章节又出现（硬错误）\n" +
@@ -280,6 +280,10 @@ func (t *CheckStoryConsistencyTool) Description() string {
 		"5. pacing_gap：连续多章无高密度场景，节奏拖沓（警告）\n" +
 		"6. promise_fulfillment：卷纲承诺的大爽点到期未兑现（硬错误）\n" +
 		"7. init_consistency：开书一致性校验（总纲/偏好/卷纲三方冲突，硬错误）\n" +
+		"8. ledger_integrity：台账自检——伏笔 resolved_chapter 指向未来章节、弧线节点 completed 但 actual_chapter=0 等数据失真（硬错误）\n" +
+		"9. beat_window：未来3章内到期的大爽点提醒（写前对齐，防止爽点被替换或顺延）\n" +
+		"10. scope_guard：本章是否落在当前卷范围内、弧线节点相对规划的提前消耗/滞后（警告）\n" +
+		"11. type_drift：回溯窗口内动作/冲突场景占比过低，类型方向漂移嫌疑（警告）\n" +
 		"review/maintain/init 阶段调用，作为审稿的硬数据支撑。" +
 		"【使用时机】审稿/每 3 章自检时调用（自动核对，输出问题条目）；发现问题后按条目定位修复。" +
 		"【注意】检查是程序化 SQL 核对，不含文笔判断——文笔问题仍需人工审读。"
@@ -295,7 +299,7 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 	a := args.(*CheckStoryConsistencyArgs)
 	db := tc.DB.WithContext(ctx)
 
-	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true, "pacing_gap": true, "promise_fulfillment": true, "init_consistency": true}
+	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true, "pacing_gap": true, "promise_fulfillment": true, "init_consistency": true, "ledger_integrity": true, "beat_window": true, "scope_guard": true, "type_drift": true}
 	if a.CheckTypes != "" {
 		checkTypes = map[string]bool{}
 		for _, c := range parseJSONStringArray(a.CheckTypes) {
@@ -371,9 +375,31 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 		}
 	}
 
+	if checkTypes["ledger_integrity"] {
+		ledgerFinds := findLedgerIntegrity(ctx, db, tc.NovelID, a.CurrentChapter)
+		findings = append(findings, ledgerFinds...)
+	}
+
+	if checkTypes["beat_window"] {
+		beatWarns := findBeatWindow(ctx, db, tc.NovelID, a.CurrentChapter)
+		warnings = append(warnings, beatWarns...)
+	}
+
+	if checkTypes["scope_guard"] {
+		scopeWarns := findScopeGuard(ctx, db, tc.NovelID, a.CurrentChapter)
+		warnings = append(warnings, scopeWarns...)
+	}
+
+	if checkTypes["type_drift"] {
+		driftWarn := findTypeDrift(ctx, db, tc.NovelID, a.CurrentChapter, a.Genre)
+		if driftWarn != "" {
+			warnings = append(warnings, driftWarn)
+		}
+	}
+
 	var content string
 	if len(findings) == 0 && len(warnings) == 0 {
-		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出、节奏拖沓、承诺未兑现、开书冲突。"
+		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出、节奏拖沓、承诺未兑现、开书冲突、台账失真、爽点临近未对齐、卷范围越界、类型漂移。"
 	} else {
 		parts := append([]string{}, findings...)
 		parts = append(parts, warnings...)
@@ -897,4 +923,158 @@ func findInitConsistency(ctx context.Context, db *gorm.DB, novelID int64, genre 
 func RegisterAppearanceTools(r *Registry) {
 	r.Register(&GetEntityAppearancesTool{})
 	r.Register(&CheckStoryConsistencyTool{})
+}
+
+// ── 防漂移检查（ledger_integrity / beat_window / scope_guard / type_drift）──
+// 背景见 docs/archive/novel2-drift-audit-2026-08-23.md：渐进式设定漂移需要程序化
+// 事实校验拦截，不能依赖 LLM 自觉。
+
+// maxChapterNumber 返回当前已写最大章节号。
+func maxChapterNumber(ctx context.Context, db *gorm.DB, novelID int64) int {
+	var maxCh int64
+	db.WithContext(ctx).Table("chapters").Where("novel_id = ?", novelID).
+		Select("COALESCE(MAX(chapter_number), 0)").Scan(&maxCh)
+	return int(maxCh)
+}
+
+// findLedgerIntegrity 台账自检：数据自身的一致性，不涉及剧情判断。
+// 1) 伏笔 resolved_chapter_id 指向未写出的未来章节（事故案例：填了 34-51 而只写到 21 章）
+// 2) 弧线节点 status=completed 但 actual_chapter=0（完成标记无证据）
+func findLedgerIntegrity(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int) []string {
+	var results []string
+	maxCh := maxChapterNumber(ctx, db, novelID)
+
+	var badResolved []timeline.TimelineEntry
+	db.WithContext(ctx).
+		Where("novel_id = ? AND status = 'resolved' AND resolved_chapter_id > ?", novelID, maxCh).
+		Order("id").Limit(20).Find(&badResolved)
+	for _, e := range badResolved {
+		results = append(results, fmt.Sprintf(
+			"[ERROR] 台账失真：伏笔「%s」resolved_chapter=%d 超过当前最大章节 %d——回收章号必须是实际已写的章节",
+			e.Title, e.ResolvedChapterID, maxCh))
+	}
+
+	var badNodes []storyarc.ArcNode
+	db.WithContext(ctx).
+		Where("novel_id = ? AND status = 'completed' AND (actual_chapter = 0 OR actual_chapter > ?)",
+			novelID, maxCh).Order("id").Limit(20).Find(&badNodes)
+	for _, n := range badNodes {
+		results = append(results, fmt.Sprintf(
+			"[ERROR] 台账失真：弧线节点「%s」标记 completed 但 actual_chapter=%d 无效（当前最大章节 %d）——请核对正文后回填实际章节号",
+			n.Title, n.ActualChapter, maxCh))
+	}
+	_ = currentChapter
+	return results
+}
+
+// findBeatWindow 未来 window 章内到期的大爽点提醒：写前对齐，防止爽点被替换或顺延。
+func findBeatWindow(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int) []string {
+	const window = 3
+	var beats []outline.OutlineBeat
+	if err := db.WithContext(ctx).
+		Where("novel_id = ? AND chapter > ? AND chapter <= ?", novelID, currentChapter, currentChapter+window).
+		Order("chapter").Find(&beats).Error; err != nil || len(beats) == 0 {
+		return nil
+	}
+	parts := make([]string, 0, len(beats))
+	for _, bt := range beats {
+		desc := bt.Description
+		if r := []rune(desc); len(r) > 40 {
+			desc = string(r[:40]) + "…"
+		}
+		parts = append(parts, fmt.Sprintf("Ch%d「%s」", bt.Chapter, desc))
+	}
+	return []string{fmt.Sprintf("[WARNING] 爽点临近：接下来%d章内有大爽点到期——%s。本章及后续规划必须向其收敛，禁止替换核心承诺或顺延章号", window, strings.Join(parts, "、"))}
+}
+
+// findScopeGuard 卷范围与弧线推进对账。
+// 1) 当前章不在任何卷范围内 → 卷数据缺失或越界，AI 失去范围约束（事故案例：volume_start=0 盲写）
+// 2) pending 弧线节点 target 已过 3 章以上 → 规划滞后
+// 3) 节点 actual 比 target 提前 5 章以上 → 后续卷冲突线被提前消耗
+func findScopeGuard(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int) []string {
+	var results []string
+
+	var vol volume.Volume
+	err := db.WithContext(ctx).
+		Where("novel_id = ? AND start_chapter <= ? AND end_chapter >= ?", novelID, currentChapter, currentChapter).
+		Order("start_chapter").First(&vol).Error
+	if err != nil {
+		results = append(results, fmt.Sprintf(
+			"[WARNING] 卷范围缺失：第%d章不属于任何卷（volumes 表缺少覆盖该章的记录），AI 失去本卷红线约束。请在卷纲中补齐当前卷的 start/end_chapter", currentChapter))
+	}
+
+	var nodes []storyarc.ArcNode
+	db.WithContext(ctx).
+		Where("novel_id = ? AND status = 'pending' AND target_chapter > 0 AND target_chapter < ?", novelID, currentChapter-3).
+		Order("target_chapter").Limit(10).Find(&nodes)
+	for _, n := range nodes {
+		results = append(results, fmt.Sprintf(
+			"[WARNING] 规划滞后：弧线节点「%s」目标第%d章但已到第%d章仍未发生——要么尽快兑现，要么明确改规划并更新 target_chapter",
+			n.Title, n.TargetChapter, currentChapter))
+	}
+
+	var early []storyarc.ArcNode
+	db.WithContext(ctx).
+		Where("novel_id = ? AND actual_chapter > 0 AND target_chapter - actual_chapter > 5", novelID).
+		Order("id").Limit(10).Find(&early)
+	for _, n := range early {
+		results = append(results, fmt.Sprintf(
+			"[WARNING] 提前消耗：「%s」规划在第%d章、实际已在第%d章发生（提前%d章）——后续冲突线的节奏被压缩，确认是否为预期调整",
+			n.Title, n.TargetChapter, n.ActualChapter, n.TargetChapter-n.ActualChapter))
+	}
+	return results
+}
+
+// findTypeDrift 类型方向漂移检测：回溯窗口内含动作/冲突场景的章节占比过低即报警。
+// 这是 init-phase 一致性校验#1/#6（力量流题材连续多章无武力展示=违规）的运行期版本，
+// 针对《祖国人》式"每章单独看都合理、累计后类型偷换"的渐进漂移。复用 pacing_gap 的标签体系。
+func findTypeDrift(ctx context.Context, db *gorm.DB, novelID int64, currentChapter int, genre string) string {
+	const lookback = 8
+	const minActionChapters = 2 // 8 章窗口内至少 2 章含动作/冲突场景
+
+	startCh := currentChapter - lookback + 1
+	if startCh < 1 {
+		startCh = 1
+	}
+	window := currentChapter - startCh + 1
+	if window < 5 { // 前期样本不足不判
+		return ""
+	}
+
+	actionTags := getActionTags(genre)
+	var chapters []chapter.Chapter
+	db.WithContext(ctx).Where("novel_id = ? AND chapter_number >= ? AND chapter_number <= ?",
+		novelID, startCh, currentChapter).Find(&chapters)
+
+	actionChapters := make([]int, 0, len(chapters))
+	for _, ch := range chapters {
+		for _, tag := range actionTags {
+			if ch.KeyEvents != "" && strings.Contains(ch.KeyEvents, tag) {
+				actionChapters = append(actionChapters, ch.ChapterNumber)
+				break
+			}
+		}
+	}
+
+	if len(actionChapters) >= minActionChapters {
+		return ""
+	}
+	hint := ""
+	if len(actionChapters) > 0 {
+		hint = fmt.Sprintf("仅第%s章含动作场景", intsToString(actionChapters))
+	} else {
+		hint = "全部章节零动作场景"
+	}
+	return fmt.Sprintf("[WARNING] 类型漂移嫌疑：最近%d章（第%d-%d章）%s，低于力量型叙事的下限（%d章）。"+
+		"对照总纲的核心矛盾与主角手段承诺自查：是否正在用取证/心理战/社交博弈替代类型承诺的直接对抗？若是预期转向须先经用户确认并修订总纲",
+		window, startCh, currentChapter, hint, minActionChapters)
+}
+
+// intsToString 把章节号列表格式化为逗号分隔字符串。
+func intsToString(nums []int) string {
+	parts := make([]string, len(nums))
+	for i, n := range nums {
+		parts[i] = fmt.Sprint(n)
+	}
+	return strings.Join(parts, "/")
 }

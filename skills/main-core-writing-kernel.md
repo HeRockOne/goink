@@ -151,7 +151,7 @@ mode: always
 
 ### review
 
-1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章。**审稿报告必须列出实际审读的章节清单**（如"已审：第 3-7 章"），主 agent 收到报告先核对覆盖范围，发现覆盖不全（漏章/只审了开头几章）必须再启动子代理补审未覆盖章节，全部覆盖后才进入修复
+1. **run_subagent**(agent_type="review")（required）— 启动审稿。**批量模式：审读本批全部 N 章**（子代理 fork 完整主历史，正文已在上下文中），不要只审第 1 章。**审稿报告必须包含 5 维度评分报告**（总分≥9.0通过/7.0-8.9需修改/<7.0不通过，致命问题一票否决），主 agent 收到报告先核对覆盖范围+评分，发现覆盖不全（漏章/只审了开头几章）必须再启动子代理补审未覆盖章节，全部覆盖后才进入修复。**审稿报告中所有层次的问题（致命/质量/轻微）全部必须修复，一丝不苟**
 2. **审稿核对（身份差异：主会话核对全量，子代理定向）**：
    - 主会话（作家视角）按意见修复前，先核对状态：**get_characters 全量**（核对角色 status：alive/dead 与正文一致性——brief 无 status 会漏检）、**get_timeline/get_story_arcs 传 current_chapter**（核对伏笔/弧线进度）、**get_reader_perspective 全量**、**check_story_consistency**（自动 DB 核对，输出问题条目）；读本章正文分段核对（read start_line/end_line）
    - 审稿子代理（fork 完整主历史，正文+writing_context 已在上下文）：只做**少量定向核对**（get_characters brief+size 小、get_timeline current_chapter），加 check_story_consistency 自动核对，然后输出审读报告——不要重复拉全量
@@ -239,7 +239,7 @@ mode: always
 | **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-chapter-title-design（章节标题设计）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
 | **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（九条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
 | **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
-| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（22项判定） |
+| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（27项判定，含卷纲范围与类型契合宏观检查） |
 | **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔）, main-tech-data-hygiene（数据卫生：内容校准） |
 | **完结** | main-tech-book-completion（完本清单） |
 

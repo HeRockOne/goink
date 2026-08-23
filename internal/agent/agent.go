@@ -115,6 +115,30 @@ func (a *Agent) Cancel(sessionID string) {
 	a.cancelMgr.Cancel(CancelPrefixChat + sessionID)
 }
 
+// reviewAbsentThreshold 门禁关闭时触发审稿缺席提醒的主 agent 回复数阈值
+// （约对应 2-3 章的回复量：每章通常含正文+维护确认等多条 assistant 消息）。
+const reviewAbsentThreshold = 6
+
+// assistantMessagesSinceLastReview 统计最近一次 run_subagent 调用之后的
+// 主 agent 可见回复条数。run_subagent 的工具调用记录在 assistant 消息的
+// extra_metadata.tool_calls 中，取其消息 id 为分界点。
+func (a *Agent) assistantMessagesSinceLastReview(ctx context.Context, opts *RunOptions) int {
+	var lastSubID int64
+	a.db.WithContext(ctx).Model(&session.Message{}).
+		Where("session_id = ? AND extra_metadata LIKE ?", opts.SessionID, "%run_subagent%").
+		Order("id DESC").Limit(1).Pluck("id", &lastSubID)
+
+	q := a.db.WithContext(ctx).Model(&session.Message{}).
+		Where("session_id = ? AND role = ? AND agent_type = ? AND to_frontend = ? AND version = ?",
+			opts.SessionID, "assistant", "main", true, opts.ActiveVersion)
+	if lastSubID > 0 {
+		q = q.Where("id > ?", lastSubID)
+	}
+	var n int64
+	q.Count(&n)
+	return int(n)
+}
+
 // RunSubAgent 启动子 Agent 并返回最终报告文本。
 // 缓存协议：子 agent 请求 = 完整主会话历史原文 + 尾部追加子 agent 身份/NS/指令
 // （Anthropic fork 模式完整版）。主历史含正文/设定/NS（上一轮主请求的完整字节），
@@ -428,6 +452,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	// 不再重复注入提醒消息（LLM 已知道，重复提醒纯噪音填充历史），只返回失败结果。
 	blockCount := make(map[string]int)
 	runningTokens := a.InitRunningTokens(opts.Messages)
+
+	// 门禁关闭时的审稿缺席提醒（防漂移）：门禁是审稿的唯一硬性强制，
+	// 关闭后内核里所有"必须 run_subagent"措辞都降级为建议——偏离会静默累积。
+	// 累计 N 条主 agent 回复未见 run_subagent 即注入一条提醒（每次 Run 至多一条）。
+	if !opts.PhaseGateEnabled && opts.AgentType == "main" && opts.SessionID != "" {
+		if n := a.assistantMessagesSinceLastReview(ctx, &opts); n >= reviewAbsentThreshold {
+			a.appendMsg("system", fmt.Sprintf(
+				"<system-reminder>\n门禁已关闭，且本会话最近 %d 条 AI 回复未经过 run_subagent 审稿。设定偏离风险随未审稿章数累积（渐进式类型漂移单章无法察觉）。\n请立即执行：set_phase(\"review\") → run_subagent(agent_type=\"review\") 审读近期章节；或提醒用户在 设置→门禁 重新开启阶段门禁恢复强制流程。\n</system-reminder>",
+				n), "", nil, &opts, runningTokens)
+			a.logger.Info("门禁关闭审稿缺席提醒", "sessionID", opts.SessionID, "absentCount", n)
+		}
+	}
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 

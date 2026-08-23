@@ -239,7 +239,7 @@ mode: always
 | **outline（大纲）** | main-tech-book-outline（章节蓝图）, main-tech-chapter-opening（每章开头）, main-tech-chapter-hook-enhanced（章末钩子）, main-tech-chapter-title-design（章节标题设计）, main-tech-maliang-method（打脸/金手指节奏）, main-tech-dialogue-subtext（对白设计）, main-tech-emotional-arc（情感弧线）, main-tech-opening-chapter（第一章开篇） |
 | **write（正文）** | main-tech-show-dont-tell（展示）, main-tech-info-density（信息密度）, main-tech-pov-purity（视角）, main-tech-anti-ai-writing（九条铁律）, main-tech-shuangdian-pacing（爽点节奏）, main-tech-climax-scene（战斗章）, main-tech-foreshadow-cycle（埋伏笔）, main-tech-pacing-control（节奏控制）, main-tech-scene-beats（场景节拍）, main-tech-emotion-injection（情绪注入）, main-tech-word-count-calibration（字数校准） |
 | **write后（自审）** | main-tech-revision-pass（修改润色）, sub-tech-anti-ai-grade（用词级反AI） |
-| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（22项判定） |
+| **review（审稿）** | run_subagent(agent_type="review") → sub-tech-review-standards（27项判定，含卷纲范围与类型契合宏观检查） |
 | **maintain（维护）** | main-tech-anti-repetition（去重）, main-tech-foreshadow-cycle（回收伏笔）, main-tech-data-hygiene（数据卫生：内容校准） |
 | **完结** | main-tech-book-completion（完本清单） |
 

@@ -2,11 +2,14 @@ package agentcfg
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
 	"novel/internal/git"
 	"novel/internal/novel"
+	"novel/internal/outline"
+	"novel/internal/volume"
 )
 
 // NovelStatePrefix 是 NovelState 内容的固定开头，用于识别落库的 NS 快照消息
@@ -43,6 +46,7 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 	var totalChapters int64
 	if err := db.Table("chapters").Where("novel_id = ?", novelID).Count(&totalChapters).Error; err == nil && totalChapters > 0 {
 		b = append(b, fmt.Sprintf("当前进度：第 %d 章。创作须服务于全书总纲（outlines + outline_beats 表），只展开本卷情节，后续卷设定不得提前使用。\n", totalChapters)...)
+		b = append(b, buildDirectionAnchor(db, novelID, int(totalChapters))...)
 	}
 
 	state, err := git.ReadFile(novelID, git.GoinkPath())
@@ -62,4 +66,61 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 	}
 
 	return string(b), nil
+}
+
+// buildDirectionAnchor 构建方向锚区块：卷范围红线 + 类型承诺 + 未兑现爽点 + 活跃禁忌。
+// 对抗长程创作中的渐进式设定漂移（每轮固定重建于动态区尾部，符合 P1 缓存协议；
+// 各项数据缺失时静默跳过，不产生空行噪音）。书本设定优先于类型技能模板的仲裁规则固定附尾。
+func buildDirectionAnchor(db *gorm.DB, novelID int64, currentChapter int) string {
+	var lines []string
+
+	// 本卷章节范围红线
+	var vol volume.Volume
+	if err := db.Where("novel_id = ? AND start_chapter <= ? AND end_chapter >= ?",
+		novelID, currentChapter, currentChapter).Order("start_chapter").First(&vol).Error; err == nil {
+		lines = append(lines, fmt.Sprintf("本卷红线：《%s》第%d-%d章，本章事件不得超出该范围、不得提前消耗后续卷冲突线", vol.Name, vol.StartChapter, vol.EndChapter))
+	}
+
+	// 类型承诺（总纲核心冲突截断）
+	var ol outline.Outline
+	if err := db.Where("novel_id = ?", novelID).First(&ol).Error; err == nil && ol.CoreConflict != "" {
+		lines = append(lines, "类型承诺（总纲核心矛盾）："+truncateRunes(ol.CoreConflict, 80))
+	}
+
+	// 未兑现大爽点（接下来 3 个）
+	var beats []outline.OutlineBeat
+	if err := db.Where("novel_id = ? AND chapter > ?", novelID, currentChapter).
+		Order("chapter").Limit(3).Find(&beats).Error; err == nil && len(beats) > 0 {
+		parts := make([]string, 0, len(beats))
+		for _, bt := range beats {
+			parts = append(parts, fmt.Sprintf("Ch%d %s", bt.Chapter, truncateRunes(bt.Description, 30)))
+		}
+		lines = append(lines, "未兑现爽点（到期必须兑现，禁止替换或顺延）："+strings.Join(parts, "｜"))
+	}
+
+	// 活跃禁忌 top3
+	var taboos []novel.PreferenceItem
+	if err := db.Where("status = 'active' AND (is_global = ? OR novel_id = ?) AND category LIKE ?", true, novelID, "%禁忌%").
+		Order("id").Limit(3).Find(&taboos).Error; err == nil && len(taboos) > 0 {
+		parts := make([]string, 0, len(taboos))
+		for _, tb := range taboos {
+			parts = append(parts, truncateRunes(tb.Content, 50))
+		}
+		lines = append(lines, "活跃禁忌（违反=致命）：\n- "+strings.Join(parts, "\n- "))
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n【方向锚】\n" + strings.Join(lines, "\n") +
+		"\n冲突规则：以上书本设定（outlines/volumes/preferences/lore）优先于任何类型技能模板建议。\n"
+}
+
+// truncateRunes 按字符数截断并加省略号。
+func truncateRunes(s string, max int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= max {
+		return string(r)
+	}
+	return string(r[:max]) + "…"
 }
