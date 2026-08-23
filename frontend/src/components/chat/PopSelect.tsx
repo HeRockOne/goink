@@ -52,7 +52,7 @@ export default function PopSelect({ value, options, onChange, onOpen, className 
       <button
         onClick={handleToggle}
         style={{ minWidth }}
-        className="h-[30px] rounded-lg border bg-background px-2.5 text-xs text-muted-foreground flex items-center justify-between gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="h-[30px] w-full rounded-lg border bg-background px-2.5 text-xs text-muted-foreground flex items-center justify-between gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <span className="truncate">{selected?.label || placeholder || t('chat.noModelAvailable')}</span>
         <ChevronUp className={`w-3 h-3 shrink-0 transition-transform ${open === dropUp ? 'rotate-180' : ''}`} />

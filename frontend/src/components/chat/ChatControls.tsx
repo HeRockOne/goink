@@ -42,14 +42,17 @@ export default function ChatControls({
   const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s
 
   return (
-    <div className={`flex items-center gap-1.5 text-xs select-none ${embedded ? 'min-w-0' : 'px-4 py-2 shrink-0'}`}>
-      <PopSelect
-        value={selectedKey}
-        options={modelOptions}
-        onChange={onSelectModel}
-        onOpen={onRefreshModels}
-        footerAction={{ label: t('chat.configureModel'), onClick: onConfigModel }}
-      />
+    <div className={`flex items-center gap-1.5 text-xs select-none overflow-hidden ${embedded ? 'min-w-0' : 'px-4 py-2 shrink-0'}`}>
+      <div className="min-w-0 flex-1">
+        <PopSelect
+          value={selectedKey}
+          options={modelOptions}
+          onChange={onSelectModel}
+          onOpen={onRefreshModels}
+          footerAction={{ label: t('chat.configureModel'), onClick: onConfigModel }}
+          minWidth="0"
+        />
+      </div>
 
       {supportsThinking && (
         <div className="relative shrink-0">
@@ -57,20 +60,18 @@ export default function ChatControls({
           <PopSelect
             value={thinkingEnabled ? (reasoningEffort || levels[0] || 'high') : ''}
             options={[
-              { value: '', label: t('chat.thinkingOff') },
+              { value: '', label: 'Off' },
               ...levels.map(level => ({
                 value: level,
                 label: cap(level),
               })),
             ]}
             onChange={onSelectEffort}
-            minWidth="120px"
+            minWidth="100px"
             className="[&>button]:pl-7"
           />
         </div>
       )}
-
-      <div className="flex-1" />
 
       <button
         onClick={onToggleApproval}
