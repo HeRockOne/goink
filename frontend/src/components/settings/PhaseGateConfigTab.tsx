@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, ChevronDown, RotateCcw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
-import { SaveSettings, GetSettings, SetPhaseGateEnabled, RestoreDefaultPhaseGateConfig, ValidatePhaseGateConfig } from '@/lib/wailsjs/go/app/App'
+import { SaveSettings, GetSettings, SetPhaseGateEnabled, SetAllowAIGateConfigUpdate, RestoreDefaultPhaseGateConfig, ValidatePhaseGateConfig } from '@/lib/wailsjs/go/app/App'
 import type { agent } from '@/lib/wailsjs/go/models'
 import { useTranslation } from 'react-i18next'
 
@@ -8,6 +8,7 @@ export default function PhaseGateConfigTab() {
   const { t } = useTranslation()
   const [config, setConfig] = useState('')
   const [phaseGateEnabled, setPhaseGateEnabled] = useState(true)
+  const [allowAIGateConfigUpdate, setAllowAIGateConfigUpdate] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -19,6 +20,9 @@ export default function PhaseGateConfigTab() {
       setConfig(s?.phase_gate_config || '')
       if (s?.phase_gate_enabled !== undefined && s?.phase_gate_enabled !== null) {
         setPhaseGateEnabled(s.phase_gate_enabled as boolean)
+      }
+      if (s?.allow_ai_gate_config_update !== undefined && s?.allow_ai_gate_config_update !== null) {
+        setAllowAIGateConfigUpdate(s.allow_ai_gate_config_update as boolean)
       }
     }).catch(() => {})
   }, [])
@@ -76,6 +80,16 @@ export default function PhaseGateConfigTab() {
     }
   }, [phaseGateEnabled])
 
+  const handleAllowAIGateConfigUpdateToggle = useCallback(async () => {
+    const newValue = !allowAIGateConfigUpdate
+    setAllowAIGateConfigUpdate(newValue)
+    try {
+      await SetAllowAIGateConfigUpdate(newValue)
+    } catch {
+      setAllowAIGateConfigUpdate(!newValue)
+    }
+  }, [allowAIGateConfigUpdate])
+
   return (
     <div className="flex flex-col h-full">
       <div className="mb-4 pb-4 border-b">
@@ -104,6 +118,34 @@ export default function PhaseGateConfigTab() {
         </p>
       </div>
 
+      {/* AI 修改门禁配置开关 */}
+      <div className="mb-4 pb-4 border-b">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4" />
+          <span className="text-sm font-medium">允许 AI 修改门禁配置</span>
+          <button
+            onClick={handleAllowAIGateConfigUpdateToggle}
+            aria-pressed={allowAIGateConfigUpdate}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-colors shadow-inner ${
+              allowAIGateConfigUpdate
+                ? 'bg-primary border-primary shadow-[0_0_6px_var(--glow)]'
+                : 'bg-muted-foreground/25 border-border'
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-transform ${
+                allowAIGateConfigUpdate ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              }`}
+            />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {allowAIGateConfigUpdate
+            ? 'AI 可通过 update_phase_gate_config 工具自动调整门禁规则（开发调试用）'
+            : '禁止 AI 修改门禁配置，防止 AI 自行放行跳过质量检查（推荐关闭）'}
+        </p>
+      </div>
+
       {/* 高级配置（默认收起，避免普通用户面对配置代码） */}
       <button
         onClick={() => setShowAdvanced(!showAdvanced)}
@@ -117,7 +159,9 @@ export default function PhaseGateConfigTab() {
         <div className="flex-1 flex flex-col min-h-0">
           <p className="text-xs text-muted-foreground mb-2">
             此配置存储在数据库，仅门禁代码读取，不占用 AI 上下文 token。
-            AI 可通过 <code className="text-xs bg-muted px-1 rounded">update_phase_gate_config</code> 工具编辑。
+            {allowAIGateConfigUpdate
+              ? <>AI 可通过 <code className="text-xs bg-muted px-1 rounded">update_phase_gate_config</code> 工具编辑。</>
+              : <>AI 修改门禁配置已被禁用（可在上方开关中启用）。</>}
             字段说明与设计指南见 <code className="text-xs bg-muted px-1 rounded">skill：main-cmd-phase-gate</code>「门禁配置设计指南」。
           </p>
           <textarea

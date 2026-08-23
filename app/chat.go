@@ -285,6 +285,7 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 		PhaseCalledJSON:      sess.CalledTools,
 		PhaseMode:            "single",
 		PhaseGateEnabled:     a.settings.PhaseGateEnabled == nil || *a.settings.PhaseGateEnabled,
+		AllowAIGateConfigUpdate: a.settings.AllowAIGateConfigUpdate != nil && *a.settings.AllowAIGateConfigUpdate,
 		Broadcast:            a.BroadcastChatEvent, // 双端同步：agent 事件广播到移动端
 	}
 	// 批量创作意图 → batch 门禁模式（outline 一次出 N 章大纲，write 循环 + 每章迷你维护）

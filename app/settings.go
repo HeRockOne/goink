@@ -100,6 +100,12 @@ func (a *App) SetReasoningEffort(effort string) error {
 	return config.SaveSettings(a.db, a.settings)
 }
 
+// SetThinkingEnabled 单独保存思考模式开关。
+func (a *App) SetThinkingEnabled(enabled bool) error {
+	a.settings.ThinkingEnabled = &enabled
+	return config.SaveSettings(a.db, a.settings)
+}
+
 // SetLastSession 保存上次活跃的会话 ID。
 func (a *App) SetLastSession(sessionID string) error {
 	a.settings.LastSessionID = sessionID
@@ -210,6 +216,12 @@ func (a *App) SetSimHitRateAdjust(adjust float64) error {
 // SetPhaseGateEnabled 设置阶段门禁开关。
 func (a *App) SetPhaseGateEnabled(enabled bool) error {
 	a.settings.PhaseGateEnabled = &enabled
+	return config.SaveSettings(a.db, a.settings)
+}
+
+// SetAllowAIGateConfigUpdate 设置是否允许 AI 修改门禁配置。
+func (a *App) SetAllowAIGateConfigUpdate(allowed bool) error {
+	a.settings.AllowAIGateConfigUpdate = &allowed
 	return config.SaveSettings(a.db, a.settings)
 }
 

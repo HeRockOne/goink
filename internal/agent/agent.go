@@ -76,6 +76,7 @@ type RunOptions struct {
 	PhaseCalledJSON      string     // 从 session 恢复的已调用工具 JSON
 	PhaseMode            string     // 门禁模式："single" | "batch"
 	PhaseGateEnabled     bool       // 门禁总开关，false 时跳过所有门禁检查
+	AllowAIGateConfigUpdate bool    // 允许 AI 修改门禁配置（默认 false，防止 AI 自行放行）
 }
 
 // New 创建 Agent 实例。
@@ -691,7 +692,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 					// ---- 阶段门禁：先检查，再执行（硬拦截） ----
 					if pg != nil && pg.Active() && pg.CurrentPhase() != "" {
-						allowed, warning := pg.CheckToolAllowed(name)
+						// 安全开关：禁止 AI 自行修改门禁配置（除非管理员显式允许）
+						allowed := true
+						warning := ""
+						if name == "update_phase_gate_config" && !opts.AllowAIGateConfigUpdate {
+							allowed = false
+							warning = "AI 修改门禁配置已被管理员禁用。如需调整门禁规则，请在设置 → 门禁 中操作。"
+						} else {
+							allowed, warning = pg.CheckToolAllowed(name)
+						}
 						// 技能缺失拦截（"必读技能尚未加载"）：系统自动补注入当前阶段必读技能后
 						// 重查并放行——全自动模式零卡顿，AI 无需手动调 auto_skill_injection，
 						// 也不用被拦一次再试错（创作动作前技能必须就绪是质量红线，自动补齐不降级）。

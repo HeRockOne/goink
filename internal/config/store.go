@@ -42,7 +42,9 @@ type AppSettings struct {
 	CachePrice       float64 `gorm:"column:cache_price;default:0.02" json:"cache_price"`                      // 缓存命中价格（元/百万 token）
 	ExaAPIKey        string  `gorm:"column:exa_api_key;default:''" json:"exa_api_key"`                       // Exa 网络搜索 API key（空则用免费 tier）
 	DisplayFont      string  `gorm:"column:display_font;default:''" json:"display_font"`                    // 显示字体，空则用默认楷体
-	PreferredIP      string  `gorm:"column:preferred_ip;default:''" json:"preferred_ip"`                     // 移动端首选网卡 IP（空则自动选 LAN）
+	PreferredIP             string  `gorm:"column:preferred_ip;default:''" json:"preferred_ip"`                     // 移动端首选网卡 IP（空则自动选 LAN）
+	AllowAIGateConfigUpdate *bool   `gorm:"column:allow_ai_gate_config_update;default:false" json:"allow_ai_gate_config_update"` // 允许 AI 通过 update_phase_gate_config 修改门禁配置（默认禁止，防止 AI 自行放行）
+	ThinkingEnabled         *bool   `gorm:"column:thinking_enabled;default:true" json:"thinking_enabled"`                      // 思考模式开关（独立于 reasoning_effort，防止关掉思考后重启被重置）
 }
 
 func (AppSettings) TableName() string { return "app_config" }
