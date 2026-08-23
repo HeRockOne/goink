@@ -48,7 +48,7 @@ export default function PopSelect({ value, options, onChange, onOpen, className 
   const selected = options.find(o => o.value === value)
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative min-w-0 ${className}`}>
       <button
         onClick={handleToggle}
         style={{ minWidth }}
