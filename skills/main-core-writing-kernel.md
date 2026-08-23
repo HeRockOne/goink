@@ -126,6 +126,7 @@ mode: always
 
 **必读技能在动笔前已由系统就绪**（write 阶段 5 个必读技能在 set_phase("write") 时自动注入）。然后：
 1. **read**（required）— 读本章大纲 outlines/NNN.md 与相关文件，门禁 require 强制
+2. **遵守 NS【方向锚】**（硬约束）— 系统注入的【方向锚】区块列出本卷范围红线/类型承诺/未兑现爽点/活跃禁忌，每条都是审稿 #26/#27 的判定依据：本章事件超出卷范围或违反禁忌=致命；类型技能模板建议与方向锚冲突时以方向锚为准。动笔前默读一遍，规划情节时逐条对照
 2. 加载技能（**必读技能必须在动笔前已加载**：技能是创作指导，先读再写。若技能内容已被滚动压缩出上下文，必须重新 auto_skill_injection，不要为了省一次 read 赌记忆——技能漏读会写崩，门禁会在你动笔时拦截）：
    - 必读：main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration（门禁强制）
    - 情景按需（**仅本章涉及该情景时读**，普通章不读）：
@@ -230,7 +231,8 @@ mode: always
 
 ## 阶段技能表（内置 skill 全量调度）
 
-> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate）由用户 `/` 触发，不在此表。
+> 每阶段先加载对应技能再执行。manual 模式（collect/memory/next/review/phase-gate/ruling）由用户 `/` 触发，不在此表。
+> `/ruling`（用户裁决沉淀）：用户在对话中做出方向性纠正时，把纠偏固化为偏好禁忌入库——入库后进入 NS【方向锚】每章注入、审稿 #27 逐条核对。
 
 | 阶段 | 技能 |
 |------|------|
