@@ -10,6 +10,7 @@ import StatusBar from '@/components/shell/StatusBar'
 import SidePanel from '@/components/sidebar/SidePanel'
 import ContentPanel, { type ContentPanelHandle } from '@/components/content/ContentPanel'
 import NarrativeTimeline from '@/components/narrative/NarrativeTimeline'
+import ReviewHistoryPanel from '@/components/review/ReviewHistoryPanel'
 import CharacterListView from '@/components/character/CharacterListView'
 import LocationListView from '@/components/location/LocationListView'
 import LoreListView from '@/components/lore/LoreListView'
@@ -37,7 +38,7 @@ import ErrorBoundary from '@/components/shared/ErrorBoundary'
 import { search } from '@/lib/wailsjs/go/models'
 import type { update as updateModels } from '@/lib/wailsjs/go/models'
 import { CheckUpdate, GetSettings, SetPhaseGateEnabled } from '@/lib/wailsjs/go/app/App'
-import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText, Gauge } from 'lucide-react'
+import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText, Gauge, ClipboardList } from 'lucide-react'
 import { WindowMinimise, WindowToggleMaximise, Quit } from '@/lib/wailsjs/runtime/runtime'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useLayoutState } from '@/hooks/useLayoutState'
@@ -88,6 +89,7 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const { sidePanelWidth, setSidePanelWidth, chatPanelWidth, setChatPanelWidth } = useLayoutState()
   const [sidebarClosed, setSidebarClosed] = useState(false)
   const [narrativeOpen, setNarrativeOpen] = useState(false)
+  const [reviewHistoryOpen, setReviewHistoryOpen] = useState(false)
   const [narrativeWidth, setNarrativeWidth] = useState(() => { try { return Number(localStorage.getItem('narrative_panel_width')) || 320 } catch { return 320 } })
   useEffect(() => { localStorage.setItem('narrative_panel_width', String(narrativeWidth)) }, [narrativeWidth])
   const [activeChapterNum, setActiveChapterNum] = useState(0)
@@ -332,8 +334,9 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
       return
     }
     setSidebarClosed(false)
-    // 点击 ActivityBar 任何面板时，关闭叙事面板
+    // 点击 ActivityBar 任何面板时，关闭叙事面板与审稿记录面板
     if (narrativeOpen) setNarrativeOpen(false)
+    if (reviewHistoryOpen) setReviewHistoryOpen(false)
     if (id === 'search') {
       setSidebarPanel('search')
     } else {
@@ -478,6 +481,13 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
             title={narrativeOpen ? '关闭叙事面板' : '打开叙事面板'}
           >
             <ScrollText className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setReviewHistoryOpen(prev => !prev)}
+            className={`narrative-toggle-btn ${reviewHistoryOpen ? 'active' : ''}`}
+            title={reviewHistoryOpen ? '关闭审稿记录面板' : '打开审稿记录面板'}
+          >
+            <ClipboardList className="w-4 h-4" />
           </button>
           <button
             onClick={handleTogglePhaseGate}
@@ -688,6 +698,19 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         result={updateResult}
         onClose={() => setShowUpdate(false)}
       />
+
+      {/* 审稿记录面板：悬浮 overlay（与叙事面板同位），右边界对齐对话面板左边框 */}
+      {reviewHistoryOpen && (
+        <div className="narrative-overlay" style={{ right: chatPanelWidth }} onClick={(e) => { if (e.target === e.currentTarget) setReviewHistoryOpen(false) }}>
+          <ErrorBoundary>
+            <ReviewHistoryPanel
+              novelId={activeNovelId}
+              width={320}
+              onClose={() => setReviewHistoryOpen(false)}
+            />
+          </ErrorBoundary>
+        </div>
+      )}
 
       {/* 叙事面板：悬浮在最上层 overlay，右边界对齐对话面板左边框 */}
       {narrativeOpen && (

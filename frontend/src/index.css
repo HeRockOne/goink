@@ -785,6 +785,159 @@ body {
   text-shadow: 0 0 8px var(--glow-strong);
 }
 
+/* ═══════════════════════════════════════════════
+   ReviewHistoryPanel — 审稿记录面板 CSS
+   （视觉沿用 narrative-card 语言：细边框 + 顶部渐变线 + 发光交互）
+   ═══════════════════════════════════════════════ */
+.review-history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--sidebar);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.review-history-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.review-history-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--foreground);
+  text-shadow: 0 0 6px var(--glow);
+  margin-right: auto;
+}
+.review-history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.review-history-btn:hover { background: var(--narrative-current-bg); color: var(--foreground); }
+.review-history-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* 记录卡片：与 narrative-card 同语言（静态列表，非画布） */
+.review-record-card {
+  position: relative;
+  border: 1px solid var(--narrative-card-border);
+  border-radius: 0.5rem;
+  background: var(--narrative-card-bg);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: var(--fin-shadow-sm);
+  transition: box-shadow 200ms, border-color 200ms;
+}
+.review-record-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--narrative-card-line), transparent);
+  pointer-events: none;
+}
+.review-record-card:hover {
+  box-shadow: var(--fin-shadow-lg), 0 0 16px rgba(161, 196, 214, 0.14);
+  border-color: var(--ring);
+}
+/* 判定色：左边框语义条 */
+.review-record-card.verdict-pass { border-left: 3px solid #34c77b; }
+.review-record-card.verdict-revise { border-left: 3px solid #e8a33d; }
+.review-record-card.verdict-fail { border-left: 3px solid #e5544b; }
+.review-record-card.verdict-unknown { border-left: 3px solid var(--border); }
+
+.review-record-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+.review-record-chapters { font-size: 0.75rem; font-weight: 600; color: var(--foreground); }
+.review-verdict-chip {
+  font-size: 0.62rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.review-verdict-chip.v-pass { color: #34c77b; }
+.review-verdict-chip.v-revise { color: #e8a33d; }
+.review-verdict-chip.v-fail { color: #e5544b; }
+.review-verdict-chip.v-unknown { color: var(--muted-foreground); }
+.review-record-time { margin-left: auto; font-size: 0.62rem; color: var(--muted-foreground); }
+
+.review-record-score-row { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.review-total-score {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--foreground);
+  text-shadow: 0 0 8px var(--glow);
+  line-height: 1;
+}
+.review-total-score small { font-size: 0.6rem; font-weight: 400; color: var(--muted-foreground); }
+.review-fatal {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #e5544b;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: rgba(229, 84, 75, 0.12);
+}
+.review-dims { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.review-dim { font-size: 0.65rem; color: var(--muted-foreground); white-space: nowrap; }
+
+.review-record-hint {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  color: var(--muted-foreground);
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-report-detail {
+  margin-top: 0.4rem;
+  border-top: 1px dashed var(--narrative-card-border);
+  padding-top: 0.4rem;
+  cursor: default;
+}
+.review-instruction {
+  font-size: 0.68rem;
+  color: var(--muted-foreground);
+  margin-bottom: 0.3rem;
+  word-break: break-word;
+}
+.review-report-detail pre {
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 0;
+}
+
 /* 标题栏阶段门禁开关 */
 .phase-gate-toggle-btn {
   display: flex;
