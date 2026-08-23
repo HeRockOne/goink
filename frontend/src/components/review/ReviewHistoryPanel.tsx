@@ -33,7 +33,12 @@ function fmtTime(s: string) {
 }
 const fmtScore = (v: number) => v < 0 ? '—' : v.toFixed(1)
 
-export default function ReviewHistoryPanel({ novelId, width, onClose }: { novelId: number; width: number; onClose: () => void }) {
+export default function ReviewHistoryPanel({ novelId, width, onClose, onWidthChange }: {
+  novelId: number
+  width: number
+  onClose: () => void
+  onWidthChange: (w: number) => void
+}) {
   const [records, setRecords] = useState<ReviewRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -49,7 +54,19 @@ export default function ReviewHistoryPanel({ novelId, width, onClose }: { novelI
   useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [novelId])
 
   return (
-    <div className="review-history-panel" style={{ width, minWidth: 280 }}>
+    <div className="review-history-panel" style={{ width, minWidth: 300 }}>
+      {/* 右缘拖拽调宽：与叙事面板同款交互 */}
+      <div
+        className="review-resize-handle"
+        onMouseDown={e => {
+          e.preventDefault(); e.stopPropagation()
+          const sx = e.clientX, sw = width
+          const mv = (ev: MouseEvent) => { onWidthChange(Math.min(Math.max(300, sw + (ev.clientX - sx)), window.innerWidth - 380)) }
+          const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); document.body.style.cursor = ''; document.body.style.userSelect = '' }
+          document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up)
+          document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'
+        }}
+      />
       <div className="review-history-header">
         <span className="review-history-title">审稿记录</span>
         <span className="text-[10px] text-muted-foreground/70">{records.length} 条</span>

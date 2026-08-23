@@ -92,6 +92,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [reviewHistoryOpen, setReviewHistoryOpen] = useState(false)
   const [narrativeWidth, setNarrativeWidth] = useState(() => { try { return Number(localStorage.getItem('narrative_panel_width')) || 320 } catch { return 320 } })
   useEffect(() => { localStorage.setItem('narrative_panel_width', String(narrativeWidth)) }, [narrativeWidth])
+  const [reviewWidth, setReviewWidth] = useState(() => { try { return Number(localStorage.getItem('review_panel_width')) || 460 } catch { return 460 } })
+  useEffect(() => { localStorage.setItem('review_panel_width', String(reviewWidth)) }, [reviewWidth])
   const [activeChapterNum, setActiveChapterNum] = useState(0)
   // 门禁状态（左下角阶段条）
   const [gateStatus, setGateStatus] = useState<import('@/components/chat/types').PhaseStatus | null>(null)
@@ -705,7 +707,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           <ErrorBoundary>
             <ReviewHistoryPanel
               novelId={activeNovelId}
-              width={320}
+              width={reviewWidth}
+              onWidthChange={setReviewWidth}
               onClose={() => setReviewHistoryOpen(false)}
             />
           </ErrorBoundary>
