@@ -593,6 +593,18 @@ function fmtContextWindow(n) {
   if (n >= 1000) return Math.round(n / 1000) + 'K';
   return String(n);
 }
+function updateContextUsage() {
+  const el = document.getElementById('contextUsage');
+  if (!el) return;
+  const usage = state.sessionUsage || {};
+  const ratio = usage.usage_ratio;
+  if (typeof ratio === 'number' && ratio > 0) {
+    el.textContent = ratio >= 100 ? '100%' : ratio.toFixed(1) + '%';
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
+}
 function updateChatBannerCost() {
   const costEl = document.getElementById('headerTokenCost');
   if (!costEl) return;
@@ -600,13 +612,6 @@ function updateChatBannerCost() {
   state.sessionCost = calcSessionCost(usage);
   // 金额
   const costText = state.sessionCost > 0 ? `¥${state.sessionCost.toFixed(4)}` : '';
-  // 上下文窗口（优先 usage，fallback 当前模型）
-  let ctxWin = usage.context_window || 0;
-  if (!ctxWin) {
-    const m = state.models.find(m => m.key === state.selectedModel);
-    if (m) ctxWin = m.context_window || 0;
-  }
-  const ctxText = fmtContextWindow(ctxWin);
   // 缓存命中率
   const hitRatio = usage.cache_hit_ratio;
   const hitText = (typeof hitRatio === 'number' && hitRatio > 0)
@@ -614,10 +619,11 @@ function updateChatBannerCost() {
     : '';
   const parts = [];
   if (costText) parts.push(`<span class="cost-value">${costText}</span>`);
-  if (ctxText) parts.push(`<small class="cost-ctx">${ctxText}</small>`);
   if (hitText) parts.push(`<small class="cost-hit">${hitText}</small>`);
   costEl.innerHTML = parts.join('<span class="cost-sep">|</span>');
   costEl.classList.toggle('no-data', parts.length === 0);
+  // 输入框左侧上下文占用百分比
+  updateContextUsage();
 }
 
 // ── Token用量显示 ──

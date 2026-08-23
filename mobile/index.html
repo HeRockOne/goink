@@ -30,6 +30,7 @@
   <!-- 顶部栏 -->
   <header id="appHeader">
     <h1 id="pageTitle">小说</h1>
+    <span id="headerTokenCost" class="header-token-cost" onclick="showTokenUsage()"></span>
     <div id="headerActions"></div>
   </header>
 
@@ -79,6 +80,7 @@
       <button id="scrollToBottom" class="scroll-bottom-btn hidden" onclick="scrollToBottom()">↓</button>
       <div id="chatInput" class="chat-input">
         <div class="input-row">
+          <span id="contextUsage" class="context-usage" onclick="showTokenUsage()"></span>
           <textarea id="msgInput" placeholder="输入消息..." rows="1"></textarea>
           <button id="sendBtn" class="btn-send" disabled>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
