@@ -1,7 +1,7 @@
 // Goink Mobile — Service Worker
 // 缓存网页资源 + API 数据，确保离线可用
 // v3：Liquid Glass UI 重构（style.css/app.js/index.html 全量更新，bump 版本刷新静态缓存）
-const CACHE = 'goink-v13';
+const CACHE = 'goink-v14';
 const API_CACHE_TTL = 10 * 60 * 1000; // API 缓存 10 分钟过期（时间戳存在响应头）
 
 self.addEventListener('install', (e) => {

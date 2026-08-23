@@ -278,6 +278,7 @@ const LANGS = {
     phase_idle: '空闲', phase_init: '初始化', phase_prepare: '准备', phase_outline: '大纲',
     phase_write: '写作', phase_review: '审稿', phase_maintain: '维护', phase_done: '完成',
     phase_gate: '门禁', thinking_label: '思考', approval_label: '审批',
+    phase_toast: '阶段: {p}', retrying_toast: '⏳ 正在重试 ({i}/{m}) 等待{s}秒...',
     // 设置页
     phase_gate_group: '门禁', enable_phase_gate: '启用门禁', phase_gate_on: '已开启', phase_gate_off: '已关闭',
     approval_group: '审批', approval_mode: '审批模式', approval_auto: '自动', approval_manual: '手动',
@@ -428,6 +429,7 @@ const LANGS = {
     phase_idle: 'Idle', phase_init: 'Init', phase_prepare: 'Prepare', phase_outline: 'Outline',
     phase_write: 'Write', phase_review: 'Review', phase_maintain: 'Maintain', phase_done: 'Done',
     phase_gate: 'Gate', thinking_label: 'Thinking', approval_label: 'Approval',
+    phase_toast: 'Phase: {p}', retrying_toast: '⏳ Retrying ({i}/{m}), waiting {s}s...',
     // Settings page
     phase_gate_group: 'Phase Gate', enable_phase_gate: 'Enable Gate', phase_gate_on: 'On', phase_gate_off: 'Off',
     approval_group: 'Approval', approval_mode: 'Approval Mode', approval_auto: 'Auto', approval_manual: 'Manual',
@@ -583,6 +585,7 @@ function fallbackCopy(text) {
 // ── 状态栏更新 ──
 // 门禁阶段状态变化时刷新快捷栏（WS/SSE phase_gate 事件调用）
 function updatePhaseStatus() { updateQuickBar(); }
+function phaseName(p) { const k = 'phase_' + p; const v = t(k); return v === k ? p : v; }
 
 // ── 快捷操作栏更新 ──
 function updateQuickBar() {
@@ -1279,7 +1282,7 @@ function handleChatEvent(ev) {
       if (ev.phase_gate && ev.phase_gate.phase) {
         state.currentPhase = ev.phase_gate.phase;
         updatePhaseStatus();
-        toast(`阶段: ${ev.phase_gate.phase}`);
+        toast(t('phase_toast', {p: phaseName(ev.phase_gate.phase)}));
       }
       break;
 
@@ -2178,12 +2181,12 @@ async function sendMessage(text) {
               if (ev.phase_gate && ev.phase_gate.phase) {
                 state.currentPhase = ev.phase_gate.phase;
                 updatePhaseStatus();
-                toast(`阶段: ${ev.phase_gate.phase}`);
+                toast(t('phase_toast', {p: phaseName(ev.phase_gate.phase)}));
               }
               break;
             case 'retry':
               if (ev.retry_count !== undefined) {
-                toast(`⏳ 正在重试 (${ev.retry_count}/${ev.retry_max}) 等待${ev.retry_wait}秒...`, ev.retry_wait * 1000);
+                toast(t('retrying_toast', {i: ev.retry_count, m: ev.retry_max, s: ev.retry_wait}), ev.retry_wait * 1000);
               }
               break;
             case 'done':
