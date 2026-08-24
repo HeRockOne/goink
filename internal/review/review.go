@@ -51,8 +51,8 @@ var (
 		"prose":     regexp.MustCompile(`散文工艺\s*[:：]?\s*([\d.]+)\s*/\s*10`),
 		"scene":     regexp.MustCompile(`场景工程\s*[:：]?\s*([\d.]+)\s*/\s*10`),
 	}
-	rangeRe  = regexp.MustCompile(`第\s*(\d+)\s*[章回]?\s*[-–~至到]{1,2}\s*第?\s*(\d+)\s*[章回]?`)
-	singleRe = regexp.MustCompile(`第\s*(\d+)\s*[章回]`)
+	rangeRe  = regexp.MustCompile(`第\s*(\d+)\s*章\s*[-–~至到]{1,2}\s*第?\s*(\d+)\s*章`)
+	singleRe = regexp.MustCompile(`第\s*(\d+)\s*章`)
 )
 
 // ParseReport 从审稿报告原文 + 任务指令中 best-effort 提取结构化字段。
