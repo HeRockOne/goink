@@ -27,7 +27,7 @@ import ImportProgressDialog from '@/components/novel/ImportProgressDialog'
 import ExportDialog from '@/components/export/ExportDialog'
 import ChatPanel from '@/components/chat/ChatPanel'
 import SettingsDialog from '@/components/settings/SettingsDialog'
-import GitHubLink from '@/components/shell/GitHubLink'
+
 import HelpDialog from '@/components/help/HelpDialog'
 import ProfileView from '@/components/profile/ProfileView'
 import CachesimView from '@/components/cachesim/CachesimView'
@@ -38,8 +38,8 @@ import ErrorBoundary from '@/components/shared/ErrorBoundary'
 import { search } from '@/lib/wailsjs/go/models'
 import type { update as updateModels } from '@/lib/wailsjs/go/models'
 import { CheckUpdate, GetSettings, SetPhaseGateEnabled } from '@/lib/wailsjs/go/app/App'
-import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText, Gauge, ClipboardList } from 'lucide-react'
-import { WindowMinimise, WindowToggleMaximise, Quit } from '@/lib/wailsjs/runtime/runtime'
+import { Settings, User, HelpCircle, Moon, Sun, Shield, ShieldOff, ScrollText, Gauge, ClipboardList, MoreHorizontal } from 'lucide-react'
+import { WindowMinimise, WindowToggleMaximise, Quit, BrowserOpenURL } from '@/lib/wailsjs/runtime/runtime'
 import { useTheme, type Theme } from '@/hooks/useTheme'
 import { useLayoutState } from '@/hooks/useLayoutState'
 import { useWindowState } from '@/hooks/useWindowState'
@@ -90,10 +90,18 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [sidebarClosed, setSidebarClosed] = useState(false)
   const [narrativeOpen, setNarrativeOpen] = useState(false)
   const [reviewHistoryOpen, setReviewHistoryOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
   const [narrativeWidth, setNarrativeWidth] = useState(() => { try { return Number(localStorage.getItem('narrative_panel_width')) || 320 } catch { return 320 } })
   useEffect(() => { localStorage.setItem('narrative_panel_width', String(narrativeWidth)) }, [narrativeWidth])
   const [reviewWidth, setReviewWidth] = useState(() => { try { return Number(localStorage.getItem('review_panel_width')) || 460 } catch { return 460 } })
   useEffect(() => { localStorage.setItem('review_panel_width', String(reviewWidth)) }, [reviewWidth])
+  useEffect(() => {
+    if (!moreOpen) return
+    const close = (e: MouseEvent) => { if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) setMoreOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [moreOpen])
   const [activeChapterNum, setActiveChapterNum] = useState(0)
   // 门禁状态（左下角阶段条）
   const [gateStatus, setGateStatus] = useState<import('@/components/chat/types').PhaseStatus | null>(null)
@@ -498,28 +506,50 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
           >
             {phaseGateEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
           </button>
-          <GitHubLink />
-          <button
-            onClick={() => { setSidebarPanel(null); setActivePanel('cachesim') }}
-            className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'cachesim' ? 'text-foreground' : ''}`}
-            title={t('workspace.cachesim')}
-          >
-            <Gauge className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => { setSidebarPanel(null); setActivePanel('profile') }}
-            className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === 'profile' ? 'text-foreground' : ''}`}
-            title={t('workspace.profile')}
-          >
-            <User className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowHelp(true)}
-            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"
-            title={t('workspace.help')}
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
+          <div ref={moreMenuRef} className="relative">
+            <button
+              onClick={() => setMoreOpen(prev => !prev)}
+              className={`narrative-toggle-btn ${moreOpen ? 'active' : ''}`}
+              title="更多"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {moreOpen && (
+              <div className="absolute top-full right-0 mt-1 w-44 bg-background border rounded-md shadow-lg z-50 py-1">
+                <button
+                  onClick={() => { setSidebarPanel(null); setActivePanel('cachesim'); setMoreOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <Gauge className="w-4 h-4 text-muted-foreground" />
+                  {t('workspace.cachesim')}
+                </button>
+                <button
+                  onClick={() => { setSidebarPanel(null); setActivePanel('profile'); setMoreOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  {t('workspace.profile')}
+                </button>
+                <button
+                  onClick={() => { setShowHelp(true); setMoreOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <HelpCircle className="w-4 h-4 text-muted-foreground" />
+                  {t('workspace.help')}
+                </button>
+                <div className="border-t my-1" />
+                <button
+                  onClick={() => { BrowserOpenURL('https://github.com/HeRockOne/goink'); setMoreOpen(false) }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <svg viewBox="0 0 16 16" className="w-4 h-4 text-muted-foreground" fill="currentColor">
+                    <path fillRule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                  </svg>
+                  GitHub
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={toggleTheme}
             className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"

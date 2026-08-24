@@ -802,7 +802,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--sidebar);
+  background: var(--background);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   overflow: hidden;
@@ -997,7 +997,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--sidebar);
+  background: var(--background);
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
