@@ -281,7 +281,13 @@ func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 	return true
 }
 
-// checkResultGateMet 检查结果门控：require 中的工具如果返回了 [ERROR]，禁止推进。
+// reviewVerdictRe 匹配审稿报告结论行：总分：X.X/10（通过/需修改/不通过）
+// 与 internal/review/review.go verdictRe 保持一致。
+var reviewVerdictRe = regexp.MustCompile(`总分[:：]\s*[\d.]+\s*/\s*10\s*[（(]\s*(通过|需修改|不通过)\s*[）)]`)
+
+// checkResultGateMet 检查结果门控：
+// 1. require 中的工具如果返回了 [ERROR]，禁止推进（check_story_consistency 等）
+// 2. run_subagent 审稿结论为需修改/不通过时，禁止推进到下一阶段
 func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 	resultGatedTools := map[string]bool{
 		"check_story_consistency": true,
@@ -293,6 +299,15 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 		if result, ok := g.lastToolResults[req]; ok {
 			if strings.Contains(result, "[ERROR]") {
 				return false, fmt.Sprintf("%s 存在硬错误，禁止切换阶段", req)
+			}
+		}
+	}
+	// 审稿结论门控：review 子代理报告含需修改/不通过时，禁止推进
+	if result, ok := g.lastToolResults["run_subagent"]; ok {
+		if m := reviewVerdictRe.FindStringSubmatch(result); m != nil {
+			switch m[1] {
+			case "需修改", "不通过":
+				return false, fmt.Sprintf("审稿结论为「%s」，禁止推进到下一阶段。请先修复问题后重新审稿", m[1])
 			}
 		}
 	}

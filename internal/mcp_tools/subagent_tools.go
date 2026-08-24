@@ -47,6 +47,7 @@ func (t *RunSubagentTool) Execute(ctx context.Context, args any, tc ToolContext)
 		Data: map[string]any{
 			"agent_type": a.AgentType,
 			"report":     report,
+			"content":    report, // expose to phase gate result gating
 		},
 	}, nil
 }
