@@ -302,13 +302,11 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 			}
 		}
 	}
-	// 审稿结论门控：review 子代理报告含需修改/不通过时，禁止推进
+	// 审稿结论门控：仅"不通过"（<7.0）阻止推进，"需修改"（7.0-8.9）放行
+	// 需修改=小问题修了就行，LLM 看到报告会自行修复；不通过=大问题必须重审
 	if result, ok := g.lastToolResults["run_subagent"]; ok {
-		if m := reviewVerdictRe.FindStringSubmatch(result); m != nil {
-			switch m[1] {
-			case "需修改", "不通过":
-				return false, fmt.Sprintf("审稿结论为「%s」，禁止推进到下一阶段。请先修复问题后重新审稿", m[1])
-			}
+		if m := reviewVerdictRe.FindStringSubmatch(result); m != nil && m[1] == "不通过" {
+			return false, "审稿结论为「不通过」（总分<7.0），禁止推进。请修复后重新审稿"
 		}
 	}
 	return true, ""
