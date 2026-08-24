@@ -41,15 +41,19 @@ const (
 )
 
 var (
-	totalRe   = regexp.MustCompile(`总分[:：]\s*([\d.]+)\s*/\s*10`)
-	verdictRe = regexp.MustCompile(`总分[:：]\s*[\d.]+\s*/\s*10\s*[（(]\s*(通过|需修改|不通过)\s*[）)]`)
-	fatalRe   = regexp.MustCompile(`致命问题[:：]?\s*(\d+)\s*项?`)
-	dimRes    = map[string]*regexp.Regexp{
-		"structure": regexp.MustCompile(`故事结构\s*[:：]?\s*([\d.]+)\s*/\s*10`),
-		"character": regexp.MustCompile(`角色深度\s*[:：]?\s*([\d.]+)\s*/\s*10`),
-		"pacing":    regexp.MustCompile(`节奏与爽点\s*[:：]?\s*([\d.]+)\s*/\s*10`),
-		"prose":     regexp.MustCompile(`散文工艺\s*[:：]?\s*([\d.]+)\s*/\s*10`),
-		"scene":     regexp.MustCompile(`场景工程\s*[:：]?\s*([\d.]+)\s*/\s*10`),
+	// totalRe 匹配总分：8.5/10 或 | 总分 | 8.5/10 |（markdown 表格）或 **总分：8.5/10**
+	totalRe = regexp.MustCompile(`(?:\*\*)?总分[:：]?\s*(?:\*\*)?\s*[\|]?\s*([\d.]+)\s*/\s*10`)
+	// verdictRe 匹配总分：8.5/10（需修改）或 | 8.5/10（需修改） |
+	verdictRe = regexp.MustCompile(`(?:\*\*)?总分[:：]?\s*(?:\*\*)?\s*[\|]?\s*[\d.]+\s*/\s*10\s*[（(]\s*(通过|需修改|不通过)\s*[）)]`)
+	// fatalRe 匹配 致命问题：0项 或 **致命问题**：0项 或 | 致命问题 | 0项 |
+	fatalRe = regexp.MustCompile(`(?:\*\*)?致命问题(?:\*\*)?[:：]?\s*[\|]?\s*(\d+)\s*项?`)
+	// dimRes 匹配 故事结构 9/10 或 故事结构：9/10 或 | 故事结构 | 9/10 |（markdown 表格行）
+	dimRes = map[string]*regexp.Regexp{
+		"structure": regexp.MustCompile(`故事结构\s*[:：]?\s*[\|]?\s*([\d.]+)\s*/\s*10`),
+		"character": regexp.MustCompile(`角色深度\s*[:：]?\s*[\|]?\s*([\d.]+)\s*/\s*10`),
+		"pacing":    regexp.MustCompile(`节奏与爽点\s*[:：]?\s*[\|]?\s*([\d.]+)\s*/\s*10`),
+		"prose":     regexp.MustCompile(`散文工艺\s*[:：]?\s*[\|]?\s*([\d.]+)\s*/\s*10`),
+		"scene":     regexp.MustCompile(`场景工程\s*[:：]?\s*[\|]?\s*([\d.]+)\s*/\s*10`),
 	}
 	rangeRe  = regexp.MustCompile(`第\s*(\d+)\s*章\s*[-–~至到]{1,2}\s*第?\s*(\d+)\s*章`)
 	singleRe = regexp.MustCompile(`第\s*(\d+)\s*章`)
@@ -66,18 +70,20 @@ func ParseReport(report, instruction string) *ReviewRecord {
 	} else {
 		r.TotalScore = -1
 	}
-	switch {
-	case strings.Contains(report, "不通过"):
-		r.Verdict = VerdictFail
-	case verdictRe.MatchString(report):
+	// 先尝试结构化结论行（总分：X.X/10（结论）），再 fallback 到纯文本匹配
+	if verdictRe.MatchString(report) {
 		m := verdictRe.FindStringSubmatch(report)
 		switch m[1] {
 		case "通过":
 			r.Verdict = VerdictPass
 		case "需修改":
 			r.Verdict = VerdictRevise
+		case "不通过":
+			r.Verdict = VerdictFail
 		}
-	default:
+	} else if strings.Contains(report, "不通过") {
+		r.Verdict = VerdictFail
+	} else {
 		r.Verdict = VerdictUnknown
 	}
 	if m := fatalRe.FindStringSubmatch(report); m != nil {
