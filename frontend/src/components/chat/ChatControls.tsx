@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import type { llm } from '@/hooks/useApp'
 import { useTranslation } from 'react-i18next'
 import { Brain } from 'lucide-react'
 import PopSelect from './PopSelect'
+import ProviderIcon from '@/components/settings/ProviderIcon'
 
 interface Props {
   models: llm.AvailableModel[]
@@ -34,7 +36,21 @@ export default function ChatControls({
   const selected = models.find(m => m.Key === selectedKey)
   const supportsThinking = selected?.SupportsThinking ?? false
 
-  const modelOptions = models.map(m => ({ value: m.Key, label: m.ProviderName ? `${m.ProviderName} / ${m.ModelName}` : m.ModelName }))
+  // 按 ProviderName 分组
+  const modelGroups = useMemo(() => {
+    const map = new Map<string, llm.AvailableModel[]>()
+    for (const m of models) {
+      const key = m.ProviderName || '未分组'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(m)
+    }
+    return Array.from(map.entries()).map(([provider, items]) => ({
+      label: provider,
+      icon: <ProviderIcon provider={provider} className="w-3.5 h-3.5 shrink-0" />,
+      options: items.map(m => ({ value: m.Key, label: m.ModelName })),
+    }))
+  }, [models])
+
   const levels = selected?.ReasoningLevels?.length
     ? selected.ReasoningLevels
     : supportsThinking ? ['low', 'high', 'max'] : []
@@ -46,7 +62,7 @@ export default function ChatControls({
       <div className="min-w-0 flex-1">
         <PopSelect
           value={selectedKey}
-          options={modelOptions}
+          groups={modelGroups}
           onChange={onSelectModel}
           onOpen={onRefreshModels}
           footerAction={{ label: t('chat.configureModel'), onClick: onConfigModel }}
