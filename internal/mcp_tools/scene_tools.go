@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"novel/internal/scene"
+	"gorm.io/gorm"
 )
 
 // ── get_scenes ──
@@ -51,7 +52,8 @@ type GetScenesArgs struct {
 
 // ── create_scene ──
 
-type CreateSceneArgs struct {
+// CreateSceneItem 是 create_scene 的单条参数。
+type CreateSceneItem struct {
 		ChapterID    int64  `json:"chapter_id" jsonschema:"description=章节ID。规划阶段可不填，写完后回填" validate:"omitempty,min=1"`
 		SceneNumber  int    `json:"scene_number" jsonschema:"required,description=场景序号（从1开始）,minimum=1" validate:"required,min=1"`
 		Title        string `json:"title" jsonschema:"required,description=场景标题"`
@@ -62,10 +64,16 @@ type CreateSceneArgs struct {
 		WordCount    int    `json:"word_count" jsonschema:"description=场景字数"`
 		Summary      string `json:"summary" jsonschema:"required,description=场景摘要，50-100字概述本场景发生什么" validate:"required"`
 	}
+
+// CreateSceneArgs 是 create_scene 的参数（批量，1-5条）。
+type CreateSceneArgs struct {
+		Scenes []CreateSceneItem `json:"scenes" jsonschema:"required,description=要创建的场景列表（1-5个），每条包含 scene_number/title/location_id/character_ids/summary 等字段" validate:"required,min=1,max=5,dive"`
+	}
 	type CreateSceneTool struct{}
 
 	func (t *CreateSceneTool) Name() string { return "create_scene" }
-	func (t *CreateSceneTool) Description() string { return "创建一个场景条目（场景 = 章节内的叙事单元，含地点/出场角色/字数/摘要）。规划阶段 chapter_id 可不填，写完后用 update_scene 回填。" +
+	func (t *CreateSceneTool) Description() string { return "批量创建场景（1-5条）。保证原子性，失败时返回具体条目原因。场景 = 章节内的叙事单元，含地点/出场角色/字数/摘要。规划阶段 chapter_id 可不填，写完后用 update_scene 回填。" +
+		"每条需传入 scene_number/title/location_id/character_ids/summary。" +
 		"【使用时机】大纲/细纲规划本章场景时建条目；写作完成回填 chapter_id 与字数。" +
 		"【注意】character_ids 是出场角色 ID 数组——场景是 get_writing_context 推断本章出场角色的数据源，漏填会导致写作上下文缺角色。" }
 	func (t *CreateSceneTool) Category() ToolCategory { return CategoryWritingAssistant }
@@ -74,18 +82,32 @@ type CreateSceneArgs struct {
 	func (t *CreateSceneTool) NewArgs() any      { return &CreateSceneArgs{} }
 	func (t *CreateSceneTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 		a := args.(*CreateSceneArgs)
-		sc := &scene.Scene{
-			NovelID: tc.NovelID, SceneNumber: a.SceneNumber,
-			Title: a.Title, CharacterIDs: a.CharacterIDs, WordCount: a.WordCount, Summary: a.Summary,
+		var ids []int64
+		var failedTitle string
+		var failedErr error
+		err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, item := range a.Scenes {
+				sc := &scene.Scene{
+					NovelID: tc.NovelID, SceneNumber: item.SceneNumber,
+					Title: item.Title, CharacterIDs: item.CharacterIDs, WordCount: item.WordCount, Summary: item.Summary,
+				}
+				if item.ChapterID > 0 { sc.ChapterID = &item.ChapterID }
+				if item.LocationID > 0 { sc.LocationID = &item.LocationID }
+				if item.ArcID > 0 { sc.ArcID = &item.ArcID }
+				if item.ArcNodeID > 0 { sc.ArcNodeID = &item.ArcNodeID }
+				if err := scene.NewStore(tx, slog.Default()).Create(ctx, sc); err != nil {
+					failedTitle = item.Title
+					failedErr = err
+					return err
+				}
+				ids = append(ids, sc.ID)
+			}
+			return nil
+		})
+		if err != nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("创建场景 [%s] 失败: %s", failedTitle, failedErr)}, nil
 		}
-		if a.ChapterID > 0 { sc.ChapterID = &a.ChapterID }
-		if a.LocationID > 0 { sc.LocationID = &a.LocationID }
-		if a.ArcID > 0 { sc.ArcID = &a.ArcID }
-		if a.ArcNodeID > 0 { sc.ArcNodeID = &a.ArcNodeID }
-		if err := scene.NewStore(tc.DB, slog.Default()).Create(ctx, sc); err != nil {
-			return nil, fmt.Errorf("create scene: %w", err)
-		}
-		return &ToolResult{Success: true, Data: map[string]any{"id": sc.ID}}, nil
+		return &ToolResult{Success: true, Data: map[string]any{"ids": ids, "count": len(ids)}}, nil
 	}
 
 // ── update_scene ──

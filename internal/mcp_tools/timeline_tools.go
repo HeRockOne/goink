@@ -241,16 +241,23 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 	}
 
 	// 台账防腐化：resolved_chapter_id 不得指向尚未写出的未来章节。
-	// （事故案例：AI 把 resolved 填成 34-51 而实际只写到 21 章，台账静默失真。）
+	// 先将 chapter_id(PK) 解析为 chapter_number 再比较，避免 id 与 number 混淆。
 	if a.Status == "resolved" && a.ResolvedChapterID > 0 {
+		var chNum int64
+		tc.DB.WithContext(ctx).Table("chapters").Where("id = ? AND novel_id = ?", a.ResolvedChapterID, tc.NovelID).
+			Select("chapter_number").Scan(&chNum)
+		if chNum == 0 {
+			return &ToolResult{Success: false, Error: fmt.Sprintf(
+				"拒绝：resolved_chapter_id=%d 对应的章节不存在——请填入已写章节的ID", a.ResolvedChapterID)}, nil
+		}
 		var maxCh int64
 		tc.DB.WithContext(ctx).Table("chapters").Where("novel_id = ?", tc.NovelID).
 			Select("COALESCE(MAX(chapter_number), 0)").Scan(&maxCh)
-		if int64(a.ResolvedChapterID) > maxCh {
+		if chNum > maxCh {
 			return &ToolResult{Success: false, Error: fmt.Sprintf(
-				"拒绝：resolved_chapter_id=%d 超过当前最大章节号 %d——伏笔只能在实际已写的章节中回收。"+
-					"若计划在未来的第 %d 章回收，请保持 status=pending 并把 target_chapter 设为该章号",
-				a.ResolvedChapterID, maxCh, a.ResolvedChapterID)}, nil
+				"拒绝：resolved_chapter_id=%d 对应第%d章，超过当前最大章节号 %d——伏笔只能在实际已写的章节中回收。"+
+					"若计划在未来回收，请保持 status=pending 并把 target_chapter 设为该章号",
+				a.ResolvedChapterID, chNum, maxCh)}, nil
 		}
 	}
 

@@ -944,14 +944,41 @@ func findLedgerIntegrity(ctx context.Context, db *gorm.DB, novelID int64, curren
 	var results []string
 	maxCh := maxChapterNumber(ctx, db, novelID)
 
-	var badResolved []timeline.TimelineEntry
+	// JOIN chapters 将 resolved_chapter_id 解析为 chapter_number 再比较，
+	// 避免 chapter_id(PK) 与 chapter_number 混淆导致假阳性。
+	// 同时检测断裂引用（chapter_id 指向不存在的章节）。
+	type badRow struct {
+		Title          string
+		ResolvedChapID int64
+		ResolvedChapNum int64
+	}
+	var badFuture []badRow
 	db.WithContext(ctx).
-		Where("novel_id = ? AND status = 'resolved' AND resolved_chapter_id > ?", novelID, maxCh).
-		Order("id").Limit(20).Find(&badResolved)
-	for _, e := range badResolved {
+		Table("time_entries te").
+		Select("te.title, te.resolved_chapter_id, c.chapter_number AS resolved_chap_num").
+		Joins("JOIN chapters c ON c.id = te.resolved_chapter_id").
+		Where("te.novel_id = ? AND te.status = 'resolved' AND te.resolved_chapter_id > 0 AND c.chapter_number > ?", novelID, maxCh).
+		Order("te.id").Limit(20).Find(&badFuture)
+	for _, r := range badFuture {
 		results = append(results, fmt.Sprintf(
-			"[ERROR] 台账失真：伏笔「%s」resolved_chapter=%d 超过当前最大章节 %d——回收章号必须是实际已写的章节",
-			e.Title, e.ResolvedChapterID, maxCh))
+			"[ERROR] 台账失真：伏笔「%s」resolved_chapter_id=%d（第%d章）超过当前最大章节 %d——回收章号必须是实际已写的章节",
+			r.Title, r.ResolvedChapID, r.ResolvedChapNum, maxCh))
+	}
+
+	var badBroken []struct {
+		Title          string
+		ResolvedChapID int64
+	}
+	db.WithContext(ctx).
+		Table("time_entries te").
+		Select("te.title, te.resolved_chapter_id").
+		Joins("LEFT JOIN chapters c ON c.id = te.resolved_chapter_id AND c.novel_id = te.novel_id").
+		Where("te.novel_id = ? AND te.status = 'resolved' AND te.resolved_chapter_id > 0 AND c.id IS NULL", novelID).
+		Order("te.id").Limit(20).Find(&badBroken)
+	for _, r := range badBroken {
+		results = append(results, fmt.Sprintf(
+			"[ERROR] 台账失真：伏笔「%s」resolved_chapter_id=%d 指向不存在的章节——请核对后修正或重置为 pending",
+			r.Title, r.ResolvedChapID))
 	}
 
 	var badNodes []storyarc.ArcNode

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"novel/internal/lore"
+	"gorm.io/gorm"
 )
 
 // ── get_lore ──
@@ -72,7 +73,8 @@ func (t *GetLoreTool) Execute(ctx context.Context, args any, tc ToolContext) (*T
 
 // ── create_lore ──
 
-type CreateLoreArgs struct {
+// CreateLoreItem 是 create_lore 的单条参数。
+type CreateLoreItem struct {
 	Title           string `json:"title" jsonschema:"required,description=设定标题" validate:"required"`
 	Category        string `json:"category" jsonschema:"required,description=分类：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述" validate:"required"`
 	Content         string `json:"content" jsonschema:"required,description=设定正文（Markdown）" validate:"required"`
@@ -85,12 +87,17 @@ type CreateLoreArgs struct {
 	Tags            string `json:"tags" jsonschema:"description=JSON标签数组，纯字符串数组，如[\"仙侠\"，\"上古\"],禁止对象数组"`
 }
 
+// CreateLoreArgs 是 create_lore 的参数（批量，1-5条）。
+type CreateLoreArgs struct {
+	Lore []CreateLoreItem `json:"lore" jsonschema:"required,description=要创建的设定列表（1-5个），每条包含 title/category/content 等字段" validate:"required,min=1,max=5,dive"`
+}
+
 type CreateLoreTool struct{}
 
 func (t *CreateLoreTool) Name() string { return "create_lore" }
 func (t *CreateLoreTool) Description() string {
-	return "创建世界观设定条目。创建后自动绑定到当前小说。与 update_lore 保持独立，新建用此工具，修改用 update_lore。" +
-		"category 可选值：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述。" +
+	return "批量创建世界观设定（1-5条）。保证原子性，失败时返回具体条目原因。与 update_lore 保持独立，新建用此工具，修改用 update_lore。" +
+		"每条需传入 title/category/content；category 可选值：力量体系/社会构成/历史事件/核心冲突/天道法则/文化习俗/种族/地理概述。" +
 		"arc_id 关联此设定所属的弧线；reveal_chapter_id 填入读者首次得知此设定的章节ID（控制信息投放节奏）；" +
 		"is_public=true 表示读者已知的公开设定，false 表示秘密（未来反转用）。" +
 		"【使用时机】开书建世界观、剧情扩展新设定时；已有设定不要重复创建（先 get_lore/search_lore 确认）。" +
@@ -102,22 +109,38 @@ func (t *CreateLoreTool) ExposeToLLM() bool           { return true }
 func (t *CreateLoreTool) NewArgs() any                { return &CreateLoreArgs{} }
 func (t *CreateLoreTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*CreateLoreArgs)
-	tags, err := NormalizeStringArray(a.Tags)
+	var ids []int64
+	var failedTitle string
+	var failedErr error
+	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, item := range a.Lore {
+			tags, err := NormalizeStringArray(item.Tags)
+			if err != nil {
+				failedTitle = item.Title
+				failedErr = fmt.Errorf("tags 格式错误: %w", err)
+				return err
+			}
+			entry := &lore.LoreEntry{
+				NovelID: tc.NovelID, Title: item.Title, Category: item.Category,
+				Content: item.Content, Summary: item.Summary, IsPublic: item.IsPublic,
+				ReferenceID: &item.ReferenceID, ReferenceType: item.ReferenceType, Tags: tags,
+			}
+			if item.ArcID > 0 { entry.ArcID = &item.ArcID }
+			if item.RevealChapterID > 0 { entry.RevealChapterID = &item.RevealChapterID }
+			if item.ReferenceID <= 0 { entry.ReferenceID = nil }
+			if err := lore.NewStore(tx, slog.Default()).Create(ctx, entry); err != nil {
+				failedTitle = item.Title
+				failedErr = err
+				return err
+			}
+			ids = append(ids, entry.ID)
+		}
+		return nil
+	})
 	if err != nil {
-		return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
+		return &ToolResult{Success: false, Error: fmt.Sprintf("创建设定 [%s] 失败: %s", failedTitle, failedErr)}, nil
 	}
-	entry := &lore.LoreEntry{
-		NovelID: tc.NovelID, Title: a.Title, Category: a.Category,
-		Content: a.Content, Summary: a.Summary, IsPublic: a.IsPublic,
-		ReferenceID: &a.ReferenceID, ReferenceType: a.ReferenceType, Tags: tags,
-	}
-	if a.ArcID > 0 { entry.ArcID = &a.ArcID }
-	if a.RevealChapterID > 0 { entry.RevealChapterID = &a.RevealChapterID }
-	if a.ReferenceID <= 0 { entry.ReferenceID = nil }
-	if err := lore.NewStore(tc.DB, slog.Default()).Create(ctx, entry); err != nil {
-		return nil, fmt.Errorf("create lore: %w", err)
-	}
-	return &ToolResult{Success: true, Data: map[string]any{"id": entry.ID}}, nil
+	return &ToolResult{Success: true, Data: map[string]any{"ids": ids, "count": len(ids)}}, nil
 }
 
 // ── update_lore ──
