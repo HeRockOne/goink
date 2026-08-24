@@ -21,9 +21,11 @@ done 是终点，等待用户发起新一轮。
 > 以下只写门禁不覆盖的：工作流细节、注意事项、独有规则。
 > **并行工具调用**：同一阶段内无依赖的工具调用并行发出，有依赖才串行。
 
-### init（开书，仅新书）
+### init（开书，仅新书，无门禁管理）
 
-门禁自动注入 5 个技能。流程：
+Init 不属于创作循环，不受门禁管控。系统在检测到新书（无章节）时自动注入 5 个开书技能（main-core-init-phase + genre-templates + book-outline + character-design + world-building-system），无需门禁配置。
+
+流程：
 信息采集（分波次提问）→ 写总纲（update_outline + create_outline_beat）→ 创建卷弧线 → 角色/地点 → 世界观/物品 → 偏好/伏笔 → 一致性校验 → 用户确认 → 7 项查询并行验证 → set_phase("prepare")
 
 **硬性门槛**：未写总纲禁止切 prepare；用户未确认禁止 set_phase（AI 自我判断不算确认）。

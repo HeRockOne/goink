@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-25：Kernel 精简（265→146 行，-45%）。删除与 identity.go 重复的 30 行（skill 目录/卷结构/并行工具调用）；压缩与 gate config 重叠的 105→~30 行（各阶段指令保留独特细节，骨架引用 gate config）；新增标准化审稿 instruction 模板（{N}/{title}/{NNN} 填充 + check_story_consistency 5 类型 + 27 项标准 + 评分阈值 + 重写/压缩场景变体）；保留全部独一份内容（批量规则/实体判定/硬约束/可选技能/字数规则/write→review 边界）。builtin + skills/ + ~/.goink/skills/ 三向同步。commit c8d5057。
+
 > 2026-08-24：创作质量闭环 4 项优化（基于 novel-2 测试会话 27 条错误分析）。① checkResultGateMet（phase_gate.go:288-323）：从 check_story_consistency 的 [ERROR] 结果中提取前 2 行错误摘要（extractErrorSummary），阻断消息从 "check_story_consistency 存在硬错误" 变为包含具体错误行——模型知道修什么而非盲目重试 set_phase（减少 ~5 次无效重试）；② autoAdvancePhase（agent.go:334-349）：进入 write 阶段时注入方向锚全文（本卷红线/类型承诺/未兑现爽点/活跃禁忌）——防止 Review 1 发现的 Ch33 爽点提前兑现致命问题；③ autoAdvancePhase maintain：追加差量检查提醒（新实体必须 create_*/update_* 建档）——解决模型 3 次漏掉赵天龙/江城置业未建档问题；④ 门禁关闭审稿缺席提醒（agent.go:459-473）：追加方向锚约束内容及 ⚠ 标记——门禁关闭时无审稿兜底，方向锚是唯一硬约束；⑤ exported DirectionAnchor()（novel_state.go:119-122）供 agent.go 调用 buildDirectionAnchor。commit 1df0722。
 
 > 2026-08-24：审稿结论结果门控（review verdict gate）。subagent_tools.go Data 新增 content 字段暴露报告文本供门禁读取；phase_gate.go checkResultGateMet 新增 reviewVerdictRe 正则匹配审稿报告结论行（总分：X.X/10（通过/需修改/不通过）），仅"不通过"（<7.0）阻止 set_phase 推进到下一阶段，"需修改"（7.0-8.9）放行由 LLM 自行修复——避免每次 revise 都触发昂贵的子代理全量 fork 重审。手动 set_phase 和自动推进均经过 SetPhase → checkResultGateMet，全覆盖。memory 子代理报告无 verdict 模式不误拦。prompt caching 不受影响。
