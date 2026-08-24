@@ -116,6 +116,11 @@ func buildDirectionAnchor(db *gorm.DB, novelID int64, currentChapter int) string
 		"\n冲突规则：以上书本设定（outlines/volumes/preferences/lore）优先于任何类型技能模板建议。\n"
 }
 
+// DirectionAnchor 导出方向锚内容，供 agent.go 在阶段推进/门禁提醒中引用。
+func DirectionAnchor(db *gorm.DB, novelID int64, currentChapter int) string {
+	return buildDirectionAnchor(db, novelID, currentChapter)
+}
+
 // truncateRunes 按字符数截断并加省略号。
 func truncateRunes(s string, max int) string {
 	r := []rune(strings.TrimSpace(s))

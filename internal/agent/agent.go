@@ -334,6 +334,17 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 	reminder := fmt.Sprintf(
 		"<system-reminder>\n%s\n</system-reminder>", phaseChecklist(pg.findPhase(next)))
 	a.appendMsg("user", reminder, "", nil, opts, runningTokens)
+	// write 阶段：追加方向锚要点提醒（防爽点提前兑现/设定偏离）
+	if next == "write" {
+		if anchor := agentcfg.DirectionAnchor(a.db, opts.NovelID, a.lastCompletedChapter(opts.NovelID)+1); anchor != "" {
+			brief := fmt.Sprintf("<system-reminder>\n动笔前对照方向锚核心条目：\n%s\n</system-reminder>", anchor)
+			a.appendMsg("user", brief, "", nil, opts, runningTokens)
+		}
+	}
+	// maintain 阶段：追加差量检查提醒（新实体建档）
+	if next == "maintain" {
+		a.appendMsg("user", "<system-reminder>\n维护阶段差量检查：本章正文中出现但数据库中不存在的新角色/地点/物品/伏笔，必须先 create_*/update_* 建档再结束维护。\n</system-reminder>", "", nil, opts, runningTokens)
+	}
 	ps := pg.Status()
 	emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 	return true
@@ -458,9 +469,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	// 累计 N 条主 agent 回复未见 run_subagent 即注入一条提醒（每次 Run 至多一条）。
 	if !opts.PhaseGateEnabled && opts.AgentType == "main" && opts.SessionID != "" {
 		if n := a.assistantMessagesSinceLastReview(ctx, &opts); n >= reviewAbsentThreshold {
-			a.appendMsg("system", fmt.Sprintf(
-				"<system-reminder>\n门禁已关闭，且本会话最近 %d 条 AI 回复未经过 run_subagent 审稿。设定偏离风险随未审稿章数累积（渐进式类型漂移单章无法察觉）。\n请立即执行：set_phase(\"review\") → run_subagent(agent_type=\"review\") 审读近期章节；或提醒用户在 设置→门禁 重新开启阶段门禁恢复强制流程。\n</system-reminder>",
-				n), "", nil, &opts, runningTokens)
+			msg := fmt.Sprintf(
+				"<system-reminder>\n门禁已关闭，且本会话最近 %d 条 AI 回复未经过 run_subagent 审稿。设定偏离风险随未审稿章数累积（渐进式类型漂移单章无法察觉）。\n请立即执行：set_phase(\"review\") → run_subagent(agent_type=\"review\") 审读近期章节；或提醒用户在 设置→门禁 重新开启阶段门禁恢复强制流程。\n", n)
+			// 追加方向锚核心条目：门禁关闭时无自动审稿兜底，方向锚是唯一约束
+			if anchor := agentcfg.DirectionAnchor(a.db, opts.NovelID, a.lastCompletedChapter(opts.NovelID)+1); anchor != "" {
+				msg += "⚠ 当前方向锚约束（无门禁保护下务必逐条遵守）：\n" + anchor + "\n"
+			}
+			msg += "</system-reminder>"
+			a.appendMsg("system", msg, "", nil, &opts, runningTokens)
 			a.logger.Info("门禁关闭审稿缺席提醒", "sessionID", opts.SessionID, "absentCount", n)
 		}
 	}

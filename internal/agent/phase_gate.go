@@ -298,7 +298,8 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 		}
 		if result, ok := g.lastToolResults[req]; ok {
 			if strings.Contains(result, "[ERROR]") {
-				return false, fmt.Sprintf("%s 存在硬错误，禁止切换阶段", req)
+				summary := extractErrorSummary(result, 2)
+				return false, fmt.Sprintf("%s 存在硬错误，禁止切换阶段。需修复：\n%s", req, summary)
 			}
 		}
 	}
@@ -310,6 +311,22 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 		}
 	}
 	return true, ""
+}
+
+// extractErrorSummary 从工具结果中提取前 N 条 [ERROR] 行，每行截断至 80 字符。
+func extractErrorSummary(result string, maxLines int) string {
+	errorRe := regexp.MustCompile(`\[ERROR\][^\n]*`)
+	matches := errorRe.FindAllString(result, maxLines)
+	if len(matches) == 0 {
+		return "[无详细错误信息]"
+	}
+	for i, m := range matches {
+		r := []rune(m)
+		if len(r) > 80 {
+			matches[i] = string(r[:80]) + "…"
+		}
+	}
+	return strings.Join(matches, "\n")
 }
 
 // missingInjections 返回当前阶段尚未加载的必读技能列表（auto_skill_injection）。
