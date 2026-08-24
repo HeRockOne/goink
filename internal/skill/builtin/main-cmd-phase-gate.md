@@ -103,14 +103,14 @@ next: outline
 
 ### require 设计（该阶段不完成就出事故的动作）
 
-| 阶段 | require 建议 |
-|------|-------------|
-| init | 7 查询（characters/locations/story_arcs/lore/items/timeline/preferences） |
-| prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） |
-| outline | edit |
-| write | edit, get_chapter_list, read（字数校验转出时自动强制，无需配置） |
-| review | run_subagent |
-| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency |
+| 阶段 | require 建议 | 结果门控 |
+|------|-------------|---------|
+| init | 7 查询（characters/locations/story_arcs/lore/items/timeline/preferences） | - |
+| prepare | 9 项必查（writing_context/chapter_list/characters/timeline/story_arcs/reader_perspective/writing_snapshot/scenes/preferences） | - |
+| outline | edit | - |
+| write | edit, get_chapter_list, read（字数校验转出时自动强制，无需配置） | check_story_consistency [ERROR] 阻止推进 |
+| review | run_subagent | 审稿结论"不通过"（<7.0）阻止推进到 maintain；"需修改"放行由 LLM 修复 |
+| maintain | edit, update_chapter_plan, update_chapter_meta, update_writing_snapshot, search_lore, search_items, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_scenes, get_item_occurrences, get_character_relations, check_story_consistency | check_story_consistency [ERROR] 阻止推进 |
 
 ### auto_skill_injection 设计（该阶段核心方法论，对照 main-core-writing-kernel 阶段技能表）
 
@@ -143,6 +143,7 @@ next: outline
 | 阶段不推进 | require 未满足，或未调 set_phase | 先调用 require 列表中的工具，再主动 `set_phase` 切换 |
 | 切换被拒 | 目标阶段不在 next 链，也不在本轮 visited | 只能推进到 next 或回退到本轮已访问过的阶段 |
 | 批量模式不循环 | write 阶段没有 `loop: true` | 默认配置已带；自定义配置需在 batch 的 write 阶段加 `loop: true` |
+| 审稿后无法推进 | 审稿结论为"不通过"（总分<7.0） | 结果门控阻止：修复问题后重新 run_subagent 审稿，通过后才能 set_phase |
 | 门禁未激活 | phase_gate_config 为空 | 出厂首次启动自动 seed；已配置过则不会被覆盖 |
 
 ## 开关

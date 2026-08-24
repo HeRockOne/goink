@@ -51,7 +51,7 @@
   ↓ require 满足后，LLM 主动调 set_phase("outline")
 outline → 写大纲（require: edit）→ set_phase("write")
 write → 写正文（require: edit + get_chapter_list）→ 字数校验 → set_phase("review")
-review → 审读（require: run_subagent）→ set_phase("maintain")
+review → 审读（require: run_subagent）→ 结果门控（不通过则阻止推进）→ set_phase("maintain")
 maintain → 状态维护（require: 14 项清单）→ set_phase("done")
   ↓ done 是终点：创作完成，系统停下。新一轮由用户重新发起
 ```
@@ -172,6 +172,25 @@ init（开书）→ prepare（全量状态）→ outline（大纲）→ write（
 注意：write 阶段转出时**自动强制字数检查**（get_chapter_list 的 word_count_ok），无需配置。
 
 > **require 按阶段计数**：工具调用统计（calledTools/successfulTools）在每次阶段切换时重置——require 的语义是"本阶段内必须调用"，上一阶段调过的工具（如 write 的 edit）不会预填下一阶段的 require（2026-08-14 修复：跨阶段累计曾导致 maintain 的 goink.md 指纹 edit 被轮末自动推进提前推到 done 白名单冻结，形成死循环）。同阶段 set_phase（批量章边界）不重置。
+
+### 结果门控（Result Gate）
+
+require 检查"工具是否调用过"，结果门控检查"工具返回了什么"。两者在 `SetPhase` 内串行执行，require 通过后才检查结果。
+
+**已实现的结果门控：**
+
+| 工具 | 检查条件 | 行为 | 来源 |
+|------|---------|------|------|
+| check_story_consistency | 返回内容含 `[ERROR]` | 阻止切换阶段 | 2026-08 初始实现 |
+| run_subagent | 审稿报告结论为"不通过"（总分<7.0） | 阻止推进到下一阶段 | 2026-08-24 review verdict gate |
+
+**设计原则：**
+- check_story_consistency 的 `[ERROR]` = 硬错误（伏笔超期/死者复出/台账越界），必须修复
+- run_subagent 的"不通过" = 章节有根本问题（总分<7.0），必须重审
+- "需修改"（7.0-8.9）= 小问题，LLM 从报告中自行修复，**不阻止推进**——避免每次 revise 都触发昂贵的子代理全量 fork 重审
+- memory 子代理报告无 verdict 模式，不误拦
+
+**实现位置：** `internal/agent/phase_gate.go` `checkResultGateMet()`；`run_subagent` 的报告文本通过 `Data["content"]` 暴露（`internal/mcp_tools/subagent_tools.go`），由 `OnToolCall` 存入 `lastToolResults["run_subagent"]`。
 
 ### 第四步：定每阶段的 auto_skill_injection（必读技能）
 
