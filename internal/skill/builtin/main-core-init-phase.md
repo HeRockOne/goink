@@ -24,7 +24,11 @@ mode: auto
 - 查询验证：`get_characters`、`get_locations`、`get_story_arcs`、`get_lore`、`get_items`、`get_timeline`、`get_preferences`（**这 7 项就是门禁 require，阶段结束前必须全部调用过**）
 - 系统：`auto_skill_injection`、`set_phase`
 
-必读技能（门禁自动注入）：main-tech-genre-templates（类型模板）、main-tech-book-outline（总纲模板）、main-tech-character-design（角色设计）、main-tech-world-building-system（世界观）。写总纲前必须确认这些技能内容在上下文中。
+必读技能（开书时按需加载）：开始采集前调用 `auto_skill_injection(skills="main-tech-genre-templates,main-tech-book-outline,main-tech-character-design,main-tech-world-building-system")` 一次性加载以下 4 个技能到上下文，写总纲前确认内容已就绪：
+- `main-tech-genre-templates`（类型模板，用于题材确认和一致性校验）
+- `main-tech-book-outline`（总纲模板，用于写总纲结构）
+- `main-tech-character-design`（角色设计，用于角色创建）
+- `main-tech-world-building-system`（世界观构建，用于世界观和底层铁则）
 
 ## 总体流程
 

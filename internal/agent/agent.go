@@ -480,34 +480,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			a.logger.Info("门禁关闭审稿缺席提醒", "sessionID", opts.SessionID, "absentCount", n)
 		}
 	}
-	// 开书阶段技能注入（无门禁管理）：新书（无章节）时自动注入 5 个开书技能，
-	// 与 main-core-init-phase 关联。Init 不进门禁——它是一次性交互式设置，
-	// 不属于 prepare→outline→write→review→maintain 创作循环。
-	if opts.AgentType == "main" && a.lastCompletedChapter(opts.NovelID) == 0 {
-		initSkillNames := []string{"main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"}
-		if content, err := mcp_tools.BuildSkillsContent(a.skillStore, opts.NovelID, initSkillNames); err == nil && content != "" {
-			alreadyInjected := false
-			for _, m := range opts.Messages {
-				role, _ := m["role"].(string)
-				if role != "system" && role != "tool" {
-					continue
-				}
-				c, ok := m["content"].(string)
-				if !ok || c == "" {
-					continue
-				}
-				if c == content || strings.Contains(c, content) {
-					alreadyInjected = true
-					break
-				}
-			}
-			if !alreadyInjected {
-				a.appendMsg("system", content, "", nil, &opts, runningTokens)
-				a.logger.Info("开书阶段注入技能（无门禁）", "skills", initSkillNames)
-			}
-		}
-	}
-
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 
