@@ -72,6 +72,67 @@ WHERE session_id = '{session_id}';
 - 缓存命中率：≥97% 为正常（前缀缓存机制）
 - 命中率 <95%：检查是否首次对话（冷启动）或 NS 被压缩破坏
 
+#### 缓存 Miss 深度分析
+
+当命中率 <97% 时，按以下步骤定位 miss 来源：
+
+**Step 1：提取 per-call token 数据**
+
+```sql
+-- 从 assistant 消息的 extra_metadata.usage 中提取每次 LLM 调用的 token 分布
+SELECT id,
+  json_extract(extra_metadata, '$.usage.prompt_tokens') as prompt,
+  json_extract(extra_metadata, '$.usage.cached_tokens') as cached,
+  json_extract(extra_metadata, '$.usage.completion_tokens') as comp,
+  json_extract(extra_metadata, '$.usage.prompt_tokens') - json_extract(extra_metadata, '$.usage.cached_tokens') as miss
+FROM messages
+WHERE session_id = '{session_id}'
+  AND role = 'assistant'
+  AND json_extract(extra_metadata, '$.usage.prompt_tokens') IS NOT NULL
+ORDER BY id;
+```
+
+**Step 2：重建消息序列，标记注入点**
+
+```sql
+-- 查看所有 system 消息（含注入的技能/提醒），标注出现位置
+SELECT id, role,
+  CASE
+    WHEN content LIKE '%--- main-tech-%' OR content LIKE '%--- main-core-%' THEN 'auto_skill'
+    WHEN content LIKE '%当前阶段%' THEN 'phase_reminder'
+    WHEN content LIKE '%方向锚%' THEN 'direction_anchor'
+    WHEN content LIKE '%小说基础信息%' THEN 'NS'
+    WHEN content LIKE '%核心原则%' THEN 'identity'
+    WHEN content LIKE '%available_skills%' THEN 'skill_catalog'
+    ELSE 'other'
+  END as type,
+  length(content) as bytes,
+  substr(content, 1, 80) as preview
+FROM messages
+WHERE session_id = '{session_id}'
+  AND role = 'system'
+ORDER BY id;
+```
+
+**Step 3：关联注入点与 miss 峰值**
+
+将 Step 1 的 per-call miss 与 Step 2 的注入位置交叉：
+- miss 峰值出现在注入消息之后的第一个 LLM 调用 → 注入打破了前缀
+- 常见注入点（按 token 贡献排序）：
+  - `auto_skill` 注入：~3-9K tokens/次（write 阶段 5 个技能拼一条 ~9K）
+  - `phase_reminder` + `direction_anchor`：~2-3K tokens/次
+  - `post-write instruction`：~5-7K tokens/次
+
+**Step 4：计算理论 savings**
+
+```
+理论 savings = Σ(注入消息 tokens) × (1 - 该注入后续调用的 miss 率)
+```
+
+实际 savings 取决于注入消息是否在 LLM 调用的 prefix 中。如果注入消息在 `appendMsg` 时追加到 `opts.Messages` 末尾（历史消息和新用户消息之间），它改变了后续调用的 prefix → miss。
+
+**已知根因**：`agent.go:1097` 的 `appendMsg` 把注入消息追加到 `opts.Messages` 末尾。注入消息位于历史消息和新用户消息之间，导致后续 LLM 调用的 prefix 改变 → 缓存 miss。
+
 ### 第3步：审稿记录
 
 ```sql
@@ -404,6 +465,32 @@ SELECT '门禁拦截' as section;
 SELECT COUNT(*) FROM messages WHERE session_id = '{SESSION_ID}' AND role='tool'
   AND (content LIKE '%要求必须调用%' OR content LIKE '%存在硬错误%' OR content LIKE '%不通过%');
 
+-- === 缓存 Miss 分析 ===
+SELECT 'Per-call token 数据' as section;
+SELECT id,
+  json_extract(extra_metadata, '$.usage.prompt_tokens') as prompt,
+  json_extract(extra_metadata, '$.usage.cached_tokens') as cached,
+  json_extract(extra_metadata, '$.usage.completion_tokens') as comp,
+  json_extract(extra_metadata, '$.usage.prompt_tokens') - json_extract(extra_metadata, '$.usage.cached_tokens') as miss
+FROM messages
+WHERE session_id = '{SESSION_ID}'
+  AND role = 'assistant'
+  AND json_extract(extra_metadata, '$.usage.prompt_tokens') IS NOT NULL
+ORDER BY id;
+
+SELECT '注入消息分布' as section;
+SELECT id,
+  CASE
+    WHEN content LIKE '%--- main-tech-%' OR content LIKE '%--- main-core-%' THEN 'auto_skill'
+    WHEN content LIKE '%当前阶段%' THEN 'phase_reminder'
+    WHEN content LIKE '%方向锚%' THEN 'direction_anchor'
+    WHEN content LIKE '%小说基础信息%' THEN 'NS'
+    ELSE 'other'
+  END as type,
+  length(content) as bytes
+FROM messages
+WHERE session_id = '{SESSION_ID}' AND role = 'system' ORDER BY id;
+
 -- === 最新章节 ===
 SELECT '最新章节' as section;
 SELECT id, chapter_number, title, content_length FROM chapters
@@ -412,4 +499,4 @@ WHERE novel_id = {NOVEL_ID} ORDER BY chapter_number DESC LIMIT 3;
 
 ---
 
-*最后更新：2026-08-25。基于4轮创作测试（dots3/mimo-v2.5×2/MiniMax-M2.7）的审计经验编写。*
+*最后更新：2026-08-26。基于7轮创作测试（dots3/mimo-v2.5×3/MiniMax-M2.7×2）的审计经验编写。新增缓存 miss 深度分析流程。*
