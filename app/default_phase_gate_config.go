@@ -36,7 +36,7 @@ edit_paths: chapters/*
 require: edit, get_chapter_list, read, check_story_consistency
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
 next: review
-note: edit(chapters/NNN.md) 写正文，read 本章大纲锚定后再动笔。禁止正文外的维护工具
+note: edit(chapters/NNN.md) 写正文。①先规划：读大纲+NS字数范围，按场景分配字数；②一次写完，禁止search_replace补字数；③禁止正文外的维护工具
 -->
 <!-- phase-gate-config
 mode: single
@@ -92,7 +92,7 @@ require: edit, get_chapter_list, read, create_scene, update_character, create_ti
 auto_skill_injection: main-tech-show-dont-tell, main-tech-anti-ai-writing, main-tech-pov-purity, main-tech-info-density, main-tech-word-count-calibration
 next: review
 loop: true
-note: edit(chapters/NNN.md) 写正文，read 本章大纲锚定后再动笔。禁止正文外的维护工具
+note: edit(chapters/NNN.md) 写正文。①先规划：读大纲+NS字数范围，按场景分配字数；②一次写完，禁止search_replace补字数；③禁止正文外的维护工具
 -->
 <!-- phase-gate-config
 mode: batch

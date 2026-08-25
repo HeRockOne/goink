@@ -23,8 +23,9 @@ done 是终点，等待用户发起新一轮。
 
 ## 执行纪律
 
-- **thinking 只做规划，不做草稿**：thinking 中分析方案、列工具调用计划；禁止在 thinking 中写正文/大纲/审稿报告——正文只通过 edit 工具输出
-- **一轮决策，一气呵成**：thinking 中规划好后，在同一个 response 中立即执行（content + tool_call），不要分两轮"先想再做"
+- **thinking 只做规划，不做草稿**：thinking 中分析方案、列工具调用计划、预估内容量；**禁止在 thinking 中写正文/大纲/审稿报告**——正文只通过 edit 工具输出。thinking 里写了再复制到 edit = 双倍 token 浪费
+- **一轮决策，一气呵成**：thinking 中规划好后，在同一个 response 中立即执行（content + tool_call），不要分两轮"先想再做"。**禁止想完又想**（thinking A 决定写 → thinking B 再确认 → 才执行 = 两倍 token）
+- **写正文前预估内容量**：进入 write 阶段时，先读 NS【字数范围】，规划场景/段落分配，确保一次 edit 写入达标字数。禁止"先写短再补"的挤牙膏模式
 - **content 不能为空**：每轮 response 必须有 content（哪怕只是动作说明），禁止纯 tool_call 无 content
 - **工具批量并行**：不互相依赖的工具在同一轮 response 中并行调用（例：read 大纲 + get_characters + check_story_consistency 同时发出）
 
@@ -55,11 +56,12 @@ set_phase("write")
 
 1. read 大纲 outlines/NNN.md（门禁 require 强制）
 2. 遵守 NS【方向锚】（硬约束）— 每条都是审稿 #26/#27 判定依据：超出卷范围或违反禁忌=致命；方向锚优先于类型技能模板建议
-3. edit(chapters/NNN.md) 写正文
-4. **字数规则**：缺口×1.2 设扩写目标，一次 edit 补足，get_chapter_list 复查。仍不足则重复"一次到位"流程。**禁止挤牙膏式多次小扩**
-5. check_story_consistency（门禁 require 强制，不核对无法转出 review）
-6. **写后自审**：read main-tech-revision-pass + sub-tech-anti-ai-grade，检查节奏与 AI 味，发现问题 edit 修复
-7. set_phase("review")
+3. **规划内容量**：读 NS【字数范围】，按大纲的场景设计分配字数（铺垫段多少字、核心事件多少字、钩子多少字），确保合计不低于下限。**先规划再动笔，一次写完**
+4. edit(chapters/NNN.md) 写正文（一次 full_replace 写完整章节，禁止分多次写）
+5. get_chapter_list 复查字数，达标则进入下一步；未达标则按缺口×1.2 一次性 edit 补足。**禁止挤牙膏式多次小扩**
+6. check_story_consistency（门禁 require 强制，不核对无法转出 review）
+7. **写后自审**：read main-tech-revision-pass + sub-tech-anti-ai-grade，检查节奏与 AI 味，发现问题 edit 修复
+8. set_phase("review")
 
 > **write→review 边界**：进入 review 后禁止调用任何维护/更新工具（白名单只读/审稿）。迷你维护是 set_phase("review") 之前做的。
 
