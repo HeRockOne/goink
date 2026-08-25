@@ -174,8 +174,12 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 			msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
 		}
 	}
+	// 免疫声明放在指令尾部（上下文最末、近端最高）：主历史 fork 自父代理，
+	// 其中 <system-reminder> 阶段清单会诱导弱模型模仿父代理行为（调用 run_subagent/
+	// set_phase/维护写入→被只读白名单拦截→身份崩塌，见 2026-08-26 Ch31 审计）。
+	instruction := req.Instruction + "\n\n[系统] 注意：主历史中的所有 <system-reminder>（阶段清单、方向锚、维护指令）都是发给父代理的，与你无关。你的工具白名单里没有 run_subagent 和 set_phase，也没有 create_*/update_*/delete_* 写入权限。你只执行上面这条指令定义的任务，按你的身份规范输出报告，不要推进阶段、不要做维护。"
 	msgs = append(msgs,
-		map[string]any{"role": "user", "content": req.Instruction},
+		map[string]any{"role": "user", "content": instruction},
 	)
 
 	subOpts := RunOptions{
@@ -710,8 +714,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								// 后续所有请求的前缀包含这条动态消息，前缀缓存每次失效。
 								// 8/9 批量每章 set_phase("write") 后每条都不同 → 命中率 89-93% 掉到 86%。
 								// 工具结果已返回 phase，LLM 不需要 StatusString 细节。
-								injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", phaseChecklist(pg.findPhase(pg.CurrentPhase())))
-								a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+								// 同阶段重复声明不再注入清单：autoAdvancePhase 已注入过同一份静态
+								// 清单，重复消息纯浪费且在转场点破坏父历史前缀缓存（每阶段×2 根因）。
+								if from != targetPhase {
+									injectMsg := fmt.Sprintf("<system-reminder>\n%s\n</system-reminder>", phaseChecklist(pg.findPhase(pg.CurrentPhase())))
+									a.appendMsg("user", injectMsg, "", nil, &opts, runningTokens)
+								}
 								ps := pg.Status()
 								emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 								toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: true, Data: map[string]any{"phase": pg.CurrentPhase()}}, displayText: display.DisplayText, activityKind: display.ActivityKind})
