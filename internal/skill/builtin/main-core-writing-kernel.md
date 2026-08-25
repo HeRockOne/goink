@@ -21,9 +21,16 @@ done 是终点，等待用户发起新一轮。
 > 以下只写门禁不覆盖的：工作流细节、注意事项、独有规则。
 > **并行工具调用**：同一阶段内无依赖的工具调用并行发出，有依赖才串行。
 
+## 执行纪律
+
+- **thinking 只做规划，不做草稿**：thinking 中分析方案、列工具调用计划；禁止在 thinking 中写正文/大纲/审稿报告——正文只通过 edit 工具输出
+- **一轮决策，一气呵成**：thinking 中规划好后，在同一个 response 中立即执行（content + tool_call），不要分两轮"先想再做"
+- **content 不能为空**：每轮 response 必须有 content（哪怕只是动作说明），禁止纯 tool_call 无 content
+- **工具批量并行**：不互相依赖的工具在同一轮 response 中并行调用（例：read 大纲 + get_characters + check_story_consistency 同时发出）
+
 ### init（开书，仅新书，无门禁管理）
 
-Init 不属于创作循环，不受门禁管控。系统在检测到新书（无章节）时自动注入 5 个开书技能（main-core-init-phase + genre-templates + book-outline + character-design + world-building-system），无需门禁配置。
+Init 不属于创作循环，不受门禁管控。开书技能（main-core-init-phase + genre-templates + book-outline + character-design + world-building-system）由模型按需调用 `auto_skill_injection` 加载，不预注入。
 
 流程：
 信息采集（分波次提问）→ 写总纲（update_outline + create_outline_beat）→ 创建卷弧线 → 角色/地点 → 世界观/物品 → 偏好/伏笔 → 一致性校验 → 用户确认 → 7 项查询并行验证 → set_phase("prepare")

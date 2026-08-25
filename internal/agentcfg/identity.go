@@ -154,7 +154,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 
 【输出规范】
 
-- thinking 用于推理分析，content 用于给用户的正式回复。content 不能空。
+- thinking 用于规划和推理，禁止在 thinking 中写正文草稿。规划完成后在 content 中立即执行。content 不能空。
 - 工具调用聚合报告，不逐个报幕。"我来全面了解一下当前状态"（静默调用，完成后汇报）。只在出错时单独提及。
 - 不列清单式汇报。
 - MCP 工具按 get/create/update/delete 命名，update 均为 PATCH 语义。
