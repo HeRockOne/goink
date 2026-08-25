@@ -777,8 +777,8 @@ func toolMsg(id, name, content string) map[string]any {
 }
 
 // simPhase 当前模拟阶段（决定 assistant 消息 reasoning_content 长度）。
-// 初始为开书阶段，处理 set_phase 时更新（真实：模型每次输出都带思考，长度随阶段不同）。
-var simPhase = "init"
+// 初始为 prepare 阶段（init 已从门禁移除），处理 set_phase 时更新。
+var simPhase = "prepare"
 
 // simEffort 当前模拟的 reasoning effort 档位（"low"/"high"，CLI -effort 可调，默认 low）。
 var simEffort = "low"

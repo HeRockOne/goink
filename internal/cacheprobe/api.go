@@ -58,7 +58,7 @@ type Result struct {
 func Run(gateRounds, shortQARounds, batchChapters, cleanRetain int) (*Result, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
-	simPhase = "init" // 每个场景独立（table 多场景串跑时防止 thinking 阶段串扰）
+	simPhase = "prepare" // 每个场景独立（table 多场景串跑时防止 thinking 阶段串扰）
 
 	if gateRounds < 0 {
 		gateRounds = 5
@@ -606,7 +606,7 @@ func buildContinueBatch(cache *TokenCache, historyChapters, chapters int) ([][2]
 func RunContinue(histSingle, histBatch, batchChapters int) (*Result, error) {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 	initTools()
-	simPhase = "init"
+	simPhase = "prepare"
 
 	res := &Result{}
 	if histSingle > 0 {

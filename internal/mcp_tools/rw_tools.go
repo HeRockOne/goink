@@ -27,6 +27,7 @@ type EditArgs struct {
 	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节文件格式为 chapters/001.md（三位数字），大纲为 outlines/001.md，故事状态为 goink.md" validate:"required"`
 	ChangeType string `json:"change_type" jsonschema:"required,enum=full_replace,enum=append,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；append：追加到文件末尾（累积台账专用，如 goink.md 指纹）；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace append search_replace line_range_replace"`
 	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
+	OldContent string `json:"old_content" jsonschema:"description=要查找的原文片段（search_replace 时必填，与 search_text 等价，二选一）。请从文件中精确复制" validate:"omitempty"`
 	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文；append 时为追加内容；search_replace 时为替换后的文本；line_range_replace 时为插入的新行" validate:"omitempty"`
 	ReplaceAll bool   `json:"replace_all" jsonschema:"description=是否替换所有匹配项。默认 false（仅替换第一个匹配）" validate:"omitempty"`
 	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
@@ -300,8 +301,12 @@ func applyChange(a *EditArgs, current string) (string, error) {
 		return strings.TrimRight(current, "\n") + "\n" + strings.TrimLeft(a.NewContent, "\n") + "\n", nil
 
 	case "search_replace":
+		// old_content 与 search_text 等价，二选一（模型习惯用 old_content）
+		if a.SearchText == "" && a.OldContent != "" {
+			a.SearchText = a.OldContent
+		}
 		if a.SearchText == "" {
-			return "", fmt.Errorf("search_replace 模式需要提供 search_text")
+			return "", fmt.Errorf("search_replace 模式需要提供 search_text 或 old_content")
 		}
 		result, found, hint := searchReplace(current, a.SearchText, a.NewContent, a.ReplaceAll)
 		if !found {
@@ -564,7 +569,7 @@ const editDescription = `编辑小说文件（章节正文或大纲或故事状�
 
 1. **full_replace** — 全文替换整个文件。new_content 为完整的替换后内容。
 2. **append** — 追加到文件末尾（累积台账专用）。new_content 为要追加的内容，不会修改已有内容。goink.md 指纹等累积记录必须用 append，禁止用 full_replace 重写整个文件。
-3. **search_replace** — 查找并替换指定文本。search_text 为要查找的原文片段（请从文件中精确复制），new_content 为替换后的文本。replace_all=false（默认）仅替换第一个匹配项，replace_all=true 替换所有匹配。如果连续两次 search_replace 因"未找到匹配"失败，直接用 line_range_replace 代替——不要在同一种模式上反复重试。
+3. **search_replace** — 查找并替换指定文本。search_text（或 old_content，二选一）为要查找的原文片段（请从文件中精确复制），new_content 为替换后的文本。replace_all=false（默认）仅替换第一个匹配项，replace_all=true 替换所有匹配。如果连续两次 search_replace 因"未找到匹配"失败，直接用 line_range_replace 代替——不要在同一种模式上反复重试。
 4. **line_range_replace** — 替换指定行范围。start_line 和 end_line 为 1-based 行号（含两端），new_content 为插入的新内容。
 
 路径格式：

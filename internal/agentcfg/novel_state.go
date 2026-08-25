@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"novel/internal/config"
 	"novel/internal/git"
 	"novel/internal/novel"
 	"novel/internal/outline"
@@ -40,6 +41,18 @@ func NovelState(db *gorm.DB, novelID int64) (string, error) {
 	}
 	if n.Description != "" {
 		b = append(b, fmt.Sprintf("简介：%s\n", n.Description)...)
+	}
+
+	// 字数范围（从设置读取，每轮重建，DB 改了下轮自动生效）
+	if settings, err := config.LoadSettings(db); err == nil {
+		minW, maxW := 2500, 4000
+		if settings.MinChapterWords > 0 {
+			minW = settings.MinChapterWords
+		}
+		if settings.MaxChapterWords > 0 {
+			maxW = settings.MaxChapterWords
+		}
+		b = append(b, fmt.Sprintf("字数范围：每章 %d-%d 字（硬约束，不足或超出都会被门禁拦截）\n", minW, maxW)...)
 	}
 
 	// 进度锚点：当前章节号（轮末动态字节，符合 P1 缓存协议）

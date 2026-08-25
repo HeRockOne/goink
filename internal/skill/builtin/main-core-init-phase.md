@@ -14,12 +14,12 @@ mode: auto
 1. **数据库总纲**：`outlines` + `outline_beats` 表（核心矛盾/成长弧线/结局方向/篇幅规划/大爽点，通过 `update_outline` + `create_outline_beat` 写入）
 2. **数据库实体**：7 类实体全部入库——故事弧线、地点、角色、世界观、物品、偏好、伏笔（含弧线节点）
 
-> 本阶段不写 goink.md（它是写作阶段的章节指纹台账，开书不涉及）；不创建场景、读者认知、角色关系、地点连通（这些工具不在 init 门禁白名单内，留到 prepare/outline 阶段按需创建）。
+> 本阶段不写 goink.md（它是写作阶段的章节指纹台账，开书不涉及）；不创建场景、读者认知、角色关系、地点连通（留到 prepare/outline 阶段按需创建）。
 
-## init 阶段允许使用的工具（与门禁白名单一致）
+## init 阶段允许使用的工具
 
 - 总纲：`update_outline`、`create_outline_beat`、`update_outline_beat`、`delete_outline_beat`、`get_outline`
-- 编辑：`edit`（init 阶段不使用；门禁 edit_paths 已改为 goink.md，总纲不再写文件）
+- 编辑：`edit`（init 阶段不使用）
 - 创建：`create_story_arc`、`create_arc_node`、`create_location`、`create_character`、`create_lore`、`create_item`、`create_timeline_entry`、`create_preference`
 - 查询验证：`get_characters`、`get_locations`、`get_story_arcs`、`get_lore`、`get_items`、`get_timeline`、`get_preferences`（**这 7 项就是门禁 require，阶段结束前必须全部调用过**）
 - 系统：`auto_skill_injection`、`set_phase`

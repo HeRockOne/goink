@@ -79,14 +79,14 @@ func TestToolPattern_Sorted(t *testing.T) {
 
 func TestToolPattern_TruncatesLongArgs(t *testing.T) {
 	long := ""
-	for i := 0; i < 150; i++ {
+	for i := 0; i < 300; i++ {
 		long += "x"
 	}
 	outputs := []toolOutput{
 		{name: "read", id: "1", rawArgs: []byte(long)},
 	}
 	result := toolPattern(outputs)
-	if len(result) > 105 { // "read:" = 5 + 100 max
+	if len(result) > 261 { // "read:" = 5 + 256 max
 		t.Errorf("pattern too long: %d chars", len(result))
 	}
 }

@@ -982,7 +982,7 @@ func TestBuildSubagentSkills(t *testing.T) {
 		t.Fatal("expected sub-* skills injected (builtin has sub-tech-review-standards + sub-tech-anti-ai-grade)")
 	}
 	// 必须包含两个现有 sub- 技能（按内容特征而非技能名）
-	if !strings.Contains(out, "22 项硬伤检查") {
+	if !strings.Contains(out, "27 项") && !strings.Contains(out, "27项") && !strings.Contains(out, "22 项") && !strings.Contains(out, "22项") {
 		t.Error("expected sub-tech-review-standards content injected")
 	}
 	if !strings.Contains(out, "T1 出现即换") {

@@ -583,3 +583,41 @@ func TestAppend_ToEmptyFile(t *testing.T) {
 		t.Errorf("append to empty should return content as-is: %q", result)
 	}
 }
+
+func TestSearchReplace_OldContentAlias(t *testing.T) {
+	// 模型习惯用 old_content 而非 search_text
+	content := "林修走在路上。\n他看到远处有灯光。"
+	args := &EditArgs{
+		ChangeType: "search_replace",
+		OldContent: "他看到远处有灯光。",
+		NewContent: "他注意到远处闪烁的灯光。",
+	}
+	result, err := applyChange(args, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "注意到远处闪烁") {
+		t.Errorf("old_content alias should work: %s", result)
+	}
+	if strings.Contains(result, "看到远处有灯光") {
+		t.Errorf("old text still present: %s", result)
+	}
+}
+
+func TestSearchReplace_OldContentTakesPrecedence(t *testing.T) {
+	// search_text 和 old_content 都有时，search_text 优先
+	content := "A和B。"
+	args := &EditArgs{
+		ChangeType: "search_replace",
+		SearchText: "A和B",
+		OldContent: "B和A",
+		NewContent: "X和Y",
+	}
+	result, err := applyChange(args, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "X和Y") {
+		t.Errorf("search_text should take precedence: %s", result)
+	}
+}
