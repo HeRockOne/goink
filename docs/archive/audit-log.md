@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-25：字数范围统一为 NS 单一来源（novel_state.go:45-55 从 app_config 注入"字数范围：每章 X-Y 字"），kernel 为唯一声明点（L137："总字数以 NS【字数范围】为准"），其余 5 个 skill 移除硬编码改引用 kernel/NS（book-outline/golden-three-chapters/shuangdian-pacing/word-count-calibration/climax-scene）。新增 creation-test-audit-guide.md（DB schema/6层审计/4会话对比/错误分类/SQL 脚本）。edit 工具新增 old_content 参数 alias（rw_tools.go:29-30 + fallback L305-307）。
+
 > 2026-08-25：Kernel 精简（265→146 行，-45%）。删除与 identity.go 重复的 30 行（skill 目录/卷结构/并行工具调用）；压缩与 gate config 重叠的 105→~30 行（各阶段指令保留独特细节，骨架引用 gate config）；新增标准化审稿 instruction 模板（{N}/{title}/{NNN} 填充 + check_story_consistency 5 类型 + 27 项标准 + 评分阈值 + 重写/压缩场景变体）；保留全部独一份内容（批量规则/实体判定/硬约束/可选技能/字数规则/write→review 边界）。builtin + skills/ + ~/.goink/skills/ 三向同步。commit c8d5057。
 
 > 2026-08-24：创作质量闭环 4 项优化（基于 novel-2 测试会话 27 条错误分析）。① checkResultGateMet（phase_gate.go:288-323）：从 check_story_consistency 的 [ERROR] 结果中提取前 2 行错误摘要（extractErrorSummary），阻断消息从 "check_story_consistency 存在硬错误" 变为包含具体错误行——模型知道修什么而非盲目重试 set_phase（减少 ~5 次无效重试）；② autoAdvancePhase（agent.go:334-349）：进入 write 阶段时注入方向锚全文（本卷红线/类型承诺/未兑现爽点/活跃禁忌）——防止 Review 1 发现的 Ch33 爽点提前兑现致命问题；③ autoAdvancePhase maintain：追加差量检查提醒（新实体必须 create_*/update_* 建档）——解决模型 3 次漏掉赵天龙/江城置业未建档问题；④ 门禁关闭审稿缺席提醒（agent.go:459-473）：追加方向锚约束内容及 ⚠ 标记——门禁关闭时无审稿兜底，方向锚是唯一硬约束；⑤ exported DirectionAnchor()（novel_state.go:119-122）供 agent.go 调用 buildDirectionAnchor。commit 1df0722。

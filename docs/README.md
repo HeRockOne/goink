@@ -78,6 +78,7 @@
 | feature-audit.md | 功能新增审计 |
 | audit-repair-2026-08-05.md | 全量代码审计与修复记录（P0-P3：门禁 seed/死角色拦截/RAG 原子性/FTS5 检索/外键等，含真机验证） |
 | [full-audit-2026-08-22.md](archive/full-audit-2026-08-22.md) | 全量审计（系统提示词/28个MCP工具/门禁系统/50个skill，1个P0安全+2个P1 Bug+6处P1代码模式+4个Critical Skill矛盾，创作质量红线全部守住） |
+| [creation-test-audit-guide.md](archive/creation-test-audit-guide.md) | 创作测试会话审计指南（DB schema/审计流程/6层架构闭环/4会话对比/错误分类/快速SQL脚本，供新会话接手） |
 
 ---
 
