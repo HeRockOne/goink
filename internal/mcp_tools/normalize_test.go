@@ -79,3 +79,45 @@ func TestNormalizeStringArrayValue(t *testing.T) {
 		t.Fatal("expected error for non-array value")
 	}
 }
+
+// TestFlexString 验证 tags 类字段在反序列化阶段兼容字符串和数组两种形态
+//（Ch26 事故：模型传数组导致整个请求在 json.Unmarshal 阶段失败）。
+func TestFlexString(t *testing.T) {
+	type args struct {
+		Tags mcp_tools.FlexString `json:"tags"`
+	}
+
+	// 数组形态：规整为 JSON 文本，下游 NormalizeStringArray 可正常处理
+	var a args
+	if err := json.Unmarshal([]byte(`{"tags":["仙侠","上古"]}`), &a); err != nil {
+		t.Fatalf("array form should unmarshal: %v", err)
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(a.Tags), &arr); err != nil || len(arr) != 2 || arr[0] != "仙侠" {
+		t.Fatalf("array form should normalize to string array, got %q (err=%v)", a.Tags, err)
+	}
+
+	// 对象数组形态：取 name
+	var b args
+	if err := json.Unmarshal([]byte(`{"tags":[{"name":"再生","level":"Lv.1"}]}`), &b); err != nil {
+		t.Fatalf("object array should unmarshal: %v", err)
+	}
+	if b.Tags != `["再生"]` {
+		t.Fatalf("object array should flatten to name, got %q", b.Tags)
+	}
+
+	// 字符串形态：原样保留
+	var c args
+	if err := json.Unmarshal([]byte(`{"tags":"[\"都市\"]"}`), &c); err != nil {
+		t.Fatalf("string form should unmarshal: %v", err)
+	}
+	if c.Tags != `[\"都市\"]` && c.Tags != `["都市"]` {
+		t.Fatalf("string form should pass through, got %q", c.Tags)
+	}
+
+	// 空值
+	var d args
+	if err := json.Unmarshal([]byte(`{"tags":null}`), &d); err != nil || d.Tags != "" {
+		t.Fatalf("null should be empty, got %q (err=%v)", d.Tags, err)
+	}
+}

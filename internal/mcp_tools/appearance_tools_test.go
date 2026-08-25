@@ -502,3 +502,34 @@ func TestInitConsistency_Pass(t *testing.T) {
 	}
 	t.Logf("✓ init_consistency 检查通过")
 }
+
+// ── dup_paragraph 整段重复检测 ───────────────────────────
+
+func TestDetectDupParagraphs(t *testing.T) {
+	para := "林修站在天台边缘，江风把他的外套吹得猎猎作响，远处的城市灯火像一片倒悬的星空。"
+	content := "# 第28章 红地毯\n\n" +
+		"开场段落。\n\n" +
+		para + "\n\n" + // 首次出现
+		"中间过渡段。\n\n" +
+		para + "\n\n" + // 逐字重复 → 应报错
+		"短段。\n\n" +
+		"短段。\n" // <15 字符 → 不报
+
+	dups := detectDupParagraphs(content)
+	if len(dups) != 1 {
+		t.Fatalf("expected exactly 1 dup finding, got %d: %v", len(dups), dups)
+	}
+	if !contains(dups[0], "[ERROR] 整段逐字重复") {
+		t.Errorf("unexpected message: %s", dups[0])
+	}
+	if !contains(dups[0], "第5行") || !contains(dups[0], "第9行") {
+		t.Errorf("should reference both line numbers, got: %s", dups[0])
+	}
+
+	// 干净正文：无报错
+	clean := "第一段内容足够长不会被误判。\n\n第二段内容同样足够长不会误判。\n\n第三段收尾。"
+	if dups := detectDupParagraphs(clean); len(dups) != 0 {
+		t.Fatalf("clean text should pass, got %v", dups)
+	}
+	t.Logf("✓ dup_paragraph 检测正确")
+}

@@ -1167,6 +1167,52 @@ next: done
 	t.Logf("✓ 检查通过不阻断推进")
 }
 
+func TestConsistencyErrors_NarrowCheckTypesCannotBypass(t *testing.T) {
+	config := `
+<!-- phase-gate-config
+mode: single
+phase: review
+tools: check_story_consistency
+require: check_story_consistency
+next: maintain
+-->
+<!-- phase-gate-config
+mode: single
+phase: maintain
+tools: edit
+require: edit
+next: done
+-->`
+	gate := ParsePhaseGateConfig(config, "single")
+
+	// 全量检查发现 ERROR（伏笔超期）
+	gate.OnToolCall("check_story_consistency", true,
+		"[ERROR] 伏笔超期未回收：林修不飞离的选择（目标第28章，当前第29章）",
+		`{"current_chapter":29}`)
+
+	// 缩窄 check_types 只查 pacing_gap，结果干净——但已有 ERROR 不能被绕过
+	gate.OnToolCall("check_story_consistency", true,
+		"✅ 一致性检查通过",
+		`{"current_chapter":29,"check_types":"[\"pacing_gap\"]"}`)
+	ok, reason := gate.SetPhase("maintain")
+	if ok {
+		t.Error("narrowed check_types recheck must not bypass existing [ERROR]")
+	}
+	if !strings.Contains(reason, "伏笔超期") {
+		t.Errorf("block reason should retain the original error, got: %s", reason)
+	}
+
+	// 修复后做一次全量复查且无 ERROR → 解除拦截
+	gate.OnToolCall("check_story_consistency", true,
+		"✅ 一致性检查通过",
+		`{"current_chapter":29,"check_types":["foreshadow_overdue","character_vanished","item_conflict","dead_appeared","pacing_gap","promise_fulfillment","init_consistency","ledger_integrity","beat_window","scope_guard","type_drift"]}`)
+	ok, _ = gate.SetPhase("maintain")
+	if !ok {
+		t.Error("full-scope clean recheck should clear consistency errors and allow transition")
+	}
+	t.Logf("✓ 缩窄复查无法绕过，全量复查可解除")
+}
+
 func containsStr(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSub(s, substr))
 }

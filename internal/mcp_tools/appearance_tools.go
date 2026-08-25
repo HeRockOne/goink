@@ -11,6 +11,7 @@ import (
 
 	"novel/internal/chapter"
 	"novel/internal/character"
+	"novel/internal/git"
 	"novel/internal/item"
 	"novel/internal/itemoccurrence"
 	"novel/internal/lore"
@@ -261,7 +262,7 @@ func foreshadowAppearances(ctx context.Context, db *gorm.DB, novelID, entryID in
 
 type CheckStoryConsistencyArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"required,description=当前章节号" validate:"required,min=1"`
-	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\",\"pacing_gap\",\"promise_fulfillment\",\"init_consistency\",\"ledger_integrity\",\"beat_window\",\"scope_guard\",\"type_drift\"]。留空=全部"`
+	CheckTypes     string `json:"check_types" jsonschema:"description=JSON数组，要执行的检查项：[\"foreshadow_overdue\",\"character_vanished\",\"item_conflict\",\"dead_appeared\",\"pacing_gap\",\"promise_fulfillment\",\"init_consistency\",\"ledger_integrity\",\"beat_window\",\"scope_guard\",\"type_drift\",\"dup_paragraph\"]。留空=全部"`
 	Lookback       int    `json:"lookback" jsonschema:"description=pacing_gap 回溯窗口章数，默认5"`
 	MinGap         int    `json:"min_gap" jsonschema:"description=pacing_gap 连续无动作场景触发阈值，默认3"`
 	Tolerance      int    `json:"tolerance" jsonschema:"description=promise_fulfillment 承诺章+tolerance后仍未兑现才报警，默认3"`
@@ -284,6 +285,7 @@ func (t *CheckStoryConsistencyTool) Description() string {
 		"9. beat_window：未来3章内到期的大爽点提醒（写前对齐，防止爽点被替换或顺延）\n" +
 		"10. scope_guard：本章是否落在当前卷范围内、弧线节点相对规划的提前消耗/滞后（警告）\n" +
 		"11. type_drift：回溯窗口内动作/冲突场景占比过低，类型方向漂移嫌疑（警告）\n" +
+		"12. dup_paragraph：本章正文中 ≥15 字的整段逐字重复（编辑事故或扩写损坏的痕迹，硬错误）\n" +
 		"review/maintain/init 阶段调用，作为审稿的硬数据支撑。" +
 		"【使用时机】审稿/每 3 章自检时调用（自动核对，输出问题条目）；发现问题后按条目定位修复。" +
 		"【注意】检查是程序化 SQL 核对，不含文笔判断——文笔问题仍需人工审读。"
@@ -299,7 +301,7 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 	a := args.(*CheckStoryConsistencyArgs)
 	db := tc.DB.WithContext(ctx)
 
-	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true, "pacing_gap": true, "promise_fulfillment": true, "init_consistency": true, "ledger_integrity": true, "beat_window": true, "scope_guard": true, "type_drift": true}
+	checkTypes := map[string]bool{"foreshadow_overdue": true, "character_vanished": true, "item_conflict": true, "dead_appeared": true, "pacing_gap": true, "promise_fulfillment": true, "init_consistency": true, "ledger_integrity": true, "beat_window": true, "scope_guard": true, "type_drift": true, "dup_paragraph": true}
 	if a.CheckTypes != "" {
 		checkTypes = map[string]bool{}
 		for _, c := range parseJSONStringArray(a.CheckTypes) {
@@ -397,9 +399,13 @@ func (t *CheckStoryConsistencyTool) Execute(ctx context.Context, args any, tc To
 		}
 	}
 
+	if checkTypes["dup_paragraph"] {
+		findings = append(findings, findDupParagraphs(tc.NovelID, a.CurrentChapter)...)
+	}
+
 	var content string
 	if len(findings) == 0 && len(warnings) == 0 {
-		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出、节奏拖沓、承诺未兑现、开书冲突、台账失真、爽点临近未对齐、卷范围越界、类型漂移。"
+		content = "✅ 一致性检查通过：未发现伏笔超期、角色断档、物品冲突、死者复出、节奏拖沓、承诺未兑现、开书冲突、台账失真、爽点临近未对齐、卷范围越界、类型漂移、整段重复。"
 	} else {
 		parts := append([]string{}, findings...)
 		parts = append(parts, warnings...)
@@ -1104,4 +1110,67 @@ func intsToString(nums []int) string {
 		parts[i] = fmt.Sprint(n)
 	}
 	return strings.Join(parts, "/")
+}
+
+// findDupParagraphs 整段逐字重复检测：读本章正文，空行分段，
+// ≥15 字符的非标题段落若与此前段落逐字相同即报硬错误。
+// 典型成因是 search_replace/line_range_replace 扩写事故导致内容成块复制（Ch28 事故）。
+func findDupParagraphs(novelID int64, chapterNum int) []string {
+	content, err := git.ReadFile(novelID, git.ChapterPath(chapterNum))
+	if err != nil || content == "" {
+		return nil
+	}
+	return detectDupParagraphs(content)
+}
+
+// detectDupParagraphs 对正文文本做整段逐字重复检测。
+func detectDupParagraphs(content string) []string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(content, "\n")
+
+	seen := map[string]int{} // 段落全文 → 首次出现的行号
+	var dups []string
+	start := 0
+	var cur []string
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+		text := strings.TrimSpace(strings.Join(cur, "\n"))
+		lineNo := start
+		cur = nil
+		start = 0
+		if lineNo == 0 || len([]rune(text)) < 15 || strings.HasPrefix(text, "#") || strings.HasPrefix(text, ">") {
+			return
+		}
+		if first, ok := seen[text]; ok {
+			r := []rune(text)
+			preview := text
+			if len(r) > 30 {
+				preview = string(r[:30]) + "…"
+			}
+			dups = append(dups, fmt.Sprintf("[ERROR] 整段逐字重复：第%d行与第%d行内容完全相同：%s", first, lineNo, preview))
+			return
+		}
+		seen[text] = lineNo
+	}
+	for i, ln := range lines {
+		if strings.TrimSpace(ln) == "" {
+			flush()
+			continue
+		}
+		if len(cur) == 0 {
+			start = i + 1
+		}
+		cur = append(cur, ln)
+	}
+	flush()
+
+	const maxShow = 5
+	if len(dups) > maxShow {
+		total := len(dups)
+		dups = dups[:maxShow]
+		dups = append(dups, fmt.Sprintf("[ERROR] 整段重复共 %d 处，仅显示前 %d 处——正文疑似损坏，建议对照 git 历史恢复", total, maxShow))
+	}
+	return dups
 }

@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-26：Ch29-30 审计驱动 4 项修复。① tags 数组容错：base.go 新增 FlexString 类型（UnmarshalJSON 接受 string 或数组，数组经 NormalizeStringArrayValue 规整后回序列化为 JSON 文本），lore/item/location 6 个 Tags 字段改用（此前 LLM 传 `tags: [...]` 在 JSON 反序列化阶段即失败，NormalizeStringArray 无机会执行）；② 会话切换中断修复：ChatPanel.tsx 新增 streamInfoRef/pendingResubRef——切走再切回仍在流式输出的会话时，历史重建完成后重挂 agent:{sid}:{turnId} 监听续流（根因：handleSelectSession 注销订阅后无人重挂，后端继续输出而 turn 永远停在 streaming）；③ 门禁 check_types 缩窄绕过封堵：phase_gate.go 新增 consistencyErrors 错误指纹集合，OnToolCall 扩展 argsJSON 参数（variadic 兼容旧调用），recordConsistencyCheck 判定全量检查（无 check_types 或覆盖全部 11 类）时重置集合、缩窄复查只增不清；checkResultGateMet 改查集合而非 lastToolResults 子串——换一组类型重查无法绕过 ERROR，修复后全量复查解除；④ dup_paragraph 第 12 种一致性检查：appearance_tools.go findDupParagraphs（git.ReadFile chapters/%03d.md，空行分段，≥15 rune 非标题段落逐字重复报 ERROR，>5 处截断提示疑似损坏）+ detectDupParagraphs 纯函数可测；identity.go 审稿步骤 4 的 check_types 列表同步加入。
+
 > 2026-08-25：字数范围统一为 NS 单一来源（novel_state.go:45-55 从 app_config 注入"字数范围：每章 X-Y 字"），kernel 为唯一声明点（L137："总字数以 NS【字数范围】为准"），其余 5 个 skill 移除硬编码改引用 kernel/NS（book-outline/golden-three-chapters/shuangdian-pacing/word-count-calibration/climax-scene）。新增 creation-test-audit-guide.md（DB schema/6层审计/4会话对比/错误分类/SQL 脚本）。edit 工具新增 old_content 参数 alias（rw_tools.go:29-30 + fallback L305-307）。
 
 > 2026-08-25：Kernel 精简（265→146 行，-45%）。删除与 identity.go 重复的 30 行（skill 目录/卷结构/并行工具调用）；压缩与 gate config 重叠的 105→~30 行（各阶段指令保留独特细节，骨架引用 gate config）；新增标准化审稿 instruction 模板（{N}/{title}/{NNN} 填充 + check_story_consistency 5 类型 + 27 项标准 + 评分阈值 + 重写/压缩场景变体）；保留全部独一份内容（批量规则/实体判定/硬约束/可选技能/字数规则/write→review 边界）。builtin + skills/ + ~/.goink/skills/ 三向同步。commit c8d5057。

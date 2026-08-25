@@ -84,7 +84,7 @@ type CreateLoreItem struct {
 	IsPublic        bool   `json:"is_public" jsonschema:"description=是否公开设定（读者已知），false=秘密,default=true"`
 	ReferenceID     int64  `json:"reference_id" jsonschema:"description=关联实体ID"`
 	ReferenceType   string `json:"reference_type" jsonschema:"description=关联类型：location/character"`
-	Tags            string `json:"tags" jsonschema:"description=JSON标签数组，纯字符串数组，如[\"仙侠\"，\"上古\"],禁止对象数组"`
+	Tags            FlexString `json:"tags" jsonschema:"description=JSON标签数组，纯字符串数组，如[\"仙侠\"，\"上古\"],禁止对象数组"`
 }
 
 // CreateLoreArgs 是 create_lore 的参数（批量，1-5条）。
@@ -114,7 +114,7 @@ func (t *CreateLoreTool) Execute(ctx context.Context, args any, tc ToolContext) 
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Lore {
-			tags, err := NormalizeStringArray(item.Tags)
+			tags, err := NormalizeStringArray(string(item.Tags))
 			if err != nil {
 				failedTitle = item.Title
 				failedErr = fmt.Errorf("tags 格式错误: %w", err)
@@ -156,7 +156,7 @@ type UpdateLoreArgs struct {
 	IsPublic        *bool   `json:"is_public,omitempty" jsonschema:"description=是否公开"`
 	ReferenceID     int64   `json:"reference_id" jsonschema:"description=关联实体ID"`
 	ReferenceType   string  `json:"reference_type" jsonschema:"description=关联实体类型"`
-	Tags            string  `json:"tags" jsonschema:"description=标签JSON数组，纯字符串数组"`
+	Tags            FlexString `json:"tags" jsonschema:"description=标签JSON数组，纯字符串数组"`
 }
 
 type UpdateLoreTool struct{}
@@ -187,7 +187,7 @@ func (t *UpdateLoreTool) Execute(ctx context.Context, args any, tc ToolContext) 
 	if a.IsPublic != nil { existing.IsPublic = *a.IsPublic }
 	if a.ReferenceID > 0 { existing.ReferenceID = &a.ReferenceID; existing.ReferenceType = a.ReferenceType }
 	if a.Tags != "" {
-		tags, err := NormalizeStringArray(a.Tags)
+		tags, err := NormalizeStringArray(string(a.Tags))
 		if err != nil {
 			return &ToolResult{Success: false, Error: fmt.Sprintf("tags 格式错误: %v", err)}, nil
 		}

@@ -209,7 +209,7 @@ type CreateLocationItem struct {
 	LocationType string `json:"location_type" jsonschema:"required,description=地点类型：城镇/村落/山脉/建筑/秘境/水域/战场/其他" validate:"required"`
 	Description      string `json:"description" jsonschema:"required,description=地点详细描述，环境氛围、特色等" validate:"required"`
 	DetailJSON       string `json:"detail_json" jsonschema:"description=字符串形式的JSON对象，结构化信息：气候、氛围、历史事件等"`
-	Tags             string `json:"tags" jsonschema:"description=字符串形式的JSON数组，自由标签，如[\"危险\"，\"神秘\"]。必须是纯字符串数组，禁止对象数组或单引号"`
+	Tags             FlexString `json:"tags" jsonschema:"description=字符串形式的JSON数组，自由标签，如[\"危险\"，\"神秘\"]。必须是纯字符串数组，禁止对象数组或单引号"`
 	ParentLocationID *int64 `json:"parent_location_id" jsonschema:"description=父级地点ID，用于构建层级树"`
 }
 
@@ -266,7 +266,7 @@ func (t *CreateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Locations {
-			tags, err := NormalizeStringArray(item.Tags)
+			tags, err := NormalizeStringArray(string(item.Tags))
 			if err != nil {
 				failedName = item.Name
 				failedErr = fmt.Errorf("tags 格式错误: %w", err)
@@ -312,7 +312,7 @@ type UpdateLocationArgs struct {
 	LocationType     string `json:"location_type" jsonschema:"description=新的类型"`
 	Description      string `json:"description" jsonschema:"description=新的描述"`
 	DetailJSON       string `json:"detail_json" jsonschema:"description=新的结构化信息，字符串形式JSON（完全替换旧的）"`
-	Tags             string `json:"tags" jsonschema:"description=新的标签，字符串形式JSON数组（完全替换旧的）。必须是纯字符串数组"`
+	Tags             FlexString `json:"tags" jsonschema:"description=新的标签，字符串形式JSON数组（完全替换旧的）。必须是纯字符串数组"`
 	ParentLocationID *int64 `json:"parent_location_id" jsonschema:"description=新的父级地点ID（不传不变，传null变根节点）"`
 }
 

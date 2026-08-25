@@ -104,6 +104,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const counterRef = useRef(0)
   const startedUnsubRef = useRef<(() => void) | null>(null)
   const agentUnsubRef = useRef<(() => void) | null>(null)
+  // 进行中的流式发送（chat:started 时记录）。切走再切回该会话时据此重挂监听续流，
+  // 否则后端继续输出而前端已注销订阅，turn 永远停在 streaming（表现为"会话中断"）
+  const streamInfoRef = useRef<{ sessionId: string; turnId: number } | null>(null)
+  // 待重挂的续流目标：handleSelectSession 设置，历史消息重建完成后由加载 effect 消费
+  const pendingResubRef = useRef<{ sessionId: string; turnId: number } | null>(null)
+  // handleAgentEvent 声明在加载 effect 之后，经 ref 间接引用（渲染时回填）
+  const handleAgentEventFnRef = useRef<((turnId: number) => (event: AgentEvent) => void) | null>(null)
   const eventQueuesRef = useRef<Map<number, EventQueue>>(new Map())
   // 发送代际号：并发发送/切换会话时，旧发送的 finally 不得注销新发送的监听器、
   // 不得把积压事件 flush 进当前会话（旧实现共享 ref 被覆盖后误删，见审计 F1/F2）
@@ -413,6 +420,15 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       if (msgs) {
         setTurns(rebuildTurns(msgs))
       }
+      // 回到仍在输出的会话：重建后的 turns 带 DB 真实 turn_id，与新订阅通道匹配，
+      // 重挂监听续上剩余流式事件（后端一直在跑，只是前端此前已注销订阅）
+      const resub = pendingResubRef.current
+      const subscribe = handleAgentEventFnRef.current
+      if (resub && resub.sessionId === activeSessionId && subscribe) {
+        pendingResubRef.current = null
+        agentUnsubRef.current?.()
+        agentUnsubRef.current = EventsOn(`agent:${resub.sessionId}:${resub.turnId}`, subscribe(resub.turnId))
+      }
     }).catch((err) => {
       console.error('Load messages failed', err)
       setHistoryLoadError(true)
@@ -492,6 +508,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     })
     eventQueuesRef.current.clear()
     sendGenRef.current++
+    // 回到仍在流式输出的会话：标记待重挂（加载 effect 重建完成后消费）
+    if (streamInfoRef.current && streamInfoRef.current.sessionId === sid) {
+      pendingResubRef.current = { ...streamInfoRef.current }
+    }
     loadOnSessionRef.current = true // 显式选会话 → 消息加载 effect 执行重建
     setActiveSessionId(sid)
     setVisibleTurnCount(30)
@@ -1019,6 +1039,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       }, EVENT_REORDER_TIMEOUT)
     }
   }, [applyAgentEvent, flushEventQueue])
+  handleAgentEventFnRef.current = handleAgentEvent
 
   const handleConfigModel = useCallback(() => setShowSettings(true), [])
 
@@ -1155,6 +1176,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         setSessionId(data.session_id)
         setActiveSessionId(data.session_id)
         app.SetLastSession(data.session_id).catch(() => {})
+        streamInfoRef.current = { sessionId: data.session_id, turnId: data.turn_id }
       }
 
       // 更新 turn 的 turnId 为后端分配的真实值
@@ -1221,6 +1243,12 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         if (staleQueue?.flushTimer) clearTimeout(staleQueue.flushTimer)
         eventQueuesRef.current.delete(myBackendTurnId)
       }
+      // 本次发送已结束：不再可续流。仅当 streamInfo 仍指向本发送时清除，
+      // 防止误删并发新发送刚写入的信息
+      if (streamInfoRef.current && streamInfoRef.current.turnId === myBackendTurnId) {
+        streamInfoRef.current = null
+      }
+      pendingResubRef.current = null
       setTurns(prev => prev.map(t =>
         t.id === turnId && t.status === 'streaming'
           ? { ...t, status: 'done' as const, segments: t.segments.map(seg =>

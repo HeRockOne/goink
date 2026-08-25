@@ -686,7 +686,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							ok, warning := pg.SetPhase(targetPhase)
 							// 记录调用（仅成功时；失败时 require 未满足不算有效调用）
 							if ok {
-								pg.OnToolCall("set_phase", true, "")
+								pg.OnToolCall("set_phase", true, "", "")
 							}
 							if ok {
 								// 成功：自动注入新阶段必读技能。
@@ -723,7 +723,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								if strings.Contains(warning, "auto_skill_injection") {
 									a.injectPhaseSkills(pg, pg.CurrentPhase(), &opts, runningTokens)
 									if ok2, _ := pg.SetPhase(targetPhase); ok2 {
-										pg.OnToolCall("set_phase", true, "")
+										pg.OnToolCall("set_phase", true, "", "")
 										if from != targetPhase {
 											a.injectPhaseSkills(pg, targetPhase, &opts, runningTokens)
 										}
@@ -883,7 +883,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								resultContent = content
 							}
 						}
-						pg.OnToolCall(name, result.Success, resultContent)
+						pg.OnToolCall(name, result.Success, resultContent, string(rawArgs))
 						// 工具执行成功：重置该工具的拦截计数（连续拦截才算降噪）
 						if result.Success {
 							delete(blockCount, pg.CurrentPhase()+":"+name)

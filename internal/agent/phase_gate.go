@@ -24,6 +24,7 @@ type PhaseGate struct {
 	calledTools     map[string]int // tool_name → 调用次数（含失败）
 	successfulTools map[string]int // tool_name → 成功次数（require 只看这个）
 	lastToolResults map[string]string // tool_name → 最近一次调用结果内容（结果门控用）
+	consistencyErrors []string       // 未解决的一致性 [ERROR] 指纹（缩窄 check_types 复查无法绕过，全量复查才清空）
 	mode            string         // "single" | "batch"
 	active          bool           // 是否启用
 	wordCountOK     *bool          // get_chapter_list 字数校验结果（nil=未检查）
@@ -195,7 +196,8 @@ func (g *PhaseGate) CurrentPhase() string {
 // OnToolCall 记录工具调用。
 // success=true 表示工具执行成功，require 只统计成功次数。
 // resultContent 是工具返回结果的内容（用于结果门控检查）。
-func (g *PhaseGate) OnToolCall(toolName string, success bool, resultContent string) {
+// argsJSON 可选，是工具原始参数 JSON（check_story_consistency 判断检查范围用）。
+func (g *PhaseGate) OnToolCall(toolName string, success bool, resultContent string, argsJSON ...string) {
 	if g == nil || !g.active {
 		return
 	}
@@ -206,6 +208,54 @@ func (g *PhaseGate) OnToolCall(toolName string, success bool, resultContent stri
 		// 存储最近一次调用结果（结果门控用）
 		if resultContent != "" {
 			g.lastToolResults[toolName] = resultContent
+		}
+		if toolName == "check_story_consistency" {
+			args := ""
+			if len(argsJSON) > 0 {
+				args = argsJSON[0]
+			}
+			g.recordConsistencyCheck(args, resultContent)
+		}
+	}
+}
+
+// fullConsistencyTypes 全量一致性检查的 11 个类型；args 覆盖全部才视为全量复查。
+var fullConsistencyTypes = []string{
+	"foreshadow_overdue", "character_vanished", "item_conflict", "dead_appeared",
+	"pacing_gap", "promise_fulfillment", "init_consistency", "ledger_integrity",
+	"beat_window", "scope_guard", "type_drift",
+}
+
+// recordConsistencyCheck 维护一致性错误指纹集合，堵住"换一组 check_types 重查绕过 ERROR"的漏洞：
+// 缩窄范围的复查只增不清——已有 ERROR 不因本次未覆盖而消失；
+// 全量检查（留空=默认全部，或覆盖全部类型）重置集合后按本次结果重建，
+// 修复后做一次全量复查即可解除拦截。
+func (g *PhaseGate) recordConsistencyCheck(argsJSON, resultContent string) {
+	lower := strings.ToLower(argsJSON)
+	full := !strings.Contains(lower, "check_types")
+	if !full {
+		all := true
+		for _, t := range fullConsistencyTypes {
+			if !strings.Contains(lower, t) {
+				all = false
+				break
+			}
+		}
+		full = all
+	}
+	if full {
+		g.consistencyErrors = nil
+	}
+	for _, line := range extractErrorLines(resultContent) {
+		dup := false
+		for _, e := range g.consistencyErrors {
+			if e == line {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			g.consistencyErrors = append(g.consistencyErrors, line)
 		}
 	}
 }
@@ -286,22 +336,13 @@ func (g *PhaseGate) checkRequireMet(pc *PhaseConfig) bool {
 var reviewVerdictRe = regexp.MustCompile(`总分[:：]\s*[\d.]+\s*/\s*10\s*[（(]\s*(通过|需修改|不通过)\s*[）)]`)
 
 // checkResultGateMet 检查结果门控：
-// 1. require 中的工具如果返回了 [ERROR]，禁止推进（check_story_consistency 等）
-// 2. run_subagent 审稿结论为需修改/不通过时，禁止推进到下一阶段
+// 1. 一致性检查存在未解决的 [ERROR] 禁止推进（consistencyErrors 集合，缩窄 check_types 无法绕过）
+// 2. run_subagent 审稿结论为不通过时，禁止推进到下一阶段
 func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
-	resultGatedTools := map[string]bool{
-		"check_story_consistency": true,
-	}
-	for _, req := range pc.Require {
-		if !resultGatedTools[req] {
-			continue
-		}
-		if result, ok := g.lastToolResults[req]; ok {
-			if strings.Contains(result, "[ERROR]") {
-				summary := extractErrorSummary(result, 2)
-				return false, fmt.Sprintf("%s 存在硬错误，禁止切换阶段。需修复：\n%s", req, summary)
-			}
-		}
+	if len(g.consistencyErrors) > 0 {
+		summary := extractErrorSummary(strings.Join(g.consistencyErrors, "\n"), 2)
+		return false, fmt.Sprintf("check_story_consistency 存在未解决硬错误（共%d条）——修复后需做一次全量检查解除，禁止切换阶段：\n%s",
+			len(g.consistencyErrors), summary)
 	}
 	// 审稿结论门控：仅"不通过"（<7.0）阻止推进，"需修改"（7.0-8.9）放行
 	// 需修改=小问题修了就行，LLM 看到报告会自行修复；不通过=大问题必须重审
@@ -313,10 +354,25 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 	return true, ""
 }
 
+var errorLineRe = regexp.MustCompile(`\[ERROR\][^\n]*`)
+
+// extractErrorLines 提取全部 [ERROR] 行（每行截断至 80 字符），作为错误指纹。
+func extractErrorLines(result string) []string {
+	matches := errorLineRe.FindAllString(result, -1)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		r := []rune(m)
+		if len(r) > 80 {
+			m = string(r[:80]) + "…"
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // extractErrorSummary 从工具结果中提取前 N 条 [ERROR] 行，每行截断至 80 字符。
 func extractErrorSummary(result string, maxLines int) string {
-	errorRe := regexp.MustCompile(`\[ERROR\][^\n]*`)
-	matches := errorRe.FindAllString(result, maxLines)
+	matches := errorLineRe.FindAllString(result, maxLines)
 	if len(matches) == 0 {
 		return "[无详细错误信息]"
 	}
@@ -667,6 +723,7 @@ func (g *PhaseGate) SetPhase(targetPhase string) (bool, string) {
 	g.calledTools = make(map[string]int)
 	g.successfulTools = make(map[string]int)
 	g.lastToolResults = make(map[string]string)
+	g.consistencyErrors = nil
 
 	g.currentPhase = targetPhase
 	// 判定一轮完整流程完成：目标阶段是"按 next 链推进回来的、且本轮已访问过"的阶段。
@@ -1059,6 +1116,7 @@ func (g *PhaseGate) ResetTo(phase string) bool {
 			g.wordCountOK = nil
 			g.readsByPhase = make(map[string]map[string]bool)
 			g.roundCompleted = false
+			g.consistencyErrors = nil
 			return true
 		}
 	}

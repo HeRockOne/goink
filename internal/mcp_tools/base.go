@@ -411,6 +411,41 @@ func NormalizeStringArrayValue(v any) ([]string, error) {
 	}
 }
 
+// FlexString 兼容 LLM 把字符串字段传成 JSON 数组（如 tags: ["a","b"]）：
+// 字符串原样保留；数组规整为纯字符串数组后重新序列化为 JSON 文本，
+// 交由下游 NormalizeStringArray 正常处理。避免反序列化阶段直接报错。
+type FlexString string
+
+func (s *FlexString) UnmarshalJSON(b []byte) error {
+	raw := strings.TrimSpace(string(b))
+	if raw == "" || raw == "null" {
+		*s = ""
+		return nil
+	}
+	if raw[0] == '"' {
+		var v string
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			return err
+		}
+		*s = FlexString(v)
+		return nil
+	}
+	var arr []any
+	if err := json.Unmarshal([]byte(raw), &arr); err != nil {
+		return fmt.Errorf("需要字符串或字符串数组")
+	}
+	out, err := NormalizeStringArrayValue(arr)
+	if err != nil {
+		return err
+	}
+	j, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	*s = FlexString(j)
+	return nil
+}
+
 func mustParseJSON(raw string) any {
 	var v any
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
