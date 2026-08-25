@@ -137,3 +137,41 @@ func TestParseReport_FailWithBold(t *testing.T) {
 			r.DimStructure, r.DimCharacter, r.DimPacing, r.DimProse, r.DimScene)
 	}
 }
+
+func TestComputeTotalScore(t *testing.T) {
+	cases := []struct {
+		name                          string
+		s, c, p, pr, sc, want         float64
+	}{
+		{"样例报告8.45", 9, 8, 8, 9, 8, 8.45}, // 模型正文自称 8.5，实际加权 8.45——正是代码计算要纠正的心算错误
+		{"Ch31实测7.7", 8, 9, 7, 5, 9, 7.7},
+		{"全零", 0, 0, 0, 0, 0, 0},
+		{"满分10", 10, 10, 10, 10, 10, 10},
+	}
+	for _, tc := range cases {
+		got := ComputeTotalScore(tc.s, tc.c, tc.p, tc.pr, tc.sc)
+		if got != tc.want {
+			t.Errorf("%s: ComputeTotalScore = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestDeriveVerdict(t *testing.T) {
+	cases := []struct {
+		name       string
+		total      float64
+		fatal      int
+		want       string
+	}{
+		{"高分无致命通过", 9.5, 0, VerdictPass},
+		{"恰好9.0通过", 9.0, 0, VerdictPass},
+		{"中分需修改", 7.7, 0, VerdictRevise},
+		{"低分不通过", 6.9, 0, VerdictFail},
+		{"有致命一票否决", 9.5, 1, VerdictFail},
+	}
+	for _, tc := range cases {
+		if got := DeriveVerdict(tc.total, tc.fatal); got != tc.want {
+			t.Errorf("%s: DeriveVerdict = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

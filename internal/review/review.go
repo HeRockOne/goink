@@ -142,3 +142,32 @@ func SaveRecord(db *gorm.DB, rec *ReviewRecord, log *slog.Logger) {
 		}
 	}
 }
+
+// 五维权重：与 sub-tech-review-standards.md 的维度权重表一一对应，改动需两处同步。
+const (
+	WeightStructure = 0.30
+	WeightCharacter = 0.25
+	WeightPacing    = 0.20
+	WeightProse     = 0.15
+	WeightScene     = 0.10
+)
+
+// ComputeTotalScore 按固定权重计算加权总分（保留两位小数）。
+// 总分由代码计算是唯一真相，模型只提交各维度分数。
+func ComputeTotalScore(structure, character, pacing, prose, scene float64) float64 {
+	total := structure*WeightStructure + character*WeightCharacter +
+		pacing*WeightPacing + prose*WeightProse + scene*WeightScene
+	return float64(int(total*100+0.5)) / 100
+}
+
+// DeriveVerdict 按审稿标准推导结论：
+// 含致命问题或总分<7.0 → fail；总分≥9.0 且无致命 → pass；其余 revise。
+func DeriveVerdict(total float64, fatalCount int) string {
+	if fatalCount > 0 || total < 7.0 {
+		return VerdictFail
+	}
+	if total >= 9.0 {
+		return VerdictPass
+	}
+	return VerdictRevise
+}

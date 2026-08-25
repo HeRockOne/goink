@@ -47,6 +47,7 @@ var toolDisplayNames = map[string]string{
 	"update_chapter_meta":             "更新章节元数据",
 	"get_item_occurrences":            "查看物品流转",
 	"get_review_history":              "查询审稿记录",
+	"submit_review":                   "提交审稿评分",
 	"create_item_occurrence":          "记录物品出现",
 	"get_items":                       "查看物品列表",
 	"create_item":                     "创建新物品",

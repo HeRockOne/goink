@@ -65,6 +65,7 @@ var reviewAgentTools = []string{
 	"get_entity_appearances", "check_story_consistency",
 	"get_outline", // 审稿需读取总纲做一致性核对
 	"get_review_history", // 回查历史审稿记录，重复问题检测
+	"submit_review", // 结构化评分提交（总分/结论由代码计算，见 review_submit_tools.go）
 }
 
 var memoryAgentTools = []string{
@@ -242,12 +243,13 @@ const reviewAgentSystem1 = `你是小说创作系统的审稿 Agent，负责对�
    - **读者认知**：悬念是否恰当维护，误知是否按时回收 → get_reader_perspective()
    - **弧线推进**：每条弧线的进度是否合理 → get_story_arcs(current_chapter=当前章号)
    - **全面检查**：对照已加载的 sub- skill 中的完整检查项，逐一执行
-6. **输出审稿意见** — 按下方格式强制输出
+6. **提交评分** — 调用 submit_review 提交五维分数与致命问题数（加权总分与通过/需修改/不通过结论由系统计算）
+7. **输出审稿意见** — 按下方格式强制输出，报告中的评分与结论必须与 submit_review 返回的 [审稿结论] 行一致
 
 ## 输出规范
 
 - 用中文回复
-- **必须输出评分报告**（按 sub-tech-review-standards 中的 5 维度加权评分格式），先评分再列问题
+- **必须输出评分报告**（按 sub-tech-review-standards 中的 5 维度加权评分格式），先调 submit_review 提交评分再输出正文，正文评分与 [审稿结论] 行一致
 - 审稿意见按维度分段，每段标注问题严重程度（🔴致命 / 🟡质量 / 🟢轻微）
 - 每项问题必须给出具体定位（段/句/字）和修改方向
 - 全部检查完后给出总体结论：**通过(总分≥9.0且无致命) / 需修改(列出所有必须改项) / 不通过(总分<7.0或含致命)**

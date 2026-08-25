@@ -200,16 +200,84 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	}
 	result, err := a.Run(ctx, subOpts)
 
-	// 审稿记录确定性落库：报告原文全量保存，结构化字段 best-effort 解析。
-	// 落库失败只告警，不影响审稿结果返回。
+	// 审稿记录确定性落库：优先取子代理 submit_review 结构化参数（分数/结论由代码
+	// 计算，不经正则解析），未调用时回退 ParseReport。落库失败只告警不影响返回。
 	if err == nil && at == agentcfg.ReviewAgent {
-		rec := review.ParseReport(result.FinalText, req.Instruction)
+		finalText := result.FinalText
+		var rec *review.ReviewRecord
+		if args, ok := findSubmitReviewArgs(subOpts.Messages); ok {
+			rec = reviewRecordFromSubmit(args, finalText, req.Instruction)
+			// 末尾追加规范结论行：门控 reviewVerdictRe 取最后一个匹配，
+			// 该行格式受控必然命中，正文排版不再影响 verdict gate
+			finalText += "\n" + args["canonical"].(string)
+		} else {
+			rec = review.ParseReport(finalText, req.Instruction)
+		}
 		rec.NovelID = req.NovelID
 		rec.SessionID = parentOpts.SessionID
 		review.SaveRecord(a.db, rec, slog.Default())
+		return finalText, err
 	}
 
 	return result.FinalText, err
+}
+
+// findSubmitReviewArgs 从子代理消息转录中提取最后一次 submit_review 调用的参数。
+func findSubmitReviewArgs(msgs []map[string]any) (map[string]any, bool) {
+	var found map[string]any
+	for _, m := range msgs {
+		if role, _ := m["role"].(string); role != "assistant" {
+			continue
+		}
+		calls, ok := m["tool_calls"].([]any)
+		if !ok {
+			continue
+		}
+		for _, c := range calls {
+			call, _ := c.(map[string]any)
+			fn, _ := call["function"].(map[string]any)
+			if name, _ := fn["name"].(string); name != "submit_review" {
+				continue
+			}
+			argsStr, _ := fn["arguments"].(string)
+			var args map[string]any
+			if json.Unmarshal([]byte(argsStr), &args) == nil {
+				found = args // last-wins
+			}
+		}
+	}
+	return found, found != nil
+}
+
+// reviewRecordFromSubmit 用 submit_review 参数构建审稿记录：
+// 总分按固定权重计算、结论按规则推导，模型提交的只有原始维度分。
+func reviewRecordFromSubmit(args map[string]any, finalText, instruction string) *review.ReviewRecord {
+	getF := func(k string) float64 { v, _ := args[k].(float64); return v }
+	getI := func(k string) int { return int(getF(k)) }
+
+	structure, character, pacing := getF("dim_structure"), getF("dim_character"), getF("dim_pacing")
+	prose, scene := getF("dim_prose"), getF("dim_scene")
+	fatal := getI("fatal_count")
+
+	rec := &review.ReviewRecord{
+		Report:       finalText,
+		Instruction:  instruction,
+		ChapterStart: getI("chapter_start"),
+		ChapterEnd:   getI("chapter_end"),
+		FatalCount:   fatal,
+		DimStructure: structure,
+		DimCharacter: character,
+		DimPacing:    pacing,
+		DimProse:     prose,
+		DimScene:     scene,
+	}
+	rec.TotalScore = review.ComputeTotalScore(structure, character, pacing, prose, scene)
+	rec.Verdict = review.DeriveVerdict(rec.TotalScore, fatal)
+
+	verdictCN := map[string]string{review.VerdictPass: "通过", review.VerdictRevise: "需修改", review.VerdictFail: "不通过"}[rec.Verdict]
+	args["canonical"] = fmt.Sprintf("[审稿结论] 总分：%s/10（%s）",
+		strconv.FormatFloat(rec.TotalScore, 'f', -1, 64), verdictCN)
+	return rec
 }
 
 // buildSubagentSkills 扫描所有 sub- 前缀技能并拼接内容（子代理专属方法论）。
