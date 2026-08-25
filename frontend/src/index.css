@@ -868,7 +868,7 @@ body {
   background: var(--narrative-card-bg);
   padding: 0.5rem 0.6rem;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--fin-shadow-sm);
   transition: box-shadow 200ms, border-color 200ms;
 }
@@ -969,8 +969,6 @@ body {
   font-size: 0.72rem;
   line-height: 1.6;
   color: var(--foreground);
-  max-height: 55vh;
-  overflow-y: auto;
 }
 .review-report-md h1, .review-report-md h2, .review-report-md h3 {
   font-size: 0.78rem;
