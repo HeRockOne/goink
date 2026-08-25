@@ -210,9 +210,8 @@ func gatePhaseSequence(mode string) []string {
 }
 
 // legacyPhaseSkills 硬编码回退表（门禁配置不可用时保持旧行为，与 default_phase_gate_config 同步）。
-// init 仅保留在 batch 配置中（single 已移除 init 门禁），legacy 回退保留 init 供 batch 使用。
+// init 已从所有模式门禁移除，技能由模型按需加载，不再出现在阶段技能表中。
 var legacyPhaseSkills = map[string][]string{
-	"init":     {"main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"},
 	"prepare":  {"main-tech-common-sense-logic"},
 	"outline":  {"main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"},
 	"write":    {"main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density", "main-tech-word-count-calibration"},

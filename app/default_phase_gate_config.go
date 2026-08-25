@@ -66,16 +66,6 @@ note: 本轮创作结束，等待用户发起新一轮
 -->
 <!-- phase-gate-config
 mode: batch
-phase: init
-tools: get, create, edit, auto_skill_injection, set_phase, update_outline, update_outline_beat, delete_outline_beat
-edit_paths: goink.md
-require: get_characters, get_locations, get_story_arcs, get_lore, get_items, get_timeline, get_preferences
-auto_skill_injection: main-core-init-phase, main-tech-genre-templates, main-tech-book-outline, main-tech-character-design, main-tech-world-building-system
-next: prepare
-note: 先写全书总纲（update_outline + create_outline_beat），未写总纲禁止切换 prepare
--->
-<!-- phase-gate-config
-mode: batch
 phase: prepare
 tools: get, search, web, read, auto_skill_injection, set_phase, update_writing_snapshot, update_chapter_plan, create_story_arc
 require: get_writing_context, get_chapter_list, get_characters, get_timeline, get_story_arcs, get_reader_perspective, get_writing_snapshot, get_scenes, get_preferences

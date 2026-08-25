@@ -1682,32 +1682,22 @@ func injectSkillsPlays(plays []play) ([]play, []string) {
 }
 
 // initScript 开书（init）流程：加载必读技能 + 建世界观/角色/弧线 + 写总纲 + 建卷。
-// single 模式 init 已从门禁移除，技能由模型按需调用 auto_skill_injection（不经过门禁拦截）；
-// batch 模式 init 仍在门禁中，用 readRequired 模拟门禁驱动加载。
+// init 已从所有模式的门禁移除，技能由模型按需调用 auto_skill_injection。
 func initScript() []play {
-	plays := []play{}
-	// single 模式 init 不进门禁，auto_skill_injection 由模型按需调用（不预加载）；
-	// batch 模式 init 仍在门禁中，readRequired 模拟门禁驱动。
-	if gc := loadGateConfig("batch"); gc != nil && gc.phase("init") != nil {
-		plays = append(plays, readRequired(skillsFor("batch", "init")...))
-	} else {
-		// 无门禁配置时回退：用 single 的 init 技能（legacy 行为）
-		plays = append(plays, readRequired(skillsFor("single", "init")...))
+	return []play{
+		readRequired(skillsFor("single", "init")...),
+		{tool: "create_location", args: `{"name":"青云宗","type":"门派","desc":"主角所在宗门"}`, result: `{"id":1}`},
+		{tool: "create_character", args: `{"name":"陆沉","desc":"主角","location_id":1}`, result: `{"id":1}`},
+		{tool: "create_character", args: `{"name":"柳雪","desc":"师姐","location_id":1}`, result: `{"id":2}`},
+		{tool: "create_lore", args: `{"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}`, result: `{"id":1}`},
+		{tool: "create_item", args: `{"name":"聚气丹","owner_id":1,"narrative_role":"道具"}`, result: `{"id":3}`},
+		{tool: "create_timeline_entry", args: `{"title":"暗流涌动","category":"foreshadowing","target_chapter":8,"importance":"high"}`, result: `{"id":5}`},
+		{tool: "create_preference", args: `{"category":"style","content":"文风简练、细节丰富"}`, result: `{"id":1}`},
+		{tool: "create_story_arc", args: `{"name":"第一卷·崛起","arc_type":"volume","start_chapter":1,"end_chapter":20,"description":"主角入宗崛起"}`, result: `{"id":1}`},
+		{tool: "edit", args: editArgs("book-outline.md", "# 全书总纲\n核心矛盾：主角从废柴逆袭对抗宗门暗流\n主角成长弧线：入宗→觉醒→崛起\n结局方向：登顶青云\n篇幅规划：3 卷 60 章"), result: "写入 book-outline.md"},
+		{tool: "edit", args: editArgs("book-outline.md", "## 第一卷规划\n第 1-20 章：入宗与崛起，暗流初现\n爽点分布：每章至少 1 个\n伏笔主线：暗流涌动（第 8 章回收）"), result: "补充 book-outline.md 卷规划"},
+		{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
 	}
-	plays = append(plays,
-		play{tool: "create_location", args: `{"name":"青云宗","type":"门派","desc":"主角所在宗门"}`, result: `{"id":1}`},
-		play{tool: "create_character", args: `{"name":"陆沉","desc":"主角","location_id":1}`, result: `{"id":1}`},
-		play{tool: "create_character", args: `{"name":"柳雪","desc":"师姐","location_id":1}`, result: `{"id":2}`},
-		play{tool: "create_lore", args: `{"title":"天地灵气","category":"规则","content":"灵气浓度决定修炼速度"}`, result: `{"id":1}`},
-		play{tool: "create_item", args: `{"name":"聚气丹","owner_id":1,"narrative_role":"道具"}`, result: `{"id":3}`},
-		play{tool: "create_timeline_entry", args: `{"title":"暗流涌动","category":"foreshadowing","target_chapter":8,"importance":"high"}`, result: `{"id":5}`},
-		play{tool: "create_preference", args: `{"category":"style","content":"文风简练、细节丰富"}`, result: `{"id":1}`},
-		play{tool: "create_story_arc", args: `{"name":"第一卷·崛起","arc_type":"volume","start_chapter":1,"end_chapter":20,"description":"主角入宗崛起"}`, result: `{"id":1}`},
-		play{tool: "edit", args: editArgs("book-outline.md", "# 全书总纲\n核心矛盾：主角从废柴逆袭对抗宗门暗流\n主角成长弧线：入宗→觉醒→崛起\n结局方向：登顶青云\n篇幅规划：3 卷 60 章"), result: "写入 book-outline.md"},
-		play{tool: "edit", args: editArgs("book-outline.md", "## 第一卷规划\n第 1-20 章：入宗与崛起，暗流初现\n爽点分布：每章至少 1 个\n伏笔主线：暗流涌动（第 8 章回收）"), result: "补充 book-outline.md 卷规划"},
-		play{tool: "set_phase", args: `{"phase":"prepare"}`, result: `{"success":true,"phase":"prepare"}`},
-	)
-	return plays
 }
 
 // gateScript 一轮创作的完整工具剧本，严格对照 main-core-writing-kernel 阶段指令：
