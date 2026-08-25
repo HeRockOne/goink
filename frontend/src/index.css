@@ -944,21 +944,74 @@ body {
   padding-top: 0.4rem;
   cursor: default;
 }
+.review-instruction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  padding: 0.15rem 0;
+}
+.review-instruction-toggle:hover { color: var(--foreground); }
 .review-instruction {
   font-size: 0.68rem;
   color: var(--muted-foreground);
   margin-bottom: 0.3rem;
   word-break: break-word;
+  padding: 0.4rem;
+  background: var(--narrative-card-bg);
+  border-radius: 0.25rem;
+  border: 1px solid var(--narrative-card-border);
 }
-.review-report-detail pre {
-  font-size: 0.7rem;
-  line-height: 1.55;
+.review-report-md {
+  font-size: 0.72rem;
+  line-height: 1.6;
   color: var(--foreground);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 50vh;
+  max-height: 55vh;
   overflow-y: auto;
-  margin: 0;
+}
+.review-report-md h1, .review-report-md h2, .review-report-md h3 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin: 0.6rem 0 0.3rem;
+  color: var(--foreground);
+}
+.review-report-md h1 { font-size: 0.85rem; }
+.review-report-md h2 { font-size: 0.8rem; }
+.review-report-md p { margin: 0.25rem 0; }
+.review-report-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.4rem 0;
+  font-size: 0.68rem;
+}
+.review-report-md th, .review-report-md td {
+  border: 1px solid var(--narrative-card-border);
+  padding: 0.2rem 0.4rem;
+  text-align: left;
+}
+.review-report-md th {
+  background: var(--narrative-card-bg);
+  font-weight: 600;
+}
+.review-report-md ul, .review-report-md ol {
+  margin: 0.2rem 0;
+  padding-left: 1.2rem;
+}
+.review-report-md li { margin: 0.1rem 0; }
+.review-report-md strong { font-weight: 600; }
+.review-report-md hr {
+  border: none;
+  border-top: 1px dashed var(--narrative-card-border);
+  margin: 0.5rem 0;
+}
+.review-report-md code {
+  font-size: 0.66rem;
+  background: var(--narrative-card-bg);
+  padding: 0.1rem 0.25rem;
+  border-radius: 0.2rem;
 }
 
 /* 标题栏阶段门禁开关 */

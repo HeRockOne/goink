@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, RefreshCw } from 'lucide-react'
+import { X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { GetReviewRecords } from '@/lib/wailsjs/go/app/App'
 
 interface ReviewRecord {
@@ -42,6 +44,7 @@ export default function ReviewHistoryPanel({ novelId, width, onClose, onWidthCha
   const [records, setRecords] = useState<ReviewRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [showInstruction, setShowInstruction] = useState<Record<number, boolean>>({})
 
   const load = () => {
     setLoading(true)
@@ -98,8 +101,16 @@ export default function ReviewHistoryPanel({ novelId, width, onClose, onWidthCha
               </div>
               {open && (
                 <div className="review-report-detail">
-                  {rec.instruction && <div className="review-instruction">指令：{rec.instruction}</div>}
-                  <pre>{rec.report}</pre>
+                  {rec.instruction && (
+                    <div className="review-instruction-toggle" onClick={(e) => { e.stopPropagation(); setShowInstruction(p => ({ ...p, [rec.id]: !p[rec.id] })) }}>
+                      {showInstruction[rec.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      <span>审稿指令</span>
+                    </div>
+                  )}
+                  {showInstruction[rec.id] && <div className="review-instruction">{rec.instruction}</div>}
+                  <div className="review-report-md">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{rec.report || '（无报告内容）'}</ReactMarkdown>
+                  </div>
                 </div>
               )}
               {!open && rec.instruction && <div className="review-record-hint">{rec.instruction}</div>}
