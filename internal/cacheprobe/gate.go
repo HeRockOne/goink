@@ -210,12 +210,13 @@ func gatePhaseSequence(mode string) []string {
 }
 
 // legacyPhaseSkills 硬编码回退表（门禁配置不可用时保持旧行为，与 default_phase_gate_config 同步）。
+// init 仅保留在 batch 配置中（single 已移除 init 门禁），legacy 回退保留 init 供 batch 使用。
 var legacyPhaseSkills = map[string][]string{
 	"init":     {"main-core-init-phase", "main-tech-genre-templates", "main-tech-book-outline", "main-tech-character-design", "main-tech-world-building-system"},
 	"prepare":  {"main-tech-common-sense-logic"},
 	"outline":  {"main-tech-chapter-hook-enhanced", "main-tech-chapter-title-design"},
-	"write":    {"main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density"},
-	"maintain": {"main-tech-anti-repetition", "main-tech-foreshadow-cycle"},
+	"write":    {"main-tech-show-dont-tell", "main-tech-anti-ai-writing", "main-tech-pov-purity", "main-tech-info-density", "main-tech-word-count-calibration"},
+	"maintain": {"main-tech-anti-repetition", "main-tech-foreshadow-cycle", "main-tech-data-hygiene"},
 }
 
 // validatePlaysAgainstGate 校验 plays 序列与门禁配置的一致性：
