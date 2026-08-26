@@ -105,9 +105,10 @@ interface Props {
   isTurnRunning?: boolean
   isCompressing?: boolean
   bar?: boolean // 条状统计条（状态栏模式），默认圆环
+  tps?: number | null // 实时输出速率（t/s，估算值；null 隐藏）
 }
 
-export default function ContextRing({ usage, selectedModel, onCompress, isTurnRunning, isCompressing, bar }: Props) {
+export default function ContextRing({ usage, selectedModel, onCompress, isTurnRunning, isCompressing, bar, tps }: Props) {
   const { t } = useTranslation()
   const [showPopover, setShowPopover] = useState(false)
   const [threshold, setThreshold] = useState(70)
@@ -184,6 +185,14 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
     >
       {bar ? (
         <>
+          {tps != null && (
+            <>
+              <span className="text-xs font-semibold tabular-nums text-muted-foreground" title="实时输出速率（估算，含思考；回合结束定格为平均值）">
+                {tps.toFixed(1)} t/s
+              </span>
+              <span className="w-1 h-1 rounded-full bg-muted-foreground/40 shrink-0" />
+            </>
+          )}
           {hasUsage && usage.cache_hit_ratio > 0 && (
             <span className="text-xs font-semibold tabular-nums" style={{ color: hitColor }}>
               命中率 {usage.cache_hit_ratio.toFixed(2)}%

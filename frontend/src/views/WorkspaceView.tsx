@@ -109,6 +109,8 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
   const [phaseMode, setPhaseMode] = useState(() => localStorage.getItem('phase_mode') || 'single')
   // token 用量（状态栏条状统计）
   const [tokenUsage, setTokenUsage] = useState<import('@/components/chat/ContextRing').UsageInfo | null>(null)
+  // 实时输出速率 t/s（流式期间估算，回合结束定格平均值）
+  const [tokenTps, setTokenTps] = useState<number | null>(null)
   // 当前选中模型（纯 modelID），底部计费面板按模型切换统计
   const [statusBarModel, setStatusBarModel] = useState('')
   const chatPanelRef = useRef<import('@/components/chat/ChatPanel').ChatPanelHandle | null>(null)
@@ -674,12 +676,12 @@ export default function WorkspaceView({ initialNovelId, initialShowHelp }: Props
         {/* ChatPanel 常驻渲染（隐藏而非卸载），避免切到个人中心时对话中断 */}
         <div className={`${activePanel === 'profile' || activePanel === 'cachesim' ? 'hidden' : ''} shrink-0 h-full min-w-0`} style={{ width: activePanel === 'profile' || activePanel === 'cachesim' ? undefined : chatPanelWidth }}>
           <ErrorBoundary>
-            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} onModelChange={setStatusBarModel} phaseMode={phaseMode} />
+            <ChatPanel ref={chatPanelRef} novelId={activeNovelId} onApprove={handleApprove} onReject={handleReject} onApprovalFileEdit={handleApprovalFileEdit} chatPanelWidth={chatPanelWidth} onChatPanelResize={setChatPanelWidth} onPhaseGate={setGateStatus} onUsage={setTokenUsage} onTps={setTokenTps} onModelChange={setStatusBarModel} phaseMode={phaseMode} />
           </ErrorBoundary>
         </div>
       </div>
 
-      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} selectedModel={statusBarModel} onCompress={() => chatPanelRef.current?.compress()} phaseMode={phaseMode} onPhaseModeChange={handlePhaseModeChange} />
+      <StatusBar content={activeContent} isDirty={isDirty} gateStatus={gateStatus} usage={tokenUsage} tps={tokenTps} selectedModel={statusBarModel} onCompress={() => chatPanelRef.current?.compress()} phaseMode={phaseMode} onPhaseModeChange={handlePhaseModeChange} />
 
       <SettingsDialog
         open={showSettings}

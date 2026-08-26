@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -316,10 +317,32 @@ func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {
 			"activity_kind": to.activityKind,
 			"phase":         phase,
 		}
-		if (to.name == "web_search" || to.name == "web_fetch") && to.result != nil && to.result.Success && to.result.Data != nil {
-			entry["result"] = to.result.Data
+		if to.result != nil && to.result.Data != nil {
+			if to.name == "web_search" || to.name == "web_fetch" {
+				// 富文本卡片按结构渲染（WebSearchCard/WebFetchCard），保留原始 shape
+				if to.result.Success {
+					entry["result"] = to.result.Data
+				}
+			} else {
+				// 其余工具结果序列化为截断 JSON 字符串，供前端历史详情展开查看
+				entry["result"] = truncateResultJSON(to.result.Data)
+			}
 		}
 		toolDisplays = append(toolDisplays, entry)
 	}
 	return toolDisplays
+}
+
+// truncateResultJSON 把工具结果序列化为 JSON 字符串（与前端展示截断一致，4000 字符），
+// 防止 extra_metadata 无限膨胀
+func truncateResultJSON(data map[string]any) string {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return ""
+	}
+	runes := []rune(string(b))
+	if len(runes) > 4000 {
+		return string(runes[:4000]) + "…（截断）"
+	}
+	return string(runes)
 }

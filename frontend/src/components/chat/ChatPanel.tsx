@@ -18,6 +18,7 @@ import SubagentCard from './SubagentCard'
 import CompressionBlock from './CompressionBlock'
 import RetryNotification from './RetryNotification'
 import type { UsageInfo } from './ContextRing'
+import { createTokenRateTracker, type TokenRateTracker } from './tokenRate'
 import SettingsDialog from '@/components/settings/SettingsDialog'
 import SessionHistory from './SessionHistory'
 
@@ -33,6 +34,7 @@ interface Props {
   onChatPanelResize: (w: number) => void
   onPhaseGate?: (s: import('./types').PhaseStatus) => void
   onUsage?: (u: UsageInfo | null) => void
+  onTps?: (tps: number | null) => void
   onModelChange?: (modelID: string) => void
   phaseMode?: string
 }
@@ -53,7 +55,7 @@ export interface ChatPanelHandle {
   compress: () => void
 }
 
-export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage, onModelChange, phaseMode }: Props, ref) {
+export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, onApprove, onReject, onApprovalFileEdit, chatPanelWidth, onChatPanelResize, onPhaseGate, onUsage, onTps, onModelChange, phaseMode }: Props, ref) {
   const { t } = useTranslation()
   const app = useApp()
 
@@ -117,6 +119,13 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
   const sendGenRef = useRef(0)
   const onApprovalFileEditRef = useRef(onApprovalFileEdit)
   useEffect(() => { onApprovalFileEditRef.current = onApprovalFileEdit }, [onApprovalFileEdit])
+  const onTpsRef = useRef(onTps)
+  useEffect(() => { onTpsRef.current = onTps }, [onTps])
+  // TPS 速率追踪：Thinking/Content delta 估算 token 速率，经 onTps 上抛状态栏
+  const tpsTrackerRef = useRef<TokenRateTracker | null>(null)
+  if (!tpsTrackerRef.current) {
+    tpsTrackerRef.current = createTokenRateTracker(r => onTpsRef.current?.(r))
+  }
   // 加载模型列表并恢复持久化设置
   useEffect(() => {
     setInitLoadError(false)
@@ -191,8 +200,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         app.GetSessionMessages(data.session_id).then(msgs => {
           if (msgs) {
             setTurns(prev => {
-              // 桌面端自己流式构建的 turns（id 非 hist_ 前缀）已含完整工具结果；
-              // 整体重建会丢失 result 与展开状态（DB 不落库结果、段 id 变化重挂载）——
+              // 桌面端自己流式构建的 turns（id 非 hist_ 前缀）已含完整工具结果与展开状态
+              //（历史重建只有截断到 4000 字符的结果，且段 id 变化会重挂载）——
               // 仅当本地无实时数据时才重建（移动端写入、桌面纯查看场景）
               const hasLiveTurns = prev.some(t => !t.id.startsWith('hist_'))
               return hasLiveTurns ? prev : rebuildTurns(msgs)
@@ -428,6 +437,14 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
         pendingResubRef.current = null
         agentUnsubRef.current?.()
         agentUnsubRef.current = EventsOn(`agent:${resub.sessionId}:${resub.turnId}`, subscribe(resub.turnId))
+        // 恢复运行态 UI：发送按钮回到"停止"（handleSelectSession 切走时无条件置 false），
+        // 重建出的 hist_ turn 状态复位为 streaming
+        setIsLoading(true)
+        setTurns(prev => prev.map(t =>
+          t.turnId === resub.turnId && t.status !== 'streaming'
+            ? { ...t, status: 'streaming' as const }
+            : t
+        ))
       }
     }).catch((err) => {
       console.error('Load messages failed', err)
@@ -517,6 +534,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     setVisibleTurnCount(30)
     setIsLoading(false)
     setRetryInfo(null)
+    // 切走时 TPS 显示隐藏（原会话若仍在流式，回来后 delta 会自动恢复速率）
+    tpsTrackerRef.current?.cancel()
     setApiStreaming(false)
     app.SetLastSession(sid).catch(() => {})
     app.GetSession(sid).then(detail => {
@@ -582,6 +601,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     setIsLoading(false)
     setRetryInfo(null)
     setApiStreaming(false)
+    tpsTrackerRef.current?.cancel()
     onUsage?.(null)
   }, [])
 
@@ -613,6 +633,10 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
     // 收到任何事件（包括 Content）→ 关闭重试悬浮通知
     if (event.type !== AgentEventType.Retry) {
       setRetryInfo(null)
+    }
+    // 流式 delta 喂给 TPS 追踪（thinking + content 都计入生成速率）
+    if (event.type === AgentEventType.Thinking || event.type === AgentEventType.Content) {
+      tpsTrackerRef.current?.addDelta(event.data || '')
     }
     switch (event.type) {
       case AgentEventType.Usage: {
@@ -781,6 +805,9 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                 displayText: event.display_text || subSegs[stIdx].displayText,
                 activityKind: event.activity_kind || '',
                 error: event.error || '',
+                result: (subToolStatus === 'completed' || subToolStatus === 'failed')
+                  ? (event.tool_result || subSegs[stIdx].result)
+                  : subSegs[stIdx].result,
               }
             } else {
               subSegs.push({
@@ -792,6 +819,7 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
                 displayText: event.display_text || event.tool_name || '',
                 activityKind: event.activity_kind || '',
                 error: event.error || '',
+                result: (subToolStatus === 'completed' || subToolStatus === 'failed') ? event.tool_result : undefined,
               })
             }
             break
@@ -1259,6 +1287,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       activeCountRef.current--
       if (activeCountRef.current === 0) {
         setIsLoading(false)
+        // 回合结束：TPS 定格为本轮平均速率（仅统计活跃输出时间）
+        tpsTrackerRef.current?.finish()
       }
     }
   }, [sessionId, novelId, selectedKey, reasoningEffort, app, handleAgentEvent, applyAgentEvent, activeSessionId])

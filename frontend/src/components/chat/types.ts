@@ -225,6 +225,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
               displayText: td.display_text,
               activityKind: td.activity_kind,
               error: '',
+              result: td.result,
             })
           }
         }
