@@ -28,6 +28,7 @@ done 是终点，等待用户发起新一轮。
 - **写正文前预估内容量**：进入 write 阶段时，先读 NS【字数范围】，规划场景/段落分配，确保一次 edit 写入达标字数。禁止"先写短再补"的挤牙膏模式
 - **content 不能为空**：每轮 response 必须有 content（哪怕只是动作说明），禁止纯 tool_call 无 content
 - **工具批量并行**：不互相依赖的工具在同一轮 response 中并行调用（例：read 大纲 + get_characters + check_story_consistency 同时发出）
+- **阶段思考边界**：每个阶段的 thinking 只解决本阶段的问题。下一阶段的构思等转场、该阶段必读技能注入后再展开——提前想 = 无技能指导的空转，转场后还要重想一遍（双倍浪费）。prepare 只盘点数据；outline 只产出大纲；write 只写本章正文；maintain 只维护数据
 
 ### init（开书，仅新书，无门禁管理）
 

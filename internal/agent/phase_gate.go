@@ -437,6 +437,18 @@ func isMutatingTool(toolName string) bool {
 
 // phaseChecklist 从门禁配置动态生成当前阶段紧凑清单（上下文末尾注入，比 kernel 更易被注意）。
 // 必做/禁止/转出 从 PhaseConfig 自动派生，注意 从 Note 字段读取——改门禁配置时顺手维护。
+// phaseThinkingBoundary 各阶段的思考边界（代码侧常量，不受用户 DB 配置副本影响）：
+// 防止模型在本阶段预支下一阶段的构思——那时下阶段必读技能还没注入，想出来的东西
+// 没有方法论指导，转场后注入技能又得重想一遍（双倍思考成本，真机观察：prepare 想
+// 大纲、outline 想正文）。
+var phaseThinkingBoundary = map[string]string{
+	"prepare":  "本阶段只完成数据盘点（9 项必查），不构思大纲情节、不设计场景",
+	"outline":  "本阶段只产出大纲文件；正文写法、场景细节、字数分配留到 write 技能注入后再展开",
+	"write":    "本阶段只写本章正文，章内场景衔接可自由构思；建档/时间线等维护动作留 maintain，后续章情节留到下轮",
+	"review":   "本阶段只做审稿判定与问题清单",
+	"maintain": "本阶段只按清单维护数据，不再修改正文内容",
+}
+
 func phaseChecklist(pc *PhaseConfig) string {
 	if pc == nil {
 		return ""
@@ -517,6 +529,12 @@ func phaseChecklist(pc *PhaseConfig) string {
 	// 注意
 	if pc.Note != "" {
 		sb.WriteString(fmt.Sprintf("\n注意：%s", pc.Note))
+	}
+
+	// 思考边界：下一阶段的工作留到转场技能注入后再想——提前想 = 无技能指导的空转，
+	// 转场后还得重想一遍
+	if boundary, ok := phaseThinkingBoundary[pc.Name]; ok {
+		sb.WriteString("\n思考边界：" + boundary)
 	}
 
 	// 转出
