@@ -1,89 +1,89 @@
-# 全架构脆弱性审计（2026-08-26）
+# 全架构脆弱性审计 v2（2026-08-26，代码实读版）
 
-> 视角：Goink 是 AI 创作小说的软件，创作质量与耗费成本是核心关注。
-> 审计范围：LLM 上游 / 审稿链路 / 上下文缓存 / 工具 schema / 门禁 / 数据 / 前端会话。
-> 依据：Ch22-31 共 10 次创作测试会话（dots3/mimo-v2.5/MiniMax-M2.7/MiniMax-M3/hy3）DB 实证 + 本日代码审查。每条标注 [实证]（有会话数据支撑）或 [推演]（结构分析）。
+> 应用户要求重做：v1 凭会话记忆写成，本版全部结论来自当日对核心链路代码的实际阅读。
+> 实读文件：`internal/agent/agent.go`（1320 行，主循环/appendMsg/retry 路径）、`internal/agent/tokens.go`（259 行全量）、`internal/agent/compress.go`（448 行全量）、`internal/agent/cancel.go`（58 行全量）、`internal/agent/phase_gate.go`（CheckToolAllowed/SaveState/LoadState/checkResultGateMet）、`app/chat.go`（chatImpl 组装/cancel 注册/loadOrCreateSession）、`internal/mcp_tools/base.go`（Registry.Execute/OpenAI）。
+> 视角不变：创作质量与耗费成本优先。标注 [实证]（有 Ch22-31 会话数据）/ [代码]（本日读码确认）/ [推演]。
 
-## 一、成本脆弱性（按浪费量排序）
+## 〇、重大勘误：推翻 v1 的 C1"P1 缓存优化"
 
-### C1. 注入消息破坏前缀缓存 —— 最大已确认未回收项 [实证]
-- 现象：注入消息（阶段清单/方向锚/auto_skill/差量提示）经 appendMsg 追加到 `opts.Messages` 中段，下一轮前缀失配 → cache miss。Ch27 实测 miss 97,695 tokens/章，命中率 94.27%（历史基线 97.5%+）。
-- 根因已定位（agent.go appendMsg 路径），PendingInjections 方案已实现过一次（commit 6bd0dc6），因同期出现 thinking 显示回归被误判关联而回滚（git reset 1e033ff）。后经排查确认 thinking 回归是 mimo 上游行为变更，与本方案无关。
-- 影响：~30K tokens/章 ≈ 单章成本 15%；8 章 ≈ 24 万 tokens。
-- 建议：**重新实施 PendingInjections**（设计已验证：injectMsg 持库+挂 PendingInjections 尾部、LLM 调用点拼接、子代理合并 parentOpts.PendingInjections 保前缀一致）。实施前先在新会话确认 mimo thinking 显示现状，避免再次误判归因。
+**v1 称"注入消息破坏前缀缓存，需重做 PendingInjections（P1，~70 行）"——误诊，撤销。**
 
-### C2. 扩写挤牙膏循环 [实证]
-- 全部模型均出现（dots3/mimo/MiniMax）：初稿 1700-2100 字 → 5-10 轮 search_replace 补字 → 达标。Ch30 最惨：1218→2409 共 9 轮；Ch26 出现 search_replace 反而丢内容至 1639。
-- 已做缓解：write 阶段 note"按场景分配字数、一次写完"、kernel"缺口×1.2 一次扩到位"。mimo Ch27 后初稿达标率提升但未根除——这是模型规划能力问题，架构只能降低频率。
-- 成本本质：每轮补写 = 重发全量 prompt（cached 便宜但 completion+延迟照付）。9 轮 ≈ 多花 5-8 分钟墙钟时间。
-- 残余风险：无硬约束阻止分多次 edit 写正文。
+证据复核（Ch27 逐轮 usage）：call 8438 cached=48,576 恰好等于上一轮 8434 的完整 prompt（48,593 取整）；miss=9,514 正是当轮新注入的两个技能全文的字节数。后续 8460/8473 同样模式。**前缀始终完整命中，miss 是每轮新增内容的正常一次性成本**——把注入挪到消息尾部不会省任何 token（新增字节总量不变）。已回滚的 commit 6bd0dc6 即使不被回滚也不会有收益。
 
-### C3. 思考时长失控 [实证]
-- mimo Ch26 单次思考最长 483s；MiniMax-M2.7 写 Ch25 全程 ~15min 思考。completion token 计费但主要损失是时间。
-- kernel 已有执行纪律（thinking 只做规划/一轮决策），效果未量化。无架构级手段（思考预算是 provider 参数，未接通）。
+连带修正：
+- v1 的 P1 建议（重做 PendingInjections）作废；
+- 8/9 批量命中率从 93% 掉到 86%（phase_gate.go:783 注释记载的旧问题）同理需要重新归因——当时归因给 StatusString 动态消息，方向可能也对也可能同样是统计口径问题，未复核，存疑待查。
+- 教训：cached_tokens ≈ 上轮 prompt_tokens 是"前缀健康"的标志，miss > 新增字节量才是真失效。tokens.go:222 已有"偶发全 miss 告警"日志区分厂商驱逐，审计时应先查该日志再下结论。
 
-### C4. 子代理 fork 缓存设计良好 ✓
-- 子代理首轮命中主会话缓存，miss 仅身份+技能+NS+指令（~3-5K）。审稿单轮成本 ~70K prompt 其中 95%+ 命中。无需改动。
+## 一、代码级发现（本轮新发现）
 
-## 二、创作质量脆弱性
+### N1. 流中重试可重复执行非幂等工具 —— [代码]，中危
+`agent.go` EventError 可重试分支（429/402/Retryable）：`continue streamLoop` 重启流，但**只清了 responseBuffer/thinkingBuffer/fullResponse，未清 toolOutputs**。而工具在 EventToolCallEnd 当场执行（registry.Execute 有真实副作用：edit 写文件、create_* 写库）。若流在中断前已执行过工具，重启后模型重新生成响应可能再次调用同类工具 → 文件被写两次/记录建两次，且新旧两批 toolOutputs 全部进历史。
+概率评估：429 通常发生在请求起点，mid-stream 死亡较少见；但长流（写章节 400s+）遇上限流并不罕见（MiniMax 402"几分钟内恢复"注释即实证场景）。
+建议：retry 分支补 `toolOutputs = nil` + 已执行工具的 tool_call_id 集合去重，或改为"流开始后不可重试，直接失败返回"。~10 行。
 
-### Q1. pacing 检测到了但没有纠正执行闭环 —— 当前最大质量缺口 [实证]
-- Ch23-31 连续低密度章：review #7 打出 pacing=5.0（历史最低）、#11 报告"连续5章零动作"、type_drift/pacing_gap 持续 WARNING——检测层全部正确触发。
-- 但 WARNING 不拦转场（设计如此，ERROR 才拦），review 建议写进报告后主代理下一章是否执行全凭自觉。Ch28 换 MiniMax-M3 直接崩到 6.4/fail。
-- 本质：**跨章节奏债务没有强制偿还机制**。方向锚有"未兑现爽点"（beat 层面），但没有"连续 N 章无高密度场景 → 下章必须补偿"的注入。
-- 建议（P2，~10 行）：autoAdvancePhase 进入 write 时查最近 type_drift 结果，若连续 ≥3 章 WARNING 则在方向锚提醒中追加硬性条目"本章必须安排 ≥300 字高密度对抗场景，否则审稿将打回"。
+### N2. 工具执行无超时 —— [代码]，中危
+`base.go Registry.Execute` 直接用 turn ctx 调 `t.Execute`，无 per-tool deadline。LLM 流有 120s idle 兜底（stream.go:294），工具没有任何兜底：web_fetch 抓慢站、git 锁竞争、SQLite busy 都可能挂住整个循环且无法恢复（ctx cancel 可解但用户未必想到点停止）。
+建议：Execute 内 `context.WithTimeout(ctx, 120s)`（web 类工具已有自身 30s 不受影响）。~5 行。
 
-### Q2. 弱模型身份崩塌：免疫声明效果未验证 [实证根因/缓解待验证]
-- hy3/MiniMax-M3 fork 主历史后被阶段清单诱导模仿父代理（Ch31 七回合堕落螺旋，review_records #12 解析全失败）。
-- 已修：instruction 尾部免疫声明（近端最高对抗力）+ 清单去重（C 修复消除了转场 ×2 的重复诱导源）。
-- 待验证：下次弱模型测试观察子代理第一动作。若仍崩，B 方案（过滤 fork 历史 <system-reminder>，代价 ~80-90K miss/次）或改隔离式子代理（Claude Code 默认路线，放弃缓存命中换确定性）二选一。
+### N3. 系统级错误对模型完全屏蔽 + "已禁用"是假禁用 —— [代码]，中危
+两层叠加：
+1. `Registry.Execute` 把 Go 层 error 统一替换为 `"服务器内部错误，请稍后重试"`（base.go:239）——模型看不到真实原因（DB locked / git 失败等），丧失自纠能力，只会盲目重试；
+2. `agent.go:989` 连续 3 次 system 失败注入"已被禁用，请不要再调用"，但 **registry 里什么都没禁用**，工具照常可调——提示词撒谎，浪费轮次。
+建议：ErrKind=system 时把 error 原文附进 ToolResult.Error（内部工具无安全泄露面）；failCnt 达阈值时真的在 AllowedTools 里临时摘除该工具，或改措辞为"请换用其他方式"。
 
-### Q3. submit_review 新链路未经真机验证 [推演]
-- 结构化提交 + 回退链（工具→正则）逻辑已测，但真实模型是否记得调用未知。观察指标：下一条 review_record 的 dims 是否非 -1、verdict 是否非 unknown。
-- 若调用率低：把 submit_review 加进 review 阶段 kernel 必做清单（提示词强化），不建议做成门禁 require（管不到子代理内部）。
+### N4. 门禁错误记忆不跨 turn —— [代码]，低危
+`SaveState`（phase_gate.go:1017）只持久化 successfulTools/visited/readsByPhase。`consistencyErrors`（本次新加的绕过封堵集合）和 `lastToolResults` 都是 Run 局部——用户中途打断再发"继续"，新 Run 里 ERROR 记忆清零，review→maintain 的硬错误拦截失效一轮。实际影响有限：一章流程通常单 turn 完成；跨 turn 多发生在用户主动中断场景。
+建议：consistencyErrors 并入 SaveState JSON。~8 行。同族问题：`wordCountOK` 也不持久化（见 N5）。
 
-### Q4. search_replace 内容丢失无直接检测 [实证事故/兜底间接]
-- Ch26：search_replace 扩写反而丢内容 2055→1639 字。dup_paragraph 只能查逐字重复段，查不出"丢了内容"；get_chapter_list 字数校验只能发现跌破 2400 下限的情况——从 2800 丢到 2500 不会触发任何告警。
-- 建议（P3，~8 行）：get_chapter_list 返回环比信息，本章字数 < 上一章×0.75 且仍达标时附 WARNING"字数骤降，疑似编辑丢失内容，请 read 复核"。
+### N5. SaveWordCount/LoadWordCount 是死代码 —— [代码]，低危
+grep 全仓无调用方。wordCountOK 纯 Run 内存态，靠 handleBatchChapterBoundary 每章重置的设计掩盖了持久化缺失。要么接上（batch 跨 turn 场景），要么删掉防误导。
 
-### Q5. 方向锚数据缺失静默跳过 [推演，低危]
-- buildDirectionAnchor 各项数据缺失时静默返回空（novel_state.go:112）。开书早期（无卷纲/无 beats）锚为空是正常的，但中途数据损坏也会静默变空——模型失去护栏而无感知。
-- 建议：锚为空且 chapter > 3 时在 NS 附一行"【方向锚】数据缺失，请检查 volumes/outlines/preferences 表"。暂缓——novel-2 十章实测未出现中途缺失。
+### N6. AgentLoopResult.FinalText 只含最后一轮文本 —— [代码]，低危
+`agent.go:1127` 每轮末清空 fullResponse，RunSubAgent 返回的 FinalText = 子代理最后一个 turn 的输出。若审稿子代理输出报告正文后又调了一次工具（如 submit_review 在正文之后），FinalText 为空 → ParseReport 回退拿到空串、Record.Report 为空。submit_review 结构化路径不受影响（参数从转录扫描），但面板 report 列可能为空。
+建议：RunSubAgent 场景拼接各轮文本，或规范"先 submit_review 后正文"顺序（standards.md 已如此要求，恰好规避）。
 
-### Q6. 已闭环项确认 ✓（本轮审计验证，无需动作）
-- 台账防腐：timeline resolved 未来值拒绝 + ledger_integrity JOIN 校验（chapter_id/PK 混淆不再误报）
-- 整段重复：dup_paragraph 第12检查（Ch28 line_range_replace 内容复制类 fatal 可拦截）
-- check_types 缩窄绕过：consistencyErrors 指纹集合封堵
-- tags 数组/old_content 别名/batch 统一：参数形态三类已修
-- 会话切换续流：streamInfoRef 机制（单流假设，见 F1）
-- 审稿评分：submit_review 代码算分（本日落地）
+### N7. cancel 注册泄漏 —— [代码]，极低危
+`chat.go:117` 仅 ctx 未取消时 Unregister；经 Cancel() 取消的注册项残留（CancelManager.Cancel 会删，但 chat.go defer 路径不走它）。IsRunning() 对已结束会话可能误报 true。一行修复（defer 无条件 Unregister）。
 
-## 三、其他层脆弱点
+## 二、验证通过的环节（本轮读码确认 ✓）
 
-### F1. 前端流式订阅单流假设 [推演，中危]
-- ChatPanel streamInfoRef 是单值：桌面端会话 A 流式中，移动端发起会话 B，双端并发流的事件路由可能串扰。cacheprobe 曾因包级状态串扰翻车（已改 Run 局部变量），前端同款隐患。
-- 用户当前单窗口使用习惯下低危。做多端并发前需改造为 per-session 订阅表。
+- **pg 是 Run 局部变量**（agent.go:474 注释 + 代码证实），并发会话门禁不串扰；Ch28"pg 变 nil"之谜实为子代理本就无门禁，set_phase 走 L829 "门禁未启用" 分支——架构正确，非 bug。
+- **压缩事务性**（compress.go persistCompression）：版本递增 + 全部写入单事务；NS 重落库、当前阶段必读技能重建补回（compress.go:110-121 专门处理了"压缩后同阶段不再触发注入"的坑）；子代理纯内存压缩不动系统头。
+- **usage 双格式兼容**（tokens.go:120-146 OpenAI cached_tokens 优先 + DeepSeek 格式 fallback，键存在即计 miss 防"命中率虚高"）；UpdateMessageUsage 在 appendMsg 之后调用避免错位（agent.go:1084 注释）。
+- **流半开检测**（stream.go 120s idle / 300s 首行宽限）✓。
+- **工具 panic 兜底**（base.go:226 recover → ErrKind=system）✓。
+- **拦截降噪**（blockCount ≥3 停止重复注入提醒）+ 成功后重置计数 ✓。
+- **死循环检测**（isStuckLoop 8 轮窗口）✓。
+- **set_phase 门禁空重建**（agent.go:741-753 从消息重解析）✓。
+- **chatImpl panic recovery**（chat.go:59，修复过"对话静默停止"）✓。
 
-### F2. verdict unknown 不拦门禁 [设计取舍]
-- ParseReport 回退失败 → unknown 放行。理由：不能因解析问题卡死创作流程。接受，但建议加观测：review_records 连续 2 条 unknown 时 goink.log WARN（一行日志，便于发现问题率上升）。
+## 三、会话实证项复核（维持 v1 结论的部分）
 
-### F3. 上游 API 行为可变 [实证，不可控]
-- mimo reasoning_content 消失事件证明：上游可以在不通知的情况下改变响应形态。客户端只解析 delta["reasoning_content"]，思考被吞时无告警。
-- 可选缓解：duration_ms > 60s 且 thinking_content 为空时 log WARN（检测异常模式）。优先级低——计费和功能不受影响，仅 UI 展示缺失。
+| 项 | v1 编号 | 复核结果 |
+|----|---------|---------|
+| 扩写挤牙膏循环 | C2 | 维持。模型规划力问题，write note + kernel 纪律已缓解，无架构级解 |
+| 思考时长失控 | C3 | 维持。provider 思考预算参数未接通，可选 |
+| pacing 债务无强制偿还 | Q1→**升为 P1** | 维持且升级：C1 撤销后这是最大质量缺口。type_drift/pacing_gap WARNING 与 review #23 打分都触发了，但"下一章必须补偿"没有机制。建议 write 进场时查最近 type_drift 结果，连续 ≥3 章 WARNING 则在方向锚提醒追加硬性条目（~10 行） |
+| search_replace 丢内容无直接检测 | Q4→P2 | 维持。get_chapter_list 加环比骤降 WARNING（<上章×0.75 且达标 → 提示 read 复核，~8 行） |
+| 弱模型身份崩塌 | Q2 | 免疫声明 + 清单去重已修，效果待下次弱模型测试验证 |
+| submit_review 调用率 | Q3 | 本日落地，待真机验证（看下条 review_record dims≠-1） |
+| 方向锚缺失静默跳过 | Q5 | 维持低危缓办 |
+| 前端单流假设 | F1 | 维持（多端并发前需改造） |
+| 上游行为可变 | F3 | 维持。可选：duration_ms>60s 且 thinking 空时 log WARN |
+| ~~注入破坏缓存~~ | ~~C1~~ | **撤销**，见〇 |
 
-### F4. 审稿 instruction 无模板强制 [低危]
-- kernel 已给标准化模板，主代理即兴发挥空间仍在。records #4-#11 显示质量尚可。暂不动。
-
-## 四、优先级汇总
+## 四、修订后优先级
 
 | 级别 | 项 | 动作 | 规模 |
 |------|----|----|------|
-| P1 | C1 缓存 | 重做 PendingInjections（先定性 thinking 现状） | ~70 行 |
-| P2 | Q1 节奏债 | write 进场注入高密度场景硬提醒 | ~10 行 |
-| P3 | Q4 丢内容 | get_chapter_list 环比骤降 WARNING | ~8 行 |
-| P4 | F2/Q3 观测 | unknown 连续计数 WARN 日志 | ~5 行 |
-| 观察 | Q2 崩塌/Q3 调用率 | 下次弱模型真机测试验证 | 0 |
+| P1 | Q1 节奏债 | write 进场按 type_drift 结果注入补偿硬提醒 | ~10 行 |
+| P2 | N3 错误屏蔽+假禁用 | system 错误透传原文 + 真禁用或改措辞 | ~15 行 |
+| P3 | N1 重试重复执行 | retry 清 toolOutputs / 禁止流中重试 | ~10 行 |
+| P4 | N2 工具超时 | Execute 包 120s WithTimeout | ~5 行 |
+| P5 | N4 跨turn错误记忆 | consistencyErrors 入 SaveState | ~8 行 |
+| 观察 | Q2/Q3/N6 | 下次真机测试验收 | 0 |
 
 ## 五、结论
 
-架构六层闭环（检测/拦截/门禁/审稿/持久化/缓存协议）经 10 章实测成立，错误数 27→0→3 的趋势证明修复有效。剩余脆弱性集中在两处结构性欠账：**注入破坏缓存**（钱）与**节奏债务无强制偿还**（质量）。两者都有低成本方案，见上表 P1/P2。
+主循环、压缩、usage、门禁状态机的工程质量经逐行检验高于预期（局部变量隔离、事务化压缩、双格式兼容、panic 兜底都做对了）。真正的脆弱点集中在三处：**异常路径的重试语义**（N1/N3）、**工具执行缺资源护栏**（N2）、**跨章节奏债务只有检测没有强制**（Q1）。另记一条方法论教训：缓存类结论必须先用"cached ≈ 上轮 prompt"公式核对再下判断——本次撤销的 C1 就是凭聚合命中率下降直接归因代码的反面教材。
