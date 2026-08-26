@@ -6,20 +6,58 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
-// newHTTPClient 创建带系统代理的 HTTP 客户端。
-// Windows: 读注册表 IE 代理设置；其他平台: 读 HTTP_PROXY/HTTPS_PROXY 环境变量。
+// sharedTransport 包级共享连接池。旧实现每次请求新建 Transport，零连接复用：
+// 每次 LLM 调用都付完整 DNS+TCP+TLS 握手（同网络同模型下其他共享 keep-alive
+// 的平台握手快一个量级），一章几十个工具回合就是几十次全握手。
+// Clone 自 DefaultTransport：自带 HTTP/2 与合理默认值，仅覆写代理与池参数。
+var sharedTransport = func() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = cachedSystemProxy
+	t.MaxIdleConns = 100
+	t.MaxIdleConnsPerHost = 4
+	t.IdleConnTimeout = 90 * time.Second
+	t.TLSHandshakeTimeout = 15 * time.Second
+	return t
+}()
+
+// newHTTPClient 返回共享连接池上的客户端。timeout 只约束非流式调用；
+// 流式调用传 0，由请求 ctx 控制生命周期（见 stream.go）。
 func newHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			Proxy: systemProxy,
-		},
+		Timeout:   timeout,
+		Transport: sharedTransport,
 	}
 }
 
+// cachedSystemProxy 缓存系统代理解析结果。Proxy 钩子在每次新建连接时都会被调，
+// Windows 注册表读取不应发生在拨号热路径上；缓存 5 分钟兼顾配置变更感知。
+var (
+	proxyMu     sync.Mutex
+	proxyCached *url.URL
+	proxyExpire time.Time
+)
+
+func cachedSystemProxy(req *http.Request) (*url.URL, error) {
+	proxyMu.Lock()
+	defer proxyMu.Unlock()
+	if time.Now().Before(proxyExpire) {
+		return proxyCached, nil
+	}
+	u, err := systemProxy(req)
+	if err != nil {
+		return nil, err
+	}
+	proxyCached = u
+	proxyExpire = time.Now().Add(5 * time.Minute)
+	return u, nil
+}
+
+// systemProxy 解析系统代理设置。
+// 优先读环境变量（Linux/macOS/手动设置）；Windows 读注册表 IE 代理设置。
 func systemProxy(req *http.Request) (*url.URL, error) {
 	// 优先读环境变量（Linux/macOS/手动设置）
 	if p := os.Getenv("HTTPS_PROXY"); p != "" {
