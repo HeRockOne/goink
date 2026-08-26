@@ -182,9 +182,14 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, tps, se
       )}
 
       <span className="flex items-center gap-2 shrink-0">
+        {tps != null && (
+          <span className="text-xs font-semibold tabular-nums text-muted-foreground" title="实时输出速率（估算，含思考；回合结束定格为平均值）">
+            {tps.toFixed(1)} t/s
+          </span>
+        )}
         <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
-        {/* 最右：token 用量条状统计（ContextRing bar 模式），含 TPS 实时速率 */}
-        <ContextRing usage={usage ?? null} selectedModel={selectedModel} onCompress={onCompress} tps={tps} bar />
+        {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
+        <ContextRing usage={usage ?? null} selectedModel={selectedModel} onCompress={onCompress} bar />
       </span>
 
       {modeToast && (
