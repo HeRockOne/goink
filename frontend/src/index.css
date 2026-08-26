@@ -35,6 +35,7 @@
   --secondary: rgba(220, 228, 237, 0.6);
   --secondary-foreground: #1f3345;
   --muted: rgba(220, 228, 237, 0.5);
+  --muted-solid: rgba(220, 228, 237, 1);
   --muted-foreground: #3d5a70;
   --accent: rgba(74, 125, 166, 0.16);
   --accent-foreground: #0e1a26;
@@ -153,6 +154,7 @@
   --secondary: rgba(17, 27, 43, 0.6);
   --secondary-foreground: #d8e4ee;
   --muted: rgba(17, 27, 43, 0.55);
+  --muted-solid: rgba(17, 27, 43, 1);
   --muted-foreground: #8aa8c0;
   --accent: rgba(161, 196, 214, 0.1);
   --accent-foreground: #e8eef2;
@@ -293,6 +295,7 @@
   --sidebar: color-mix(in oklch, var(--background) 96%, contrast-color(var(--background)));
   --secondary: color-mix(in oklch, var(--background) 88%, contrast-color(var(--background)));
   --muted: color-mix(in oklch, var(--background) 86%, contrast-color(var(--background)));
+  --muted-solid: color-mix(in oklch, var(--background) 86%, contrast-color(var(--background)));
   --accent: color-mix(in oklch, var(--background) 82%, contrast-color(var(--background)));
   --input: var(--secondary);
   --sidebar-accent: var(--accent);
@@ -340,6 +343,7 @@
   --sidebar: var(--background);
   --secondary: color-mix(in oklch, var(--secondary) 82%, transparent);
   --muted: color-mix(in oklch, var(--muted) 82%, transparent);
+  --muted-solid: color-mix(in oklch, var(--background) 86%, contrast-color(var(--background)));
   --accent: color-mix(in oklch, var(--accent) 75%, transparent);
   --fin-glass: 12px;
   --fin-glass-sm: 10px;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, FileText, Pencil, Plus, Download, Trash2 } from 'lucide-react'
+import { ChevronRight, FileText, Plus, Download, Trash2 } from 'lucide-react'
 import { toastError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useApp } from '@/hooks/useApp'
@@ -173,14 +173,14 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
         <div className="flex items-center gap-0.5">
           <button
             onClick={onExportNovel}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--muted-solid)] text-muted-foreground hover:text-foreground transition-colors"
             title={t('sidebar.export')}
           >
             <Download className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setShowCreateChapter(true)}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--muted-solid)] text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -206,7 +206,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
 
       <button
         onClick={onSelectGoink}
-        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50 bg-sidebar
+        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors relative border-b border-border/50 bg-sidebar
           ${target?.path === 'goink.md' ? 'bg-primary/10 font-medium glow-primary' : ''}`}
       >
         {target?.path === 'goink.md' && (
@@ -218,7 +218,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
 
       <button
         onClick={onSelectBookOutline}
-        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50 bg-sidebar
+        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors relative border-b border-border/50 bg-sidebar
           ${target?.path === 'book-outline.md' ? 'bg-primary/10 font-medium glow-primary' : ''}`}
       >
         {target?.path === 'book-outline.md' && (
@@ -231,7 +231,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
       {/* 大纲列表：复用正文列表的交互，读取路径为 outlines/ */}
       <button
         onClick={() => setShowOutlines(!showOutlines)}
-        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50"
+        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors border-b border-border/50"
       >
         <ChevronRight
           className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${showOutlines ? 'rotate-90' : ''}`}
@@ -245,10 +245,10 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
             <p className="text-xs text-muted-foreground/70 px-3 py-2">{t('sidebar.noOutlines')}</p>
           ) : (
             outlines.map(o => (
-              <div key={o.chapter_number} className="group flex items-center w-full">
+              <div key={o.chapter_number} className="group flex items-center w-full bg-sidebar hover:bg-[var(--muted-solid)]">
                 <button
                   onClick={() => onSelectOutline(o.file_path, o.title ? `第${o.chapter_number}章 · ${o.title}` : `第${o.chapter_number}章 大纲`)}
-                  className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 relative bg-sidebar
+                  className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors flex-1 min-w-0 relative bg-sidebar
                     ${target?.path === o.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
                 >
                   {target?.path === o.file_path && (
@@ -300,7 +300,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
               <div key={block.key}>
                 <button
                   onClick={() => toggleBlock(block.key)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50 sticky top-0 bg-sidebar z-20"
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors border-b border-border/50 sticky top-0 bg-sidebar z-20"
                 >
                   <ChevronRight
                     className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
@@ -313,11 +313,11 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                     {block.chs.map(ch => (
                       <div
                         key={ch.id}
-                        className="group flex items-center w-full relative bg-sidebar"
+                        className="group flex items-center w-full bg-sidebar hover:bg-[var(--muted-solid)]"
                       >
                         <button
                           onClick={() => onSelectChapter(ch)}
-                          className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 bg-sidebar
+                          className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-[var(--muted-solid)] transition-colors flex-1 min-w-0 relative bg-sidebar
                             ${target?.path === ch.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
                         >
                           {target?.path === ch.file_path && (
@@ -349,21 +349,13 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                           )}
                         </button>
                         {editingId !== ch.id && (
-                          <>
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDeleteChapter(ch) }}
-                              className="absolute right-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all z-10"
-                              title="删除章节"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={e => { e.stopPropagation(); startEdit(ch) }}
-                              className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground hover:text-foreground transition-all z-10"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                          </>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDeleteChapter(ch) }}
+                            className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all shrink-0 mr-1"
+                            title="删除章节"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         )}
                       </div>
                     ))}
