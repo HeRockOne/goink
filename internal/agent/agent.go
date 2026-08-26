@@ -737,7 +737,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	}
 
 	interrupted := false
-	executedTools := false // 本轮流中已真实执行过工具——流中重试会重新生成响应，若再放行会导致非幂等工具重复执行
 
 	// 发送阶段门禁初始状态到前端
 	if pg != nil {
@@ -753,6 +752,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
+		// executedTools 按单次流尝试计：流内已执行工具后再断流，重试会重新生成响应、
+		// 可能重复执行非幂等工具——此时禁 retry。但上一轮迭代的工具结果已入历史，
+		// 新流的重新生成不会重跑它们（能看到结果），所以每次迭代必须复位，
+		// 否则第一个工具之后整轮失去重试能力（真机：上游 EOF 高发夜连续"对话出错"）。
+		executedTools := false
 		// token 预算检查：每轮开始时，超限触发压缩
 		threshold := opts.CompressionThreshold
 		if threshold <= 0 || threshold >= 1 {

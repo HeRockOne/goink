@@ -445,7 +445,7 @@ func isMutatingTool(toolName string) bool {
 var phaseThinkingBoundary = map[string]string{
 	"prepare":  "thinking 只用于：核对 9 项必查返回数据的缺口（缺设定/断伏笔/物品异常），列出补查清单。数据齐就直接 set_phase(\"outline\")，禁止构思大纲情节、场景或章节标题",
 	"outline":  "thinking 用于：对照 NS 方向锚+上章审稿摘要定本章目标→场景切分与顺序→选章末钩子类型→伏笔操作逐条对号。想完立即 edit outlines/NNN.md，禁止展开正文写法",
-	"write":    "thinking 用于：把大纲场景展开为段落规划+按 NS 字数范围分配各段字数预算，然后一次性 full_replace 成稿。禁止在 thinking 里写正文成稿再抄进 edit（双倍 token）；建档/时间线等维护留 maintain",
+	"write":    "thinking 用于：把大纲场景展开为段落规划+按 NS 字数范围分配各段字数预算，对照本阶段已注入的必读技能规则自检，然后一次性 full_replace 成稿。成稿后先 get_chapter_list 核字数（达标才继续），再 check_story_consistency。禁止在 thinking 里写正文成稿再抄进 edit（双倍 token）；建档/时间线等维护留 maintain",
 	"review":   "thinking 用于：对照审稿标准逐项过证据，汇总出五维分与致命问题数并调 submit_review。禁止在此构思修复方案（评分输出后按问题清单修）",
 	"maintain": "thinking 用于：对照 14 项清单盘点本章差量（新实体/角色状态变化/伏笔回收），排好并行写入批次后一轮发出。不再修改正文内容",
 }

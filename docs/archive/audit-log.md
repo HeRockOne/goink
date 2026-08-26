@@ -4,6 +4,8 @@
 
 ---
 
+> 2026-08-26：executedTools 作用域修复（Ch34 审计驱动，P3 的过度修正）。原实现 turn 级：本轮任一工具执行后所有后续 LLM 流的自动重试全部被禁——上游网关（opencode.ai）EOF 高发时段，模型每轮必调工具→第一次断流即整轮失败（"对话出错请重试"刷屏）、用户重发导致大纲两段相同 thinking、run_subagent 三连死审稿未完成。实际风险边界是单次流尝试：流内已执行工具再断流才需禁重试（防重新生成重复执行非幂等工具）；新迭代开始时旧工具结果已入历史、重生成的响应能看到结果不会重跑它们。修复：executedTools 从 Run 级变量移到 loopCount 迭代级声明（每次迭代复位）。同批：write 思考边界补"成稿后先 get_chapter_list 核字数达标再 check_story_consistency"+"对照本阶段已注入必读技能自检"。
+
 > 2026-08-26：思考边界升级为"正面任务+禁区"。原边界只说不许想什么，无正面任务时模型空转或漂移（Ch33 prepare 实测 15313 字符无任务 thinking）。phase_gate.go phaseThinkingBoundary 每阶段改为 thinking 该解决的具体任务：prepare=核对必查数据缺口列补查清单/数据齐直接转阶段；outline=对照方向锚定目标→场景切分→选钩子→伏笔对号，想完立即写大纲；write=段落规划+字数分配后一次性成稿，禁止 thinking 写正文再抄进 edit；review=逐项过证据汇总五维分调 submit_review，禁止构思修复；maintain=盘点差量排并行批次。随初始阶段清单注入（同日上一条）一并送达模型。
 
 > 2026-08-26：初始阶段清单注入（Ch33 审计驱动）。根因：阶段提醒历来只在 set_phase 转场时由 autoAdvancePhase 注入，prepare 作为初始阶段没有转场、永远收不到清单和思考边界——模型裸奔进 prepare 提前做下一阶段的活（实测：读不存在的 outlines/033.md、15313 字符 thinking 里构思章节标题、直接 edit 写大纲被门禁拦截）。修复：agent.go 轮首（门禁关闭提醒块后）检查历史中是否已有"【当前阶段：X】"标记，缺失则注入当前阶段 phaseChecklist（按 marker 去重，仅主 agent+门禁开启时）；prepare/outline 阶段额外附"本章大纲与正文均未产出，prepare 只做数据收集，禁止预做后续阶段产出"。kernel prepare 段加同义说明（builtin→skills/→~/.goink/skills 三向同步）。同日确认 submit_review 主白名单归属：源码仅在 reviewAgentTools（identity.go），主 agent 直接调用属构建瞬态，方案 A 维持仅子代理可调。
