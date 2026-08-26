@@ -1012,8 +1012,23 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								}
 							}
 						}
-						// 门禁通过，准备执行工具
 					}
+
+					// submit_review 仅审稿子代理可用（审稿独立性，方案 A）：主会话直调会在
+					// 这里硬拦——白名单/门禁链路存在未定位的放行旁路（Ch33/Ch34 实测主 agent
+					// 抢先自评 8 维分并建记录，锚定后续 run_subagent 的独立审稿），此防御层
+					// 不依赖 allowlist/门禁配置，行为确定。
+					if name == "submit_review" && opts.AgentType != "review" {
+						blockMsg := "submit_review 只能由审稿子代理调用。主会话请用 run_subagent(agent_type=\"review\") 启动独立审稿，不要自行评分提交。"
+						cur := ""
+						if pg != nil && pg.Active() {
+							cur = pg.CurrentPhase()
+						}
+						a.logger.Warn("主会话 submit_review 硬拦截", "sessionID", opts.SessionID, "phase", cur)
+						toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: &mcp_tools.ToolResult{Success: false, Error: blockMsg, ErrKind: "user"}, displayText: display.DisplayText, activityKind: display.ActivityKind})
+						continue
+					}
+					// 门禁通过，准备执行工具
 
 					// ---- 执行工具 ----
 					emit(AgentEvent{
