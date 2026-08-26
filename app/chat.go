@@ -114,6 +114,7 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 
 	a.agent.Cancel(sess.SessionID)
 	a.agent.RegisterCancel(sess.SessionID, cancel)
+	a.agent.RegisterShutdown(sess.SessionID)
 	// 无条件注销：旧实现 ctx 已取消时跳过，被 Cancel() 打断的会话注册项残留，
 	// IsRunning 对已结束会话误报 true
 	defer a.agent.UnregisterCancel(sess.SessionID)
@@ -539,7 +540,17 @@ func (a *App) SetPhaseMode(sessionID, mode string) error {
 }
 
 // DeleteSession 删除指定会话及其所有消息。
+// 先取消运行中的回合：旧实现只删 DB 不中止 agent 循环，孤儿回合会继续
+// 编辑章节/落库审稿/git commit（实测 Ch35：被删 mimo 会话跑完全程，与
+// 新 ox-alpha 会话并行写同一章），取消后等待 loop 退出（最长 10 秒）
+// 再删除，避免 appendMsg 复活孤儿数据。
 func (a *App) DeleteSession(sessionID string) error {
+	a.agent.Cancel(sessionID)
+	// 等待 run loop 实际退出：Cancel 是异步的（流中断/工具边界后 loop 才 break），
+	// 不等待则 delete 后 loop 仍可能 appendMsg 到已删除的会话。
+	// 注意不能用 IsRunning() 判断：Cancel() 已移除 cancels 条目，IsRegistered 返回 false。
+	// WaitForStop 检查 done 通道（Cancel 不删除），Unregister 关闭时才标记退出。
+	a.agent.WaitForStop(sessionID, 10*time.Second)
 	return a.session.DeleteSession(a.ctx, sessionID)
 }
 
@@ -589,6 +600,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	ctx, cancel := context.WithCancel(a.ctx)
 	defer cancel()
 	a.agent.RegisterCancel(sess.SessionID, cancel)
+	a.agent.RegisterShutdown(sess.SessionID)
 	defer a.agent.UnregisterCancel(sess.SessionID)
 
 	// 6. 初始化 runningTokens

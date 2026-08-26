@@ -116,6 +116,20 @@ func (a *Agent) Cancel(sessionID string) {
 	a.cancelMgr.Cancel(CancelPrefixChat + sessionID)
 }
 
+// RegisterShutdown 注册会话结束信号，供 WaitForStop 等待 run loop 退出。
+// 必须在 RegisterCancel 之后调用。
+func (a *Agent) RegisterShutdown(sessionID string) {
+	a.cancelMgr.RegisterShutdown(CancelPrefixChat + sessionID)
+}
+
+// WaitForStop 阻塞直到会话 run loop 实际退出（Unregister 被调用）或超时。
+// 返回 true 表示已停止，false 表示超时。
+func (a *Agent) WaitForStop(sessionID string, timeout time.Duration) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return a.cancelMgr.WaitForStop(CancelPrefixChat+sessionID, ctx)
+}
+
 // reviewAbsentThreshold 门禁关闭时触发审稿缺席提醒的主 agent 回复数阈值
 // （约对应 2-3 章的回复量：每章通常含正文+维护确认等多条 assistant 消息）。
 const reviewAbsentThreshold = 6
