@@ -407,9 +407,14 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 			continue
 		}
 
-		// reasoning_content → EventThinking
-		if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
-			ch <- StreamEvent{Type: EventThinking, Data: reasoning}
+		// 思考内容 → EventThinking。字段名因厂商/网关而异（无统一标准）：
+		// DeepSeek/Kimi = reasoning_content；vLLM/OpenRouter/Vercel 等网关 = reasoning；
+		// 部分实现 = thinking。逐个探测，自定义/网关模型思考块丢失多半是方言不匹配。
+		for _, key := range []string{"reasoning_content", "reasoning", "thinking"} {
+			if reasoning, ok := delta[key].(string); ok && reasoning != "" {
+				ch <- StreamEvent{Type: EventThinking, Data: reasoning}
+				break
+			}
 		}
 
 		// content → EventContent
