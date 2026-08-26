@@ -248,7 +248,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
               <div key={o.chapter_number} className="group flex items-center w-full">
                 <button
                   onClick={() => onSelectOutline(o.file_path, o.title ? `第${o.chapter_number}章 · ${o.title}` : `第${o.chapter_number}章 大纲`)}
-                  className={`flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 relative bg-sidebar
+                  className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 relative bg-sidebar
                     ${target?.path === o.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
                 >
                   {target?.path === o.file_path && (
@@ -317,7 +317,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                       >
                         <button
                           onClick={() => onSelectChapter(ch)}
-                          className={`flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 bg-sidebar
+                          className={`flex items-center gap-2.5 pl-5 pr-10 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0 bg-sidebar
                             ${target?.path === ch.file_path ? 'bg-primary/10 font-medium glow-primary' : ''}`}
                         >
                           {target?.path === ch.file_path && (
