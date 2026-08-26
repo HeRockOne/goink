@@ -1,7 +1,7 @@
-// tokenRate — 流式 token 速率追踪（纯前端估算，回合结束冻结平均速率）。
-// 估算口径：CJK 字符 ≈0.6 token/字，其他 ≈0.25 token/字符（英文 ~4 字符/token）。
-// 瞬时速率用 3s 滑动窗口；>2s 无 delta 视为停顿（工具执行等），窗口重开且速率归零隐藏；
-// finish() 在回合结束时按活跃输出时间定格本轮平均速率。
+// tokenRate — 流式 token 速率追踪。
+// 实时速率：CJK 字符 ≈0.6 token/字、其他 ≈0.25 token/字符估算，3s 滑动窗口（网速式体验）。
+// 回合结束定格值：改用后端真实 completion_tokens（acc_completion_tokens 回合内增量）÷
+// 真实生成时长（首 token 时刻 → 末次 usage 时刻），数值精确；无 usage 时退回字符估算均值。
 
 const WINDOW_MS = 3000
 const IDLE_MS = 2000
@@ -25,6 +25,7 @@ function estimateTokens(text: string): number {
 
 export interface TokenRateTracker {
   addDelta(text: string): void
+  addUsage(accCompletionTokens: number): void
   finish(): void
   cancel(): void
 }
@@ -38,6 +39,10 @@ export function createTokenRateTracker(emit: (tps: number | null) => void): Toke
   let samples: Array<{ t: number; cum: number }> = []
   let emitTimer: ReturnType<typeof setTimeout> | null = null
   let idleTimer: ReturnType<typeof setTimeout> | null = null
+  // 真实 token 计数（会话累计 completion_tokens），用于回合结束精确定格
+  let realAccFirst: number | null = null
+  let realAccLast: number | null = null
+  let realLastAt = 0
 
   function clearTimers() {
     if (emitTimer) { clearTimeout(emitTimer); emitTimer = null }
@@ -50,6 +55,9 @@ export function createTokenRateTracker(emit: (tps: number | null) => void): Toke
     firstDeltaAt = 0
     lastDeltaAt = 0
     samples = []
+    realAccFirst = null
+    realAccLast = null
+    realLastAt = 0
   }
 
   function liveRate(now: number): number | null {
@@ -85,8 +93,25 @@ export function createTokenRateTracker(emit: (tps: number | null) => void): Toke
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => emit(0), IDLE_MS)
     },
+    addUsage(accCompletionTokens: number) {
+      const now = Date.now()
+      if (realAccFirst === null) realAccFirst = accCompletionTokens
+      realAccLast = accCompletionTokens
+      realLastAt = now
+    },
     finish() {
       clearTimers()
+      // 精确定格：真实 completion_tokens 回合内增量 ÷ 真实生成时长
+      if (realAccFirst !== null && realAccLast !== null && realLastAt > 0 && firstDeltaAt > 0 && realLastAt > firstDeltaAt) {
+        const realTokens = realAccLast - realAccFirst
+        const realMs = realLastAt - firstDeltaAt
+        const precise = realMs > 0 && realTokens > 0 ? realTokens / (realMs / 1000) : 0
+        reset()
+        lastEmitAt = 0
+        emit(Math.round(precise * 10) / 10)
+        return
+      }
+      // 兜底：无 usage 时退回字符估算均值
       const avg = activeMs > 500 && totalTokens > 0
         ? Math.round((totalTokens / (activeMs / 1000)) * 10) / 10
         : 0

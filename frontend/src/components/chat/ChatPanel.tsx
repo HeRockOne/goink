@@ -642,6 +642,8 @@ export default forwardRef<ChatPanelHandle, Props>(function ChatPanel({ novelId, 
       case AgentEventType.Usage: {
         if (event.usage) {
           onUsage?.(event.usage as unknown as UsageInfo)
+          const acc = event.usage.acc_completion_tokens
+          if (typeof acc === 'number') tpsTrackerRef.current?.addUsage(acc)
         }
         return
       }
