@@ -1103,6 +1103,37 @@ func findTypeDrift(ctx context.Context, db *gorm.DB, novelID int64, currentChapt
 		window, startCh, currentChapter, hint, minActionChapters)
 }
 
+// TypeDriftStreak 返回 beforeChapter（不含）往前连续无高密度动作场景的章数（最多回看 5 章）。
+// 供 write 阶段进场注入节奏补偿提醒使用（Q1：type_drift WARNING 只有检测没有纠正执行）。
+// 与 findTypeDrift 共用 getActionTags 标签体系；genre 传空用默认标签。
+func TypeDriftStreak(db *gorm.DB, novelID int64, beforeChapter int, genre string) int {
+	const lookback = 5
+	startCh := beforeChapter - lookback
+	if startCh < 1 {
+		startCh = 1
+	}
+	var chapters []chapter.Chapter
+	db.Where("novel_id = ? AND chapter_number >= ? AND chapter_number < ?",
+		novelID, startCh, beforeChapter).Order("chapter_number DESC").Find(&chapters)
+
+	actionTags := getActionTags(genre)
+	streak := 0
+	for _, ch := range chapters {
+		has := false
+		for _, tag := range actionTags {
+			if ch.KeyEvents != "" && strings.Contains(ch.KeyEvents, tag) {
+				has = true
+				break
+			}
+		}
+		if has {
+			break
+		}
+		streak++
+	}
+	return streak
+}
+
 // intsToString 把章节号列表格式化为逗号分隔字符串。
 func intsToString(nums []int) string {
 	parts := make([]string, len(nums))

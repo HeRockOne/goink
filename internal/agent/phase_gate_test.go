@@ -1225,3 +1225,40 @@ func containsSub(s, substr string) bool {
 	}
 	return false
 }
+
+func TestSaveLoadState_ConsistencyErrorsRoundtrip(t *testing.T) {
+	pg := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: check, edit, set_phase
+require: check_story_consistency
+next: review
+-->
+`, "single")
+	if pg == nil {
+		t.Fatal("ParsePhaseGateConfig 返回 nil")
+	}
+	pg.consistencyErrors = []string{"[ERROR] 伏笔超期未回收：测试伏笔"}
+
+	phase, stateJSON := pg.SaveState()
+	if phase == "" {
+		t.Fatal("SaveState 阶段为空")
+	}
+
+	pg2 := ParsePhaseGateConfig(`
+<!-- phase-gate-config
+phase: write
+tools: check, edit, set_phase
+require: check_story_consistency
+next: review
+-->
+`, "single")
+	pg2.LoadState(phase, stateJSON)
+	if len(pg2.consistencyErrors) != 1 {
+		t.Fatalf("consistencyErrors 未跨 turn 恢复: %v", pg2.consistencyErrors)
+	}
+	ok, _ := pg2.checkResultGateMet(pg2.findPhase(pg2.CurrentPhase()))
+	if ok {
+		t.Error("恢复后存在未解决 ERROR，checkResultGateMet 应拦截")
+	}
+}

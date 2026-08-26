@@ -198,6 +198,11 @@ func (r *Registry) OpenAI(allowed map[string]bool) []map[string]any {
 	return list
 }
 
+// toolExecTimeout 单个工具执行的兜底超时（业界惯例：MCP 60s / AutoGen HttpTool 30s，
+// 取宽值 3 分钟；run_subagent 豁免——审稿子代理实测可达 5-8 分钟，且其内部流有
+// 独立的 idle 超时保护）。
+const toolExecTimeout = 3 * time.Minute
+
 // Execute 查表 → 白名单校验 → 反序列化 + validate → 调 Tool.Execute → 兜底 panic + 错误。
 // allowed=nil 表示不限制；非 nil 只放行白名单内的工具。
 func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMessage, tc ToolContext, allowed map[string]bool) *ToolResult {
@@ -231,12 +236,21 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 				execErr = nil
 			}
 		}()
-		result, execErr = t.Execute(ctx, args, tc)
+		execCtx := ctx
+		if name != "run_subagent" {
+			var cancel context.CancelFunc
+			execCtx, cancel = context.WithTimeout(ctx, toolExecTimeout)
+			defer cancel()
+		}
+		result, execErr = t.Execute(execCtx, args, tc)
 	}()
 
 	if execErr != nil {
 		r.logger.Error("tool execution failed", "tool", name, "error", execErr, "elapsed_ms", time.Since(t0).Milliseconds())
-		return &ToolResult{Success: false, Error: "服务器内部错误，请稍后重试", ErrKind: "system"}
+		// 透传真实错误（DB locked/git 失败等自有 error 无安全泄露面）：
+		// 屏蔽成通用文案会让模型丧失自纠信号、盲目重试（arXiv 2606.05037：
+		// 通用错误无法承载 agent 自纠所需的结构化指引）
+		return &ToolResult{Success: false, Error: fmt.Sprintf("工具执行失败: %v", execErr), ErrKind: "system"}
 	}
 
 	if result != nil {

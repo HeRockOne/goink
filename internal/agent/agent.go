@@ -412,6 +412,13 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 			brief := fmt.Sprintf("<system-reminder>\n动笔前对照方向锚核心条目：\n%s\n</system-reminder>", anchor)
 			a.appendMsg("user", brief, "", nil, opts, runningTokens)
 		}
+		// 节奏债务强制偿还（Q1）：type_drift/pacing_gap 的 WARNING 与审稿打分都只是检测，
+		// 连续多章无高密度场景时在进场点注入硬性补偿要求——检测闭环补上执行闭环。
+		done := a.lastCompletedChapter(opts.NovelID)
+		if done >= 3 && mcp_tools.TypeDriftStreak(a.db, opts.NovelID, done+1, "") >= 3 {
+			a.appendMsg("user", "<system-reminder>\n⚠ 节奏债务：最近 3 章以上无高密度对抗/冲突场景（type_drift 持续告警）。本章必须安排至少一段 ≥300 字的高密度场景，形式按总纲类型承诺选择；否则审稿将按 #23 连续同质与节奏拖沓打回。\n</system-reminder>", "", nil, opts, runningTokens)
+			a.logger.Info("write 进场注入节奏补偿提醒", "novel_id", opts.NovelID, "last_chapter", done)
+		}
 	}
 	// maintain 阶段：追加差量检查提醒（新实体建档）
 	if next == "maintain" {
@@ -624,6 +631,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	}
 
 	interrupted := false
+	executedTools := false // 本轮流中已真实执行过工具——流中重试会重新生成响应，若再放行会导致非幂等工具重复执行
 
 	// 发送阶段门禁初始状态到前端
 	if pg != nil {
@@ -831,6 +839,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 
 					// ---- 阶段门禁：先检查，再执行（硬拦截） ----
+					// 系统级连续失败真禁用：同一工具本轮 Run 内系统异常 ≥3 次后不再执行
+					// （旧实现只发"已被禁用"提醒但 registry 照常执行，提示词撒谎、轮次照浪费）
+					if failCnt[name] >= 3 {
+						toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs,
+							result: &mcp_tools.ToolResult{Success: false, ErrKind: "user",
+								Error: fmt.Sprintf("工具 %s 本轮已连续系统失败 %d 次，被禁用至本轮结束。请改用其他方式完成目标，或向用户说明。", name, failCnt[name])},
+							displayText: display.DisplayText, activityKind: display.ActivityKind})
+						continue
+					}
 					if pg != nil && pg.Active() && pg.CurrentPhase() != "" {
 						// 安全开关：禁止 AI 自行修改门禁配置（除非管理员显式允许）
 						allowed := true
@@ -921,6 +938,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						WebSearch:     a.BuildWebSearch(),
 					}
 					result := a.registry.Execute(ctx, name, rawArgs, tc, opts.AllowedTools)
+					executedTools = true
 					a.logger.Info("tool executed", "tool", name, "success", result.Success, "phase", map[bool]string{true: "completed", false: "failed"}[result.Success])
 
 					phase := "completed"
@@ -1007,11 +1025,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					// 检查是否可重试：429 限流 + Retryable 标记 + 402（额度/免费渠道限流）。
 					// 402 旧实现直接判死——实测商汤免费渠道 402 几分钟内恢复，turn 1-2 连续
 					// "对话失败"就是它。与 429 同上限重试（用户实测短重试不够，改满额）。
+					// 流中已执行过工具时禁止重试（业界幂等性共识）：重启流会重新生成响应，
+					// edit/create_* 等非幂等副作用无法回滚，二次执行 = 文件写两遍/记录建两条。
 					retryable := false
 					if apiErr, ok := event.Error.(*llm.APIError); ok {
 						retryable = apiErr.StatusCode == 429 || apiErr.StatusCode == 402 || apiErr.Retryable
 					}
-					if retryable && retryCount < maxLLMRetries {
+					if retryable && retryCount < maxLLMRetries && !executedTools {
 						retryCount++
 						waitTime := time.Duration(retryCount) * 5 * time.Second
 						if waitTime > 60*time.Second {

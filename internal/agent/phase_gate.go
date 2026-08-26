@@ -1037,13 +1037,15 @@ func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 		return "", ""
 	}
 	data := struct {
-		Tools    map[string]int            `json:"tools"`
-		Visited  []string                  `json:"visited"`
-		Reads    map[string]map[string]bool `json:"reads,omitempty"`
+		Tools             map[string]int             `json:"tools"`
+		Visited           []string                   `json:"visited"`
+		Reads             map[string]map[string]bool `json:"reads,omitempty"`
+		ConsistencyErrors []string                   `json:"consistency_errors,omitempty"`
 	}{
-		Tools:   g.successfulTools,
-		Visited: g.visited,
-		Reads:   g.readsByPhase,
+		Tools:             g.successfulTools,
+		Visited:           g.visited,
+		Reads:             g.readsByPhase,
+		ConsistencyErrors: g.consistencyErrors,
 	}
 	b, err := json.Marshal(data)
 	if err != nil {
@@ -1051,14 +1053,6 @@ func (g *PhaseGate) SaveState() (currentPhase string, calledToolsJSON string) {
 		return g.currentPhase, "{}"
 	}
 	return g.currentPhase, string(b)
-}
-
-// SaveWordCount 返回字数校验状态的 JSON 片段。
-func (g *PhaseGate) SaveWordCount() string {
-	if g == nil || g.wordCountOK == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", *g.wordCountOK)
 }
 
 // LoadState 从持久化数据恢复门禁状态。
@@ -1073,9 +1067,10 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	if calledToolsJSON != "" {
 		// 先尝试新格式
 		var state struct {
-			Tools   map[string]int             `json:"tools"`
-			Visited []string                   `json:"visited"`
-			Reads   map[string]map[string]bool `json:"reads"`
+			Tools             map[string]int             `json:"tools"`
+			Visited           []string                   `json:"visited"`
+			Reads             map[string]map[string]bool `json:"reads"`
+			ConsistencyErrors []string                   `json:"consistency_errors"`
 		}
 		if json.Unmarshal([]byte(calledToolsJSON), &state) == nil && state.Tools != nil {
 			g.successfulTools = state.Tools
@@ -1089,6 +1084,11 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 				g.visited = state.Visited
 			} else {
 				g.visited = []string{currentPhase}
+			}
+			// 跨 turn 保留一致性错误记忆：用户打断再续时，未解决的 [ERROR]
+			// 仍要拦截 review→maintain（修复后全量复查才解除）
+			if len(state.ConsistencyErrors) > 0 {
+				g.consistencyErrors = state.ConsistencyErrors
 			}
 			return
 		}
@@ -1104,20 +1104,6 @@ func (g *PhaseGate) LoadState(currentPhase string, calledToolsJSON string) {
 	}
 	if len(g.visited) == 0 {
 		g.visited = []string{g.currentPhase}
-	}
-}
-
-// LoadWordCount 从持久化数据恢复字数校验状态。
-func (g *PhaseGate) LoadWordCount(okStr string) {
-	if g == nil || !g.active || okStr == "" {
-		return
-	}
-	if okStr == "true" {
-		v := true
-		g.wordCountOK = &v
-	} else if okStr == "false" {
-		v := false
-		g.wordCountOK = &v
 	}
 }
 

@@ -114,11 +114,9 @@ func (a *App) chatImpl(input ChatInput, eventCallback func(map[string]any)) (*Ch
 
 	a.agent.Cancel(sess.SessionID)
 	a.agent.RegisterCancel(sess.SessionID, cancel)
-	defer func() {
-		if ctx.Err() == nil {
-			a.agent.UnregisterCancel(sess.SessionID)
-		}
-	}()
+	// 无条件注销：旧实现 ctx 已取消时跳过，被 Cancel() 打断的会话注册项残留，
+	// IsRunning 对已结束会话误报 true
+	defer a.agent.UnregisterCancel(sess.SessionID)
 
 	// 3. 新会话自动生成标题（异步，与 agent LLM 调用并发）
 	if isNew && sess.Title == "" {
