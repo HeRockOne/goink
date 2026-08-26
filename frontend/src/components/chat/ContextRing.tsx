@@ -189,16 +189,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
               命中率 {usage.cache_hit_ratio.toFixed(2)}%
             </span>
           )}
-          <span className="text-xs font-semibold text-muted-foreground shrink-0">上下文</span>
-          <span className="w-24 h-2.5 rounded-sm bg-muted border border-border overflow-hidden">
-            <span
-              className="h-full rounded-sm block transition-all duration-400"
-              style={{ width: `${ratio}%`, backgroundColor: color }}
-            />
-          </span>
-          <span className="text-xs font-semibold tabular-nums" style={{ color }}>
-            {ratio.toFixed(2)}%
-          </span>
+          <span className="text-xs font-semibold text-muted-foreground">上下文 {ratio.toFixed(2)}%</span>
         </>
       ) : (
         <>
