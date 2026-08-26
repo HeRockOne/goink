@@ -79,17 +79,17 @@ export function createTokenRateTracker(emit: (tps: number | null) => void): Toke
           emitTimer = null
           lastEmitAt = Date.now()
           const r = liveRate(Date.now())
-          emit(r !== null ? Math.round(r * 10) / 10 : null)
+          emit(r !== null ? Math.round(r * 10) / 10 : 0)
         }, wait)
       }
       if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = setTimeout(() => emit(null), IDLE_MS)
+      idleTimer = setTimeout(() => emit(0), IDLE_MS)
     },
     finish() {
       clearTimers()
       const avg = activeMs > 500 && totalTokens > 0
         ? Math.round((totalTokens / (activeMs / 1000)) * 10) / 10
-        : null
+        : 0
       reset()
       lastEmitAt = 0
       emit(avg)
@@ -98,7 +98,7 @@ export function createTokenRateTracker(emit: (tps: number | null) => void): Toke
       clearTimers()
       reset()
       lastEmitAt = 0
-      emit(null)
+      emit(0)
     },
   }
 }
