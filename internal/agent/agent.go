@@ -419,6 +419,33 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 			a.appendMsg("user", "<system-reminder>\n⚠ 节奏债务：最近 3 章以上无高密度对抗/冲突场景（type_drift 持续告警）。本章必须安排至少一段 ≥300 字的高密度场景，形式按总纲类型承诺选择；否则审稿将按 #23 连续同质与节奏拖沓打回。\n</system-reminder>", "", nil, opts, runningTokens)
 			a.logger.Info("write 进场注入节奏补偿提醒", "novel_id", opts.NovelID, "last_chapter", done)
 		}
+		// 上一章审稿纠正（series memory，critique-conditioned generation 业界标准做法）：
+		// 上章审稿非 pass 时注入结构化摘要 + 指引读全文。跨章纠正链此前断裂
+		// （实证 Ch32：get_review_history 全会话 0 调用，下章计划未带审稿纠正项）。
+		if done > 0 {
+			var lastRev review.ReviewRecord
+			if err := a.db.Where("novel_id = ? AND chapter_end <= ?", opts.NovelID, done).
+				Order("id DESC").First(&lastRev).Error; err == nil &&
+				lastRev.Verdict != review.VerdictPass && lastRev.Verdict != review.VerdictUnknown &&
+				lastRev.TotalScore >= 0 {
+				verdictCN := map[string]string{review.VerdictRevise: "需修改", review.VerdictFail: "不通过"}[lastRev.Verdict]
+				msg := fmt.Sprintf("<system-reminder>\n上一章（第%d章）审稿结论：总分 %.1f/10（%s），致命 %d 项", lastRev.ChapterEnd, lastRev.TotalScore, verdictCN, lastRev.FatalCount)
+				lowestName, lowestV := "", 11.0
+				for n, v := range map[string]float64{
+					"故事结构": lastRev.DimStructure, "角色深度": lastRev.DimCharacter,
+					"节奏与爽点": lastRev.DimPacing, "散文工艺": lastRev.DimProse, "场景工程": lastRev.DimScene,
+				} {
+					if v >= 0 && v < lowestV {
+						lowestName, lowestV = n, v
+					}
+				}
+				if lowestName != "" {
+					msg += fmt.Sprintf("，最低维度：%s %.0f/10", lowestName, lowestV)
+				}
+				msg += "。动笔前先 get_review_history 查看完整问题清单，规划本章时规避同类问题、落实上章修改方向。\n</system-reminder>"
+				a.appendMsg("user", msg, "", nil, opts, runningTokens)
+			}
+		}
 	}
 	// maintain 阶段：追加差量检查提醒（新实体建档）
 	if next == "maintain" {
