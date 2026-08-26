@@ -188,7 +188,6 @@ export default function StatusBar({ content, isDirty, gateStatus, usage, tps, se
         <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
         {/* 最右：token 用量条状统计（ContextRing bar 模式） */}
         <ContextRing usage={usage ?? null} selectedModel={selectedModel} onCompress={onCompress} bar />
-        <span className={`w-1.5 h-1.5 rounded-full ${isDirty ? 'bg-status-warning' : 'bg-status-ok'}`} />
       </span>
 
       {modeToast && (

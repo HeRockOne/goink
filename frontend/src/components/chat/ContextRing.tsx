@@ -189,6 +189,7 @@ export default function ContextRing({ usage, selectedModel, onCompress, isTurnRu
               命中率 {usage.cache_hit_ratio.toFixed(2)}%
             </span>
           )}
+          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
           <span className="text-xs font-semibold text-muted-foreground">上下文 {ratio.toFixed(2)}%</span>
         </>
       ) : (
