@@ -313,7 +313,7 @@ export default function ChapterList({ novelId, target, onSelectChapter, onSelect
                     {block.chs.map(ch => (
                       <div
                         key={ch.id}
-                        className="group flex items-center w-full relative"
+                        className="group flex items-center w-full relative bg-sidebar"
                       >
                         <button
                           onClick={() => onSelectChapter(ch)}

@@ -48,7 +48,7 @@
   --chart-3: #c4956a;
   --chart-4: #7a9ab5;
   --chart-5: #b57a8a;
-  --sidebar: rgba(255, 255, 255, 0.92);
+  --sidebar: rgba(255, 255, 255, 1);
   --sidebar-foreground: #0e1a26;
   --sidebar-primary: #4a7da6;
   --sidebar-primary-foreground: #f0f4f8;
@@ -166,7 +166,7 @@
   --chart-3: #d4a870;
   --chart-4: #7a9ab5;
   --chart-5: #c0808a;
-  --sidebar: rgba(13, 20, 32, 0.82);
+  --sidebar: rgba(13, 20, 32, 1);
   --sidebar-foreground: #e8eef2;
   --sidebar-primary: #a1c4d6;
   --sidebar-primary-foreground: #0a0e17;
@@ -337,7 +337,7 @@
 [data-finish="glass"] {
   --card: color-mix(in oklch, var(--card) 78%, transparent);
   --popover: color-mix(in oklch, var(--popover) 86%, transparent);
-  --sidebar: color-mix(in oklch, var(--sidebar) 80%, transparent);
+  --sidebar: var(--background);
   --secondary: color-mix(in oklch, var(--secondary) 82%, transparent);
   --muted: color-mix(in oklch, var(--muted) 82%, transparent);
   --accent: color-mix(in oklch, var(--accent) 75%, transparent);
