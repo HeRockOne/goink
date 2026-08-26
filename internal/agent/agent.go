@@ -20,6 +20,7 @@ import (
 	"novel/internal/agentcfg"
 	"novel/internal/approval"
 	"novel/internal/config"
+	"novel/internal/git"
 	"novel/internal/llm"
 	"novel/internal/mcp_tools"
 	"novel/internal/review"
@@ -446,6 +447,16 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 				a.appendMsg("user", msg, "", nil, opts, runningTokens)
 			}
 		}
+		// 上一章结尾衔接锚：跨 session 写作时上下文只有上章的情节摘要与指纹，
+		// 没有正文实际收束（最后段落的语气/场景停点）。按段落注入末尾 3 段
+		// （约 300-600 字）供文气承接，省去模型自己 read 的一个来回。
+		if done > 0 {
+			if paras := chapterTailParagraphs(opts.NovelID, done, 3, 800); len(paras) > 0 {
+				msg := fmt.Sprintf("<system-reminder>\n衔接锚：上一章（第%d章）结尾 %d 段。本章开头须自然承接其时间/场景/情绪，禁止复述或重复这些内容：\n\n%s\n</system-reminder>",
+					done, len(paras), strings.Join(paras, "\n\n"))
+				a.appendMsg("user", msg, "", nil, opts, runningTokens)
+			}
+		}
 	}
 	// maintain 阶段：追加差量检查提醒（新实体建档）
 	if next == "maintain" {
@@ -454,6 +465,48 @@ func (a *Agent) autoAdvancePhase(pg *PhaseGate, opts *RunOptions, runningTokens 
 	ps := pg.Status()
 	emit(AgentEvent{TurnID: opts.TurnID, Type: EventPhaseGate, PhaseGate: &ps, Timestamp: time.Now()})
 	return true
+}
+
+// chapterTailParagraphs 读章节正文并返回末尾最多 maxParas 个非空段落（空行分段，跳过标题）。
+// 段落总字符超过 maxRunes 时从最早段开始丢弃，保证衔接锚轻量。
+func chapterTailParagraphs(novelID int64, chapterNum, maxParas, maxRunes int) []string {
+	content, err := git.ReadFile(novelID, git.ChapterPath(chapterNum))
+	if err != nil || content == "" {
+		return nil
+	}
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	var paras []string
+	var cur []string
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+		text := strings.TrimSpace(strings.Join(cur, "\n"))
+		cur = nil
+		if text != "" && !strings.HasPrefix(text, "#") {
+			paras = append(paras, text)
+		}
+	}
+	for _, ln := range strings.Split(content, "\n") {
+		if strings.TrimSpace(ln) == "" {
+			flush()
+		} else {
+			cur = append(cur, ln)
+		}
+	}
+	flush()
+	if len(paras) > maxParas {
+		paras = paras[len(paras)-maxParas:]
+	}
+	total := 0
+	for i, p := range paras {
+		total += len([]rune(p))
+		if total > maxRunes && i > 0 {
+			paras = paras[i:]
+			break
+		}
+	}
+	return paras
 }
 
 // agentTypeFromString 将字符串转为 AgentType。
