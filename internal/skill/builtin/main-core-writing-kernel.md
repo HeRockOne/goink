@@ -41,6 +41,8 @@ Init 不属于创作循环，不受门禁管控。开书技能（main-core-init-
 
 ### prepare
 
+本章的大纲与正文此时都**尚未产出**——prepare 只做数据收集（9 项必查只读），大纲在 outline 阶段写，正文在 write 阶段写。禁止在 prepare 读/写 outlines/NNN.md、禁止预想章节标题或情节细节。
+
 门禁 require 9 项工具并行发出。**必须检查返回的 volume_entities（本卷涉及实体）**，确认本卷设定约束、伏笔状态、物品流转。发现问题用 get_entity_appearances 反查确认。
 
 五门检查（字数/段数/情绪/节奏/禁止项）→ set_phase("outline")

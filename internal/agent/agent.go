@@ -639,6 +639,32 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			a.logger.Info("门禁关闭审稿缺席提醒", "sessionID", opts.SessionID, "absentCount", n)
 		}
 	}
+
+	// 初始阶段清单注入：阶段提醒历来只在 set_phase 转场时注入，prepare 作为
+	// 初始阶段没有转场、永远收不到清单和思考边界——模型裸奔进 prepare 会提前
+	// 做大纲/正文的事（实测：prepare 读不存在的大纲、直接 edit 写大纲被拦）。
+	// 轮首检查历史中是否已有本阶段清单标记，缺失则补注入（去重，仅主 agent）。
+	if opts.PhaseGateEnabled && pg != nil && pg.Active() && opts.AgentType == "main" {
+		if cur := pg.CurrentPhase(); cur != "" {
+			marker := fmt.Sprintf("【当前阶段：%s】", cur)
+			has := false
+			for _, m := range opts.Messages {
+				if c, ok := m["content"].(string); ok && strings.Contains(c, marker) {
+					has = true
+					break
+				}
+			}
+			if !has {
+				reminder := "<system-reminder>\n" + phaseChecklist(pg.findPhase(cur))
+				if cur == "prepare" || cur == "outline" {
+					reminder += "\n本章大纲与正文均未产出：大纲在 outline 阶段写（edit outlines/NNN.md），正文在 write 阶段写（edit chapters/NNN.md）。prepare 只做数据收集，禁止预做后续阶段的产出。"
+				}
+				reminder += "\n</system-reminder>"
+				a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+				a.logger.Info("初始阶段清单注入", "phase", cur, "sessionID", opts.SessionID)
+			}
+		}
+	}
 	// 始终发送全量 tools（优化 Prompt Caching），用 allowed_tools 限制可用工具
 	tools := a.registry.OpenAI(nil) // nil = 不限制，发送全量
 
