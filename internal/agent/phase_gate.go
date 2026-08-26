@@ -440,13 +440,14 @@ func isMutatingTool(toolName string) bool {
 // phaseThinkingBoundary 各阶段的思考边界（代码侧常量，不受用户 DB 配置副本影响）：
 // 防止模型在本阶段预支下一阶段的构思——那时下阶段必读技能还没注入，想出来的东西
 // 没有方法论指导，转场后注入技能又得重想一遍（双倍思考成本，真机观察：prepare 想
-// 大纲、outline 想正文）。
+// 大纲、outline 想正文）。每条 = 本阶段 thinking 的正面任务 + 越界禁区：
+// 只给禁区会空转或漂移（Ch33 实测 15313 字符无任务 thinking），必须同时给该想什么。
 var phaseThinkingBoundary = map[string]string{
-	"prepare":  "本阶段只完成数据盘点（9 项必查），不构思大纲情节、不设计场景",
-	"outline":  "本阶段只产出大纲文件；正文写法、场景细节、字数分配留到 write 技能注入后再展开",
-	"write":    "本阶段只写本章正文，章内场景衔接可自由构思；建档/时间线等维护动作留 maintain，后续章情节留到下轮",
-	"review":   "本阶段只做审稿判定与问题清单",
-	"maintain": "本阶段只按清单维护数据，不再修改正文内容",
+	"prepare":  "thinking 只用于：核对 9 项必查返回数据的缺口（缺设定/断伏笔/物品异常），列出补查清单。数据齐就直接 set_phase(\"outline\")，禁止构思大纲情节、场景或章节标题",
+	"outline":  "thinking 用于：对照 NS 方向锚+上章审稿摘要定本章目标→场景切分与顺序→选章末钩子类型→伏笔操作逐条对号。想完立即 edit outlines/NNN.md，禁止展开正文写法",
+	"write":    "thinking 用于：把大纲场景展开为段落规划+按 NS 字数范围分配各段字数预算，然后一次性 full_replace 成稿。禁止在 thinking 里写正文成稿再抄进 edit（双倍 token）；建档/时间线等维护留 maintain",
+	"review":   "thinking 用于：对照审稿标准逐项过证据，汇总出五维分与致命问题数并调 submit_review。禁止在此构思修复方案（评分输出后按问题清单修）",
+	"maintain": "thinking 用于：对照 14 项清单盘点本章差量（新实体/角色状态变化/伏笔回收），排好并行写入批次后一轮发出。不再修改正文内容",
 }
 
 func phaseChecklist(pc *PhaseConfig) string {
