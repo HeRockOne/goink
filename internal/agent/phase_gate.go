@@ -444,9 +444,9 @@ func isMutatingTool(toolName string) bool {
 // 只给禁区会空转或漂移（Ch33 实测 15313 字符无任务 thinking），必须同时给该想什么。
 var phaseThinkingBoundary = map[string]string{
 	"prepare":  "thinking 只用于：核对 9 项必查返回数据的缺口（缺设定/断伏笔/物品异常），列出补查清单。数据齐就直接 set_phase(\"outline\")，禁止构思大纲情节、场景或章节标题",
-	"outline":  "thinking 用于：对照 NS 方向锚+上章审稿摘要定本章目标→场景切分与顺序→选章末钩子类型→伏笔操作逐条对号。想完立即 edit outlines/NNN.md，禁止展开正文写法",
-	"write":    "thinking 用于：把大纲场景展开为段落规划+按 NS 字数范围分配各段字数预算，对照本阶段已注入的必读技能规则自检，然后一次性 full_replace 成稿。成稿后先 get_chapter_list 核字数（达标才继续），再 check_story_consistency。禁止在 thinking 里写正文成稿再抄进 edit（双倍 token）；建档/时间线等维护留 maintain",
-	"review":   "thinking 用于：对照审稿标准逐项过证据，汇总出五维分与致命问题数并调 submit_review。禁止在此构思修复方案（评分输出后按问题清单修）",
+	"outline":  "thinking 硬预算 ≤600 字。只允许：对照 NS 方向锚+上章审稿摘要定本章目标→列 4-6 个场景块及顺序→选章末钩子类型→伏笔操作逐条对号（每点一句话）。绝对禁止在 thinking 展开场景正文写法或写任何叙事描写。想完立即 edit outlines/NNN.md",
+	"write":    "thinking 硬预算 ≤500 字。只允许：①按大纲拆段并给每段分配字数（总和=NS 字数范围）②对照已注入必读技能列 3-5 条自检雷区。绝对禁止在 thinking 写任何叙事正文/描写/对话/摘要——哪怕一句。正文 100% 直接写进 full_replace 的 content 参数；thinking 出现 ≥2 行连续叙事文字即判违规（审稿记'过度思考浪费 token'一笔，且浪费 token 不计入有效创作）。成稿后 get_chapter_list 核字数→check_story_consistency；建档/时间线维护留 maintain",
+	"review":   "thinking 硬预算 ≤800 字。只允许：对照审稿标准逐项比对证据、汇总五维分与致命数并调 submit_review。禁止在 thinking 复述/总结章节正文（细节直接引用章节，不要抄进 thinking）；禁止在此构思修复方案（评分输出后按问题清单修）",
 	"maintain": "thinking 用于：对照 14 项清单盘点本章差量（新实体/角色状态变化/伏笔回收），排好并行写入批次后一轮发出。不再修改正文内容",
 }
 

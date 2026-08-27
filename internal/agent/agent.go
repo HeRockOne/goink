@@ -134,6 +134,11 @@ func (a *Agent) WaitForStop(sessionID string, timeout time.Duration) bool {
 // （约对应 2-3 章的回复量：每章通常含正文+维护确认等多条 assistant 消息）。
 const reviewAbsentThreshold = 6
 
+// writeOverthinkThreshold write 阶段 thinking 字符数阈值。超过即判定模型在
+// thinking 里打草稿（真机实测 mimo-v2.5 单条 thinking 达 1.8-3 万字符，浪费
+// token 且正文质量无提升）。触发后注入硬提醒，迫使下一轮直接 full_replace 输出。
+const writeOverthinkThreshold = 2500
+
 // assistantMessagesSinceLastReview 统计最近一次 run_subagent 调用之后的
 // 主 agent 可见回复条数。run_subagent 的工具调用记录在 assistant 消息的
 // extra_metadata.tool_calls 中，取其消息 id 为分界点。
@@ -1238,6 +1243,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				"tool_calls":    buildToolCalls(toolOutputs),
 				"tool_displays": buildToolDisplay(toolOutputs),
 			}, &opts, runningTokens)
+
+		// write 阶段过度思考拦截：thinking 超阈值说明模型在思考区打草稿
+		// （真机 mimo-v2.5 单条 thinking 达 1.8-3 万字符）。thinking 已产生的
+		// token 无法回收，但注入硬提醒可阻止后续轮次继续在 thinking 构思，
+		// 迫使模型直接 full_replace 把正文写入 content。
+		if pg != nil && pg.Active() && pg.CurrentPhase() == "write" && opts.AgentType == "main" && len(thinkingBuffer) > writeOverthinkThreshold {
+			a.appendMsg("user", "<system-reminder>\n⚠ thinking 过量（疑似在思考区打草稿，浪费 token 且正文质量无提升）。thinking 只做：①按大纲拆段+分配字数预算 ②对照必读技能列 3-5 条自检雷区。绝对禁止在 thinking 写任何叙事正文/描写/对话/摘要。立即用 full_replace 把正文直接写入 content 参数并输出，不要继续在 thinking 构思。\n</system-reminder>", "", nil, &opts, runningTokens)
+		}
 
 		// 请求结束：统一处理最终 usage（过滤流式中途的部分值，避免显示回跳与重复累计）。
 		// 必须在 appendMsg 之后：UpdateMessageUsage 按"最新 assistant 消息"定位，
