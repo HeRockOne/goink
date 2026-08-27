@@ -29,6 +29,8 @@ done 是终点，等待用户发起新一轮。
 - **content 不能为空**：每轮 response 必须有 content（哪怕只是动作说明），禁止纯 tool_call 无 content
 - **工具批量并行**：不互相依赖的工具在同一轮 response 中并行调用（例：read 大纲 + get_characters + check_story_consistency 同时发出）
 - **阶段思考边界**：每个阶段的 thinking 只解决本阶段的问题。下一阶段的构思等转场、该阶段必读技能注入后再展开——提前想 = 无技能指导的空转，转场后还要重想一遍（双倍浪费）。prepare 只盘点数据；outline 只产出大纲；write 只写本章正文；maintain 只维护数据
+- **不重复获取已加载的上下文**：prepare 阶段已调用的 get_characters/get_timeline/get_story_arcs/get_reader_perspective 等结果仍保留在对话历史中，后续阶段除非刚用 create_*/update_* 改过对应数据，否则直接引用历史结果，**不要重复调用相同参数的 get_* 重新拉取**（同内容二次获取=无意义的探索浪费）；get_chapter_list 一次确认当前章号后无需反复调用；同一阶段不要重复 set_phase
+- **写完不回读**：edit/full_replace 写入文件后你已知刚写入的内容，**不要立即 read 同一文件回读确认**——那只是重复一遍已知信息，纯 token 浪费
 
 ### init（开书，仅新书，无门禁管理）
 
