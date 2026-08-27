@@ -261,6 +261,20 @@ func (c *Client) buildPayload(
 		payload = p.BuildRequest(payload)
 	}
 
+	// 调试：记录钩子改写后实际下发的思考参数（post-hook wire 值）。
+	// 用于排查降档失效/过度思考：DB 与 messages 表只存 opts 设定值（改写前），
+	// 此处才能看到模型真正收到的 reasoning_effort / thinking.type。
+	if c.logger != nil {
+		re, _ := payload["reasoning_effort"].(string)
+		thinkingType := ""
+		if t, ok := payload["thinking"].(map[string]string); ok {
+			thinkingType = t["type"]
+		}
+		c.logger.Debug("llm request thinking params (post-hook)",
+			"provider", p.Name, "model", model,
+			"reasoning_effort", re, "thinking_type", thinkingType)
+	}
+
 	return payload
 }
 
