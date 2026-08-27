@@ -49,7 +49,7 @@ Go 命令在项目根目录执行。前端构建在 `build.ps1` 中自动完成�
 
 ## 三、环境
 
-- **OS**: Windows 10, PowerShell 7
+- **OS**: Windows 10, PowerShell 7（C:\Program Files\PowerShell\7\pwsh.exe）
 - **依赖**: 仅 WebView2 Runtime（系统内置）
 - **数据目录**: `D:\Goink\`（exe 同级），含 `novel-agent.db`、`novels/`
 - **调试日志**: `D:\Goink\goink.log`（DEBUG 级，含 LLM usage/model_usage 更新、门禁拦截、工具调用、appendMsg 落库等，排查 token/门禁问题先看这里）
