@@ -1142,6 +1142,22 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						}
 					}
 
+					// 结果门禁 always-on 地板：门禁关闭时，审稿不通过 / 一致性ERROR 仍注入硬停提醒，
+					// 迫使主Agent修复后才能视为本章完成。门禁开启时由 checkResultGateMet 负责，此处不重复触发。
+					if opts.AgentType == "main" && (pg == nil || !pg.Active()) && (name == "check_story_consistency" || name == "run_subagent") {
+						rc := ""
+						if result.Data != nil {
+							if c, ok := result.Data["content"].(string); ok {
+								rc = c
+							}
+						}
+						if rc != "" {
+							if msg := alwaysOnResultBlock(name, rc); msg != "" {
+								a.appendMsg("user", "<system-reminder>\n"+msg+"\n</system-reminder>", "", nil, &opts, runningTokens)
+							}
+						}
+					}
+
 					// 失败计数：仅系统异常计入
 					if !result.Success && result.ErrKind == "system" {
 						failCnt[name]++

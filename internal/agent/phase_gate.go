@@ -357,6 +357,29 @@ func (g *PhaseGate) checkResultGateMet(pc *PhaseConfig) (bool, string) {
 	return true, ""
 }
 
+// alwaysOnResultBlock 结果门禁的 always-on 版本（不依赖门禁开关）：
+// 审稿结论为「不通过」或一致性检查存在 [ERROR] 时返回硬停提醒文案，
+// 迫使主Agent修复后才能视为本章完成。与 submit_review 硬拦、时间线硬拒同属 always-on 防御层。
+// 门禁开启时由 checkResultGateMet 负责（含阶段推进拦截），此处仅在门禁关闭时补足地板。
+func alwaysOnResultBlock(toolName string, resultContent string) string {
+	if resultContent == "" {
+		return ""
+	}
+	switch toolName {
+	case "run_subagent":
+		if matches := reviewVerdictRe.FindAllStringSubmatch(resultContent, -1); len(matches) > 0 {
+			if m := matches[len(matches)-1]; m[1] == "不通过" {
+				return "⚠ 审稿结论为「不通过」（总分<7.0）：禁止视为本章完成，必须按报告逐项修复后重新 run_subagent(agent_type=\"review\") 重审，直到通过或仅剩可接受的需修改项。"
+			}
+		}
+	case "check_story_consistency":
+		if errorLineRe.MatchString(resultContent) {
+			return "⚠ check_story_consistency 返回 [ERROR] 硬错误：禁止推进或视为本章完成，必须先修复触发错误的项，再重新跑一次全量检查解除，方可继续。"
+		}
+	}
+	return ""
+}
+
 var errorLineRe = regexp.MustCompile(`\[ERROR\][^\n]*`)
 
 // extractErrorLines 提取全部 [ERROR] 行（每行截断至 80 字符），作为错误指纹。
