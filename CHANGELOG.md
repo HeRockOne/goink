@@ -201,7 +201,7 @@
 
 ### HTTP API + 移动端
 
-- **23 个 REST 端点**：`api_server.go`，覆盖所有读操作
+- **37 个 API 端点**：`api_server.go`，覆盖所有读操作（含 SSE 对话流与 WebSocket 双端同步）
 - **SSE 对话流**：`POST /api/chat`，移动端通过 EventSource 接收
 - **移动端 Web 前端**：`mobile/` 目录，纯原生 JS
   - 书架/详情/阅读器/对话/设置 完整功能

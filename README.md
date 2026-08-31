@@ -52,7 +52,7 @@ prepare → outline → write → review → maintain → done
 
 ### HTTP API + 移动端
 
-31 个 REST 端点 + SSE 对话流 + WebSocket 双端同步，手机浏览器可完整使用 Goink：
+37 个 API 端点（含 SSE 对话流与 WebSocket 双端同步），手机浏览器可完整使用 Goink：
 
 - **书架**：小说列表、字数统计、当前书籍标识
 - **小说详情**：章节/角色/时间线/弧线/读者/偏好/地点/世界观/物品 九大模块
@@ -324,7 +324,7 @@ goink-fork/
 | 功能 | 上游 v1.1 | 本 fork |
 |------|-----------|---------|
 | 阶段门禁 | 无 | 5 阶段校验 + 白名单 + require |
-| HTTP API | 无 | 31 端点 + SSE 对话 + WebSocket |
+| HTTP API | 无 | 37 端点（含 SSE 对话 + WebSocket） |
 | 移动端 | 无 | 完整 Web 前端 + 离线缓存 |
 | WebDAV | 无 | 内置服务器 |
 | 计费面板 | 无 | Token 统计 + 趋势图 |
