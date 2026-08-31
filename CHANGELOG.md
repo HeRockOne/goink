@@ -154,6 +154,22 @@
 - **短提醒注入**：首次进入阶段注入全文（学习内容常驻历史）；再次进入同阶段注入短提醒（`BuildSkillsReminder`：技能名 + description 要点，~300 字符 vs 全文 ~8K，紧跟请求尾部注意力最强位置）——解决 Lost in the Middle（全文可见 ≠ 被注意），业界对照 Anthropic skills #591 / hermes-agent / autogen
 - 模拟验证：miss 降 13.8%（506,703→436,595），命中率 97.4% 不变
 
+### 新增（2026-08-23 ~ 2026-08-27 防漂移硬化 + 体验）
+
+- **NS【方向锚】（防设定漂移）**：每轮注入本卷范围红线、总纲类型承诺、未兑现大爽点、活跃禁忌，书本设定优先于类型技能模板
+- **check_story_consistency 新增 4 类程序化检查**：ledger_integrity（伏笔/弧线节点台账防腐，拒绝越界回收）、beat_window（未来 3 章大爽点临近禁顺延）、scope_guard（本章不在任何卷范围内告警 + 弧线节点滞后/提前消耗检测）、type_drift（类型方向漂移嫌疑）
+- **时间线越界硬拒**：`update_timeline_entry` 中 status=resolved 且 resolved_chapter_id 超过当前最大章节号时直接拒绝（伏笔只能在实际已写章节回收）
+- **submit_review 主会话硬拦**：主 agent 直调 submit_review 建记录会被拦截（防橡皮图章锚定审稿），仅审稿子 agent 可调用
+- **审稿不及格 always-on 门禁**：run_subagent 结论"不通过"或 check_story_consistency 返回 [ERROR] 时，即使阶段门禁关闭也注入硬停提醒，强制修复后才可视为完成
+- **新 skill `main-cmd-ruling`**：用户对话纠偏一键沉淀为偏好禁忌（提取规则化表述 → 确认 → create_preference）
+- **门禁关闭审稿缺席提醒**：阶段门禁关闭且最近一次审稿后累计 ≥6 条主 agent 回复时注入提醒
+- **审稿记录面板（ReviewHistoryPanel）**：悬浮卡片式展示历次审稿评分/五维明细/致命项/报告，可拖拽调宽自适应
+- **聊天消息元信息**：气泡显示模型 / 思考模式 / 耗时 / 缓存命中率与 token 数
+- **输入框草稿持久化**：未发送消息按 session 存 localStorage，意外关闭不丢失
+- **消息导航条**：按天快速定位消息泡
+- **write 阶段过度思考守卫**：thinking 量化预算 + 超额反应式硬停提醒
+- **门禁关闭时主动调用 auto_skill_injection 的 kernel 引导**
+
 ---
 
 ## Fork 以来的完整变更
