@@ -58,3 +58,9 @@ docs.local/
 .zcode/
 .opencode/
 .bitfun/
+
+# Runtime (bundled Git for Windows, needed locally but not tracked)
+/runtime/
+
+# Test deployment copy (has own novel-agent.db, never commit)
+/test-goink-for-real/
