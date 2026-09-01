@@ -43,18 +43,13 @@ Each phase has a **tools whitelist** and **require list**. Gate config is stored
 <p align="center"><img src="assets/阶段门禁.png" width="720" alt="Phase Gate">
 <br><sub>Phase Gate — per-phase tools whitelist + require list</sub></p>
 
-<p align="center">
-<img src="assets/大纲.png" width="350" alt="Outline Editing"> &nbsp;&nbsp; <img src="assets/总纲.png" width="350" alt="Master Outline">
-<br><sub>Outline Editing (left) / Master Outline (right)</sub>
-</p>
+<p align="center"><img src="assets/总纲.png" width="500" alt="Master Outline">
+<br><sub>Master Outline</sub></p>
 
 <p align="center">
 <img src="assets/正文.png" width="350" alt="Chapter Writing"> &nbsp;&nbsp; <img src="assets/审稿记录.png" width="350" alt="Review Records">
 <br><sub>Chapter Writing (left) / Review Records (right)</sub>
 </p>
-
-<p align="center"><img src="assets/提取写作风格.png" width="500" alt="Extract Writing Style">
-<br><sub>Extract Writing Style</sub></p>
 
 ### 8 New Creative Modules
 
@@ -74,15 +69,8 @@ Each phase has a **tools whitelist** and **require list**. Gate config is stored
 <br><sub>Worldbuilding (left) / Items (right)</sub>
 </p>
 
-<p align="center">
-<img src="assets/弧线节点.png" width="350" alt="Arc Nodes"> &nbsp;&nbsp; <img src="assets/卷纲.png" width="350" alt="Volume Outline">
-<br><sub>Arc Nodes (left) / Volume Outline (right)</sub>
-</p>
-
-<p align="center">
-<img src="assets/地点关系.png" width="350" alt="Location Relations"> &nbsp;&nbsp; <img src="assets/偏好.png" width="350" alt="Preferences">
-<br><sub>Location Relations (left) / Preferences (right)</sub>
-</p>
+<p align="center"><img src="assets/卷纲.png" width="500" alt="Volume Outline">
+<br><sub>Volume Outline</sub></p>
 
 ### HTTP API + Mobile Frontend
 
@@ -173,9 +161,6 @@ New tool categories:
 | Web Search/Fetch (WebSearch) | 2 | Exa API search + web fetch |
 | Sub-Agent (Subagent) | 1 | Launch review/memory sub-agent |
 | Delete (Delete) | 1 | Delete any record |
-
-<p align="center"><img src="assets/技能.png" width="720" alt="Skill System">
-<br><sub>42 Built-in Skills — three-tier system, zero-code extensibility</sub></p>
 
 ### 42 Skills
 

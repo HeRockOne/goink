@@ -43,18 +43,13 @@ prepare → outline → write → review → maintain → done
 <p align="center"><img src="assets/阶段门禁.png" width="720" alt="阶段门禁">
 <br><sub>阶段门禁 — 每阶段 tools 白名单 + require 必调列表</sub></p>
 
-<p align="center">
-<img src="assets/大纲.png" width="350" alt="大纲编辑"> &nbsp;&nbsp; <img src="assets/总纲.png" width="350" alt="总纲">
-<br><sub>大纲编辑（左）/ 总纲（右）</sub>
-</p>
+<p align="center"><img src="assets/总纲.png" width="500" alt="总纲">
+<br><sub>总纲</sub></p>
 
 <p align="center">
 <img src="assets/正文.png" width="350" alt="正文写作"> &nbsp;&nbsp; <img src="assets/审稿记录.png" width="350" alt="审稿记录">
 <br><sub>正文写作（左）/ 审稿记录（右）</sub>
 </p>
-
-<p align="center"><img src="assets/提取写作风格.png" width="500" alt="提取写作风格">
-<br><sub>提取写作风格</sub></p>
 
 ### 8 个全新创作模块
 
@@ -74,15 +69,8 @@ prepare → outline → write → review → maintain → done
 <br><sub>世界观设定（左）/ 物品管理（右）</sub>
 </p>
 
-<p align="center">
-<img src="assets/弧线节点.png" width="350" alt="弧线节点"> &nbsp;&nbsp; <img src="assets/卷纲.png" width="350" alt="卷纲">
-<br><sub>弧线节点（左）/ 卷纲（右）</sub>
-</p>
-
-<p align="center">
-<img src="assets/地点关系.png" width="350" alt="地点关系"> &nbsp;&nbsp; <img src="assets/偏好.png" width="350" alt="偏好">
-<br><sub>地点关系（左）/ 偏好（右）</sub>
-</p>
+<p align="center"><img src="assets/卷纲.png" width="500" alt="卷纲">
+<br><sub>卷纲</sub></p>
 
 ### HTTP API + 移动端
 
@@ -179,9 +167,6 @@ AI 通过 60 个 Function Calling 工具管理小说的全部数据。工具按�
 | 网络搜索/抓取（WebSearch） | 2 | Exa API 搜索 + 网页抓取 |
 | 子 Agent（Subagent） | 1 | 启动审稿/记忆子 Agent |
 | 通用删除（Delete） | 1 | 删除任意记录 |
-
-<p align="center"><img src="assets/技能.png" width="720" alt="技能系统">
-<br><sub>42 个内置 Skill — 三层系统零代码扩展</sub></p>
 
 ### 42 个 Skill（技能系统）
 
