@@ -133,6 +133,14 @@ Bearer Token auth, see [mobile/API.md](mobile/API.md).
 <p align="center"><img src="assets/移动端连接.png" width="360" alt="Mobile Connection">
 <br><sub>Mobile Connection — scan QR to connect</sub></p>
 
+<p align="center">
+<img src="assets/移动端书架.png" width="170" alt="Mobile Bookshelf"> &nbsp;
+<img src="assets/移动端对话界面.png" width="170" alt="Mobile Chat"> &nbsp;
+<img src="assets/移动端正文.png" width="170" alt="Mobile Chapter"> &nbsp;
+<img src="assets/移动端设置.png" width="170" alt="Mobile Settings">
+<br><sub>Mobile: Bookshelf / Chat / Chapter / Settings</sub>
+</p>
+
 ### Dynamic Narrative Panel
 
 Canvas-style draggable/resizable card panel, aggregating all writing context via a single IPC call:

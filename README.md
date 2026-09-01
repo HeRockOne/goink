@@ -139,6 +139,14 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 <p align="center"><img src="assets/移动端连接.png" width="360" alt="移动端连接">
 <br><sub>移动端连接 — 扫码快速连接</sub></p>
 
+<p align="center">
+<img src="assets/移动端书架.png" width="170" alt="移动端书架"> &nbsp;
+<img src="assets/移动端对话界面.png" width="170" alt="移动端对话"> &nbsp;
+<img src="assets/移动端正文.png" width="170" alt="移动端正文"> &nbsp;
+<img src="assets/移动端设置.png" width="170" alt="移动端设置">
+<br><sub>移动端：书架 / 对话 / 正文 / 设置</sub>
+</p>
+
 ### 动态叙事面板
 
 画布式可拖拽/缩放卡片面板，一次 IPC 调用聚合全部写作上下文：
