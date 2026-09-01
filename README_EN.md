@@ -6,7 +6,7 @@
 
 > Forked from [sigpanic/goink](https://github.com/sigpanic/goink) v1.1, with significant expansion of creative modules, tool system, and engineering capabilities.
 
-<p align="center"><img src="assets/主页面.png" width="720" alt="Goink Main Page">
+<p align="center"><img src="assets/主页面.png" width="832" alt="Goink Main Page">
 <br><sub>Main Page — novel list, word count, current book</sub></p>
 
 ---
@@ -40,14 +40,14 @@ prepare → outline → write → review → maintain → done
 
 Each phase has a **tools whitelist** and **require list**. Gate config is stored in DB, not in AI context.
 
-<p align="center"><img src="assets/阶段门禁.png" width="720" alt="Phase Gate">
+<p align="center"><img src="assets/阶段门禁.png" width="832" alt="Phase Gate">
 <br><sub>Phase Gate — per-phase tools whitelist + require list</sub></p>
 
-<p align="center"><img src="assets/总纲.png" width="500" alt="Master Outline">
+<p align="center"><img src="assets/总纲.png" width="720" alt="Master Outline">
 <br><sub>Master Outline</sub></p>
 
 <p align="center">
-<img src="assets/正文.png" width="350" alt="Chapter Writing"> &nbsp;&nbsp; <img src="assets/审稿记录.png" width="350" alt="Review Records">
+<img src="assets/正文.png" width="400" alt="Chapter Writing"> &nbsp;&nbsp; <img src="assets/审稿记录.png" width="400" alt="Review Records">
 <br><sub>Chapter Writing (left) / Review Records (right)</sub>
 </p>
 
@@ -65,11 +65,11 @@ Each phase has a **tools whitelist** and **require list**. Gate config is stored
 | Creative Stats (Stats) | word count / arc progress / foreshadowing recovery rate / entity counts |
 
 <p align="center">
-<img src="assets/世界观.png" width="350" alt="Worldbuilding"> &nbsp;&nbsp; <img src="assets/物品.png" width="350" alt="Items">
+<img src="assets/世界观.png" width="400" alt="Worldbuilding"> &nbsp;&nbsp; <img src="assets/物品.png" width="400" alt="Items">
 <br><sub>Worldbuilding (left) / Items (right)</sub>
 </p>
 
-<p align="center"><img src="assets/卷纲.png" width="500" alt="Volume Outline">
+<p align="center"><img src="assets/卷纲.png" width="720" alt="Volume Outline">
 <br><sub>Volume Outline</sub></p>
 
 ### HTTP API + Mobile Frontend
@@ -118,14 +118,14 @@ Bearer Token auth, see [mobile/API.md](mobile/API.md).
 - **Auto HTTPS**: self-signed certificate generated on startup
 - **Mobile theme**: white background with blue accent (HSL custom theme, 56+ CSS variables)
 
-<p align="center"><img src="assets/移动端连接.png" width="360" alt="Mobile Connection">
+<p align="center"><img src="assets/移动端连接.png" width="500" alt="Mobile Connection">
 <br><sub>Mobile Connection — scan QR to connect</sub></p>
 
 <p align="center">
-<img src="assets/移动端书架.png" width="170" alt="Mobile Bookshelf"> &nbsp;
-<img src="assets/移动端对话界面.png" width="170" alt="Mobile Chat"> &nbsp;
-<img src="assets/移动端正文.png" width="170" alt="Mobile Chapter"> &nbsp;
-<img src="assets/移动端设置.png" width="170" alt="Mobile Settings">
+<img src="assets/移动端书架.png" width="195" alt="Mobile Bookshelf"> &nbsp;
+<img src="assets/移动端对话界面.png" width="195" alt="Mobile Chat"> &nbsp;
+<img src="assets/移动端正文.png" width="195" alt="Mobile Chapter"> &nbsp;
+<img src="assets/移动端设置.png" width="195" alt="Mobile Settings">
 <br><sub>Mobile: Bookshelf / Chat / Chapter / Settings</sub>
 </p>
 
@@ -138,7 +138,7 @@ Canvas-style draggable/resizable card panel, aggregating all writing context via
 - Double-click card titles to rename, layout persisted to localStorage
 - Real-time refresh: listens for file changes and chat events, 300ms debounce
 
-<p align="center"><img src="assets/叙事面板.png" width="720" alt="Narrative Panel">
+<p align="center"><img src="assets/叙事面板.png" width="832" alt="Narrative Panel">
 <br><sub>Dynamic Narrative Panel — canvas-style draggable/resizable cards</sub></p>
 
 ### 60 MCP Tools
@@ -189,10 +189,10 @@ Three-tier skill system (built-in / user / novel × auto / manual / always), zer
 - Token trend chart (date + model aggregation, SVG pie chart)
 - Cache hit rate 89-93% in real-world testing
 
-<p align="center"><img src="assets/token统计.png" width="720" alt="Token Statistics">
+<p align="center"><img src="assets/token统计.png" width="832" alt="Token Statistics">
 <br><sub>Billing Panel — per-model accumulation + Token trend chart</sub></p>
 
-<p align="center"><img src="assets/token消耗面板.png" width="720" alt="Token Consumption Panel">
+<p align="center"><img src="assets/token消耗面板.png" width="832" alt="Token Consumption Panel">
 <br><sub>Token Consumption Panel — session-level token category breakdown</sub></p>
 
 ### Built-in WebDAV
