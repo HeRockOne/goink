@@ -6,6 +6,9 @@
 
 > 基于 [sigpanic/goink](https://github.com/sigpanic/goink) v1.1 fork，大幅扩展了创作模块、工具系统和工程能力。
 
+<p align="center"><img src="assets/主页面.png" width="720" alt="Goink 主页面">
+<br><sub>书架主页 — 小说列表、字数统计、当前书籍</sub></p>
+
 ---
 
 ## 目录
@@ -37,6 +40,22 @@ prepare → outline → write → review → maintain → done
 
 每阶段有 **tools 白名单**和 **require 必调列表**，不满足条件无法推进到下一阶段。门禁配置存数据库，不占 AI 上下文。
 
+<p align="center"><img src="assets/阶段门禁.png" width="720" alt="阶段门禁">
+<br><sub>阶段门禁 — 每阶段 tools 白名单 + require 必调列表</sub></p>
+
+<p align="center">
+<img src="assets/大纲.png" width="350" alt="大纲编辑"> &nbsp;&nbsp; <img src="assets/总纲.png" width="350" alt="总纲">
+<br><sub>大纲编辑（左）/ 总纲（右）</sub>
+</p>
+
+<p align="center">
+<img src="assets/正文.png" width="350" alt="正文写作"> &nbsp;&nbsp; <img src="assets/审稿记录.png" width="350" alt="审稿记录">
+<br><sub>正文写作（左）/ 审稿记录（右）</sub>
+</p>
+
+<p align="center"><img src="assets/提取写作风格.png" width="500" alt="提取写作风格">
+<br><sub>提取写作风格</sub></p>
+
 ### 8 个全新创作模块
 
 | 模块 | 能力 |
@@ -49,6 +68,21 @@ prepare → outline → write → review → maintain → done
 | 树状上下文（WritingContext） | 一次调用获取 8 个数据源 + 超期伏笔检测 |
 | 写作进度快照（Snapshot） | current_arc_id / active_chars / summary / detailed_state |
 | 创作统计（Stats） | 字数 / 弧线进度 / 伏笔回收率 / 角色数 / 地点数 |
+
+<p align="center">
+<img src="assets/世界观.png" width="350" alt="世界观设定"> &nbsp;&nbsp; <img src="assets/物品.png" width="350" alt="物品管理">
+<br><sub>世界观设定（左）/ 物品管理（右）</sub>
+</p>
+
+<p align="center">
+<img src="assets/弧线节点.png" width="350" alt="弧线节点"> &nbsp;&nbsp; <img src="assets/卷纲.png" width="350" alt="卷纲">
+<br><sub>弧线节点（左）/ 卷纲（右）</sub>
+</p>
+
+<p align="center">
+<img src="assets/地点关系.png" width="350" alt="地点关系"> &nbsp;&nbsp; <img src="assets/偏好.png" width="350" alt="偏好">
+<br><sub>地点关系（左）/ 偏好（右）</sub>
+</p>
 
 ### HTTP API + 移动端
 
@@ -102,6 +136,9 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 - **自动 HTTPS**：启动时自动生成证书
 - **移动端主题**：白底蓝强调色（HSL 自定义主题，支持 56+ CSS 变量）
 
+<p align="center"><img src="assets/移动端连接.png" width="360" alt="移动端连接">
+<br><sub>移动端连接 — 扫码快速连接</sub></p>
+
 ### 动态叙事面板
 
 画布式可拖拽/缩放卡片面板，一次 IPC 调用聚合全部写作上下文：
@@ -110,6 +147,9 @@ Bearer Token 认证，详见 [mobile/API.md](mobile/API.md)。
 - 四边四角拖拽缩放，自动吸附其他卡片边缘
 - 卡片标题可双击重命名，布局存 localStorage
 - 实时刷新：监听文件变更和对话事件，300ms 防抖
+
+<p align="center"><img src="assets/叙事面板.png" width="720" alt="叙事面板">
+<br><sub>动态叙事面板 — 画布式可拖拽/缩放卡片</sub></p>
 
 ### 60 个 MCP 工具
 
@@ -131,6 +171,9 @@ AI 通过 60 个 Function Calling 工具管理小说的全部数据。工具按�
 | 网络搜索/抓取（WebSearch） | 2 | Exa API 搜索 + 网页抓取 |
 | 子 Agent（Subagent） | 1 | 启动审稿/记忆子 Agent |
 | 通用删除（Delete） | 1 | 删除任意记录 |
+
+<p align="center"><img src="assets/技能.png" width="720" alt="技能系统">
+<br><sub>42 个内置 Skill — 三层系统零代码扩展</sub></p>
 
 ### 42 个 Skill（技能系统）
 
@@ -159,6 +202,12 @@ AI 通过 60 个 Function Calling 工具管理小说的全部数据。工具按�
 - Token 趋势图（日期 + 模型聚合，SVG 饼图）
 - 缓存命中率实测 89-93%
 
+<p align="center"><img src="assets/token统计.png" width="720" alt="Token 统计">
+<br><sub>计费面板 — 按模型独立累计 + Token 趋势图</sub></p>
+
+<p align="center"><img src="assets/token消耗面板.png" width="720" alt="Token 消耗面板">
+<br><sub>Token 消耗面板 — 会话级 token 分类统计</sub></p>
+
 ### 内置 WebDAV
 
 - 可配置端口/用户/密码
@@ -172,6 +221,9 @@ AI 通过 60 个 Function Calling 工具管理小说的全部数据。工具按�
 - JSON 粘贴即应用
 - 示例主题「墨绿书斋」
 - `normalizeTheme()` 自动补全缺失变量
+
+<p align="center"><img src="assets/自定义主题.png" width="720" alt="自定义主题">
+<br><sub>自定义主题 — JSON 粘贴即应用</sub></p>
 
 ### 图标替换
 
