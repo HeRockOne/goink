@@ -2,9 +2,7 @@
 
 ## 项目简介
 
-Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
-
-技术栈：Wails (Go + React + TypeScript)，SQLite + sqlite-vec + ONNX（CGO）。
+Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。功能介绍与技术栈详见 README.md。
 
 **核心边界（不可逾越）：**
 
@@ -15,6 +13,8 @@ Goink — 桌面 AI 创作小说软件，Wails (Go + React) 构建。
 - 系统提示词、MCP 工具、skill 里出现的创作规则，都可能是设计意图，不要轻易删减。
 
 ## 代码结构与跨层契约
+
+完整项目结构与功能介绍见 README.md；下面的树只标注与 agent 行为相关的契约。
 
 ```
 app/                    # Wails 绑定层：Chat/设置/面板入口，chat.go 组装 LLM 链路
@@ -76,7 +76,6 @@ build/                  # 打包配置
 Go 命令在项目根目录执行。前端构建在 `build.ps1` 中自动完成。
 
 - **OS**: Windows 10, PowerShell 7（C:\Program Files\PowerShell\7\pwsh.exe）
-- **依赖**: 仅 WebView2 Runtime（系统内置）
 - **数据目录**: `D:\Goink\`（exe 同级），含 `novel-agent.db`、`novels/`
 - **调试日志**: `D:\Goink\goink.log`（DEBUG 级，含 LLM usage/model_usage 更新、门禁拦截、工具调用、appendMsg 落库等，排查 token/门禁问题先看这里）
 - **Git**: 每本小说独立仓库在 `{DataDir}/novels/{id}/`，含 `chapters/NNN.md`、`outlines/NNN.md`
